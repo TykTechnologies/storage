@@ -1,46 +1,41 @@
-# <REPO-NAME>
-<!-- Tell other people why your project is useful, what they can do with your project, and how they can use it.
-As explained in GitHub it typically includes information on:
-1. What the project does
-2. Why the project is useful
-3. How users can get started with the project
-4. Where users can get help with your project
-5. Who maintains and contributes to the project
-For more details check GitHub [doc](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes)
-
-PLEASE CHANGE THIS FILE NAME TO BE "README.md" so GitHub can automatically surface it to repository visitors.
--->
+# <storage>
 
 ## About
-This repo is doing ...
+This repository provides a common interface for Tyk components to connect to different storage.
   
 ## Purpose
-You can use it for ....
-  
+The aim of this library is to offer Tyk components an effortless and versatile solution for connecting to persistent storage systems. With this library, Tyk components can effortlessly switch between different storage systems without disrupting their application's inner workings. It includes typical database operations and healthcheck functionalities to verify a stable connection to the storage system.
+
+## Roadmap
+### Q1 2023
+- [ ] Persistent storage: common interfaces.
+- [ ] Persistent storage: Mongo `mgo` driver.
+- [ ] Persistent storage: Mongo `official` driver.
+
+### Q2 2023
+- [ ] Persistent storage: SQL `gorm` driver.
+- [ ] Temporal storage: Redis 6 driver.
+- [ ] Temporal storage: Redis 7 driver.
+
+### Q3 2023
+- [ ] TBD
+
+### Q4 2023
+- [ ] TBD
+
+Note: This roadmap is a sample and is subject to change based on development progress and priorities.
+
+
 ## Getting started  
 To get started do ... <!-- add code snippet etc -->
-  
+**TBD**  
 
-## PRs
-Explain the requirements for a PR...
   
-#### SLA
-First response (clarifying questions/guidance on improvements/answering questions) - target of 48 hours
-Detailed review and feedback on PRs - target 7 days
-  
-  
-  
-## Bugs
+## Contributing
 
-#### SLA
-First response (clarifying questions/guidance on improvements/answering questions) - target of 48 hours
-  
-  
-  
-## Features
-  
-#### SLA
-First response (clarifying questions/guidance on improvements/answering questions) - target 72 hours
+See the [Contributing Guide](CONTRIBUTING.md) for details.
+
+- Maintainers and Approvers ([@TykTechnologies/platform-squad](https://github.com/orgs/TykTechnologies/teams/platform-squad)):
   
 ### Questions
 For question on products, please use [Tyk Community forum](https://community.tyk.io/).
