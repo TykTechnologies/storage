@@ -1,4 +1,4 @@
-# <storage>
+# Tyk Storage 
 
 ## About
 This repository provides a common interface for Tyk components to connect to different storage.
