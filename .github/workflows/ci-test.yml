@@ -14,7 +14,7 @@ jobs:
             TOKEN: '${{ secrets.ORG_GH_TOKEN }}'
         run: >
           git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
-      - name: Checkout Tyk Sink
+      - name: Checkout Storage
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test, golangci-lint]
     steps:
-      - name: Checkout Tyk Storages
+      - name: Checkout Tyk Storage
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
@@ -100,7 +100,7 @@ jobs:
         with:
           args: >
             -Dsonar.organization=tyktechnologies
-            -Dsonar.projectKey=TykTechnologies_storages
+            -Dsonar.projectKey=TykTechnologies_storage
             -Dsonar.sources=.
             -Dsonar.coverage.exclusions=**/*_test.go,**/mocks/*.go
             -Dsonar.exclusions=**/mocks/*.go
