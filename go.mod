@@ -1,3 +1,3 @@
-module github.com/TykTechnologies/storages
+module github.com/TykTechnologies/storage
 
 go 1.16
