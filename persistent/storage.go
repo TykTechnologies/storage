@@ -2,6 +2,7 @@ package persistent
 
 import (
 	"errors"
+
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
