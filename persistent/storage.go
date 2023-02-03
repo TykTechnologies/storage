@@ -14,9 +14,9 @@ const (
 func NewPersistentStorage(opts model.ClientOpts) (model.PersistentStorage, error) {
 	switch opts.Type {
 	case OfficialMongo:
-		// to be implemented
+		return nil, errors.New("not implemented")
 	case Mgo:
-		// To be implemented
+		return nil, errors.New("not implemented")
 	default:
 		return nil, errors.New("invalid driver")
 	}
