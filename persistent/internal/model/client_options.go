@@ -17,4 +17,7 @@ type ClientOpts struct {
 	SSLPEMKeyfile string
 	// Sets the session consistency for the storage connection
 	SessionConsistency string
+
+	// type of database/driver
+	Type string
 }
