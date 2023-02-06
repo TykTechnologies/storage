@@ -8,7 +8,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/helper"
+	"github.com/TykTechnologies/storage/persistent/internal/helper"
 )
 
 type ClientOpts struct {
