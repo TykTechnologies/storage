@@ -12,3 +12,9 @@ type StorageLifecycle interface {
 	// DBType returns the type of the registered storage driver.
 	DBType() DBType
 }
+
+// DBTable is an interface that should be implemented by
+// database models in order to perform CRUD operations
+type DBTable interface {
+	TableName() string
+}
