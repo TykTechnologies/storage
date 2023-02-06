@@ -12,7 +12,7 @@ const (
 )
 
 // NewPersistentStorage returns a persistent storage object that uses the given driver
-func NewPersistentStorage(opts model.ClientOpts) (model.PersistentStorage, error) {
+func NewPersistentStorage(opts *model.ClientOpts) (model.PersistentStorage, error) {
 	switch opts.Type {
 	case OfficialMongo:
 		return nil, errors.New("not implemented")
