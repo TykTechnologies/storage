@@ -94,6 +94,7 @@ func (opts *ClientOpts) GetTLSConfig() (*tls.Config, error) {
 
 	if opts.SSLPEMKeyfile != "" {
 		cert, err := helper.LoadCertficateAndKeyFromFile(opts.SSLPEMKeyfile)
+
 		if err != nil {
 			log.Fatal("Can't load mongo client certificate: ", err)
 		}
