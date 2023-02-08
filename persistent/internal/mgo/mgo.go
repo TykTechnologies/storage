@@ -5,56 +5,36 @@ import (
 
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 
-	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
 
 type mgoDriver struct {
-	session *mgo.Session
-	db      *mgo.Database
-
+	*lifeCycle
 	lastConnAttempt time.Time
 	options         model.ClientOpts
 }
 
-// Connect connects to mongo given the ClientOpts
-func (d *mgoDriver) Connect(opts *model.ClientOpts) error {
-	if d.db != nil {
-		if err := d.db.Session.Ping(); err == nil {
-			return nil
-		}
+// NewMgoDriver returns an instance of the driver connected to the database.
+func NewMgoDriver(opts *model.ClientOpts) (*mgoDriver, error){
+	newDriver := &mgoDriver{}
+
+	// create the db life cycle manager
+	lc := &lifeCycle{}
+	// connect to the db
+	err := lc.Connect(opts)
+	if err != nil{
+		return nil, err
 	}
 
-	dialInfo, err := mgo.ParseURL(d.options.ConnectionString)
-	if err != nil {
-		return err
-	}
-	sess, err := mgo.DialWithInfo(dialInfo)
-	if err != nil {
-		return err
-	}
+	newDriver.lifeCycle = lc
 
-	d.session = sess
-
-	d.setSessionConsistency()
-
-	d.db = d.session.DB("")
-
-	return nil
+	return newDriver, nil
 }
+
+
 
 func (d *mgoDriver) NewBSONID() model.BSON {
 	id := bson.NewObjectId()
 	return &mgoBson{id}
 }
 
-func (d *mgoDriver) setSessionConsistency() {
-	switch d.options.SessionConsistency {
-	case "eventual":
-		d.session.SetMode(mgo.Eventual, true)
-	case "monotonic":
-		d.session.SetMode(mgo.Monotonic, true)
-	default:
-		d.session.SetMode(mgo.Strong, true)
-	}
-}

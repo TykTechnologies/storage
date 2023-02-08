@@ -4,8 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"io/ioutil"
-	"log"
+	"os"
 	"time"
 
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
@@ -46,9 +45,9 @@ func (opts *ClientOpts) GetTLSConfig() (*tls.Config, error) {
 	}
 
 	if opts.SSLCAFile != "" {
-		caCert, err := ioutil.ReadFile(opts.SSLCAFile)
+		caCert, err := os.ReadFile(opts.SSLCAFile)
 		if err != nil {
-			return tlsConfig, errors.New("can't load mongo CA certificates:" + err.Error())
+			return tlsConfig, errors.New("can't load CA certificates:" + err.Error())
 		}
 		caCertPool := x509.NewCertPool()
 		caCertPool.AppendCertsFromPEM(caCert)
@@ -96,7 +95,7 @@ func (opts *ClientOpts) GetTLSConfig() (*tls.Config, error) {
 		cert, err := helper.LoadCertficateAndKeyFromFile(opts.SSLPEMKeyfile)
 
 		if err != nil {
-			log.Fatal("Can't load mongo client certificate: ", err)
+			return tlsConfig, errors.New("Can't load mongo client certificate: "+ err.Error())
 		}
 
 		tlsConfig.Certificates = []tls.Certificate{*cert}
