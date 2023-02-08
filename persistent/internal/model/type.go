@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 type DBType string
 
 type StorageLifecycle interface {
@@ -17,4 +19,15 @@ type StorageLifecycle interface {
 // database models in order to perform CRUD operations
 type DBTable interface {
 	TableName() string
+}
+
+// BSON interface to be implemented by each mongo driver
+type BSON interface {
+	Hex() string
+	String() string
+	Timestamp() time.Time
+	MarshalJSON() ([]byte, error)
+	UnmarshalJSON([]byte) error
+	MarshalText() ([]byte, error)
+	UnmarshalText([]byte) error
 }

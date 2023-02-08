@@ -6,6 +6,7 @@ import (
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 
 	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 )
 
 type mgoDriver struct {
@@ -40,6 +41,11 @@ func (d *mgoDriver) Connect(opts *model.ClientOpts) error {
 	d.db = d.session.DB("")
 
 	return nil
+}
+
+func (d *mgoDriver) NewBSONID() model.BSON {
+	id := bson.NewObjectId()
+	return &mgoBson{id}
 }
 
 func (d *mgoDriver) setSessionConsistency() {
