@@ -10,6 +10,10 @@ import (
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 )
 
+const(
+	DEFAULT_CONN_TIMEOUT = 10 * time.Second
+)
+
 type ClientOpts struct {
 	// ConnectionString is the expression used to connect to a storage db server.
 	// It contains parameters such as username, hostname, password and port
@@ -27,7 +31,8 @@ type ClientOpts struct {
 	SSLPEMKeyfile string
 	// Sets the session consistency for the storage connection
 	SessionConsistency string
-
+	// Sets the connection timeout to the database. Defaults to 10s.
+	ConnectionTimeout string
 	// type of database/driver
 	Type string
 }
@@ -95,7 +100,7 @@ func (opts *ClientOpts) GetTLSConfig() (*tls.Config, error) {
 		cert, err := helper.LoadCertficateAndKeyFromFile(opts.SSLPEMKeyfile)
 
 		if err != nil {
-			return tlsConfig, errors.New("Can't load mongo client certificate: "+ err.Error())
+			return tlsConfig, errors.New("unable to load tls certificate: "+ err.Error())
 		}
 
 		tlsConfig.Certificates = []tls.Certificate{*cert}

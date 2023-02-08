@@ -13,7 +13,6 @@ var _ model.StorageLifecycle = &lifeCycle{}
 type lifeCycle struct {
 	session *mgo.Session
 	db      *mgo.Database
-
 }
 
 func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
@@ -21,6 +20,8 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 	if err != nil {
 		return err
 	}
+
+	dialInfo.Timeout = model.DEFAULT_CONN_TIMEOUT
 
 	if opts.UseSSL{
 		tlsConfig, err := opts.GetTLSConfig()

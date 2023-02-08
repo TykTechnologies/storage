@@ -31,8 +31,6 @@ func NewMgoDriver(opts *model.ClientOpts) (*mgoDriver, error){
 	return newDriver, nil
 }
 
-
-
 func (d *mgoDriver) NewBSONID() model.BSON {
 	id := bson.NewObjectId()
 	return &mgoBson{id}
