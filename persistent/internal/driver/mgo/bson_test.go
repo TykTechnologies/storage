@@ -1,3 +1,5 @@
+// +build mongo
+
 package mgo
 
 import "testing"

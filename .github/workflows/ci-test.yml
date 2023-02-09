@@ -24,7 +24,7 @@ jobs:
       - name: Download golangci-lint
         run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
       - name: golangci-lint
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ contains(fromJSON('["push", "pull_request"]'), github.event_name) }}
         run: |
           $(go env GOPATH)/bin/golangci-lint run --out-format checkstyle --timeout=300s --max-issues-per-linter=0 --max-same-issues=0 --issues-exit-code=0 --new-from-rev=origin/${{ github.base_ref }} ./... > golanglint.xml
       - uses: actions/upload-artifact@v2
@@ -35,9 +35,15 @@ jobs:
             golanglint.xml
 
   test:
-    name: CI Go Test
+    name: CI Persistent storage tests - DB '${{ matrix.databases }}'
     needs: [golangci-lint]
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        storage-type: ["persistent"]
+        databases: ["mongo"]
+        mongo-versions: [4.2]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -55,6 +61,11 @@ jobs:
       - name: Build
         run: go build -v ./...
 
+      - if: '${{ matrix.databases == "mongo" }}'
+        name: Start MongoDB '${{ matrix.mongodb-version }}'
+        uses: supercharge/mongodb-github-action@1.2.0
+        with:
+          mongodb-version: '${{ matrix.mongodb-version }}'
       - name: Run tests
         run: go test -race -vet=off ./... -coverprofile=coverage.cov
 
