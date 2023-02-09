@@ -45,7 +45,7 @@ jobs:
       matrix:
         storagetypes: ["persistent"]
         databases: ["mongo"]
-        mongo-versions: [4.2]
+        mongo-versions: ["4.2"]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
