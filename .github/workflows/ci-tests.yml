@@ -3,7 +3,8 @@ name: CI tests
 on:
   pull_request:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   golangci-lint:
@@ -21,10 +22,14 @@ jobs:
       - name: Fetch base branch
         if: ${{ github.event_name == 'pull_request' }}
         run: git fetch origin ${{ github.base_ref }}
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.16
       - name: Download golangci-lint
         run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
       - name: golangci-lint
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ contains(fromJSON('["push", "pull_request"]'), github.event_name) }}
         run: |
           $(go env GOPATH)/bin/golangci-lint run --out-format checkstyle --timeout=300s --max-issues-per-linter=0 --max-same-issues=0 --issues-exit-code=0 --new-from-rev=origin/${{ github.base_ref }} ./... > golanglint.xml
       - uses: actions/upload-artifact@v2
@@ -33,11 +38,20 @@ jobs:
           retention-days: 1
           path: |
             golanglint.xml
-
   test:
-    name: CI Go Test
+    name: Tests ${{ matrix.storagetype }} storage - DB ${{ matrix.database }} ${{ matrix.version }}
     needs: [golangci-lint]
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - storagetype: persistent
+            database: mongo
+            version: 4.4
+          - storagetype: persistent
+            database: mongo
+            version: 4.2
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -45,7 +59,7 @@ jobs:
           fetch-depth: 2
 
       - name: Setup Golang
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: 1.16
 
@@ -55,9 +69,14 @@ jobs:
       - name: Build
         run: go build -v ./...
 
+      - if: ${{ matrix.database == 'mongo' }}
+        name: Start MongoDB '${{ matrix.version }}'
+        uses: supercharge/mongodb-github-action@1.8.0
+        with:
+          mongodb-version: '${{ matrix.version }}'
       - name: Run tests
-        run: go test -race -vet=off ./... -coverprofile=coverage.cov
-
+        run: |
+          ./bin/ci-tests.sh ${{ matrix.storagetype }} ${{ matrix.database }}
       - uses: actions/upload-artifact@v2
         with:
           name: coverage
@@ -95,6 +114,11 @@ jobs:
           TOKEN: '${{ secrets.ORG_GH_TOKEN }}'
         run: >
           git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
+
+          go install github.com/wadey/gocovmerge@latest
+      - name: merge reports
+        run: |
+          ./bin/merge-cov.sh
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@master
         with:
