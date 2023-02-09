@@ -2,9 +2,7 @@ name: CI tests
 
 on:
   pull_request:
-    branches: ['*']
   push:
-    branches: [main]
 
 jobs:
   golangci-lint:
