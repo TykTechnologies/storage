@@ -39,15 +39,19 @@ jobs:
           path: |
             golanglint.xml
   test:
-    name: CI storage tests -'${{ matrix.storagetypes }}'-'${{ matrix.databases }}'
+    name: ${{ matrix.storagetypes }} - DB ${{ matrix.databases }}
     needs: [golangci-lint]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        storagetypes: ["persistent"]
-        databases: ["mongo"]
-        mongo-versions: ["4.2"]
+        storagetypes:
+          - persistent
+        databases:
+          - mongo
+        mongo-versions:
+          - 4.2
+          - 4.4
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -69,7 +73,7 @@ jobs:
         name: Start MongoDB '${{ matrix.mongodb-version }}'
         uses: supercharge/mongodb-github-action@1.8.0
         with:
-          mongodb-version: '${{ matrix.mongodb-versions }}'
+          mongodb-version: '${{ matrix.mongo-versions }}'
       - name: Run tests
         run: |
           ./bin/ci-tests.sh ${{ matrix.storagetypes }} ${{ matrix.databases }}
