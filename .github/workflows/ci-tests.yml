@@ -33,13 +33,13 @@ jobs:
           path: |
             golanglint.xml
   test:
-    name: CI storage tests -'${{storage-type}}'-'${{ matrix.databases }}'
+    name: CI storage tests -'${{ matrix.storagetypes }}'-'${{ matrix.databases }}'
     needs: [golangci-lint]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        storage-type: ["persistent"]
+        storagetypes: ["persistent"]
         databases: ["mongo"]
         mongo-versions: [4.2]
     steps:
@@ -49,7 +49,7 @@ jobs:
           fetch-depth: 2
 
       - name: Setup Golang
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: 1.16
 
@@ -59,14 +59,14 @@ jobs:
       - name: Build
         run: go build -v ./...
 
-      - name: Start MongoDB '${{ matrix.mongodb-version }}'
+      - if: '${{ matrix.databases == "mongo" }}'
+        name: Start MongoDB '${{ matrix.mongodb-version }}'
         uses: supercharge/mongodb-github-action@1.2.0
         with:
           mongodb-version: '${{ matrix.mongodb-version }}'
       - name: Run tests
         run: |
-          ./bin/ci-tests.sh ${{storage-type}} ${{ matrix.databases }}
-
+          ./bin/ci-tests.sh ${{ matrix.storagetypes }} ${{ matrix.databases }}
       - uses: actions/upload-artifact@v2
         with:
           name: coverage
@@ -104,6 +104,11 @@ jobs:
           TOKEN: '${{ secrets.ORG_GH_TOKEN }}'
         run: >
           git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
+
+          go install github.com/wadey/gocovmerge@latest
+      - name: merge reports
+        run: |
+          ./bin/merge-cov.sh
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@master
         with:
