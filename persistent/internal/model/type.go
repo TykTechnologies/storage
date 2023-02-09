@@ -21,8 +21,8 @@ type DBTable interface {
 	TableName() string
 }
 
-// BSON interface to be implemented by each mongo driver
-type BSON interface {
+// ObjectID interface to be implemented by each db driver
+type ObjectID interface {
 	Hex() string
 	String() string
 	Timestamp() time.Time

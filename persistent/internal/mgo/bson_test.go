@@ -3,9 +3,7 @@ package mgo
 import "testing"
 
 func Test_NewBSONID(t *testing.T) {
-	mgo := mgoDriver{}
-
-	id := mgo.NewBSONID()
+	id := NewObjectID()
 
 	t.Log(id)
 	t.Log(id.Hex())

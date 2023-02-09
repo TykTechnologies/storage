@@ -43,7 +43,7 @@ func (d *mgoDriver) Connect(opts *model.ClientOpts) error {
 	return nil
 }
 
-func (d *mgoDriver) NewBSONID() model.BSON {
+func NewObjectID() model.ObjectID {
 	id := bson.NewObjectId()
 	return &mgoBson{id}
 }
