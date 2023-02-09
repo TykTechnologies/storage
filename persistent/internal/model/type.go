@@ -1,9 +1,12 @@
 package model
 
-import "time"
+import (
+	"time"
+)
 
 type DBType string
-const(
+
+const (
 	MongoType DBType = "mongo"
 )
 
@@ -33,4 +36,9 @@ type ObjectID interface {
 	UnmarshalJSON([]byte) error
 	MarshalText() ([]byte, error)
 	UnmarshalText([]byte) error
+}
+
+type DBObject interface {
+	DBID() ObjectID
+	SetDBID(id ObjectID)
 }
