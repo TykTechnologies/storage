@@ -69,7 +69,7 @@ jobs:
         name: Start MongoDB '${{ matrix.mongodb-version }}'
         uses: supercharge/mongodb-github-action@1.8.0
         with:
-          mongodb-version: '${{ matrix.mongodb-version }}'
+          mongodb-version: '${{ matrix.mongodb-versions }}'
       - name: Run tests
         run: |
           ./bin/ci-tests.sh ${{ matrix.storagetypes }} ${{ matrix.databases }}
