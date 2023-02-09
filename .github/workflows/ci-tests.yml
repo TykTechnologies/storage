@@ -39,19 +39,18 @@ jobs:
           path: |
             golanglint.xml
   test:
-    name: ${{ matrix.storagetypes }} - DB ${{ matrix.databases }}
+    name: Tests ${{ matrix.storagetype }} storage - DB ${{ matrix.database }} v${{ matrix.database }}
     needs: [golangci-lint]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        storagetypes:
-          - persistent
-        databases:
-          - mongo
-        mongo-versions:
-          - 4.2
-          - 4.4
+        - storagetype: persistent
+          database: mongo
+          version: 4.2
+        - storagetype: persistent
+          database: mongo
+          version: 4.2
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -69,14 +68,14 @@ jobs:
       - name: Build
         run: go build -v ./...
 
-      - if: ${{ matrix.databases == 'mongo' }}
-        name: Start MongoDB '${{ matrix.mongodb-version }}'
+      - if: ${{ matrix.database == 'mongo' }}
+        name: Start MongoDB '${{ matrix.version }}'
         uses: supercharge/mongodb-github-action@1.8.0
         with:
-          mongodb-version: '${{ matrix.mongo-versions }}'
+          mongodb-version: '${{ matrix.version }}'
       - name: Run tests
         run: |
-          ./bin/ci-tests.sh ${{ matrix.storagetypes }} ${{ matrix.databases }}
+          ./bin/ci-tests.sh ${{ matrix.storagetype }} ${{ matrix.database }}
       - uses: actions/upload-artifact@v2
         with:
           name: coverage
