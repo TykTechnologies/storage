@@ -2,6 +2,7 @@ name: CI tests
 
 on:
   pull_request:
+    branches: ['*']
   push:
     branches: [main]
 
@@ -67,7 +68,8 @@ jobs:
         with:
           mongodb-version: '${{ matrix.mongodb-version }}'
       - name: Run tests
-        run: go test -race -vet=off ./... -coverprofile=coverage.cov
+        run: |
+          ./bin/ci-tests.sh ${{storage-type}} ${{ matrix.databases }}
 
       - uses: actions/upload-artifact@v2
         with:
