@@ -1,9 +1,12 @@
 package model
 
-import "time"
+import (
+	"time"
+)
 
 type DBType string
-const(
+
+const (
 	MongoType DBType = "mongo"
 )
 
@@ -24,8 +27,8 @@ type DBTable interface {
 	TableName() string
 }
 
-// BSON interface to be implemented by each mongo driver
-type BSON interface {
+// ObjectID interface to be implemented by each db driver
+type ObjectID interface {
 	Hex() string
 	String() string
 	Timestamp() time.Time
@@ -33,4 +36,9 @@ type BSON interface {
 	UnmarshalJSON([]byte) error
 	MarshalText() ([]byte, error)
 	UnmarshalText([]byte) error
+}
+
+type DBObject interface {
+	DBID() ObjectID
+	SetDBID(id ObjectID)
 }
