@@ -39,18 +39,19 @@ jobs:
           path: |
             golanglint.xml
   test:
-    name: Tests ${{ matrix.storagetype }} storage - DB ${{ matrix.database }} v${{ matrix.database }}
+    name: Tests ${{ matrix.storagetype }} storage - DB ${{ matrix.database }} ${{ matrix.version }}
     needs: [golangci-lint]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        - storagetype: persistent
-          database: mongo
-          version: 4.4
-        - storagetype: persistent
-          database: mongo
-          version: 4.2
+        include:
+          - storagetype: persistent
+            database: mongo
+            version: 4.4
+          - storagetype: persistent
+            database: mongo
+            version: 4.2
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
