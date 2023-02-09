@@ -32,7 +32,6 @@ jobs:
           retention-days: 1
           path: |
             golanglint.xml
-
   test:
     name: CI storage tests -'${{storage-type}}'-'${{ matrix.databases }}'
     needs: [golangci-lint]
@@ -60,8 +59,7 @@ jobs:
       - name: Build
         run: go build -v ./...
 
-      - if: '${{ matrix.databases == "mongo" }}'
-        name: Start MongoDB '${{ matrix.mongodb-version }}'
+      - name: Start MongoDB '${{ matrix.mongodb-version }}'
         uses: supercharge/mongodb-github-action@1.2.0
         with:
           mongodb-version: '${{ matrix.mongodb-version }}'
