@@ -1,11 +1,12 @@
 package mgo
 
-import "testing"
+import (
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
 
-func Test_NewBSONID(t *testing.T) {
+func TestNewObjectID(t *testing.T) {
 	id := NewObjectID()
 
-	t.Log(id)
-	t.Log(id.Hex())
-	t.Log(id.Timestamp())
+	assert.NotEqual(t, "", id)
 }
