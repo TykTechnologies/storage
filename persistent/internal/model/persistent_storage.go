@@ -1,6 +1,7 @@
 package model
 
+import "context"
 
 type PersistentStorage interface {
-	// methods to be defined
+	Insert(context.Context, DBTable, DBObject) error
 }
