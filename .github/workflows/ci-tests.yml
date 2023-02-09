@@ -47,7 +47,7 @@ jobs:
       matrix:
         - storagetype: persistent
           database: mongo
-          version: 4.2
+          version: 4.4
         - storagetype: persistent
           database: mongo
           version: 4.2
