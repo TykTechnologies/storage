@@ -71,8 +71,7 @@ func (lc *lifeCycle) DBType() model.DBType {
 		Code int `bson:"code"`
 	}
 
-	lc.session.Run("features", &result)
-	if result.Code == 303 {
+	if err := lc.session.Run("features", &result); err != nil && result.Code == 303 {
 		return model.AWSDocumentDB
 	}
 
