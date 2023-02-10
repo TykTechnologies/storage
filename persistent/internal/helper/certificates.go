@@ -27,6 +27,7 @@ func LoadCertificateAndKey(data []byte) (*tls.Certificate, error) {
 				return nil, err
 			}
 		}
+
 		data = rest
 	}
 
@@ -42,8 +43,9 @@ func LoadCertificateAndKey(data []byte) (*tls.Certificate, error) {
 func LoadCertificateAndKeyFromFile(path string) (*tls.Certificate, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failure reading file: %s", err)
+		return nil, fmt.Errorf("failure reading certificate file: %w", err)
 	}
+
 	return LoadCertificateAndKey(raw)
 }
 

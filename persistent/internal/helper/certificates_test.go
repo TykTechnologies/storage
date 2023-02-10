@@ -36,7 +36,6 @@ func TestParsePrivateKey(t *testing.T) {
 		validation := rsaKey.N.Cmp(rsaKey.PublicKey.N) != 0 ||
 			rsaKey.E != rsaKey.PublicKey.E
 		assert.False(t, validation)
-
 	})
 	t.Run("PKCS8 format", func(t *testing.T) {
 		rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -117,11 +116,14 @@ func TestLoadCertificateAndKey(t *testing.T) {
 
 func TestLoadCertificateAndKeyFromFile(t *testing.T) {
 	_, _, combinedPEM, _ := GenServerCertificate(t)
-	dir, _ := ioutil.TempDir("", "certs")
+	dir, err := ioutil.TempDir("", "certs")
 	defer os.RemoveAll(dir)
 
+	assert.Nil(t, err)
+
+
 	certCombinedPath := filepath.Join(dir, "combined.pem")
-	err := ioutil.WriteFile(certCombinedPath, combinedPEM, 0666)
+	err = ioutil.WriteFile(certCombinedPath, combinedPEM, 0o666)
 	assert.Nil(t, err)
 
 	tcs := []struct {
@@ -137,19 +139,17 @@ func TestLoadCertificateAndKeyFromFile(t *testing.T) {
 		{
 			name:        "invalid file",
 			file:        "random.pem",
-			expectedErr: errors.New("failure reading file: open random.pem: no such file or directory"),
+			expectedErr: errors.New("failure reading certificate file: open random.pem: no such file or directory"),
 		},
 	}
 
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-
 			cert, err := LoadCertificateAndKeyFromFile(tc.file)
 			assert.Equal(t, tc.expectedErr, err)
 			if err == nil {
 				assert.NotNil(t, cert)
 			}
-
 		})
 	}
 }

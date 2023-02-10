@@ -98,7 +98,6 @@ func (opts *ClientOpts) GetTLSConfig() (*tls.Config, error) {
 
 	if opts.SSLPEMKeyfile != "" {
 		cert, err := helper.LoadCertificateAndKeyFromFile(opts.SSLPEMKeyfile)
-
 		if err != nil {
 			return tlsConfig, err
 		}
