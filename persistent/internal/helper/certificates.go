@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"os"
 )
@@ -43,7 +44,7 @@ func LoadCertificateAndKey(data []byte) (*tls.Certificate, error) {
 func LoadCertificateAndKeyFromFile(path string) (*tls.Certificate, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failure reading certificate file: %w", err)
+		return nil, errors.New("failure reading certificate file: "+ err.Error())
 	}
 
 	return LoadCertificateAndKey(raw)
