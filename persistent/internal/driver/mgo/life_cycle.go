@@ -51,6 +51,13 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 }
 
 func (lc *lifeCycle) Close() error {
+	if lc.session != nil {
+		lc.session.Close()
+
+		lc.session = nil
+		lc.db = nil
+	}
+
 	return nil
 }
 
