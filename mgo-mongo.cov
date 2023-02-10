@@ -1,0 +1,23 @@
+mode: atomic
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/bson.go:15.41,17.2 1 0
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:19.60,21.16 2 4
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:25.2,27.17 2 3
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:39.2,40.16 2 2
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:44.2,50.12 4 1
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:21.16,23.3 1 1
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:27.17,29.17 2 1
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:33.3,33.70 1 0
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:29.17,31.4 1 1
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:33.70,35.4 1 0
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:40.16,42.3 1 1
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:53.36,55.2 1 0
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:58.44,60.2 1 0
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:62.68,63.33 1 1
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:64.18,65.41 1 0
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:66.19,67.42 1 0
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/life_cycle.go:68.10,69.39 1 1
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/mgo.go:19.63,26.16 4 0
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/mgo.go:30.2,32.23 2 0
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/mgo.go:26.16,28.3 1 0
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/mgo.go:35.35,38.2 2 1
+github.com/TykTechnologies/storage/persistent/internal/driver/mgo/mgo.go:40.96,47.2 4 0
