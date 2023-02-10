@@ -39,6 +39,6 @@ type ObjectID interface {
 }
 
 type DBObject interface {
-	DBID() ObjectID
-	SetDBID(id ObjectID)
+	GetObjectID() ObjectID
+	SetObjectID(id ObjectID)
 }
