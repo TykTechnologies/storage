@@ -1,7 +1,10 @@
 package model
 
-import "context"
+import (
+	"context"
+	"github.com/TykTechnologies/storage/persistent"
+)
 
 type PersistentStorage interface {
-	Insert(context.Context, DBTable, DBObject) error
+	Insert(context.Context, DBTable, persistent.DBObject) error
 }

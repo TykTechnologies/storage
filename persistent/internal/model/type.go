@@ -1,9 +1,5 @@
 package model
 
-import (
-	"time"
-)
-
 type DBType string
 
 const (
@@ -25,20 +21,4 @@ type StorageLifecycle interface {
 // database models in order to perform CRUD operations
 type DBTable interface {
 	TableName() string
-}
-
-// ObjectID interface to be implemented by each db driver
-type ObjectID interface {
-	Hex() string
-	String() string
-	Timestamp() time.Time
-	MarshalJSON() ([]byte, error)
-	UnmarshalJSON([]byte) error
-	MarshalText() ([]byte, error)
-	UnmarshalText([]byte) error
-}
-
-type DBObject interface {
-	GetObjectID() ObjectID
-	SetObjectID(id ObjectID)
 }

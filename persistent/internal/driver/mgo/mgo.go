@@ -2,6 +2,7 @@ package mgo
 
 import (
 	"context"
+	"github.com/TykTechnologies/storage/persistent"
 	"time"
 
 	"github.com/TykTechnologies/storage/persistent/internal/model"
@@ -32,12 +33,12 @@ func NewMgoDriver(opts *model.ClientOpts) (*mgoDriver, error) {
 	return newDriver, nil
 }
 
-func NewObjectID() model.ObjectID {
+func NewObjectID() persistent.ObjectID {
 	id := bson.NewObjectId()
 	return &mgoBson{id}
 }
 
-func (d *mgoDriver) Insert(ctx context.Context, table model.DBTable, row model.DBObject) error {
+func (d *mgoDriver) Insert(ctx context.Context, table model.DBTable, row persistent.DBObject) error {
 	sess := d.session.Copy()
 
 	col := sess.DB("").C(table.TableName())
