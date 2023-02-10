@@ -117,10 +117,10 @@ func TestLoadCertificateAndKey(t *testing.T) {
 func TestLoadCertificateAndKeyFromFile(t *testing.T) {
 	_, _, combinedPEM, _ := GenServerCertificate(t)
 	dir, err := ioutil.TempDir("", "certs")
+
 	defer os.RemoveAll(dir)
 
 	assert.Nil(t, err)
-
 
 	certCombinedPath := filepath.Join(dir, "combined.pem")
 	err = ioutil.WriteFile(certCombinedPath, combinedPEM, 0o666)
@@ -156,25 +156,35 @@ func TestLoadCertificateAndKeyFromFile(t *testing.T) {
 
 func GenCertificate(t *testing.T, template *x509.Certificate, setLeaf bool) ([]byte, []byte, []byte, tls.Certificate) {
 	t.Helper()
-	priv, _ := rsa.GenerateKey(rand.Reader, 1024)
+	priv, err := rsa.GenerateKey(rand.Reader, 1024)
+	assert.Nil(t, err)
 
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, _ := rand.Int(rand.Reader, serialNumberLimit)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	assert.Nil(t, err)
+
 	template.SerialNumber = serialNumber
 	template.BasicConstraintsValid = true
 	template.NotBefore = time.Now()
 	template.NotAfter = template.NotBefore.Add(time.Hour)
 
-	derBytes, _ := x509.CreateCertificate(rand.Reader, template, template, &priv.PublicKey, priv)
+	derBytes, err := x509.CreateCertificate(rand.Reader, template, template, &priv.PublicKey, priv)
+	assert.Nil(t, err)
 
 	var certPem, keyPem bytes.Buffer
-	pem.Encode(&certPem, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-	pem.Encode(&keyPem, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+	err = pem.Encode(&certPem, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	assert.Nil(t, err)
 
-	clientCert, _ := tls.X509KeyPair(certPem.Bytes(), keyPem.Bytes())
+	err = pem.Encode(&keyPem, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+	assert.Nil(t, err)
+
+	clientCert, err := tls.X509KeyPair(certPem.Bytes(), keyPem.Bytes())
+	assert.Nil(t, err)
+
 	if setLeaf {
 		clientCert.Leaf = template
 	}
+
 	combinedPEM := bytes.Join([][]byte{certPem.Bytes(), keyPem.Bytes()}, []byte("\n"))
 
 	return certPem.Bytes(), keyPem.Bytes(), combinedPEM, clientCert
