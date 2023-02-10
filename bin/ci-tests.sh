@@ -34,7 +34,7 @@ do
 
     set -x
 
-     echo "Testing... $pkg with tags $tags"
+     echo "Testing... $pkg with tags $tags coverprofile $coveragefile"
     go test \
     -failfast \
     -timeout ${TEST_TIMEOUT:-"5m"} \

@@ -1,3 +1,6 @@
+//go:build mongo
+// +build mongo
+
 package mgo
 
 import (
@@ -126,7 +129,22 @@ func TestClose(t *testing.T) {
 
 	assert.Nil(t, lc.session)
 	assert.Nil(t, lc.db)
+
+	err = lc.Close()
+	assert.NotNil(t, err)
+	assert.Equal(t, "closing a no connected database", err.Error())
 }
 
 func TestDBType(t *testing.T) {
+	lc := &lifeCycle{}
+	opts := &model.ClientOpts{
+		ConnectionString: "mongodb://localhost:27017/test",
+	}
+
+	err := lc.Connect(opts)
+	assert.Nil(t, err)
+
+	dbType := lc.DBType()
+	assert.Equal(t, model.StandardMongo, dbType)
 }
+

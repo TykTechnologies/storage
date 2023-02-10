@@ -2,6 +2,7 @@ package mgo
 
 import (
 	"crypto/tls"
+	"errors"
 	"net"
 
 	"gopkg.in/mgo.v2"
@@ -16,6 +17,7 @@ type lifeCycle struct {
 	db      *mgo.Database
 }
 
+// Connect connects to the mongo database given the ClientOpts.
 func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 	dialInfo, err := mgo.ParseURL(opts.ConnectionString)
 	if err != nil {
@@ -49,20 +51,32 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 	return nil
 }
 
+// Close finish the session.
 func (lc *lifeCycle) Close() error {
 	if lc.session != nil {
 		lc.session.Close()
 
 		lc.session = nil
 		lc.db = nil
+
+		return nil
 	}
 
-	return nil
+	return errors.New("closing a no connected database")
 }
 
 // DBType returns the type of the registered storage driver.
 func (lc *lifeCycle) DBType() model.DBType {
-	return model.MongoType
+	var result struct {
+		Code int `bson:"code"`
+	}
+
+	lc.session.Run("features", &result)
+	if result.Code == 303 {
+		return model.AWSDocumentDB
+	}
+
+	return model.StandardMongo
 }
 
 func (lc *lifeCycle) setSessionConsistency(opts *model.ClientOpts) {
