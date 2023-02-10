@@ -4,8 +4,9 @@ import (
 	"crypto/tls"
 	"net"
 
-	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"gopkg.in/mgo.v2"
+
+	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
 var _ model.StorageLifecycle = &lifeCycle{}
@@ -23,7 +24,7 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 
 	dialInfo.Timeout = model.DEFAULT_CONN_TIMEOUT
 
-	if opts.UseSSL{
+	if opts.UseSSL {
 		tlsConfig, err := opts.GetTLSConfig()
 		if err != nil {
 			return err
@@ -49,12 +50,12 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 	return nil
 }
 
-func (lc *lifeCycle) Close() error{
+func (lc *lifeCycle) Close() error {
 	return nil
 }
 
 // DBType returns the type of the registered storage driver.
-func (lc *lifeCycle) DBType() model.DBType{
+func (lc *lifeCycle) DBType() model.DBType {
 	return model.MongoType
 }
 

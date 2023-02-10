@@ -1,3 +1,4 @@
+//go:build mongo
 // +build mongo
 
 package mgo
@@ -6,8 +7,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
 func TestConnect(t *testing.T) {
@@ -51,15 +53,15 @@ func TestConnect(t *testing.T) {
 				Type:             "mongodb",
 				SSLPEMKeyfile:    "invalid_pem_file",
 			},
-			want: errors.New("unable to load tls certificate: open invalid_pem_file: no such file or directory"),
+			want: errors.New("failure reading certificate file: open invalid_pem_file: no such file or directory"),
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			lc := lifeCycle{}
-			 gotErr := lc.Connect(test.opts)
-			 assert.Equal(t, gotErr, test.want)
+			gotErr := lc.Connect(test.opts)
+			assert.Equal(t, gotErr, test.want)
 		})
 	}
 }

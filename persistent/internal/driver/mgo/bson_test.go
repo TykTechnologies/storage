@@ -1,10 +1,12 @@
+//go:build mongo
 // +build mongo
 
 package mgo
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewObjectID(t *testing.T) {
