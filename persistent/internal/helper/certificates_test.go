@@ -156,6 +156,7 @@ func TestLoadCertificateAndKeyFromFile(t *testing.T) {
 
 func GenCertificate(t *testing.T, template *x509.Certificate, setLeaf bool) ([]byte, []byte, []byte, tls.Certificate) {
 	t.Helper()
+
 	priv, err := rsa.GenerateKey(rand.Reader, 1024)
 	assert.Nil(t, err)
 
@@ -192,6 +193,7 @@ func GenCertificate(t *testing.T, template *x509.Certificate, setLeaf bool) ([]b
 
 func GenServerCertificate(t *testing.T) ([]byte, []byte, []byte, tls.Certificate) {
 	t.Helper()
+
 	certPem, privPem, combinedPEM, cert := GenCertificate(t, &x509.Certificate{
 		DNSNames:    []string{"localhost"},
 		IPAddresses: []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::")},
