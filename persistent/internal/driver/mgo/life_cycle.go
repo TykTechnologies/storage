@@ -33,7 +33,6 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 		dialInfo.DialServer = func(addr *mgo.ServerAddr) (net.Conn, error) {
 			return tls.Dial("tcp", addr.String(), tlsConfig)
 		}
-
 	}
 
 	sess, err := mgo.DialWithInfo(dialInfo)
