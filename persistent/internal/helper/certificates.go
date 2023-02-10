@@ -8,18 +8,14 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
+	"os"
 )
 
-func LoadCertficateAndKeyFromFile(path string) (*tls.Certificate, error) {
-	raw, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
+func LoadCertificateAndKey(data []byte) (*tls.Certificate, error) {
 	var cert tls.Certificate
+	var err error
 	for {
-		block, rest := pem.Decode(raw)
+		block, rest := pem.Decode(data)
 		if block == nil {
 			break
 		}
@@ -28,19 +24,27 @@ func LoadCertficateAndKeyFromFile(path string) (*tls.Certificate, error) {
 		} else {
 			cert.PrivateKey, err = parsePrivateKey(block.Bytes)
 			if err != nil {
-				return nil, fmt.Errorf("Failure reading private key from \"%s\": %s", path, err)
+				return nil, err
 			}
 		}
-		raw = rest
+		data = rest
 	}
 
 	if len(cert.Certificate) == 0 {
-		return nil, fmt.Errorf("No certificate found in \"%s\"", path)
+		return nil, fmt.Errorf("no certificate found")
 	} else if cert.PrivateKey == nil {
-		return nil, fmt.Errorf("No private key found in \"%s\"", path)
+		return nil, fmt.Errorf("no private key found")
 	}
 
 	return &cert, nil
+}
+
+func LoadCertificateAndKeyFromFile(path string) (*tls.Certificate, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failure reading file: %s", err)
+	}
+	return LoadCertificateAndKey(raw)
 }
 
 func parsePrivateKey(der []byte) (crypto.PrivateKey, error) {
