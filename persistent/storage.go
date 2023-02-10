@@ -15,6 +15,7 @@ const (
 type ClientOpts model.ClientOpts
 type PersistentStorage model.PersistentStorage
 type ObjectID model.ObjectID
+type DBObject model.DBObject
 
 // NewPersistentStorage returns a persistent storage object that uses the given driver
 func NewPersistentStorage(opts *ClientOpts) (model.PersistentStorage, error) {
