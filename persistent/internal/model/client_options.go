@@ -100,7 +100,7 @@ func (opts *ClientOpts) GetTLSConfig() (*tls.Config, error) {
 		cert, err := helper.LoadCertificateAndKeyFromFile(opts.SSLPEMKeyfile)
 
 		if err != nil {
-			return tlsConfig, errors.New("unable to load tls certificate: " + err.Error())
+			return tlsConfig, err
 		}
 
 		tlsConfig.Certificates = []tls.Certificate{*cert}

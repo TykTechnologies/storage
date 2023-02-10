@@ -53,7 +53,7 @@ func TestConnect(t *testing.T) {
 				Type:             "mongodb",
 				SSLPEMKeyfile:    "invalid_pem_file",
 			},
-			want: errors.New("unable to load tls certificate: open invalid_pem_file: no such file or directory"),
+			want: errors.New("failure reading file: open invalid_pem_file: no such file or directory"),
 		},
 	}
 
