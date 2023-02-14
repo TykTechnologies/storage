@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
 func TestNewPersistentStorage(t *testing.T) {

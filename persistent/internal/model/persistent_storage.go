@@ -6,7 +6,10 @@ import (
 )
 
 type PersistentStorage interface {
+	// Insert a DbObject into the database
 	Insert(context.Context, DBTable, id.DBObject) error
+	// NewObjectID returns a new id object
 	NewObjectID() id.ObjectID
-	ObjectIdHex(s string) id.ObjectID
+	// ObjectIdHex returns an object id created from an existent id
+	ObjectIdHex(id string) id.ObjectID
 }

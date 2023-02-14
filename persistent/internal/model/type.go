@@ -3,7 +3,8 @@ package model
 type DBType string
 
 const (
-	MongoType DBType = "mongo"
+	StandardMongo DBType = "mongo"
+	AWSDocumentDB DBType = "docdb"
 )
 
 type StorageLifecycle interface {

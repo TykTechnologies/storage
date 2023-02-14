@@ -10,7 +10,7 @@ import (
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 )
 
-const(
+const (
 	DEFAULT_CONN_TIMEOUT = 10 * time.Second
 )
 
@@ -97,10 +97,9 @@ func (opts *ClientOpts) GetTLSConfig() (*tls.Config, error) {
 	}
 
 	if opts.SSLPEMKeyfile != "" {
-		cert, err := helper.LoadCertficateAndKeyFromFile(opts.SSLPEMKeyfile)
-
+		cert, err := helper.LoadCertificateAndKeyFromFile(opts.SSLPEMKeyfile)
 		if err != nil {
-			return tlsConfig, errors.New("unable to load tls certificate: "+ err.Error())
+			return tlsConfig, err
 		}
 
 		tlsConfig.Certificates = []tls.Certificate{*cert}
