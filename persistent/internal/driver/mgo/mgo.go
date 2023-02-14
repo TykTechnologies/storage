@@ -38,6 +38,10 @@ func (d *mgoDriver) NewObjectID() id.ObjectID {
 	return &mgoBson{id}
 }
 
+func (d *mgoDriver) ObjectIdHex(s string) id.ObjectID {
+	return &mgoBson{bson.ObjectIdHex(s)}
+}
+
 func (d *mgoDriver) Insert(ctx context.Context, table model.DBTable, row id.DBObject) error {
 	sess := d.session.Copy()
 
