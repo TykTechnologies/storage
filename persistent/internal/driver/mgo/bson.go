@@ -18,10 +18,6 @@ func (m *mgoBson) String() string {
 	return m.Hex()
 }
 
-func (m *mgoBson) GetBSON() (interface{}, error) {
-	return bson.ObjectId(*m), nil
-}
-
 func (m *mgoBson) Valid() bool {
 	return bson.ObjectId(*m).Valid()
 }
