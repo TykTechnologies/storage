@@ -7,6 +7,7 @@ type ObjectID interface {
 	Hex() string
 	String() string
 	Timestamp() time.Time
+	Valid() bool
 	MarshalJSON() ([]byte, error)
 	UnmarshalJSON([]byte) error
 	MarshalText() ([]byte, error)
