@@ -7,7 +7,7 @@ import (
 )
 
 // inherit all the bson methods from mgo.v2. Implements the
-// `mode.BSON` interface
+// `model.BSON` interface
 type mgoBson bson.ObjectId
 
 func (m *mgoBson) Hex() string {
@@ -16,6 +16,10 @@ func (m *mgoBson) Hex() string {
 
 func (m *mgoBson) String() string {
 	return m.Hex()
+}
+
+func (m *mgoBson) GetBSON() (interface{}, error) {
+	return bson.ObjectId(*m), nil
 }
 
 func (m *mgoBson) Valid() bool {

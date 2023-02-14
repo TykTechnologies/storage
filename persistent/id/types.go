@@ -12,6 +12,7 @@ type ObjectID interface {
 	UnmarshalJSON([]byte) error
 	MarshalText() ([]byte, error)
 	UnmarshalText([]byte) error
+	GetBSON() (interface{}, error)
 }
 
 type DBObject interface {
