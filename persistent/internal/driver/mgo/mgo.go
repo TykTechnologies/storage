@@ -33,7 +33,7 @@ func NewMgoDriver(opts *model.ClientOpts) (*mgoDriver, error) {
 	return newDriver, nil
 }
 
-func NewObjectID() id.ObjectID {
+func (d *mgoDriver) NewObjectID() id.ObjectID {
 	id := bson.NewObjectId()
 	return &mgoBson{id}
 }

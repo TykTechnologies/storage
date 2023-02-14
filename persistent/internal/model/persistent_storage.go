@@ -7,4 +7,5 @@ import (
 
 type PersistentStorage interface {
 	Insert(context.Context, DBTable, id.DBObject) error
+	NewObjectID() id.ObjectID
 }
