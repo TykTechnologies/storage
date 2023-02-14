@@ -35,11 +35,13 @@ func NewMgoDriver(opts *model.ClientOpts) (*mgoDriver, error) {
 
 func (d *mgoDriver) NewObjectID() id.ObjectID {
 	id := bson.NewObjectId()
-	return &mgoBson{id}
+	mgoId := mgoBson(id)
+	return &mgoId
 }
 
 func (d *mgoDriver) ObjectIdHex(s string) id.ObjectID {
-	return &mgoBson{bson.ObjectIdHex(s)}
+	hex := mgoBson(bson.ObjectIdHex(s))
+	return &hex
 }
 
 func (d *mgoDriver) Insert(ctx context.Context, table model.DBTable, row id.DBObject) error {
