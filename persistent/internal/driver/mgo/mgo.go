@@ -2,8 +2,9 @@ package mgo
 
 import (
 	"context"
-	"github.com/TykTechnologies/storage/persistent/id"
 	"time"
+
+	"github.com/TykTechnologies/storage/persistent/id"
 
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 

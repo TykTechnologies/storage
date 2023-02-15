@@ -6,8 +6,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-// inherit all the bson methods from mgo.v2. Implements the
-// `model.BSON` interface
+// Implements the `model.BSON` interface
 type mgoBson bson.ObjectId
 
 func (m *mgoBson) Hex() string {
