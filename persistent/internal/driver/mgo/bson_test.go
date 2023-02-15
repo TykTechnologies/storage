@@ -26,7 +26,7 @@ func TestNewObjectID(t *testing.T) {
 		otcBytes, err := objectToCompare.MarshalText()
 		idBytes, err2 := id.MarshalText()
 
-		if err != nill || err2 != nil {
+		if err != nil || err2 != nil {
 			t.Error(err.Error())
 		}
 
@@ -37,7 +37,7 @@ func TestNewObjectID(t *testing.T) {
 		otcBytes, err := objectToCompare.MarshalJSON()
 		idBytes, err2 := id.MarshalJSON()
 
-		if err != nill || err2 != nil {
+		if err != nil || err2 != nil {
 			t.Error(err.Error())
 		}
 
