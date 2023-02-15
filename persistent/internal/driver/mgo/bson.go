@@ -27,10 +27,10 @@ func (m *mgoBson) MarshalJSON() ([]byte, error) {
 
 func (m *mgoBson) UnmarshalJSON(bytes []byte) error {
 	var b bson.ObjectId
-	b.UnmarshalJSON(bytes)
+	err := b.UnmarshalJSON(bytes)
 	*m = mgoBson(string(b))
 
-	return nil
+	return err
 }
 
 func (m *mgoBson) MarshalText() ([]byte, error) {
