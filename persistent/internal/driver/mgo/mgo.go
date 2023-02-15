@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/TykTechnologies/storage/persistent/id"
+
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 
 	"gopkg.in/mgo.v2/bson"
@@ -32,12 +34,18 @@ func NewMgoDriver(opts *model.ClientOpts) (*mgoDriver, error) {
 	return newDriver, nil
 }
 
-func NewObjectID() model.ObjectID {
+func (d *mgoDriver) NewObjectID() id.ObjectID {
 	id := bson.NewObjectId()
-	return &mgoBson{id}
+	mgoId := mgoBson(id)
+	return &mgoId
 }
 
-func (d *mgoDriver) Insert(ctx context.Context, table model.DBTable, row model.DBObject) error {
+func (d *mgoDriver) ObjectIdHex(s string) id.ObjectID {
+	hex := mgoBson(bson.ObjectIdHex(s))
+	return &hex
+}
+
+func (d *mgoDriver) Insert(ctx context.Context, table model.DBTable, row id.DBObject) error {
 	sess := d.session.Copy()
 
 	col := sess.DB("").C(table.TableName())
