@@ -10,7 +10,8 @@ import (
 )
 
 func TestNewObjectID(t *testing.T) {
-	id := NewObjectID()
+	mgo := mgoDriver{}
+	id := mgo.NewObjectID()
 
 	assert.NotEqual(t, "", id)
 }
