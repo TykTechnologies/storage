@@ -14,7 +14,7 @@ func (m *mgoBson) Hex() string {
 }
 
 func (m *mgoBson) String() string {
-	return m.Hex()
+	return bson.ObjectId(*m).String()
 }
 
 func (m *mgoBson) Valid() bool {
