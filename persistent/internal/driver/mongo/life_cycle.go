@@ -16,6 +16,8 @@ type lifeCycle struct {
 	client *mongo.Client
 }
 
+var _ model.StorageLifecycle = &lifeCycle{}
+
 // Connect connects to the mongo database given the ClientOpts.
 func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 	var err error
