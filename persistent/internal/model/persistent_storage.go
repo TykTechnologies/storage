@@ -13,4 +13,6 @@ type PersistentStorage interface {
 	NewObjectID() id.ObjectID
 	// ObjectIdHex returns an object id created from an existent id
 	ObjectIdHex(id string) id.ObjectID
+	// Checking if an error is a "no rows error"
+	IsErrNoRows(err error) bool
 }

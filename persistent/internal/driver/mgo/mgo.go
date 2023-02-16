@@ -8,6 +8,7 @@ import (
 
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 
+	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -52,4 +53,8 @@ func (d *mgoDriver) Insert(ctx context.Context, table model.DBTable, row id.DBOb
 	defer col.Database.Session.Close()
 
 	return col.Insert(row)
+}
+
+func (d *mgoDriver) IsErrNoRows(err error) bool {
+	return err == mgo.ErrNotFound
 }
