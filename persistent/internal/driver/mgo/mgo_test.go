@@ -5,7 +5,6 @@ package mgo
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/TykTechnologies/storage/persistent/id"
