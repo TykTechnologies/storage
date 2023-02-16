@@ -1,7 +1,12 @@
+//go:build mongo
+// +build mongo
+
 package mongo
 
 import (
+	"context"
 	"crypto/tls"
+	"errors"
 	"testing"
 	"time"
 
@@ -114,4 +119,83 @@ func TestMongoOptsBuilder(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConnect(t *testing.T) {
+	tests := []struct {
+		name string
+		opts *model.ClientOpts
+		want error
+	}{
+		{
+			name: "valid connection_string",
+			opts: &model.ClientOpts{
+				ConnectionString: "mongodb://localhost:27017/test",
+				UseSSL:           false,
+				Type:             "mongodb",
+			},
+			want: nil,
+		},
+		{
+			name: "invalid connection_string",
+			opts: &model.ClientOpts{
+				ConnectionString: "invalid_conn_string",
+				UseSSL:           false,
+				Type:             "mongodb",
+			},
+			want: errors.New("error parsing uri: scheme must be \"mongodb\" or \"mongodb+srv\""),
+		},
+		{
+			name: "valid connection_string and invalid tls config",
+			opts: &model.ClientOpts{
+				ConnectionString: "mongodb://localhost:27017/test",
+				UseSSL:           true,
+				Type:             "mongodb",
+				SSLPEMKeyfile:    "invalid_pem_file",
+			},
+			want: errors.New("failure reading certificate file: open invalid_pem_file: no such file or directory"),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lc := &lifeCycle{}
+			gotErr := lc.Connect(test.opts)
+			assert.Equal(t, gotErr, test.want)
+
+			defer lc.Close()
+		})
+	}
+}
+
+func TestClose(t *testing.T) {
+	lc := &lifeCycle{}
+	opts := &model.ClientOpts{
+		ConnectionString: "mongodb://localhost:27017/test",
+	}
+
+	err := lc.Connect(opts)
+	assert.Nil(t, err)
+
+	err = lc.Close()
+	assert.Nil(t, err)
+
+	assert.NotNil(t, lc.client.Ping(context.Background(), nil))
+
+	err = lc.Close()
+	assert.NotNil(t, err)
+	assert.Equal(t, "client is disconnected", err.Error())
+}
+
+func TestDBType(t *testing.T) {
+	lc := &lifeCycle{}
+	opts := &model.ClientOpts{
+		ConnectionString: "mongodb://localhost:27017/test",
+	}
+
+	err := lc.Connect(opts)
+	assert.Nil(t, err)
+
+	dbType := lc.DBType()
+	assert.Equal(t, model.StandardMongo, dbType)
 }

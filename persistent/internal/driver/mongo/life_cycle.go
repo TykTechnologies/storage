@@ -2,13 +2,14 @@ package mongo
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
-
-	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
 type lifeCycle struct {
@@ -22,7 +23,7 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 
 	connOpts, err := mongoOptsBuilder(opts)
 	if err != nil {
-		return err
+		return errors.New(err.Error())
 	}
 
 	if client, err = mongo.Connect(context.Background(), connOpts); err != nil {
@@ -32,6 +33,31 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 	lc.client = client
 
 	return lc.client.Ping(context.Background(), nil)
+}
+
+// Close finish the session.
+func (lc *lifeCycle) Close() error {
+	if lc.client != nil {
+		return lc.client.Disconnect(context.Background())
+	}
+
+	return errors.New("closing a no connected database")
+}
+
+// DBType returns the type of the registered storage driver.
+func (lc *lifeCycle) DBType() model.DBType {
+	var result struct {
+		Code int `bson:"code"`
+	}
+
+	cmd := bson.D{{Key: "features", Value: 1}}
+	singleResult := lc.client.Database("admin").RunCommand(context.Background(), cmd)
+
+	if err := singleResult.Decode(&result); (singleResult.Err() != nil || err != nil) && result.Code == 303 {
+		return model.AWSDocumentDB
+	}
+
+	return model.StandardMongo
 }
 
 // mongoOptsBuilder build Mongo options.ClientOptions from our own model.ClientOpts. Also sets default values.
