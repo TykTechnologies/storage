@@ -4,9 +4,10 @@
 package mgo
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/mgo.v2/bson"
-	"testing"
 )
 
 func TestObjectIdHex(t *testing.T) {

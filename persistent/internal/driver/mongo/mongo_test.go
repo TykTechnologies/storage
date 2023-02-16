@@ -6,8 +6,9 @@ package mongo
 import (
 	"testing"
 
-	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
 func TestNewMongoDriver(t *testing.T) {
@@ -19,6 +20,7 @@ func TestNewMongoDriver(t *testing.T) {
 		assert.Nil(t, err)
 		assert.NotNil(t, newDriver)
 		assert.NotNil(t, newDriver.lifeCycle)
+		assert.NotNil(t, newDriver.options)
 	})
 	t.Run("new driver without connection string", func(t *testing.T) {
 		newDriver, err := NewMongoDriver(&model.ClientOpts{})
@@ -27,5 +29,4 @@ func TestNewMongoDriver(t *testing.T) {
 		assert.Equal(t, "can't connect without connection string", err.Error())
 		assert.Nil(t, newDriver)
 	})
-
 }

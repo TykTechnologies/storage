@@ -2,15 +2,13 @@ package mongo
 
 import (
 	"errors"
-	"time"
 
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
 type mongoDriver struct {
 	*lifeCycle
-	lastConnAttempt time.Time
-	options         model.ClientOpts
+	options *model.ClientOpts
 }
 
 // NewMongoDriver returns an instance of the driver official mongo connected to the database.
@@ -20,6 +18,7 @@ func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
 	}
 
 	newDriver := &mongoDriver{}
+	newDriver.options = opts
 
 	// create the db life cycle manager
 	lc := &lifeCycle{}

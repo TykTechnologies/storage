@@ -1,4 +1,3 @@
 package mongo
 
-type lifeCycle struct {
-}
+type lifeCycle struct{}
