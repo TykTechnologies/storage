@@ -13,8 +13,10 @@ const (
 	Mgo           string = "mgo"
 )
 
-type ClientOpts model.ClientOpts
-type PersistentStorage model.PersistentStorage
+type (
+	ClientOpts        model.ClientOpts
+	PersistentStorage model.PersistentStorage
+)
 
 // NewPersistentStorage returns a persistent storage object that uses the given driver
 func NewPersistentStorage(opts *ClientOpts) (model.PersistentStorage, error) {
