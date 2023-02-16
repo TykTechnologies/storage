@@ -2,6 +2,7 @@ package mgo
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/TykTechnologies/storage/persistent/id"
@@ -65,6 +66,5 @@ func (d *mgoDriver) Delete(ctx context.Context, table model.DBTable, row id.DBOb
 }
 
 func (d *mgoDriver) IsErrNoRows(err error) bool {
-	return err == mgo.ErrNotFound
+	return errors.Is(err, mgo.ErrNotFound)
 }
-

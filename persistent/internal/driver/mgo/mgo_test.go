@@ -1,7 +1,9 @@
+//go:build mongo
+// +build mongo
+
 package mgo
 
 import (
-
 	"context"
 	"testing"
 
@@ -128,5 +130,4 @@ func TestIsErrNoRows(t *testing.T) {
 	assert.True(t, mgoDriver.IsErrNoRows(mgo.ErrNotFound))
 	assert.False(t, mgoDriver.IsErrNoRows(nil))
 	assert.False(t, mgoDriver.IsErrNoRows(mgo.ErrCursor))
-
 }
