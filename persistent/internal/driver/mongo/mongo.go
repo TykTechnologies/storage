@@ -15,7 +15,7 @@ type mongoDriver struct {
 
 // NewMongoDriver returns an instance of the driver official mongo connected to the database.
 func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
-	if opts.ConnectionString == ""{
+	if opts.ConnectionString == "" {
 		return nil, errors.New("can't connect without connection string")
 	}
 
