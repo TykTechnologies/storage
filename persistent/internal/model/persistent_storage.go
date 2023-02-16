@@ -15,4 +15,6 @@ type PersistentStorage interface {
 	ObjectIdHex(id string) id.ObjectID
 	// Delete a DbObject from the database
 	Delete(ctx context.Context, table DBTable, row id.DBObject) error
+	// Checking if an error is a "no rows error"
+	IsErrNoRows(err error) bool
 }
