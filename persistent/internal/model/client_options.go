@@ -32,7 +32,7 @@ type ClientOpts struct {
 	// Sets the session consistency for the storage connection
 	SessionConsistency string
 	// Sets the connection timeout to the database. Defaults to 10s.
-	ConnectionTimeout string
+	ConnectionTimeout int
 	// type of database/driver
 	Type string
 }

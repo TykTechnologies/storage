@@ -7,10 +7,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/TykTechnologies/storage/persistent/id"
-	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/mgo.v2/bson"
+
+	"github.com/TykTechnologies/storage/persistent/id"
+	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
 type dummyTable struct{}
@@ -68,7 +69,6 @@ func TestInsert(t *testing.T) {
 	assert.Equal(t, object.Name, result.Name)
 	assert.Equal(t, object.Email, result.Email)
 	assert.Equal(t, object.GetObjectID().String(), result.GetObjectID().String())
-
 }
 
 func TestDelete(t *testing.T) {
