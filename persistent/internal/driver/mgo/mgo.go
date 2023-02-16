@@ -2,12 +2,14 @@ package mgo
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/TykTechnologies/storage/persistent/id"
 
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 
+	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -61,4 +63,8 @@ func (d *mgoDriver) Delete(ctx context.Context, table model.DBTable, row id.DBOb
 	col := sess.DB("").C(table.TableName())
 
 	return col.Remove(row)
+}
+
+func (d *mgoDriver) IsErrNoRows(err error) bool {
+	return errors.Is(err, mgo.ErrNotFound)
 }
