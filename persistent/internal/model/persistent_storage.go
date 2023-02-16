@@ -13,4 +13,6 @@ type PersistentStorage interface {
 	NewObjectID() id.ObjectID
 	// ObjectIdHex returns an object id created from an existent id
 	ObjectIdHex(id string) id.ObjectID
+	// Delete a DbObject from the database
+	Delete(ctx context.Context, table DBTable, row id.DBObject) error
 }

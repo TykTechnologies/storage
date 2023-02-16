@@ -47,9 +47,18 @@ func (d *mgoDriver) ObjectIdHex(s string) id.ObjectID {
 
 func (d *mgoDriver) Insert(ctx context.Context, table model.DBTable, row id.DBObject) error {
 	sess := d.session.Copy()
+	defer sess.Close()
 
 	col := sess.DB("").C(table.TableName())
-	defer col.Database.Session.Close()
 
 	return col.Insert(row)
+}
+
+func (d *mgoDriver) Delete(ctx context.Context, table model.DBTable, row id.DBObject) error {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	col := sess.DB("").C(table.TableName())
+
+	return col.Remove(row)
 }
