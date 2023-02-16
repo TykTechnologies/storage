@@ -21,7 +21,7 @@ func TestNewObjectID(t *testing.T) {
 	assert.Equal(t, objectToCompare.Time(), id.Timestamp())
 	assert.Equal(t, objectToCompare.Valid(), id.Valid())
 
-	//Marshall text test
+	// Marshall text test
 	t.Run("Marshal Text", func(t *testing.T) {
 		otcBytes, err := objectToCompare.MarshalText()
 		idBytes, err2 := id.MarshalText()
