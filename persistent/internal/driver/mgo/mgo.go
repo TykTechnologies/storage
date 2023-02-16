@@ -53,3 +53,12 @@ func (d *mgoDriver) Insert(ctx context.Context, table model.DBTable, row id.DBOb
 
 	return col.Insert(row)
 }
+
+func (d *mgoDriver) Delete(ctx context.Context, table model.DBTable, row id.DBObject) error {
+	sess := d.session.Copy()
+
+	col := sess.DB("").C(table.TableName())
+	defer col.Database.Session.Close()
+
+	return col.Remove(row)
+}
