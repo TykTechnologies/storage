@@ -36,31 +36,24 @@ func NewMgoDriver(opts *model.ClientOpts) (*mgoDriver, error) {
 	return newDriver, nil
 }
 
-func (d *mgoDriver) NewObjectID() id.ObjectID {
-	id := bson.NewObjectId()
-	mgoId := mgoBson(id)
-	return &mgoId
-}
+func (d *mgoDriver) Insert(ctx context.Context, row id.DBObject) error {
+	if row.GetObjectID() == "" {
+		row.SetObjectID(id.OID(bson.NewObjectId().Hex()))
+	}
 
-func (d *mgoDriver) ObjectIdHex(s string) id.ObjectID {
-	hex := mgoBson(bson.ObjectIdHex(s))
-	return &hex
-}
-
-func (d *mgoDriver) Insert(ctx context.Context, table model.DBTable, row id.DBObject) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
-	col := sess.DB("").C(table.TableName())
+	col := sess.DB("").C(row.TableName())
 
 	return col.Insert(row)
 }
 
-func (d *mgoDriver) Delete(ctx context.Context, table model.DBTable, row id.DBObject) error {
+func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
-	col := sess.DB("").C(table.TableName())
+	col := sess.DB("").C(row.TableName())
 
 	return col.Remove(row)
 }

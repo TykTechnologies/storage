@@ -15,24 +15,22 @@ import (
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
-type dummyTable struct{}
-
-func (d dummyTable) TableName() string {
-	return "dummy"
-}
-
 type dummyDBObject struct {
-	Id    *mgoBson `bson:"_id,omitempty"`
-	Name  string   `bson:"name"`
-	Email string   `bson:"email"`
+	Id    id.OID `bson:"_id,omitempty"`
+	Name  string `bson:"name"`
+	Email string `bson:"email"`
 }
 
-func (d dummyDBObject) GetObjectID() id.ObjectID {
+func (d dummyDBObject) GetObjectID() id.OID {
 	return d.Id
 }
 
-func (d *dummyDBObject) SetObjectID(id id.ObjectID) {
-	d.Id = id.(*mgoBson)
+func (d *dummyDBObject) SetObjectID(id id.OID) {
+	d.Id = id
+}
+
+func (d dummyDBObject) TableName() string {
+	return "dummy"
 }
 
 func TestInsert(t *testing.T) {
@@ -43,25 +41,22 @@ func TestInsert(t *testing.T) {
 	})
 	assert.Nil(t, err)
 	// create a new dummy table
-	var table dummyTable
 	// create a new dummy object
 	object := &dummyDBObject{
 		Name:  "test",
 		Email: "test@test.com",
 	}
-	objId := mgo.NewObjectID()
-	object.SetObjectID(objId)
 
 	// insert the object into the database
-	err = mgo.Insert(context.Background(), table, object)
+	err = mgo.Insert(context.Background(), object)
 	assert.Nil(t, err)
 	// delete the object from the database
-	defer mgo.Delete(context.Background(), table, object)
+	defer mgo.Delete(context.Background(), object)
 
 	// check if the object was inserted
 	sess := mgo.session.Copy()
 	defer sess.Close()
-	col := sess.DB("").C(table.TableName())
+	col := sess.DB("").C(object.TableName())
 
 	var result dummyDBObject
 	err = col.Find(bson.M{"_id": object.GetObjectID()}).One(&result)
@@ -69,7 +64,7 @@ func TestInsert(t *testing.T) {
 
 	assert.Equal(t, object.Name, result.Name)
 	assert.Equal(t, object.Email, result.Email)
-	assert.Equal(t, object.GetObjectID().String(), result.GetObjectID().String())
+	assert.Equal(t, object.GetObjectID(), result.GetObjectID())
 }
 
 func TestDelete(t *testing.T) {
@@ -79,23 +74,19 @@ func TestDelete(t *testing.T) {
 		UseSSL:           false,
 	})
 	assert.Nil(t, err)
-	// create a new dummy table
-	var table dummyTable
 	// create a new dummy object
 	object := &dummyDBObject{
 		Name:  "test",
 		Email: "test@test.com",
 	}
 
-	object.SetObjectID(mgo.NewObjectID())
-
 	// insert the object into the database
-	err = mgo.Insert(context.Background(), table, object)
+	err = mgo.Insert(context.Background(), object)
 	assert.Nil(t, err)
 	// check if the object was inserted
 	sess := mgo.session.Copy()
 	defer sess.Close()
-	col := sess.DB("").C(table.TableName())
+	col := sess.DB("").C(object.TableName())
 
 	var result dummyDBObject
 	err = col.Find(bson.M{"_id": object.GetObjectID()}).One(&result)
@@ -103,24 +94,16 @@ func TestDelete(t *testing.T) {
 
 	assert.Equal(t, object.Name, result.Name)
 	assert.Equal(t, object.Email, result.Email)
-	assert.Equal(t, object.GetObjectID().String(), result.GetObjectID().String())
+	assert.Equal(t, object.GetObjectID(), result.GetObjectID())
 
 	// delete the object from the database
-	err = mgo.Delete(context.Background(), table, object)
+	err = mgo.Delete(context.Background(), object)
 	assert.Nil(t, err)
 
 	// check if the object was deleted
 	err = col.Find(bson.M{"_id": object.GetObjectID()}).One(&result)
 	assert.NotNil(t, err)
-}
-
-func TestObjectIdHex(t *testing.T) {
-	mgo := mgoDriver{}
-
-	oldIdFormat := bson.NewObjectId()
-	newIdFormat := mgo.ObjectIdHex(oldIdFormat.Hex())
-
-	assert.Equal(t, oldIdFormat.String(), newIdFormat.String())
+	assert.True(t, mgo.IsErrNoRows(err))
 }
 
 func TestIsErrNoRows(t *testing.T) {
