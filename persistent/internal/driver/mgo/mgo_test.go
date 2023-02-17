@@ -15,12 +15,10 @@ import (
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
-
-
 type dummyDBObject struct {
 	Id    id.OID `bson:"_id,omitempty"`
-	Name  string   `bson:"name"`
-	Email string   `bson:"email"`
+	Name  string `bson:"name"`
+	Email string `bson:"email"`
 }
 
 func (d dummyDBObject) GetObjectID() id.OID {
@@ -53,7 +51,7 @@ func TestInsert(t *testing.T) {
 	err = mgo.Insert(context.Background(), object)
 	assert.Nil(t, err)
 	// delete the object from the database
-	defer mgo.Delete(context.Background(),  object)
+	defer mgo.Delete(context.Background(), object)
 
 	// check if the object was inserted
 	sess := mgo.session.Copy()
@@ -66,7 +64,7 @@ func TestInsert(t *testing.T) {
 
 	assert.Equal(t, object.Name, result.Name)
 	assert.Equal(t, object.Email, result.Email)
-	assert.Equal(t, object.GetObjectID(), result.GetObjectID() )
+	assert.Equal(t, object.GetObjectID(), result.GetObjectID())
 }
 
 func TestDelete(t *testing.T) {
