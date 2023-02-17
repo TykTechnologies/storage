@@ -23,6 +23,10 @@ func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
 	// create the db life cycle manager
 	lc := &lifeCycle{}
 
+	if err := lc.Connect(opts); err != nil {
+		return nil, err
+	}
+
 	newDriver.lifeCycle = lc
 
 	return newDriver, nil
