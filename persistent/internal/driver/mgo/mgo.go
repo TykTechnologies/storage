@@ -58,6 +58,15 @@ func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject) error {
 	return col.Remove(row)
 }
 
+func (d *mgoDriver) Update(ctx context.Context, row id.DBObject) error {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	col := sess.DB("").C(row.TableName())
+
+	return col.UpdateId(row.GetObjectID(), row)
+}
+
 func (d *mgoDriver) IsErrNoRows(err error) bool {
 	return errors.Is(err, mgo.ErrNotFound)
 }
