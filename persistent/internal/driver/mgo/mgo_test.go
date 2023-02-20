@@ -5,7 +5,6 @@ package mgo
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strconv"
 	"testing"
