@@ -67,6 +67,15 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject) error {
 	return col.UpdateId(row.GetObjectID(), row)
 }
 
+func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	col := sess.DB("").C(row.TableName())
+
+	return col.Find(nil).Count()
+}
+
 func (d *mgoDriver) IsErrNoRows(err error) bool {
 	return errors.Is(err, mgo.ErrNotFound)
 }
