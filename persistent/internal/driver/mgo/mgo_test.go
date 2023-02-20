@@ -5,14 +5,15 @@ package mgo
 
 import (
 	"context"
+	"os"
+	"strconv"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
 
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"github.com/stretchr/testify/assert"
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 )
 
 type dummyDBObject struct {
@@ -30,6 +31,9 @@ func (d *dummyDBObject) SetObjectID(id id.OID) {
 }
 
 func (d dummyDBObject) TableName() string {
+	if os.Getenv("INVALID_TABLENAME") != "" {
+		return ""
+	}
 	return "dummy"
 }
 
@@ -153,4 +157,78 @@ func TestIsErrNoRows(t *testing.T) {
 	assert.True(t, mgoDriver.IsErrNoRows(mgo.ErrNotFound))
 	assert.False(t, mgoDriver.IsErrNoRows(nil))
 	assert.False(t, mgoDriver.IsErrNoRows(mgo.ErrCursor))
+}
+
+func Test_mgoDriver_Count(t *testing.T) {
+	tests := []struct {
+		name    string
+		want    int
+		wantErr bool
+	}{
+		{
+			name: "0 objects",
+			want: 0,
+		},
+		{
+			name: "1 object",
+			want: 1,
+		},
+		{
+			name: "2 objects",
+			want: 2,
+		},
+		{
+			name: "10 objects",
+			want: 10,
+		},
+		{
+			name:    "failing because of invalid table name",
+			want:    0,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mgo, object := prepareEnvironment(t)
+			// Making sure dummy collection is empty before running tests
+			sess := mgo.session.Copy()
+			defer sess.Close()
+			dropCollection(sess, object, t)
+
+			for i := 0; i < tt.want; i++ {
+				object = &dummyDBObject{
+					Name:  "test" + strconv.Itoa(i),
+					Email: "test@test.com",
+				}
+				err := mgo.Insert(context.Background(), object)
+				assert.Nil(t, err)
+			}
+			// Making sure dummy collection is empty after running tests
+			defer dropCollection(sess, object, t)
+
+			if tt.wantErr {
+				os.Setenv("INVALID_TABLENAME", "true")
+				defer os.Unsetenv("INVALID_TABLENAME")
+			}
+			got, err := mgo.Count(context.Background(), object)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("mgoDriver.Count() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("mgoDriver.Count() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func dropCollection(sess *mgo.Session, object *dummyDBObject, t *testing.T) {
+	col := sess.DB("").C(object.TableName())
+	err := col.DropCollection()
+	if err != nil {
+		// If no object has been inserted yet, the collection does not exist
+		if err.Error() != "ns not found" {
+			t.Fatal("Error dropping collection", err)
+		}
+	}
 }
