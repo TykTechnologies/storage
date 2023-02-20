@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mgo
 
 import (
@@ -196,8 +193,14 @@ func Test_mgoDriver_Count(t *testing.T) {
 					Name:  "test" + strconv.Itoa(i),
 					Email: "test@test.com",
 				}
-				mgo.Insert(context.Background(), object)
-				defer mgo.Delete(context.Background(), object)
+				err := mgo.Insert(context.Background(), object)
+				assert.Nil(t, err)
+				defer func() {
+					err = mgo.Delete(context.Background(), object)
+					if err != nil {
+						t.Fatal("Error deleting object", err)
+					}
+				}()
 			}
 
 			if tt.wantErr {
