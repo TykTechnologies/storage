@@ -1,3 +1,6 @@
+//go:build mongo
+// +build mongo
+
 package mgo
 
 import (
@@ -188,6 +191,11 @@ func Test_mgoDriver_Count(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mgo, object := prepareEnvironment(t)
+			// Making sure dummy collection is empty before running tests
+			sess := mgo.session.Copy()
+			defer sess.Close()
+			dropCollection(sess, object, t)
+
 			for i := 0; i < tt.want; i++ {
 				object = &dummyDBObject{
 					Name:  "test" + strconv.Itoa(i),
@@ -195,13 +203,9 @@ func Test_mgoDriver_Count(t *testing.T) {
 				}
 				err := mgo.Insert(context.Background(), object)
 				assert.Nil(t, err)
-				defer func() {
-					err = mgo.Delete(context.Background(), object)
-					if err != nil {
-						t.Fatal("Error deleting object", err)
-					}
-				}()
 			}
+			// Making sure dummy collection is empty after running tests
+			defer dropCollection(sess, object, t)
 
 			if tt.wantErr {
 				os.Setenv("INVALID_TABLENAME", "true")
@@ -217,5 +221,16 @@ func Test_mgoDriver_Count(t *testing.T) {
 				t.Errorf("mgoDriver.Count() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func dropCollection(sess *mgo.Session, object *dummyDBObject, t *testing.T) {
+	col := sess.DB("").C(object.TableName())
+	err := col.DropCollection()
+	if err != nil {
+		// If no object has been inserted yet, the collection does not exist
+		if err.Error() != "ns not found" {
+			t.Fatal("Error dropping collection", err)
+		}
 	}
 }
