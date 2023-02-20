@@ -17,6 +17,16 @@ func (id OID) Hex() string {
 	return idObj.Hex()
 }
 
+func (id OID) String() string {
+	idObj := bson.ObjectIdHex(string(id))
+	return idObj.String()
+}
+
+func (id OID) Timestamp() time.Time {
+	idObj := bson.ObjectIdHex(string(id))
+	return idObj.Time()
+}
+
 type ObjectID interface {
 	Hex() string
 	String() string
