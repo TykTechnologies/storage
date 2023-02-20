@@ -211,7 +211,6 @@ func Test_mgoDriver_Count(t *testing.T) {
 				os.Setenv("INVALID_TABLENAME", "true")
 				defer os.Unsetenv("INVALID_TABLENAME")
 			}
-			fmt.Println("TABLENAME:", object.TableName())
 			got, err := mgo.Count(context.Background(), object)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("mgoDriver.Count() error = %v, wantErr %v", err, tt.wantErr)
