@@ -13,6 +13,10 @@ func (id OID) Valid() bool {
 }
 
 func (id OID) Hex() string {
+	if string(id) == "" {
+		return ""
+	}
+
 	idObj := bson.ObjectIdHex(string(id))
 	return idObj.Hex()
 }
