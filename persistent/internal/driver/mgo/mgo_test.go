@@ -64,7 +64,7 @@ func TestInsert(t *testing.T) {
 	err := mgo.Insert(context.Background(), object)
 	assert.Nil(t, err)
 	// delete the object from the database
-	// defer mgo.Delete(context.Background(), object)
+	defer mgo.Delete(context.Background(), object)
 
 	// check if the object was inserted
 	sess := mgo.session.Copy()
