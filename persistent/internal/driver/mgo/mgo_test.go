@@ -229,6 +229,7 @@ func dropCollection(sess *mgo.Session, object *dummyDBObject, t *testing.T) {
 		}
 	}
 }
+
 func TestMgoDriver_Query(t *testing.T) {
 	// Setup
 	mgo, object := prepareEnvironment(t)
