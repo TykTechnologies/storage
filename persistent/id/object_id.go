@@ -22,8 +22,7 @@ func (id OID) String() string {
 }
 
 func (id OID) Timestamp() time.Time {
-	idObj := bson.ObjectIdHex(string(id))
-	return idObj.Time()
+	return bson.ObjectId(id).Time()
 }
 
 func (id OID) MarshalJSON() ([]byte, error) {
