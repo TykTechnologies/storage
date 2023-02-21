@@ -18,8 +18,7 @@ func (id OID) Hex() string {
 }
 
 func (id OID) String() string {
-	idObj := bson.ObjectIdHex(string(id))
-	return idObj.String()
+	return id.Hex()
 }
 
 func (id OID) Timestamp() time.Time {
