@@ -26,6 +26,11 @@ func (id OID) Timestamp() time.Time {
 	return idObj.Time()
 }
 
+// ObjectIdHex useful to create an object ID from the string
+func ObjectIdHex(id string) OID {
+	return OID(bson.ObjectIdHex(id))
+}
+
 type ObjectID interface {
 	Hex() string
 	String() string
