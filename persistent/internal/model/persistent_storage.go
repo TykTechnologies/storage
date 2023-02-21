@@ -16,7 +16,7 @@ type PersistentStorage interface {
 	// Update a DbObject in the database
 	Update(context.Context, id.DBObject) error
 	// Query select multiple records for table, writes to dest.
-	Query(context.Context, string, interface{}, DBM) error
+	Query(context.Context, id.DBObject, interface{}, DBM) error
 	// Count counts all rows for a DBTable
 	Count(context.Context, id.DBObject) (int, error)
 	// IsErrNoRows Checking if an error is a "no rows error"

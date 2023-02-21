@@ -67,11 +67,11 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject) error {
 	return col.UpdateId(row.GetObjectID(), row)
 }
 
-func (d *mgoDriver) Query(ctx context.Context, collectionName string, result interface{}, dbm model.DBM) error {
+func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, dbm model.DBM) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
-	col := sess.DB("").C(collectionName)
+	col := sess.DB("").C(row.TableName())
 
 	query := col.Find(dbm["query"])
 

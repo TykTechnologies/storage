@@ -1,3 +1,6 @@
+//go:build mongo
+// +build mongo
+
 package mgo
 
 import (
@@ -341,7 +344,7 @@ func TestMgoDriver_Query(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Query the database
 			var result []dummyDBObject
-			err := mgo.Query(context.Background(), object.TableName(), &result, model.DBM{
+			err := mgo.Query(context.Background(), object, &result, model.DBM{
 				"query":  test.query,
 				"sort":   test.sort,
 				"limit":  test.limit,
