@@ -67,27 +67,27 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject) error {
 	return col.UpdateId(row.GetObjectID(), row)
 }
 
-func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, dbm model.DBM) error {
+func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query model.DBM) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
 	col := sess.DB("").C(row.TableName())
 
-	query := col.Find(dbm["query"])
+	q := col.Find(query["query"])
 
-	if sort, ok := dbm["sort"].(string); ok && sort != "" {
-		query = query.Sort(sort)
+	if sort, ok := query["sort"].(string); ok && sort != "" {
+		q = q.Sort(sort)
 	}
 
-	if limit, ok := dbm["limit"].(int); ok {
-		query = query.Limit(limit)
+	if limit, ok := query["limit"].(int); ok {
+		q = q.Limit(limit)
 	}
 
-	if offset, ok := dbm["offset"].(int); ok {
-		query = query.Skip(offset)
+	if offset, ok := query["offset"].(int); ok {
+		q = q.Skip(offset)
 	}
 
-	return query.All(result)
+	return q.All(result)
 }
 
 func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
