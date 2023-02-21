@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mgo
 
 import (
@@ -64,7 +61,7 @@ func TestInsert(t *testing.T) {
 	err := mgo.Insert(context.Background(), object)
 	assert.Nil(t, err)
 	// delete the object from the database
-	defer mgo.Delete(context.Background(), object)
+	// defer mgo.Delete(context.Background(), object)
 
 	// check if the object was inserted
 	sess := mgo.session.Copy()
@@ -230,5 +227,135 @@ func dropCollection(sess *mgo.Session, object *dummyDBObject, t *testing.T) {
 		if err.Error() != "ns not found" {
 			t.Fatal("Error dropping collection", err)
 		}
+	}
+}
+func TestMgoDriver_Query(t *testing.T) {
+	// Setup
+	mgo, object := prepareEnvironment(t)
+	sess := mgo.session.Copy()
+
+	defer sess.Close()
+
+	dropCollection(sess, object, t)
+
+	dummyData := []dummyDBObject{
+		{Name: "John", Email: "john@example.com", Id: id.OID(bson.NewObjectId().Hex())},
+		{Name: "Jane", Email: "jane@tyk.com", Id: id.OID(bson.NewObjectId().Hex())},
+		{Name: "Bob", Email: "bob@example.com", Id: id.OID(bson.NewObjectId().Hex())},
+		{Name: "Alice", Email: "alice@tyk.com", Id: id.OID(bson.NewObjectId().Hex())},
+	}
+
+	for _, obj := range dummyData {
+		err := mgo.Insert(context.Background(), &obj)
+		assert.Nil(t, err)
+	}
+
+	defer dropCollection(sess, object, t)
+
+	tests := []struct {
+		name          string
+		query         bson.M
+		sort          string
+		limit         int
+		offset        int
+		expectedCount int
+		expected      []dummyDBObject
+	}{
+		{
+			name:          "query with no filters",
+			query:         bson.M{},
+			limit:         0,
+			offset:        0,
+			expectedCount: 4,
+			expected:      dummyData,
+		},
+		{
+			name:          "query with limit and offset",
+			query:         bson.M{},
+			limit:         2,
+			offset:        1,
+			expectedCount: 2,
+			expected:      []dummyDBObject{dummyData[1], dummyData[2]},
+		},
+		{
+			name:          "query with name starting with J",
+			query:         bson.M{"name": bson.M{"$regex": "^J"}},
+			limit:         0,
+			offset:        0,
+			expectedCount: 2,
+			expected:      []dummyDBObject{dummyData[0], dummyData[1]},
+		},
+		{
+			name: "query with emails ending with example.com",
+			query: bson.M{
+				"email": bson.M{
+					"$regex": "example.com$",
+				},
+			},
+			limit:         0,
+			offset:        0,
+			expectedCount: 2,
+			expected:      []dummyDBObject{dummyData[0], dummyData[2]},
+		},
+		{
+			name: "query with emails ending with example.com and limit 1, offset 1",
+			query: bson.M{
+				"email": bson.M{
+					"$regex": "example.com$",
+				},
+			},
+			limit:         1,
+			offset:        1,
+			expectedCount: 1,
+			expected:      []dummyDBObject{dummyData[2]},
+		},
+		{
+			name: "query with emails ending with example.com and limit 1, offset 2",
+			query: bson.M{
+				"email": bson.M{
+					"$regex": "example.com$",
+				},
+			},
+			limit:         1,
+			offset:        2,
+			expectedCount: 0,
+			expected:      []dummyDBObject{},
+		},
+		{
+			name: "query with emails starting with j, sorted by name",
+			query: bson.M{
+				"email": bson.M{
+					"$regex": "^j",
+				},
+			},
+			sort:          "name",
+			limit:         0,
+			offset:        0,
+			expectedCount: 2,
+			expected:      []dummyDBObject{dummyData[1], dummyData[0]},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Query the database
+			var result []dummyDBObject
+			err := mgo.Query(context.Background(), object.TableName(), &result, model.DBM{
+				"query":  test.query,
+				"sort":   test.sort,
+				"limit":  test.limit,
+				"offset": test.offset,
+			})
+			assert.Nil(t, err)
+
+			// Check the number of documents returned
+			assert.Equal(t, test.expectedCount, len(result))
+
+			// Check that the returned documents match the expected ones
+			for i, doc := range result {
+				assert.Equal(t, test.expected[i].Name, doc.Name)
+				assert.Equal(t, test.expected[i].Email, doc.Email)
+			}
+		})
 	}
 }
