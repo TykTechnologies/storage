@@ -359,6 +359,7 @@ func TestMgoDriver_Query(t *testing.T) {
 			for i, doc := range result {
 				assert.Equal(t, test.expected[i].Name, doc.Name)
 				assert.Equal(t, test.expected[i].Email, doc.Email)
+				assert.Equal(t, test.expected[i].Id, doc.Id)
 			}
 		})
 	}
