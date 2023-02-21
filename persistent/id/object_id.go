@@ -26,6 +26,18 @@ func (id OID) Timestamp() time.Time {
 	return idObj.Time()
 }
 
+func (id OID) MarshalJSON() ([]byte, error) {
+	return bson.ObjectId(id).MarshalJSON()
+}
+
+func (id *OID) UnmarshalJSON(buf []byte) error {
+	var b bson.ObjectId
+	b.UnmarshalJSON(buf)
+	*id = OID(string(b))
+
+	return nil
+}
+
 // ObjectIdHex useful to create an object ID from the string
 func ObjectIdHex(id string) OID {
 	return OID(bson.ObjectIdHex(id))

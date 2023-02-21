@@ -34,3 +34,7 @@ func TestValidObjectId(t *testing.T) {
 		})
 	}
 }
+
+func TestHex(t *testing.T) {
+
+}
