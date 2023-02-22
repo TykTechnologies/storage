@@ -1,14 +1,12 @@
 package id
 
 import (
-	"encoding/hex"
 	"fmt"
 	"gopkg.in/mgo.v2/bson"
 	"time"
 )
 
-//type OID string
-type OID bson.ObjectId
+type OID string
 
 // Valid returns true if id is valid. A valid id must contain exactly 12 bytes.
 func (id OID) Valid() bool {
@@ -16,11 +14,12 @@ func (id OID) Valid() bool {
 }
 
 func (id OID) Hex() string {
-	return hex.EncodeToString([]byte(id))
+	//return hex.EncodeToString([]byte(id))
+	return bson.ObjectId(id).Hex()
 }
 
 func (id OID) String() string {
-	return bson.ObjectId(id).String()
+	return id.Hex()
 }
 
 func (id OID) Timestamp() time.Time {
