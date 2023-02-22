@@ -2,6 +2,7 @@ package id
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"gopkg.in/mgo.v2/bson"
 	"time"
 )
@@ -30,9 +31,9 @@ func (id OID) Timestamp() time.Time {
 }
 
 func (id OID) MarshalJSON() ([]byte, error) {
-
-	x, err := bson.ObjectId(id).MarshalJSON()
-	return x, err
+	return json.Marshal(id.Hex())
+	/*x, err := bson.ObjectId(id).MarshalJSON()
+	return x, err*/
 }
 
 func (id *OID) UnmarshalJSON(buf []byte) error {
