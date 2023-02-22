@@ -38,7 +38,7 @@ func NewMgoDriver(opts *model.ClientOpts) (*mgoDriver, error) {
 
 func (d *mgoDriver) Insert(ctx context.Context, row id.DBObject) error {
 	if row.GetObjectID() == "" {
-		row.SetObjectID(id.OID(bson.NewObjectId().String()))
+		row.SetObjectID(id.OID(bson.NewObjectId()))
 	}
 
 	sess := d.session.Copy()

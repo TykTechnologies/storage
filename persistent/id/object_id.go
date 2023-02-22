@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-type OID string
+//type OID string
+type OID bson.ObjectId
 
 // Valid returns true if id is valid. A valid id must contain exactly 12 bytes.
 func (id OID) Valid() bool {
