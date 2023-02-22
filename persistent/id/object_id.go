@@ -23,7 +23,7 @@ func (id OID) String() string {
 }
 
 func (id OID) GetBSON() (interface{}, error) {
-	return string(id), nil
+	return id.Hex(), nil
 }
 
 func (id OID) Timestamp() time.Time {
