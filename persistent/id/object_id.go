@@ -1,6 +1,7 @@
 package id
 
 import (
+	"encoding/hex"
 	"fmt"
 	"gopkg.in/mgo.v2/bson"
 	"time"
@@ -14,12 +15,15 @@ func (id OID) Valid() bool {
 }
 
 func (id OID) Hex() string {
-	//return hex.EncodeToString([]byte(id))
-	return bson.ObjectId(id).Hex()
+	return hex.EncodeToString([]byte(id))
 }
 
 func (id OID) String() string {
 	return id.Hex()
+}
+
+func (id OID) GetBSON() (interface{}, error) {
+	return bson.ObjectId(id), nil
 }
 
 func (id OID) Timestamp() time.Time {
