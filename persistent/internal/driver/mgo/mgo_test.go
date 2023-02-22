@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mgo
 
 import (
@@ -254,87 +251,79 @@ func TestMgoDriver_Query(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
-	defer dropCollection(sess, object, t)
+	// defer dropCollection(sess, object, t)
 
 	tests := []struct {
 		name          string
-		query         bson.M
-		sort          string
-		limit         int
-		offset        int
+		query         model.DBM
 		expectedCount int
 		expected      []dummyDBObject
 	}{
 		{
 			name:          "query with no filters",
-			query:         bson.M{},
-			limit:         0,
-			offset:        0,
+			query:         model.DBM{},
 			expectedCount: 4,
 			expected:      dummyData,
 		},
 		{
-			name:          "query with limit and offset",
-			query:         bson.M{},
-			limit:         2,
-			offset:        1,
+			name: "query with limit and offset",
+			query: model.DBM{
+				"query":  bson.M{},
+				"limit":  2,
+				"offset": 1,
+			},
 			expectedCount: 2,
 			expected:      []dummyDBObject{dummyData[1], dummyData[2]},
 		},
 		{
 			name:          "query with name starting with J",
-			query:         bson.M{"name": bson.M{"$regex": "^J"}},
-			limit:         0,
-			offset:        0,
+			query:         model.DBM{"query": bson.M{"name": bson.M{"$regex": "^J"}}},
 			expectedCount: 2,
 			expected:      []dummyDBObject{dummyData[0], dummyData[1]},
 		},
 		{
 			name: "query with emails ending with example.com",
-			query: bson.M{
+			query: model.DBM{"query": bson.M{
 				"email": bson.M{
 					"$regex": "example.com$",
 				},
-			},
-			limit:         0,
-			offset:        0,
+			}},
 			expectedCount: 2,
 			expected:      []dummyDBObject{dummyData[0], dummyData[2]},
 		},
 		{
 			name: "query with emails ending with example.com and limit 1, offset 1",
-			query: bson.M{
+			query: model.DBM{"query": bson.M{
 				"email": bson.M{
 					"$regex": "example.com$",
 				},
 			},
-			limit:         1,
-			offset:        1,
+				"limit":  1,
+				"offset": 1},
 			expectedCount: 1,
 			expected:      []dummyDBObject{dummyData[2]},
 		},
 		{
 			name: "query with emails ending with example.com and limit 1, offset 2",
-			query: bson.M{
+			query: model.DBM{"query": bson.M{
 				"email": bson.M{
 					"$regex": "example.com$",
 				},
 			},
-			limit:         1,
-			offset:        2,
+				"limit":  1,
+				"offset": 2},
 			expectedCount: 0,
 			expected:      []dummyDBObject{},
 		},
 		{
 			name: "query with emails starting with j, sorted by name",
-			query: bson.M{
+			query: model.DBM{"query": bson.M{
 				"email": bson.M{
 					"$regex": "^j",
 				},
 			},
-			sort:          "name",
-			limit:         0,
-			offset:        0,
+				"sort": "name",
+			},
 			expectedCount: 2,
 			expected:      []dummyDBObject{dummyData[1], dummyData[0]},
 		},
@@ -344,12 +333,7 @@ func TestMgoDriver_Query(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Query the database
 			var result []dummyDBObject
-			err := mgo.Query(context.Background(), object, &result, model.DBM{
-				"query":  test.query,
-				"sort":   test.sort,
-				"limit":  test.limit,
-				"offset": test.offset,
-			})
+			err := mgo.Query(context.Background(), object, &result, test.query)
 			assert.Nil(t, err)
 
 			// Check the number of documents returned
