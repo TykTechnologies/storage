@@ -19,7 +19,7 @@ func (id OID) Hex() string {
 }
 
 func (id OID) String() string {
-	return bson.ObjectId(id).String()
+	return id.Hex()
 }
 
 func (id OID) Timestamp() time.Time {
