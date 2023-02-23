@@ -39,7 +39,7 @@ func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
 
 func (d *mongoDriver) Insert(ctx context.Context, row id.DBObject) error {
 	if row.GetObjectID() == "" {
-		row.SetObjectID(id.OID(primitive.NewObjectID().Hex()))
+		row.SetObjectID(id.OID(primitive.NewObjectID().String()))
 	}
 
 	collection := d.client.Database(d.database).Collection(row.TableName())
