@@ -2,6 +2,7 @@ package mgo
 
 import (
 	"context"
+	"errors"
 	"os"
 	"reflect"
 	"strconv"
@@ -474,6 +475,83 @@ func TestGetQuery(t *testing.T) {
 			result := d.getQuery(test.query, collection)
 			if !reflect.DeepEqual(result, test.expected) {
 				t.Errorf("mgoDriver.getQuery() = %v, want %v", result, test.expected)
+			}
+		})
+	}
+}
+
+func TestHandleStoreError(t *testing.T) {
+
+	mgo, _ := prepareEnvironment(t)
+
+	tests := []struct {
+		name          string
+		inputErr      error
+		wantErr       error
+		wantReconnect bool
+	}{
+		{
+			name:     "Nil input error",
+			inputErr: nil,
+			wantErr:  nil,
+		},
+		{
+			name:          "Known connection error",
+			inputErr:      errors.New("no reachable servers"),
+			wantErr:       nil,
+			wantReconnect: true,
+		},
+		{
+			name:     "Unknown connection error",
+			inputErr: errors.New("unknown error"),
+			wantErr:  nil,
+		},
+		{
+			name:          "i/o timeout",
+			inputErr:      errors.New("i/o timeout"),
+			wantErr:       nil,
+			wantReconnect: true,
+		},
+		{
+			name:          "failing when reconnecting",
+			inputErr:      errors.New("reset by peer"),
+			wantErr:       errors.New("reset by peer"),
+			wantReconnect: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sess := mgo.session
+			defer sess.Close()
+
+			if test.wantErr != nil {
+				invalidMgo := *mgo
+				invalidMgo.options = model.ClientOpts{
+					ConnectionString:  "mongodb://host:port/invalid",
+					ConnectionTimeout: 1,
+				}
+				err := invalidMgo.HandleStoreError(test.inputErr)
+				if err == nil {
+					t.Errorf("expected error to be returned when mgo is nil")
+				}
+				return
+			}
+
+			gotErr := mgo.HandleStoreError(test.inputErr)
+
+			if test.wantReconnect {
+				if sess == mgo.session {
+					t.Errorf("session was not reconnected when it should have been")
+				}
+			} else {
+				if sess != mgo.session {
+					t.Errorf("session was reconnected when it shouldn't have been")
+				}
+			}
+
+			if !errors.Is(gotErr, test.wantErr) {
+				t.Errorf("got error %v, want error %v", gotErr, test.wantErr)
 			}
 		})
 	}

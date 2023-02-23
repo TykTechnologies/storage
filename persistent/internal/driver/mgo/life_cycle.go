@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"net"
+	"time"
 
 	"gopkg.in/mgo.v2"
 
@@ -24,7 +25,11 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 		return err
 	}
 
-	dialInfo.Timeout = model.DEFAULT_CONN_TIMEOUT
+	if opts.ConnectionTimeout != 0 {
+		dialInfo.Timeout = time.Second * time.Duration(opts.ConnectionTimeout)
+	} else {
+		dialInfo.Timeout = model.DEFAULT_CONN_TIMEOUT
+	}
 
 	if opts.UseSSL {
 		tlsConfig, err := opts.GetTLSConfig()

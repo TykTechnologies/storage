@@ -11,6 +11,7 @@ import (
 
 	"github.com/TykTechnologies/storage/persistent/id"
 
+	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 
 	"gopkg.in/mgo.v2"
@@ -104,7 +105,7 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 	}
 
 	var err error
-	if isSlice(result) {
+	if helper.IsSlice(result) {
 		err = q.All(result)
 	} else {
 		err = q.One(result)
@@ -213,10 +214,6 @@ func (d *mgoDriver) HandleStoreError(err error) error {
 		}
 	}
 	return nil
-}
-
-func isSlice(o interface{}) bool {
-	return reflect.TypeOf(o).Elem().Kind() == reflect.Slice
 }
 
 func (d *mgoDriver) IsErrNoRows(err error) bool {
