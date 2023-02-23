@@ -114,8 +114,9 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 	if err != nil {
 		conErr := d.HandleStoreError(err)
 		if conErr != nil {
-			return fmt.Errorf("failed while reconnecting to mongo: %s after error: %s", conErr.Error(), err.Error())
+			return fmt.Errorf("failed while reconnecting to mongo: %w after error: %v", conErr, err)
 		}
+
 		return err
 	}
 
@@ -142,6 +143,7 @@ func (d *mgoDriver) getQuery(query model.DBM, col *mgo.Collection) bson.M {
 		// If user provided nested query, for example, "name": {"$ne": "123"}
 		if nested, ok := v.(model.DBM); ok {
 			found := false
+
 			for nk, nv := range nested {
 				// Mongo support it as it is
 				if nk == "$in" {
@@ -157,6 +159,7 @@ func (d *mgoDriver) getQuery(query model.DBM, col *mgo.Collection) bson.M {
 					found = true
 				}
 			}
+
 			if found {
 				continue
 			}
@@ -207,12 +210,13 @@ func (d *mgoDriver) HandleStoreError(err error) error {
 		if strings.Contains(err.Error(), substr) {
 			connErr := d.Connect(&d.options)
 			if connErr != nil {
-				return fmt.Errorf("failure while connecting to mongo: %s", connErr.Error())
+				return fmt.Errorf("failure while connecting to mongo: %w", connErr)
 			}
 
 			return nil
 		}
 	}
+
 	return nil
 }
 

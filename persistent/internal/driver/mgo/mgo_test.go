@@ -481,7 +481,6 @@ func TestGetQuery(t *testing.T) {
 }
 
 func TestHandleStoreError(t *testing.T) {
-
 	mgo, _ := prepareEnvironment(t)
 
 	tests := []struct {
