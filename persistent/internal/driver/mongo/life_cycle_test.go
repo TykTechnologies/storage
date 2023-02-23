@@ -143,7 +143,7 @@ func TestConnect(t *testing.T) {
 				UseSSL:           false,
 				Type:             "mongodb",
 			},
-			want: errors.New("error parsing uri: scheme must be \"mongodb\" or \"mongodb+srv\""),
+			want: errors.New("invalid connection string"),
 		},
 		{
 			name: "valid connection_string and invalid tls config",

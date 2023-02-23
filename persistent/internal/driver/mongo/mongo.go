@@ -1,9 +1,14 @@
 package mongo
 
 import (
+	"context"
 	"errors"
 
+	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type mongoDriver struct {
@@ -30,4 +35,35 @@ func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
 	newDriver.lifeCycle = lc
 
 	return newDriver, nil
+}
+
+func (d *mongoDriver) Insert(ctx context.Context, row id.DBObject) error {
+	if row.GetObjectID() == "" {
+		row.SetObjectID(id.OID(primitive.NewObjectID().Hex()))
+	}
+
+	collection := d.client.Database(d.database).Collection(row.TableName())
+
+	_, err := collection.InsertOne(ctx, row)
+
+	return err
+}
+
+func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject) error {
+	collection := d.client.Database(d.database).Collection(row.TableName())
+
+	res, err := collection.DeleteOne(ctx, bson.M{"_id": row.GetObjectID()})
+	if err != nil {
+		return err
+	}
+
+	if res.DeletedCount == 0 {
+		return errors.New("error deleting a non existing object")
+	}
+
+	return nil
+}
+
+func (d *mongoDriver) IsErrNoRows(err error) bool {
+	return errors.Is(err, mongo.ErrNoDocuments)
 }

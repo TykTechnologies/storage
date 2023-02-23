@@ -10,10 +10,13 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
+	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
 )
 
 type lifeCycle struct {
 	client *mongo.Client
+
+	database string
 }
 
 var _ model.StorageLifecycle = &lifeCycle{}
@@ -22,6 +25,12 @@ var _ model.StorageLifecycle = &lifeCycle{}
 func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 	var err error
 	var client *mongo.Client
+
+	// we check if the connection string is valid before building the connOpts.
+	cs, err := connstring.ParseAndValidate(opts.ConnectionString)
+	if err != nil {
+		return errors.New("invalid connection string")
+	}
 
 	connOpts, err := mongoOptsBuilder(opts)
 	if err != nil {
@@ -32,6 +41,7 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 		return err
 	}
 
+	lc.database = cs.Database
 	lc.client = client
 
 	return lc.client.Ping(context.Background(), nil)
