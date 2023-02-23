@@ -87,7 +87,7 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 	col := session.DB("").C(row.TableName())
 	defer col.Database.Session.Close()
 
-	search := d.getQuery(query, col)
+	search := d.buildQuery(query, col)
 
 	q := col.Find(search)
 
@@ -123,7 +123,7 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 	return nil
 }
 
-func (d *mgoDriver) getQuery(query model.DBM, col *mgo.Collection) bson.M {
+func (d *mgoDriver) buildQuery(query model.DBM, col *mgo.Collection) bson.M {
 	search := bson.M{}
 
 	for k, v := range query {
@@ -177,11 +177,11 @@ func (d *mgoDriver) getQuery(query model.DBM, col *mgo.Collection) bson.M {
 		} else {
 			switch v := v.(type) {
 			case model.DBM:
-				search[k] = d.getQuery(v, col)
+				search[k] = d.buildQuery(v, col)
 			case []model.DBM:
 				sliceOfBsons := []bson.M{}
 				for _, sliceValue := range v {
-					sliceOfBsons = append(sliceOfBsons, d.getQuery(sliceValue, col))
+					sliceOfBsons = append(sliceOfBsons, d.buildQuery(sliceValue, col))
 				}
 				search[k] = sliceOfBsons
 			default:

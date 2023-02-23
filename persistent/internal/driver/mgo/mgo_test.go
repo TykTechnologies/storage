@@ -382,7 +382,7 @@ func Test_mgoDriver_Query(t *testing.T) {
 	}
 }
 
-func TestGetQuery(t *testing.T) {
+func TestBuildQuery(t *testing.T) {
 	d := &mgoDriver{}
 	collection := &mgo.Collection{}
 
@@ -472,9 +472,9 @@ func TestGetQuery(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := d.getQuery(test.query, collection)
+			result := d.buildQuery(test.query, collection)
 			if !reflect.DeepEqual(result, test.expected) {
-				t.Errorf("mgoDriver.getQuery() = %v, want %v", result, test.expected)
+				t.Errorf("mgoDriver.buildQuery() = %v, want %v", result, test.expected)
 			}
 		})
 	}
