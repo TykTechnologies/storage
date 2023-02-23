@@ -171,7 +171,18 @@ func (d *mgoDriver) getQuery(query model.DBM, col *mgo.Collection) bson.M {
 		if reflect.ValueOf(v).Kind() == reflect.Slice && k != "$or" {
 			search[k] = bson.M{"$in": v}
 		} else {
-			search[k] = v
+			switch v := v.(type) {
+			case model.DBM:
+				search[k] = d.getQuery(v, col)
+			case []model.DBM:
+				sliceOfBsons := []bson.M{}
+				for _, sliceValue := range v {
+					sliceOfBsons = append(sliceOfBsons, d.getQuery(sliceValue, col))
+				}
+				search[k] = sliceOfBsons
+			default:
+				search[k] = v
+			}
 		}
 	}
 

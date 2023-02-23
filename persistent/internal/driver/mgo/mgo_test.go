@@ -413,7 +413,7 @@ func TestGetQuery(t *testing.T) {
 				},
 			},
 			expected: bson.M{
-				"name": model.DBM{
+				"name": bson.M{
 					"$ne": "Bob",
 				},
 			},
@@ -456,7 +456,7 @@ func TestGetQuery(t *testing.T) {
 		{
 			name:     "Query with $or",
 			query:    model.DBM{"$or": []model.DBM{{"name": "John"}, {"name": "Bob"}}},
-			expected: bson.M{"$or": []model.DBM{{"name": "John"}, {"name": "Bob"}}},
+			expected: bson.M{"$or": []bson.M{{"name": "John"}, {"name": "Bob"}}},
 		},
 		{
 			name: "Query with slice",
