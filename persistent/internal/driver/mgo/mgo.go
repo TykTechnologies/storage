@@ -114,7 +114,7 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 	if err != nil {
 		conErr := d.HandleStoreError(err)
 		if conErr != nil {
-			return fmt.Errorf("failed while reconnecting to mongo: %w after error: %v", conErr, err)
+			return fmt.Errorf("failed while reconnecting to mongo: %w", conErr)
 		}
 
 		return err
