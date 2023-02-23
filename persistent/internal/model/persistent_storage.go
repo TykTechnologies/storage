@@ -13,6 +13,8 @@ type PersistentStorage interface {
 	Delete(context.Context, id.DBObject) error
 	// Update a DbObject in the database
 	Update(context.Context, id.DBObject) error
+	// Count counts all rows for a DBTable
+	Count(context.Context, id.DBObject) (int, error)
 	// IsErrNoRows Checking if an error is a "no rows error"
 	IsErrNoRows(err error) bool
 }
