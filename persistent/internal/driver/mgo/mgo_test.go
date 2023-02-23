@@ -1,11 +1,9 @@
-//go:build mongo
-// +build mongo
-
 package mgo
 
 import (
 	"context"
 	"os"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -230,5 +228,253 @@ func dropCollection(sess *mgo.Session, object *dummyDBObject, t *testing.T) {
 		if err.Error() != "ns not found" {
 			t.Fatal("Error dropping collection", err)
 		}
+	}
+}
+
+func Test_mgoDriver_Query(t *testing.T) {
+	type args struct {
+		result interface{}
+		query  model.DBM
+	}
+
+	dummyData := []dummyDBObject{
+		{Name: "John", Email: "john@example.com", Id: id.OID(bson.NewObjectId().Hex())},
+		{Name: "Jane", Email: "jane@tyk.com", Id: id.OID(bson.NewObjectId().Hex())},
+		{Name: "Bob", Email: "bob@example.com", Id: id.OID(bson.NewObjectId().Hex())},
+		{Name: "Alice", Email: "alice@tyk.com", Id: id.OID(bson.NewObjectId().Hex())},
+		{Name: "Peter", Email: "peter@test.com", Id: id.OID(bson.NewObjectId().Hex())},
+	}
+
+	tests := []struct {
+		name           string
+		args           args
+		expectedResult interface{}
+		wantErr        bool
+	}{
+		{
+			name: "4 objects",
+			args: args{
+				result: &[]dummyDBObject{},
+				query:  model.DBM{},
+			},
+			expectedResult: &dummyData,
+		},
+		{
+			name: "4 objects with limit 2",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"_limit": 2,
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[0], dummyData[1]},
+		},
+		{
+			name: "4 objects with limit 2 and offset 2",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"_limit":  2,
+					"_offset": 2,
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[2], dummyData[3]},
+		},
+		{
+			name: "4 objects with limit 2 and offset 2 and sort by name",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"_limit":  2,
+					"_offset": 2,
+					"_sort":   "name",
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[1], dummyData[0]},
+		},
+		{
+			name: "filter by email ending with tyk.com",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"email": model.DBM{
+						"$regex": "tyk.com$",
+					},
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[1], dummyData[3]},
+		},
+		{
+			name: "filter by email ending with tyk.com and sort by name",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"email": model.DBM{
+						"$regex": "tyk.com$",
+					},
+					"_sort": "name",
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[3], dummyData[1]},
+		},
+		{
+			name: "filter by name starting with A",
+			args: args{
+				result: &dummyDBObject{},
+				query: model.DBM{
+					"name": model.DBM{
+						"$regex": "^A",
+					},
+				},
+			},
+			expectedResult: &dummyData[3],
+		},
+		{
+			name: "filter by name starting with J and sort by name",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"name": model.DBM{
+						"$regex": "^J",
+					},
+					"_sort": "name",
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[1], dummyData[0]},
+		},
+		{
+			name: "invalid db name",
+			args: args{
+				result: &[]dummyDBObject{},
+				query:  model.DBM{},
+			},
+			wantErr:        true,
+			expectedResult: &[]dummyDBObject{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mgo, object := prepareEnvironment(t)
+			// Making sure dummy collection is empty before running tests
+			sess := mgo.session.Copy()
+			defer sess.Close()
+			dropCollection(sess, object, t)
+
+			// Making sure dummy collection is empty after running tests
+			defer dropCollection(sess, object, t)
+
+			for _, obj := range dummyData {
+				err := mgo.Insert(context.Background(), &obj)
+				assert.Nil(t, err)
+			}
+
+			if tt.wantErr {
+				os.Setenv("INVALID_TABLENAME", "true")
+				defer os.Unsetenv("INVALID_TABLENAME")
+			}
+
+			if err := mgo.Query(context.Background(), object, tt.args.result, tt.args.query); (err != nil) != tt.wantErr {
+				t.Errorf("mgoDriver.Query() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			assert.Equal(t, tt.expectedResult, tt.args.result)
+		})
+	}
+}
+
+func TestGetQuery(t *testing.T) {
+	d := &mgoDriver{}
+	collection := &mgo.Collection{}
+
+	tests := []struct {
+		name     string
+		query    model.DBM
+		expected bson.M
+	}{
+		{
+			name:     "Empty Query",
+			query:    model.DBM{},
+			expected: bson.M{},
+		},
+		{
+			name:     "Simple Query with One Key-Value Pair",
+			query:    model.DBM{"name": "John"},
+			expected: bson.M{"name": "John"},
+		},
+		{
+			name:     "Query with Multiple Key-Value Pairs",
+			query:    model.DBM{"name": "John", "age": 30},
+			expected: bson.M{"name": "John", "age": 30},
+		},
+		{
+			name: "Query with Nested Query",
+			query: model.DBM{
+				"name": model.DBM{
+					"$ne": "Bob",
+				},
+			},
+			expected: bson.M{
+				"name": model.DBM{
+					"$ne": "Bob",
+				},
+			},
+		},
+		{
+			name: "Query with Nested Query Containing $i",
+			query: model.DBM{
+				"name": model.DBM{
+					"$i": "john",
+				},
+			},
+			expected: bson.M{
+				"name": &bson.RegEx{
+					Pattern: "^john$",
+					Options: "i",
+				},
+			},
+		},
+		{
+			name: "Query with Nested Query Containing $text",
+			query: model.DBM{
+				"name": model.DBM{
+					"$text": "John",
+				},
+			},
+			expected: bson.M{
+				"name": bson.M{
+					"$regex": bson.RegEx{
+						Pattern: "John",
+						Options: "i",
+					},
+				},
+			},
+		},
+		{
+			name:     "Query with _id",
+			query:    model.DBM{"_id": bson.ObjectIdHex("6068ff6b2242597b683cef38")},
+			expected: bson.M{"_id": bson.ObjectIdHex("6068ff6b2242597b683cef38")},
+		},
+		{
+			name:     "Query with $or",
+			query:    model.DBM{"$or": []model.DBM{{"name": "John"}, {"name": "Bob"}}},
+			expected: bson.M{"$or": []model.DBM{{"name": "John"}, {"name": "Bob"}}},
+		},
+		{
+			name: "Query with slice",
+			query: model.DBM{
+				"name": []string{"Alice", "Bob"},
+			},
+			expected: bson.M{
+				"name": bson.M{"$in": []string{"Alice", "Bob"}},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := d.getQuery(test.query, collection)
+			if !reflect.DeepEqual(result, test.expected) {
+				t.Errorf("mgoDriver.getQuery() = %v, want %v", result, test.expected)
+			}
+		})
 	}
 }
