@@ -1,9 +1,11 @@
+//go:build mongo
+// +build mongo
+
 package mgo
 
 import (
 	"context"
 	"errors"
-	"os"
 	"reflect"
 	"strconv"
 	"testing"
@@ -16,9 +18,10 @@ import (
 )
 
 type dummyDBObject struct {
-	Id    id.OID `bson:"_id,omitempty"`
-	Name  string `bson:"name"`
-	Email string `bson:"email"`
+	Id                id.OID `bson:"_id,omitempty"`
+	Name              string `bson:"name"`
+	Email             string `bson:"email"`
+	invalidCollection bool
 }
 
 func (d dummyDBObject) GetObjectID() id.OID {
@@ -30,14 +33,14 @@ func (d *dummyDBObject) SetObjectID(id id.OID) {
 }
 
 func (d dummyDBObject) TableName() string {
-	if os.Getenv("INVALID_TABLENAME") != "" {
+	if d.invalidCollection {
 		return ""
 	}
 	return "dummy"
 }
 
 // prepareEnvironment returns a new mgo driver connection and a dummy object to test
-func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject) {
+func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject, *mgo.Session) {
 	t.Helper()
 	// create a new mgo driver connection
 	mgo, err := NewMgoDriver(&model.ClientOpts{
@@ -53,21 +56,30 @@ func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject) {
 		Email: "test@test.com",
 	}
 
-	return mgo, object
+	// create a session
+	sess := mgo.session.Copy()
+	dropCollection(sess, object, t)
+
+	return mgo, object, sess
+}
+
+func cleanEnvironment(t *testing.T, object *dummyDBObject, sess *mgo.Session) {
+	t.Helper()
+
+	object.invalidCollection = false
+	dropCollection(sess, object, t)
+	sess.Close()
 }
 
 func TestInsert(t *testing.T) {
-	mgo, object := prepareEnvironment(t)
+	mgo, object, sess := prepareEnvironment(t)
+	defer cleanEnvironment(t, object, sess)
 
 	// insert the object into the database
 	err := mgo.Insert(context.Background(), object)
 	assert.Nil(t, err)
-	// delete the object from the database
-	defer mgo.Delete(context.Background(), object)
 
 	// check if the object was inserted
-	sess := mgo.session.Copy()
-	defer sess.Close()
 	col := sess.DB("").C(object.TableName())
 
 	var result dummyDBObject
@@ -80,14 +92,14 @@ func TestInsert(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	mgo, object := prepareEnvironment(t)
+	mgo, object, sess := prepareEnvironment(t)
+	defer cleanEnvironment(t, object, sess)
 
 	// insert the object into the database
 	err := mgo.Insert(context.Background(), object)
 	assert.Nil(t, err)
+
 	// check if the object was inserted
-	sess := mgo.session.Copy()
-	defer sess.Close()
 	col := sess.DB("").C(object.TableName())
 
 	var result dummyDBObject
@@ -109,18 +121,16 @@ func TestDelete(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	mgo, object := prepareEnvironment(t)
+	mgo, object, sess := prepareEnvironment(t)
+	defer cleanEnvironment(t, object, sess)
 	// insert the object into the database
 	err := mgo.Insert(context.Background(), object)
 	assert.Nil(t, err)
 
 	// check if the object was inserted
-	sess := mgo.session.Copy()
 	col := sess.DB("").C(object.TableName())
 
 	defer func() {
-		sess.Close()
-
 		err = mgo.Delete(context.Background(), object)
 		if err != nil {
 			t.Fatal("Error deleting object", err)
@@ -188,11 +198,8 @@ func Test_mgoDriver_Count(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mgo, object := prepareEnvironment(t)
-			// Making sure dummy collection is empty before running tests
-			sess := mgo.session.Copy()
-			defer sess.Close()
-			dropCollection(sess, object, t)
+			mgo, object, sess := prepareEnvironment(t)
+			defer cleanEnvironment(t, object, sess)
 
 			for i := 0; i < tt.want; i++ {
 				object = &dummyDBObject{
@@ -202,12 +209,9 @@ func Test_mgoDriver_Count(t *testing.T) {
 				err := mgo.Insert(context.Background(), object)
 				assert.Nil(t, err)
 			}
-			// Making sure dummy collection is empty after running tests
-			defer dropCollection(sess, object, t)
 
 			if tt.wantErr {
-				os.Setenv("INVALID_TABLENAME", "true")
-				defer os.Unsetenv("INVALID_TABLENAME")
+				object.invalidCollection = true
 			}
 			got, err := mgo.Count(context.Background(), object)
 			if (err != nil) != tt.wantErr {
@@ -355,14 +359,8 @@ func Test_mgoDriver_Query(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mgo, object := prepareEnvironment(t)
-			// Making sure dummy collection is empty before running tests
-			sess := mgo.session.Copy()
-			defer sess.Close()
-			dropCollection(sess, object, t)
-
-			// Making sure dummy collection is empty after running tests
-			defer dropCollection(sess, object, t)
+			mgo, object, sess := prepareEnvironment(t)
+			defer cleanEnvironment(t, object, sess)
 
 			for _, obj := range dummyData {
 				err := mgo.Insert(context.Background(), &obj)
@@ -370,8 +368,7 @@ func Test_mgoDriver_Query(t *testing.T) {
 			}
 
 			if tt.wantErr {
-				os.Setenv("INVALID_TABLENAME", "true")
-				defer os.Unsetenv("INVALID_TABLENAME")
+				object.invalidCollection = true
 			}
 
 			if err := mgo.Query(context.Background(), object, tt.args.result, tt.args.query); (err != nil) != tt.wantErr {
@@ -481,7 +478,7 @@ func TestBuildQuery(t *testing.T) {
 }
 
 func TestHandleStoreError(t *testing.T) {
-	mgo, _ := prepareEnvironment(t)
+	mgo, _, _ := prepareEnvironment(t)
 
 	tests := []struct {
 		name          string
