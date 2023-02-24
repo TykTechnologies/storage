@@ -3,8 +3,9 @@ package id
 import (
 	"encoding/hex"
 	"fmt"
-	"gopkg.in/mgo.v2/bson"
 	"testing"
+
+	"gopkg.in/mgo.v2/bson"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -83,7 +84,11 @@ func TestUnmarshalJSON(t *testing.T) {
 	}
 
 	var id2 ObjectId
-	id2.UnmarshalJSON(idBytes)
+	err = id2.UnmarshalJSON(idBytes)
+
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, id, id2)
 }

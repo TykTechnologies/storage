@@ -5,8 +5,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"gopkg.in/mgo.v2/bson"
 	"time"
+
+	"gopkg.in/mgo.v2/bson"
 )
 
 type ObjectId string
@@ -31,6 +32,7 @@ func (id ObjectId) String() string {
 func (id ObjectId) Timestamp() time.Time {
 	bytes := []byte(string(id)[0:4])
 	secs := int64(binary.BigEndian.Uint32(bytes))
+
 	return time.Unix(secs, 0)
 }
 
@@ -55,7 +57,9 @@ func IsObjectIdHex(s string) bool {
 	if len(s) != 24 {
 		return false
 	}
+	
 	_, err := hex.DecodeString(s)
+
 	return err == nil
 }
 
