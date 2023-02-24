@@ -72,6 +72,7 @@ func TestMarshalJSON(t *testing.T) {
 	if err1 != nil || err2 != nil {
 		t.Fatal("failed marshaling object id")
 	}
+
 	assert.Equal(t, bsonBytes, idBytes)
 }
 

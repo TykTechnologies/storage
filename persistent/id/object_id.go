@@ -42,10 +42,11 @@ func (id ObjectId) MarshalJSON() ([]byte, error) {
 
 func (id *ObjectId) UnmarshalJSON(buf []byte) error {
 	var b bson.ObjectId
-	b.UnmarshalJSON(buf)
+	err := b.UnmarshalJSON(buf)
+
 	*id = ObjectId(string(b))
 
-	return nil
+	return err
 }
 
 // ObjectIdHex useful to create an object ID from the string
@@ -57,7 +58,7 @@ func IsObjectIdHex(s string) bool {
 	if len(s) != 24 {
 		return false
 	}
-	
+
 	_, err := hex.DecodeString(s)
 
 	return err == nil
