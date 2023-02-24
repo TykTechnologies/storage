@@ -51,6 +51,10 @@ func ObjectIdHex(id string) OID {
 	return OID(bson.ObjectIdHex(id))
 }
 
+func NewObjectID() OID {
+	return OID(bson.NewObjectId())
+}
+
 type ObjectID interface {
 	Hex() string
 	String() string
