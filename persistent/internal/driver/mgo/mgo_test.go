@@ -210,9 +210,8 @@ func Test_mgoDriver_Count(t *testing.T) {
 				assert.Nil(t, err)
 			}
 
-			if tt.wantErr {
-				object.invalidCollection = true
-			}
+			object.invalidCollection = tt.wantErr
+
 			got, err := mgo.Count(context.Background(), object)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("mgoDriver.Count() error = %v, wantErr %v", err, tt.wantErr)
@@ -367,9 +366,7 @@ func Test_mgoDriver_Query(t *testing.T) {
 				assert.Nil(t, err)
 			}
 
-			if tt.wantErr {
-				object.invalidCollection = true
-			}
+			object.invalidCollection = tt.wantErr
 
 			if err := mgo.Query(context.Background(), object, tt.args.result, tt.args.query); (err != nil) != tt.wantErr {
 				t.Errorf("mgoDriver.Query() error = %v, wantErr %v", err, tt.wantErr)
