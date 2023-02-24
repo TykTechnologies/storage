@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+
 	"gopkg.in/mgo.v2/bson"
 	"time"
 )
@@ -53,6 +54,14 @@ func ObjectIdHex(id string) OID {
 
 func NewObjectID() OID {
 	return OID(bson.NewObjectId())
+}
+
+func IsObjectIdHex(s string) bool {
+	if len(s) != 24 {
+		return false
+	}
+	_, err := hex.DecodeString(s)
+	return err == nil
 }
 
 type ObjectID interface {
