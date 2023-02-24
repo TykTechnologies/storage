@@ -64,6 +64,14 @@ func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject) error {
 	return nil
 }
 
+func (d *mongoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
+	collection := d.client.Database(d.database).Collection(row.TableName())
+
+	count, err := collection.CountDocuments(ctx, bson.D{})
+
+	return int(count), err
+}
+
 func (d *mongoDriver) IsErrNoRows(err error) bool {
 	return errors.Is(err, mongo.ErrNoDocuments)
 }
