@@ -79,7 +79,6 @@ func TestMarshalJSON(t *testing.T) {
 func TestUnmarshalJSON(t *testing.T) {
 	id := NewObjectID()
 	idBytes, err := id.MarshalJSON()
-
 	if err != nil {
 		t.Fatal(err)
 	}
