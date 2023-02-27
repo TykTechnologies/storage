@@ -422,7 +422,9 @@ func TestBuildQuery(t *testing.T) {
 			input: model.DBM{
 				"_id": "invalid_id",
 			},
-			output: bson.M{},
+			output: bson.M{
+				"_id": "invalid_id",
+			},
 		},
 		{
 			name: "Test with $regex",

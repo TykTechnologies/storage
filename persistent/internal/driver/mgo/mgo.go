@@ -135,17 +135,22 @@ func (m *mgoDriver) buildQuery(query model.DBM) bson.M {
 				search[key] = bson.ObjectId(id)
 				continue
 			}
+			handleQueryValue(key, value, search)
 		default:
-			if isNestedQuery(value) {
-				handleNestedQuery(search, key, value)
-			} else if reflect.ValueOf(value).Kind() == reflect.Slice && key != "$or" {
-				search[key] = bson.M{"$in": value}
-			} else {
-				search[key] = value
-			}
+			handleQueryValue(key, value, search)
 		}
 	}
 	return search
+}
+
+func handleQueryValue(key string, value interface{}, search bson.M) {
+	if isNestedQuery(value) {
+		handleNestedQuery(search, key, value)
+	} else if reflect.ValueOf(value).Kind() == reflect.Slice && key != "$or" {
+		search[key] = bson.M{"$in": value}
+	} else {
+		search[key] = value
+	}
 }
 
 func isNestedQuery(value interface{}) bool {
