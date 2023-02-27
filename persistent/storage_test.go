@@ -11,7 +11,11 @@ func TestNewPersistentStorage(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc, func(t *testing.T) {
-			_, err := NewPersistentStorage(&ClientOpts{Type: tc})
+			_, err := NewPersistentStorage(&ClientOpts{
+				ConnectionString: "mongodb://localhost:27017/test",
+				UseSSL:           false,
+				Type:             tc,
+			})
 
 			if tc == "unvalid" {
 				assert.Error(t, err)

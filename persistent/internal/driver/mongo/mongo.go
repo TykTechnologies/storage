@@ -17,7 +17,6 @@ type mongoDriver struct {
 }
 
 func (d *mongoDriver) Update(ctx context.Context, object id.DBObject) error {
-	//TODO implement me
 	panic("implement me")
 }
 
