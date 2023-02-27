@@ -13,10 +13,10 @@ func TestNewPersistentStorage(t *testing.T) {
 		t.Run(tc, func(t *testing.T) {
 			_, err := NewPersistentStorage(&ClientOpts{Type: tc})
 
-			if tc == Mgo {
-				assert.Nil(t, err)
-			} else {
+			if tc == "unvalid" {
 				assert.Error(t, err)
+			} else {
+				assert.Nil(t, err)
 			}
 		})
 	}
