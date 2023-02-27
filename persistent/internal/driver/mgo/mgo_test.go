@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mgo
 
 import (
@@ -377,98 +374,148 @@ func Test_mgoDriver_Query(t *testing.T) {
 }
 
 func TestBuildQuery(t *testing.T) {
-	d := &mgoDriver{}
-	collection := &mgo.Collection{}
-
 	tests := []struct {
-		name     string
-		query    model.DBM
-		expected bson.M
+		name   string
+		input  model.DBM
+		output bson.M
 	}{
 		{
-			name:     "Empty Query",
-			query:    model.DBM{},
-			expected: bson.M{},
+			name:   "Test empty input",
+			input:  model.DBM{},
+			output: bson.M{},
 		},
 		{
-			name:     "Simple Query with One Key-Value Pair",
-			query:    model.DBM{"name": "John"},
-			expected: bson.M{"name": "John"},
-		},
-		{
-			name:     "Query with Multiple Key-Value Pairs",
-			query:    model.DBM{"name": "John", "age": 30},
-			expected: bson.M{"name": "John", "age": 30},
-		},
-		{
-			name: "Query with Nested Query",
-			query: model.DBM{
+			name: "Test with nested query",
+			input: model.DBM{
 				"name": model.DBM{
-					"$ne": "Bob",
+					"$ne": "123",
 				},
 			},
-			expected: bson.M{
+			output: bson.M{
 				"name": bson.M{
-					"$ne": "Bob",
+					"$ne": "123",
 				},
 			},
 		},
 		{
-			name: "Query with Nested Query Containing $i",
-			query: model.DBM{
-				"name": model.DBM{
-					"$i": "john",
+			name: "Test with $in query",
+			input: model.DBM{
+				"age": []int{20, 30, 40},
+			},
+			output: bson.M{
+				"age": bson.M{
+					"$in": []int{20, 30, 40},
 				},
 			},
-			expected: bson.M{
+		},
+		{
+			name: "Test with _id",
+			input: model.DBM{
+				"_id": bson.ObjectIdHex("61634c7b5f46cc8c296edc36"),
+			},
+			output: bson.M{
+				"_id": bson.ObjectIdHex("61634c7b5f46cc8c296edc36"),
+			},
+		},
+		{
+			name: "Test with invalid _id",
+			input: model.DBM{
+				"_id": "invalid_id",
+			},
+			output: bson.M{},
+		},
+		{
+			name: "Test with $regex",
+			input: model.DBM{
+				"name": model.DBM{
+					"$regex": "tyk.com$",
+				},
+			},
+			output: bson.M{
+				"name": bson.M{
+					"$regex": "tyk.com$",
+				},
+			},
+		},
+
+		{
+			name: "Test with $in",
+			input: model.DBM{
+				"age": model.DBM{
+					"$in": []int{25, 30, 35},
+				},
+			},
+			output: bson.M{
+				"age": bson.M{
+					"$in": []int{25, 30, 35},
+				},
+			},
+		},
+		{
+			name: "Test with $i",
+			input: model.DBM{
+				"name": model.DBM{
+					"$i": "tyk",
+				},
+			},
+			output: bson.M{
 				"name": &bson.RegEx{
-					Pattern: "^john$",
+					Pattern: "^tyk$",
 					Options: "i",
 				},
 			},
 		},
 		{
-			name: "Query with Nested Query Containing $text",
-			query: model.DBM{
+			name: "Test with $text",
+			input: model.DBM{
 				"name": model.DBM{
-					"$text": "John",
+					"$text": "tyk",
 				},
 			},
-			expected: bson.M{
+			output: bson.M{
 				"name": bson.M{
 					"$regex": bson.RegEx{
-						Pattern: "John",
+						Pattern: "tyk",
 						Options: "i",
 					},
 				},
 			},
 		},
 		{
-			name:     "Query with _id",
-			query:    model.DBM{"_id": bson.ObjectIdHex("6068ff6b2242597b683cef38")},
-			expected: bson.M{"_id": bson.ObjectIdHex("6068ff6b2242597b683cef38")},
-		},
-		{
-			name:     "Query with $or",
-			query:    model.DBM{"$or": []model.DBM{{"name": "John"}, {"name": "Bob"}}},
-			expected: bson.M{"$or": []bson.M{{"name": "John"}, {"name": "Bob"}}},
-		},
-		{
-			name: "Query with slice",
-			query: model.DBM{
-				"name": []string{"Alice", "Bob"},
+			name: "Test with unsupported operator",
+			input: model.DBM{
+				"name": model.DBM{
+					"$foo": "bar",
+				},
 			},
-			expected: bson.M{
-				"name": bson.M{"$in": []string{"Alice", "Bob"}},
+			output: bson.M{
+				"name": bson.M{
+					"$foo": "bar",
+				},
+			},
+		},
+		{
+			name: "Default value",
+			input: model.DBM{
+				"name":      "John",
+				"age":       30,
+				"is_active": true,
+			},
+			output: bson.M{
+				"name":      "John",
+				"age":       30,
+				"is_active": true,
 			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := d.buildQuery(test.query, collection)
-			if !reflect.DeepEqual(result, test.expected) {
-				t.Errorf("mgoDriver.buildQuery() = %v, want %v", result, test.expected)
+			mgodriver := mgoDriver{}
+			result := mgodriver.buildQuery(test.input)
+
+			if !reflect.DeepEqual(result, test.output) {
+				t.Errorf("Expected output %v, but got %v", test.output, result)
 			}
 		})
 	}

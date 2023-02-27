@@ -87,7 +87,7 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 	col := session.DB("").C(row.TableName())
 	defer col.Database.Session.Close()
 
-	search := d.buildQuery(query, col)
+	search := d.buildQuery(query)
 
 	q := col.Find(search)
 
@@ -123,74 +123,57 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 	return nil
 }
 
-func (d *mgoDriver) buildQuery(query model.DBM, col *mgo.Collection) bson.M {
+func (m *mgoDriver) buildQuery(query model.DBM) bson.M {
 	search := bson.M{}
 
-	for k, v := range query {
-		// Skip _hints and _sort fields
-		if k == "_sort" {
+	for key, value := range query {
+		switch key {
+		case "_sort", "_collection", "_limit", "_offset", "_date_sharding":
 			continue
-		}
-
-		if k == "_limit" {
-			continue
-		}
-
-		if k == "_offset" {
-			continue
-		}
-
-		// If user provided nested query, for example, "name": {"$ne": "123"}
-		if nested, ok := v.(model.DBM); ok {
-			found := false
-
-			for nk, nv := range nested {
-				// Mongo support it as it is
-				if nk == "$in" {
-					continue
-				}
-
-				if nk == "$i" {
-					quoted := regexp.QuoteMeta(nv.(string))
-					search[k] = &bson.RegEx{Pattern: fmt.Sprintf("^%s$", quoted), Options: "i"}
-					found = true
-				} else if nk == "$text" {
-					search[k] = bson.M{"$regex": bson.RegEx{Pattern: regexp.QuoteMeta(nv.(string)), Options: "i"}}
-					found = true
-				}
-			}
-
-			if found {
+		case "_id":
+			if id, ok := value.(bson.ObjectId); ok {
+				search[key] = bson.ObjectId(id)
 				continue
 			}
-		}
-
-		if k == "_id" {
-			if id, ok := v.(bson.ObjectId); ok {
-				search[k] = bson.ObjectId(id)
-				continue
-			}
-		}
-
-		if reflect.ValueOf(v).Kind() == reflect.Slice && k != "$or" {
-			search[k] = bson.M{"$in": v}
-		} else {
-			switch v := v.(type) {
-			case model.DBM:
-				search[k] = d.buildQuery(v, col)
-			case []model.DBM:
-				sliceOfBsons := []bson.M{}
-				for _, sliceValue := range v {
-					sliceOfBsons = append(sliceOfBsons, d.buildQuery(sliceValue, col))
-				}
-				search[k] = sliceOfBsons
-			default:
-				search[k] = v
+		default:
+			if isNestedQuery(value) {
+				handleNestedQuery(search, key, value)
+			} else if reflect.ValueOf(value).Kind() == reflect.Slice && key != "$or" {
+				search[key] = bson.M{"$in": value}
+			} else {
+				search[key] = value
 			}
 		}
 	}
-
 	return search
+}
+
+func isNestedQuery(value interface{}) bool {
+	_, ok := value.(model.DBM)
+	return ok
+}
+
+func handleNestedQuery(search bson.M, key string, value interface{}) {
+	nestedQuery, ok := value.(model.DBM)
+	if !ok {
+		return
+	}
+
+	for nestedKey, nestedValue := range nestedQuery {
+		switch nestedKey {
+		case "$i":
+			if stringValue, ok := nestedValue.(string); ok {
+				quoted := regexp.QuoteMeta(stringValue)
+				search[key] = &bson.RegEx{Pattern: fmt.Sprintf("^%s$", quoted), Options: "i"}
+			}
+		case "$text":
+			if stringValue, ok := nestedValue.(string); ok {
+				search[key] = bson.M{"$regex": bson.RegEx{Pattern: regexp.QuoteMeta(stringValue), Options: "i"}}
+			}
+		default:
+			search[key] = bson.M{nestedKey: nestedValue}
+		}
+	}
 }
 
 func (d *mgoDriver) HandleStoreError(err error) error {
