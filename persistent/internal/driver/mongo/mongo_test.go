@@ -16,16 +16,16 @@ import (
 )
 
 type dummyDBObject struct {
-	Id    id.OID `bson:"_id,omitempty"`
-	Name  string `bson:"name"`
-	Email string `bson:"email"`
+	Id    id.ObjectId `bson:"_id,omitempty"`
+	Name  string      `bson:"name"`
+	Email string      `bson:"email"`
 }
 
-func (d dummyDBObject) GetObjectID() id.OID {
+func (d dummyDBObject) GetObjectID() id.ObjectId {
 	return d.Id
 }
 
-func (d *dummyDBObject) SetObjectID(id id.OID) {
+func (d *dummyDBObject) SetObjectID(id id.ObjectId) {
 	d.Id = id
 }
 
