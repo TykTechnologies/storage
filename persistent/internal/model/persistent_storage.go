@@ -17,6 +17,8 @@ type PersistentStorage interface {
 	Update(context.Context, id.DBObject) error
 	// Count counts all rows for a DBTable
 	Count(context.Context, id.DBObject) (int, error)
+	// Query one or multiple DBObjects from the database
+	Query(context.Context, id.DBObject, interface{}, DBM) error
 	// IsErrNoRows Checking if an error is a "no rows error"
 	IsErrNoRows(err error) bool
 }

@@ -78,6 +78,10 @@ func (d *mongoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 	return int(count), err
 }
 
+func (d *mongoDriver) Query(context.Context, id.DBObject, interface{}, model.DBM) error {
+	panic("implement me")
+}
+
 func (d *mongoDriver) IsErrNoRows(err error) bool {
 	return errors.Is(err, mongo.ErrNoDocuments)
 }
