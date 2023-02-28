@@ -6,6 +6,8 @@ import (
 	"github.com/TykTechnologies/storage/persistent/id"
 )
 
+type DBM map[string]interface{}
+
 type PersistentStorage interface {
 	// Insert a DbObject into the database
 	Insert(context.Context, id.DBObject) error
