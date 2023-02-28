@@ -37,6 +37,9 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 		return errors.New(err.Error())
 	}
 
+	// SetRegistry allow us to marshall/unmarshall old mgo ID's structures.
+	connOpts.SetRegistry(createCustomRegistry().Build())
+
 	if client, err = mongo.Connect(context.Background(), connOpts); err != nil {
 		return err
 	}
