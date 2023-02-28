@@ -121,8 +121,8 @@ func (m *mgoDriver) buildQuery(query model.DBM) bson.M {
 		case "_sort", "_collection", "_limit", "_offset", "_date_sharding":
 			continue
 		case "_id":
-			if id, ok := value.(bson.ObjectId); ok {
-				search[key] = bson.ObjectId(id)
+			if id, ok := value.(id.ObjectId); ok {
+				search[key] = id
 				continue
 			}
 
@@ -143,9 +143,9 @@ func handleQueryValue(key string, value interface{}, search bson.M) {
 		strSlice, isStr := value.([]string)
 
 		if isStr && key == "_id" {
-			objectIDs := []bson.ObjectId{}
+			objectIDs := []id.ObjectId{}
 			for _, str := range strSlice {
-				objectIDs = append(objectIDs, bson.ObjectIdHex(str))
+				objectIDs = append(objectIDs, id.ObjectIdHex(str))
 			}
 
 			search[key] = bson.M{"$in": objectIDs}
