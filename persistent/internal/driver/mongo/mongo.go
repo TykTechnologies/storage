@@ -8,7 +8,6 @@ import (
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -45,7 +44,7 @@ func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
 
 func (d *mongoDriver) Insert(ctx context.Context, row id.DBObject) error {
 	if row.GetObjectID() == "" {
-		row.SetObjectID(id.ObjectId(primitive.NewObjectID().String()))
+		row.SetObjectID(id.NewObjectID())
 	}
 
 	collection := d.client.Database(d.database).Collection(row.TableName())
