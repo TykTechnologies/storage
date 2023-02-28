@@ -14,7 +14,7 @@ import (
 )
 
 type dummyDBObject struct {
-	Id                id.OID            `bson:"_id,omitempty"`
+	Id                id.ObjectId       `bson:"_id,omitempty"`
 	Name              string            `bson:"name"`
 	Email             string            `bson:"email"`
 	Country           dummyCountryField `bson:"country"`
@@ -27,11 +27,11 @@ type dummyCountryField struct {
 	Continent   string `bson:"continent"`
 }
 
-func (d dummyDBObject) GetObjectID() id.OID {
+func (d dummyDBObject) GetObjectID() id.ObjectId {
 	return d.Id
 }
 
-func (d *dummyDBObject) SetObjectID(id id.OID) {
+func (d *dummyDBObject) SetObjectID(id id.ObjectId) {
 	d.Id = id
 }
 
@@ -260,11 +260,11 @@ func TestQuery(t *testing.T) {
 	}
 
 	dummyData := []dummyDBObject{
-		{Name: "John", Email: "john@example.com", Id: id.OID(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
-		{Name: "Jane", Email: "jane@tyk.com", Id: id.OID(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
-		{Name: "Bob", Email: "bob@example.com", Id: id.OID(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25},
-		{Name: "Alice", Email: "alice@tyk.com", Id: id.OID(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45},
-		{Name: "Peter", Email: "peter@test.com", Id: id.OID(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12},
+		{Name: "John", Email: "john@example.com", Id: id.ObjectId(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
+		{Name: "Jane", Email: "jane@tyk.com", Id: id.ObjectId(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
+		{Name: "Bob", Email: "bob@example.com", Id: id.ObjectId(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25},
+		{Name: "Alice", Email: "alice@tyk.com", Id: id.ObjectId(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45},
+		{Name: "Peter", Email: "peter@test.com", Id: id.ObjectId(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12},
 	}
 
 	tests := []struct {

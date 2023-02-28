@@ -6,6 +6,7 @@ package mongo
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 
 	"github.com/TykTechnologies/storage/persistent/id"
@@ -15,16 +16,16 @@ import (
 )
 
 type dummyDBObject struct {
-	Id    id.OID `bson:"_id,omitempty"`
-	Name  string `bson:"name"`
-	Email string `bson:"email"`
+	Id    id.ObjectId `bson:"_id,omitempty"`
+	Name  string      `bson:"name"`
+	Email string      `bson:"email"`
 }
 
-func (d dummyDBObject) GetObjectID() id.OID {
+func (d dummyDBObject) GetObjectID() id.ObjectId {
 	return d.Id
 }
 
-func (d *dummyDBObject) SetObjectID(id id.OID) {
+func (d *dummyDBObject) SetObjectID(id id.ObjectId) {
 	d.Id = id
 }
 
@@ -138,4 +139,76 @@ func TestDelete(t *testing.T) {
 		assert.NotNil(t, err)
 		assert.Equal(t, errors.New("error deleting a non existing object"), err)
 	})
+}
+
+func TestCount(t *testing.T) {
+	ctx := context.Background()
+
+	tcs := []struct {
+		name      string
+		prepareTc func(*testing.T) (*mongoDriver, *dummyDBObject)
+		want      int
+		wantErr   error
+	}{
+		{
+			name: "0 objects",
+			want: 0,
+			prepareTc: func(t *testing.T) (*mongoDriver, *dummyDBObject) {
+				return prepareEnvironment(t)
+			},
+		},
+		{
+			name: "1 object",
+			want: 1,
+			prepareTc: func(t *testing.T) (*mongoDriver, *dummyDBObject) {
+				driver, object := prepareEnvironment(t)
+
+				err := driver.Insert(ctx, object)
+				assert.Nil(t, err)
+
+				return driver, object
+			},
+		},
+		{
+			name: "10 objects",
+			want: 10,
+			prepareTc: func(t *testing.T) (*mongoDriver, *dummyDBObject) {
+				driver, object := prepareEnvironment(t)
+
+				for i := 0; i < 10; i++ {
+					object = &dummyDBObject{
+						Name:  "test" + strconv.Itoa(i),
+						Email: "test@test.com",
+					}
+
+					err := driver.Insert(ctx, object)
+					assert.Nil(t, err)
+				}
+
+				return driver, object
+			},
+		},
+		{
+			name: "error when counting on closed connection ",
+			want: 0,
+			prepareTc: func(t *testing.T) (*mongoDriver, *dummyDBObject) {
+				driver, object := prepareEnvironment(t)
+
+				driver.Close()
+
+				return driver, object
+			},
+			wantErr: errors.New("client is disconnected"),
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			driver, object := tc.prepareTc(t)
+			defer driver.client.Database(driver.database).Collection(object.TableName()).Drop(ctx)
+
+			got, err := driver.Count(ctx, object)
+			assert.Equal(t, tc.want, got)
+			assert.Equal(t, tc.wantErr, err)
+		})
+	}
 }

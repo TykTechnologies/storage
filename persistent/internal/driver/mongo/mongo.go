@@ -16,6 +16,10 @@ type mongoDriver struct {
 	options *model.ClientOpts
 }
 
+func (d *mongoDriver) Update(ctx context.Context, object id.DBObject) error {
+	panic("implement me")
+}
+
 // NewMongoDriver returns an instance of the driver official mongo connected to the database.
 func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
 	if opts.ConnectionString == "" {
@@ -39,7 +43,7 @@ func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
 
 func (d *mongoDriver) Insert(ctx context.Context, row id.DBObject) error {
 	if row.GetObjectID() == "" {
-		row.SetObjectID(id.OID(primitive.NewObjectID().String()))
+		row.SetObjectID(id.ObjectId(primitive.NewObjectID().String()))
 	}
 
 	collection := d.client.Database(d.database).Collection(row.TableName())
@@ -62,6 +66,18 @@ func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject) error {
 	}
 
 	return nil
+}
+
+func (d *mongoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
+	collection := d.client.Database(d.database).Collection(row.TableName())
+
+	count, err := collection.CountDocuments(ctx, bson.D{})
+
+	return int(count), err
+}
+
+func (d *mongoDriver) Query(context.Context, id.DBObject, interface{}, model.DBM) error {
+	panic("implement me")
 }
 
 func (d *mongoDriver) IsErrNoRows(err error) bool {
