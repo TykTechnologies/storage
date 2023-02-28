@@ -260,11 +260,11 @@ func TestQuery(t *testing.T) {
 	}
 
 	dummyData := []dummyDBObject{
-		{Name: "John", Email: "john@example.com", Id: id.ObjectId(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
-		{Name: "Jane", Email: "jane@tyk.com", Id: id.ObjectId(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
-		{Name: "Bob", Email: "bob@example.com", Id: id.ObjectId(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25},
-		{Name: "Alice", Email: "alice@tyk.com", Id: id.ObjectId(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45},
-		{Name: "Peter", Email: "peter@test.com", Id: id.ObjectId(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12},
+		{Name: "John", Email: "john@example.com", Id: id.ObjectId(bson.NewObjectId()), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
+		{Name: "Jane", Email: "jane@tyk.com", Id: id.ObjectId(bson.NewObjectId()), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
+		{Name: "Bob", Email: "bob@example.com", Id: id.ObjectId(bson.NewObjectId()), Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25},
+		{Name: "Alice", Email: "alice@tyk.com", Id: id.ObjectId(bson.NewObjectId()), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45},
+		{Name: "Peter", Email: "peter@test.com", Id: id.ObjectId(bson.NewObjectId()), Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12},
 	}
 
 	tests := []struct {
@@ -402,7 +402,7 @@ func TestQuery(t *testing.T) {
 				result: &[]dummyDBObject{},
 				query: model.DBM{
 					"_id": model.DBM{
-						"$in": []string{string(dummyData[0].GetObjectID()), string(dummyData[1].GetObjectID())},
+						"$in": []id.ObjectId{dummyData[0].GetObjectID(), dummyData[1].GetObjectID()},
 					},
 				},
 			},
