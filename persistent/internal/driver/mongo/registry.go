@@ -17,20 +17,30 @@ func objectIDEncodeValue(ec bsoncodec.EncodeContext, vw bsonrw.ValueWriter, val 
 	if !val.IsValid() || val.Type() != tOID {
 		return bsoncodec.ValueEncoderError{Name: "ObjectIDEncodeValue", Types: []reflect.Type{tOID}, Received: val}
 	}
+
 	s := val.Interface().(id.ObjectId).Hex()
-	newOID, _ := primitive.ObjectIDFromHex(s)
+
+	newOID, err := primitive.ObjectIDFromHex(s)
+	if err != nil {
+		return err
+	}
+
 	return vw.WriteObjectID(newOID)
 }
 
 // objectIDDecodeValue decode Hex value of primitive.ObjectID into id.ObjectId
 func objectIDDecodeValue(dc bsoncodec.DecodeContext, vr bsonrw.ValueReader, val reflect.Value) error {
 	objectID, err := vr.ReadObjectID()
-	if err != nil{
+	if err != nil {
 		return err
 	}
+
 	newOID := id.ObjectIdHex(objectID.Hex())
 
-	val.Set(reflect.ValueOf(newOID))
+	if val.CanSet() {
+		val.Set(reflect.ValueOf(newOID))
+	}
+
 	return nil
 }
 
@@ -44,5 +54,6 @@ func createCustomRegistry() *bsoncodec.RegistryBuilder {
 	rb.RegisterTypeEncoder(tOID, bsoncodec.ValueEncoderFunc(objectIDEncodeValue))
 	rb.RegisterTypeDecoder(tOID, bsoncodec.ValueDecoderFunc(objectIDDecodeValue))
 	primitiveCodecs.RegisterPrimitiveCodecs(rb)
+
 	return rb
 }

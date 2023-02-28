@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCreateCustomRegistry(t *testing.T){
+func TestCreateCustomRegistry(t *testing.T) {
 	customRegistry := createCustomRegistry()
 
 	build := customRegistry.Build()
