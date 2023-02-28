@@ -2,7 +2,6 @@ package mgo
 
 import (
 	"context"
-	"errors"
 	"reflect"
 	"strconv"
 	"testing"
@@ -15,10 +14,17 @@ import (
 )
 
 type dummyDBObject struct {
-	Id                id.OID `bson:"_id,omitempty"`
-	Name              string `bson:"name"`
-	Email             string `bson:"email"`
+	Id                id.OID            `bson:"_id,omitempty"`
+	Name              string            `bson:"name"`
+	Email             string            `bson:"email"`
+	Country           dummyCountryField `bson:"country"`
+	Age               int               `bson:"age"`
 	invalidCollection bool
+}
+
+type dummyCountryField struct {
+	CountryName string `bson:"country_name"`
+	Continent   string `bson:"continent"`
 }
 
 func (d dummyDBObject) GetObjectID() id.OID {
@@ -49,8 +55,10 @@ func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject, *mgo.Session)
 	}
 	// create a new dummy object
 	object := &dummyDBObject{
-		Name:  "test",
-		Email: "test@test.com",
+		Name:    "test",
+		Email:   "test@test.com",
+		Country: dummyCountryField{CountryName: "test_country", Continent: "test_continent"},
+		Age:     10,
 	}
 
 	// create a session
@@ -85,6 +93,8 @@ func TestInsert(t *testing.T) {
 
 	assert.Equal(t, object.Name, result.Name)
 	assert.Equal(t, object.Email, result.Email)
+	assert.Equal(t, object.Country, result.Country)
+	assert.Equal(t, object.Age, result.Age)
 	assert.Equal(t, object.GetObjectID(), result.GetObjectID())
 }
 
@@ -105,6 +115,8 @@ func TestDelete(t *testing.T) {
 
 	assert.Equal(t, object.Name, result.Name)
 	assert.Equal(t, object.Email, result.Email)
+	assert.Equal(t, object.Country, result.Country)
+	assert.Equal(t, object.Age, result.Age)
 	assert.Equal(t, object.GetObjectID(), result.GetObjectID())
 
 	// delete the object from the database
@@ -140,11 +152,14 @@ func TestUpdate(t *testing.T) {
 
 	assert.Equal(t, object.Name, result.Name)
 	assert.Equal(t, object.Email, result.Email)
+	assert.Equal(t, object.Country, result.Country)
+	assert.Equal(t, object.Age, result.Age)
 	assert.Equal(t, object.GetObjectID(), result.GetObjectID())
 
 	// update the object
 	object.Name = "test2"
 	object.Email = "test2@test2.com"
+	object.Age = 20
 	err = mgo.Update(context.Background(), object)
 	assert.Nil(t, err)
 
@@ -165,7 +180,7 @@ func TestIsErrNoRows(t *testing.T) {
 	assert.False(t, mgoDriver.IsErrNoRows(mgo.ErrCursor))
 }
 
-func Test_mgoDriver_Count(t *testing.T) {
+func TestCount(t *testing.T) {
 	tests := []struct {
 		name    string
 		want    int
@@ -202,7 +217,13 @@ func Test_mgoDriver_Count(t *testing.T) {
 				object = &dummyDBObject{
 					Name:  "test" + strconv.Itoa(i),
 					Email: "test@test.com",
+					Country: dummyCountryField{
+						CountryName: "TestCountry" + strconv.Itoa(i),
+						Continent:   "TestContinent",
+					},
+					Age: i,
 				}
+
 				err := mgo.Insert(context.Background(), object)
 				assert.Nil(t, err)
 			}
@@ -232,18 +253,18 @@ func dropCollection(sess *mgo.Session, object *dummyDBObject, t *testing.T) {
 	}
 }
 
-func Test_mgoDriver_Query(t *testing.T) {
+func TestQuery(t *testing.T) {
 	type args struct {
 		result interface{}
 		query  model.DBM
 	}
 
 	dummyData := []dummyDBObject{
-		{Name: "John", Email: "john@example.com", Id: id.OID(bson.NewObjectId().Hex())},
-		{Name: "Jane", Email: "jane@tyk.com", Id: id.OID(bson.NewObjectId().Hex())},
-		{Name: "Bob", Email: "bob@example.com", Id: id.OID(bson.NewObjectId().Hex())},
-		{Name: "Alice", Email: "alice@tyk.com", Id: id.OID(bson.NewObjectId().Hex())},
-		{Name: "Peter", Email: "peter@test.com", Id: id.OID(bson.NewObjectId().Hex())},
+		{Name: "John", Email: "john@example.com", Id: id.OID(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
+		{Name: "Jane", Email: "jane@tyk.com", Id: id.OID(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
+		{Name: "Bob", Email: "bob@example.com", Id: id.OID(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25},
+		{Name: "Alice", Email: "alice@tyk.com", Id: id.OID(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45},
+		{Name: "Peter", Email: "peter@test.com", Id: id.OID(bson.NewObjectId().Hex()), Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12},
 	}
 
 	tests := []struct {
@@ -343,6 +364,51 @@ func Test_mgoDriver_Query(t *testing.T) {
 			},
 			expectedResult: &[]dummyDBObject{dummyData[1], dummyData[0]},
 		},
+		{
+			name: "filter by country name",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"country.country_name": "TestCountry",
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[0], dummyData[3]},
+		},
+		{
+			name: "filter by country name and sort by name",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"country.country_name": "TestCountry",
+					"_sort":                "name",
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[3], dummyData[0]},
+		},
+
+		{
+			name: "filter by id",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"_id": dummyData[0].GetObjectID(),
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[0]},
+		},
+		{
+			name: "filter by slice of ids",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"_id": model.DBM{
+						"$in": []string{string(dummyData[0].GetObjectID()), string(dummyData[1].GetObjectID())},
+					},
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[0], dummyData[1]},
+		},
+
 		{
 			name: "invalid db name",
 			args: args{
@@ -497,6 +563,72 @@ func TestBuildQuery(t *testing.T) {
 			},
 		},
 		{
+			name: "Test with slice of strings and _id key",
+			input: model.DBM{
+				"_id": []string{"61634c7b5f46cc8c296edc36", "61634c7b5f46cc8c296edc37"},
+			},
+			output: bson.M{
+				"_id": bson.M{
+					"$in": []bson.ObjectId{
+						bson.ObjectIdHex("61634c7b5f46cc8c296edc36"),
+						bson.ObjectIdHex("61634c7b5f46cc8c296edc37"),
+					},
+				},
+			},
+		},
+		{
+			name: "Test with $min",
+			input: model.DBM{
+				"age": model.DBM{
+					"$min": 20,
+				},
+			},
+			output: bson.M{
+				"age": bson.M{
+					"$min": 20,
+				},
+			},
+		},
+		{
+			name: "Test with $max",
+			input: model.DBM{
+				"age": model.DBM{
+					"$max": 20,
+				},
+			},
+			output: bson.M{
+				"age": bson.M{
+					"$max": 20,
+				},
+			},
+		},
+		{
+			name: "Test with $inc",
+			input: model.DBM{
+				"age": model.DBM{
+					"$inc": 20,
+				},
+			},
+			output: bson.M{
+				"age": bson.M{
+					"$inc": 20,
+				},
+			},
+		},
+		{
+			name: "Test with $set",
+			input: model.DBM{
+				"age": model.DBM{
+					"$set": 20,
+				},
+			},
+			output: bson.M{
+				"age": bson.M{
+					"$set": 20,
+				},
+			},
+		},
+		{
 			name: "Default value",
 			input: model.DBM{
 				"name":      "John",
@@ -518,82 +650,6 @@ func TestBuildQuery(t *testing.T) {
 
 			if !reflect.DeepEqual(result, test.output) {
 				t.Errorf("Expected output %v, but got %v", test.output, result)
-			}
-		})
-	}
-}
-
-func TestHandleStoreError(t *testing.T) {
-	mgo, _, _ := prepareEnvironment(t)
-
-	tests := []struct {
-		name          string
-		inputErr      error
-		wantErr       error
-		wantReconnect bool
-	}{
-		{
-			name:     "Nil input error",
-			inputErr: nil,
-			wantErr:  nil,
-		},
-		{
-			name:          "Known connection error",
-			inputErr:      errors.New("no reachable servers"),
-			wantErr:       nil,
-			wantReconnect: true,
-		},
-		{
-			name:     "Unknown connection error",
-			inputErr: errors.New("unknown error"),
-			wantErr:  nil,
-		},
-		{
-			name:          "i/o timeout",
-			inputErr:      errors.New("i/o timeout"),
-			wantErr:       nil,
-			wantReconnect: true,
-		},
-		{
-			name:          "failing when reconnecting",
-			inputErr:      errors.New("reset by peer"),
-			wantErr:       errors.New("reset by peer"),
-			wantReconnect: false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			sess := mgo.session
-			defer sess.Close()
-
-			if test.wantErr != nil {
-				invalidMgo := *mgo
-				invalidMgo.options = model.ClientOpts{
-					ConnectionString:  "mongodb://host:port/invalid",
-					ConnectionTimeout: 1,
-				}
-				err := invalidMgo.HandleStoreError(test.inputErr)
-				if err == nil {
-					t.Errorf("expected error to be returned when mgo is nil")
-				}
-				return
-			}
-
-			gotErr := mgo.HandleStoreError(test.inputErr)
-
-			if test.wantReconnect {
-				if sess == mgo.session {
-					t.Errorf("session was not reconnected when it should have been")
-				}
-			} else {
-				if sess != mgo.session {
-					t.Errorf("session was reconnected when it shouldn't have been")
-				}
-			}
-
-			if !errors.Is(gotErr, test.wantErr) {
-				t.Errorf("got error %v, want error %v", gotErr, test.wantErr)
 			}
 		})
 	}

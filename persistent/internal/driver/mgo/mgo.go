@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/TykTechnologies/storage/persistent/id"
@@ -111,16 +110,7 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 		err = q.One(result)
 	}
 
-	if err != nil {
-		conErr := d.HandleStoreError(err)
-		if conErr != nil {
-			return fmt.Errorf("failed while reconnecting to mongo: %w", conErr)
-		}
-
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (m *mgoDriver) buildQuery(query model.DBM) bson.M {
@@ -147,6 +137,16 @@ func handleQueryValue(key string, value interface{}, search bson.M) {
 	if isNestedQuery(value) {
 		handleNestedQuery(search, key, value)
 	} else if reflect.ValueOf(value).Kind() == reflect.Slice && key != "$or" {
+		strSlice, isStr := value.([]string)
+
+		if isStr && key == "_id" {
+			objectIDs := []bson.ObjectId{}
+			for _, str := range strSlice {
+				objectIDs = append(objectIDs, bson.ObjectIdHex(str))
+			}
+			search[key] = bson.M{"$in": objectIDs}
+			return
+		}
 		search[key] = bson.M{"$in": value}
 	} else {
 		search[key] = value
@@ -179,33 +179,6 @@ func handleNestedQuery(search bson.M, key string, value interface{}) {
 			search[key] = bson.M{nestedKey: nestedValue}
 		}
 	}
-}
-
-func (d *mgoDriver) HandleStoreError(err error) error {
-	if err == nil {
-		return nil
-	}
-
-	listOfErrors := []string{
-		"EOF",
-		"Closed explicitly",
-		"reset by peer",
-		"no reachable servers",
-		"i/o timeout",
-	}
-
-	for _, substr := range listOfErrors {
-		if strings.Contains(err.Error(), substr) {
-			connErr := d.Connect(&d.options)
-			if connErr != nil {
-				return fmt.Errorf("failure while connecting to mongo: %w", connErr)
-			}
-
-			return nil
-		}
-	}
-
-	return nil
 }
 
 func (d *mgoDriver) IsErrNoRows(err error) bool {
