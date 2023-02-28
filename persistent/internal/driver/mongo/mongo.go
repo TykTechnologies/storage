@@ -3,12 +3,10 @@ package mongo
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -34,7 +32,6 @@ func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
 	lc := &lifeCycle{}
 
 	if err := lc.Connect(opts); err != nil {
-		fmt.Println("ERROR CONNECTINGGG::::", err)
 		return nil, err
 	}
 
@@ -45,17 +42,10 @@ func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
 
 func (d *mongoDriver) Insert(ctx context.Context, row id.DBObject) error {
 	if row.GetObjectID() == "" {
-		row.SetObjectID(id.ObjectId(primitive.NewObjectID().String()))
+		row.SetObjectID(id.NewObjectID())
 	}
 
-	db := d.database
-	fmt.Println("with database:",db)
-
-	table := row.TableName()
-	fmt.Println("with table:",table)
-
-	fmt.Println("with client:",d.client)
-	collection := d.client.Database(db).Collection(table)
+	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	_, err := collection.InsertOne(ctx, row)
 
