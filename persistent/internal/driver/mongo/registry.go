@@ -12,6 +12,7 @@ import (
 
 var tOID = reflect.TypeOf(id.NewObjectID())
 
+// objectIDDecodeValue encode Hex value of id.ObjectId into primitive.ObjectID
 func objectIDEncodeValue(ec bsoncodec.EncodeContext, vw bsonrw.ValueWriter, val reflect.Value) error {
 	if !val.IsValid() || val.Type() != tOID {
 		return bsoncodec.ValueEncoderError{Name: "ObjectIDEncodeValue", Types: []reflect.Type{tOID}, Received: val}
@@ -21,6 +22,7 @@ func objectIDEncodeValue(ec bsoncodec.EncodeContext, vw bsonrw.ValueWriter, val 
 	return vw.WriteObjectID(newOID)
 }
 
+// objectIDDecodeValue decode Hex value of primitive.ObjectID into id.ObjectId
 func objectIDDecodeValue(dc bsoncodec.DecodeContext, vr bsonrw.ValueReader, val reflect.Value) error {
 	objectID, err := vr.ReadObjectID()
 	if err != nil{
@@ -32,6 +34,8 @@ func objectIDDecodeValue(dc bsoncodec.DecodeContext, vr bsonrw.ValueReader, val 
 	return nil
 }
 
+// createCustomRegistry creates a *bsoncodec.RegistryBuilder for our lifeCycle mongo's client using  objectIDDecodeValue
+// and objectIDEncodeValue as Type Encoder/Decoders for id.ObjectId
 func createCustomRegistry() *bsoncodec.RegistryBuilder {
 	var primitiveCodecs bson.PrimitiveCodecs
 	rb := bsoncodec.NewRegistryBuilder()
