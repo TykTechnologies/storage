@@ -16,6 +16,10 @@ type mongoDriver struct {
 	options *model.ClientOpts
 }
 
+func (d *mongoDriver) Update(ctx context.Context, object id.DBObject) error {
+	panic("implement me")
+}
+
 // NewMongoDriver returns an instance of the driver official mongo connected to the database.
 func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
 	if opts.ConnectionString == "" {
