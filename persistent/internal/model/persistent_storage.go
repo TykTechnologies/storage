@@ -19,6 +19,8 @@ type PersistentStorage interface {
 	Count(context.Context, id.DBObject) (int, error)
 	// Query one or multiple DBObjects from the database
 	Query(context.Context, id.DBObject, interface{}, DBM) error
+	// DeleteWhere deletes all rows that match the query
+	DeleteWhere(context.Context, id.DBObject, DBM) error
 	// IsErrNoRows Checking if an error is a "no rows error"
 	IsErrNoRows(err error) bool
 }

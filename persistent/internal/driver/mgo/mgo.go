@@ -83,7 +83,12 @@ func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query model.DBM) error {
 	session := d.session.Copy()
 
-	col := session.DB("").C(row.TableName())
+	colName, ok := query["_collection"].(string)
+	if !ok {
+		colName = row.TableName()
+	}
+
+	col := session.DB("").C(colName)
 	defer col.Database.Session.Close()
 
 	search := d.buildQuery(query)
@@ -185,6 +190,22 @@ func handleNestedQuery(search bson.M, key string, value interface{}) {
 			search[key] = bson.M{nestedKey: nestedValue}
 		}
 	}
+}
+
+func (d *mgoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query model.DBM) error {
+	session := d.session.Copy()
+
+	colName, ok := query["_collection"].(string)
+	if !ok {
+		colName = row.TableName()
+	}
+
+	col := session.DB("").C(colName)
+	defer col.Database.Session.Close()
+
+	_, err := col.RemoveAll(d.buildQuery(query))
+
+	return err
 }
 
 func (d *mgoDriver) IsErrNoRows(err error) bool {
