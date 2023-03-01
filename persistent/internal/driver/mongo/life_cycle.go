@@ -80,7 +80,7 @@ func (lc *lifeCycle) DBType() model.DBType {
 
 // mongoOptsBuilder build Mongo options.ClientOptions from our own model.ClientOpts. Also sets default values.
 // mongo URI parameters specified in the model.ClientOpts ConnectionString have precedence over the ones configured in
-// other fields.
+// other input.
 func mongoOptsBuilder(opts *model.ClientOpts) (*options.ClientOptions, error) {
 	connOpts := options.Client()
 

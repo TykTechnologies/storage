@@ -16,9 +16,16 @@ import (
 )
 
 type dummyDBObject struct {
-	Id    id.ObjectId `bson:"_id,omitempty"`
-	Name  string      `bson:"name"`
-	Email string      `bson:"email"`
+	Id      id.ObjectId       `bson:"_id,omitempty"`
+	Name    string            `bson:"testName"`
+	Email   string            `bson:"email"`
+	Country dummyCountryField `bson:"country"`
+	Age     int               `bson:"age"`
+}
+
+type dummyCountryField struct {
+	CountryName string `bson:"country_name"`
+	Continent   string `bson:"continent"`
 }
 
 func (d dummyDBObject) GetObjectID() id.ObjectId {
@@ -209,6 +216,181 @@ func TestCount(t *testing.T) {
 			got, err := driver.Count(ctx, object)
 			assert.Equal(t, tc.want, got)
 			assert.Equal(t, tc.wantErr, err)
+		})
+	}
+}
+
+func TestQuery(t *testing.T) {
+	type args struct {
+		result interface{}
+		query  model.DBM
+	}
+
+	dummyData := []dummyDBObject{
+		{Name: "John", Email: "john@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
+		{Name: "Jane", Email: "jane@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
+		{Name: "Bob", Email: "bob@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25},
+		{Name: "Alice", Email: "alice@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45},
+		{Name: "Peter", Email: "peter@test.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12},
+	}
+
+	tests := []struct {
+		name           string
+		args           args
+		expectedResult interface{}
+		wantErr        bool
+	}{
+		{
+			name: "4 objects",
+			args: args{
+				result: &[]dummyDBObject{},
+				query:  model.DBM{},
+			},
+			expectedResult: &dummyData,
+		},
+		{
+			name: "4 objects with limit 2",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"_limit": 2,
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[0], dummyData[1]},
+		},
+		{
+			name: "4 objects with limit 2 and offset 2",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"_limit":  2,
+					"_offset": 2,
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[2], dummyData[3]},
+		},
+		{
+			name: "4 objects with limit 2 and offset 2 and sort by testName",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"_limit":  2,
+					"_offset": 2,
+					"_sort":   "testName",
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[1], dummyData[0]},
+		},
+		{
+			name: "filter by email ending with tyk.com",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"email": model.DBM{
+						"$regex": "tyk.com$",
+					},
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[1], dummyData[3]},
+		},
+		{
+			name: "filter by email ending with tyk.com and sort by testName",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"email": model.DBM{
+						"$regex": "tyk.com$",
+					},
+					"_sort": "testName",
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[3], dummyData[1]},
+		},
+		{
+			name: "filter by testName starting with A",
+			args: args{
+				result: &dummyDBObject{},
+				query: model.DBM{
+					"testName": model.DBM{
+						"$regex": "^A",
+					},
+				},
+			},
+			expectedResult: &dummyData[3],
+		},
+		{
+			name: "filter by testName starting with J and sort by testName",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"testName": model.DBM{
+						"$regex": "^J",
+					},
+					"_sort": "testName",
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[1], dummyData[0]},
+		},
+		{
+			name: "filter by country testName",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"country.country_name": "TestCountry",
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[0], dummyData[3]},
+		},
+		{
+			name: "filter by country testName and sort by testName",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"country.country_name": "TestCountry",
+					"_sort":                "testName",
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[3], dummyData[0]},
+		},
+
+		{
+			name: "filter by id",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"_id": dummyData[0].GetObjectID(),
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[0]},
+		},
+		{
+			name: "filter by slice of ids",
+			args: args{
+				result: &[]dummyDBObject{},
+				query: model.DBM{
+					"_id": model.DBM{
+						"$in": []id.ObjectId{dummyData[0].GetObjectID(), dummyData[1].GetObjectID()},
+					},
+				},
+			},
+			expectedResult: &[]dummyDBObject{dummyData[0], dummyData[1]},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			driver, object := prepareEnvironment(t)
+			ctx := context.Background()
+			defer driver.Drop(ctx, object)
+
+			for _, obj := range dummyData {
+				err := driver.Insert(ctx, &obj)
+				assert.Nil(t, err)
+			}
+
+			if err := driver.Query(ctx, object, tt.args.result, tt.args.query); (err != nil) != tt.wantErr {
+				t.Errorf("mongoDriver.Query() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			assert.Equal(t, tt.expectedResult, tt.args.result)
 		})
 	}
 }

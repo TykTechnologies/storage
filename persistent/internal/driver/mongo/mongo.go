@@ -5,9 +5,11 @@ import (
 	"errors"
 
 	"github.com/TykTechnologies/storage/persistent/id"
+	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type mongoDriver struct {
@@ -75,10 +77,53 @@ func (d *mongoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 	return int(count), err
 }
 
-func (d *mongoDriver) Query(context.Context, id.DBObject, interface{}, model.DBM) error {
-	panic("implement me")
-}
-
 func (d *mongoDriver) IsErrNoRows(err error) bool {
 	return errors.Is(err, mongo.ErrNoDocuments)
+}
+
+func (d *mongoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query model.DBM) error {
+	collection := d.client.Database(d.database).Collection(row.TableName())
+
+	search := buildQuery(query)
+
+	findOpts := options.Find()
+	findOneOpts := options.FindOne()
+
+	sort, sortFound := query["_sort"].(string)
+	if sortFound && sort != "" {
+		sortQuery := buildLimitQuery(sort)
+		findOpts.SetSort(sortQuery)
+		findOneOpts.SetSort(sortQuery)
+	}
+
+	if limit, ok := query["_limit"].(int); ok && limit > 0 {
+		findOpts.SetLimit(int64(limit))
+	}
+
+	if offset, ok := query["_offset"].(int); ok && offset > 0 {
+		findOpts.SetSkip(int64(offset))
+		findOneOpts.SetSkip(int64(offset))
+	}
+
+	var err error
+
+	if helper.IsSlice(result) {
+		var cursor *mongo.Cursor
+
+		cursor, err = collection.Find(ctx, search, findOpts)
+		if err == nil {
+			err = cursor.All(ctx, result)
+		}
+		defer cursor.Close(ctx)
+	} else {
+		err = collection.FindOne(ctx, search, findOneOpts).Decode(result)
+	}
+
+	return err
+}
+
+func (d *mongoDriver) Drop(ctx context.Context, row id.DBObject) error {
+	collection := d.client.Database(d.database).Collection(row.TableName())
+
+	return collection.Drop(ctx)
 }
