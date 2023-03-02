@@ -761,7 +761,6 @@ func TestDeleteWhere(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			mgo, object, sess := prepareEnvironment(t)
 			defer cleanEnvironment(t, object, sess)
 
@@ -790,7 +789,6 @@ func TestDeleteWhere(t *testing.T) {
 			if !reflect.DeepEqual(result, tt.expectedNewValues) {
 				t.Errorf("Expected output %v, but got %v", tt.expectedNewValues, result)
 			}
-
 		})
 	}
 }
