@@ -17,10 +17,6 @@ type mongoDriver struct {
 	options *model.ClientOpts
 }
 
-func (d *mongoDriver) Update(ctx context.Context, object id.DBObject) error {
-	panic("implement me")
-}
-
 // NewMongoDriver returns an instance of the driver official mongo connected to the database.
 func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
 	if opts.ConnectionString == "" {
@@ -130,4 +126,15 @@ func (d *mongoDriver) Drop(ctx context.Context, row id.DBObject) error {
 
 func (d *mongoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query model.DBM) error {
 	panic("implement me")
+}
+
+func (d *mongoDriver) Update(ctx context.Context, row id.DBObject) error {
+	collection := d.client.Database(d.database).Collection(row.TableName())
+
+	result, err := collection.UpdateOne(ctx, bson.M{"_id": row.GetObjectID()}, bson.D{{Key: "$set", Value: row}})
+	if err == nil && result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return err
 }

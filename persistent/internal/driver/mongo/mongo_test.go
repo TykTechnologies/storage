@@ -394,3 +394,53 @@ func TestQuery(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdate(t *testing.T) {
+	t.Run("Updating an existing obj", func(t *testing.T) {
+		driver, object := prepareEnvironment(t)
+		ctx := context.Background()
+
+		err := driver.Insert(ctx, object)
+		assert.Nil(t, err)
+		defer driver.Drop(ctx, object)
+
+		object.Name = "test2"
+		object.Email = "test2@test2.com"
+		object.Age = 20
+		err = driver.Update(ctx, object)
+		assert.Nil(t, err)
+
+		// check if the object was updated
+		result := &dummyDBObject{}
+		result.SetObjectID(object.GetObjectID())
+		err = driver.Query(ctx, object, result, model.DBM{"_id": result.GetObjectID()})
+		assert.Nil(t, err)
+
+		assert.Equal(t, object.Name, result.Name)
+		assert.Equal(t, object.Email, result.Email)
+		assert.Equal(t, object.GetObjectID(), result.GetObjectID())
+	})
+
+	t.Run("Updating a non existing obj", func(t *testing.T) {
+		driver, object := prepareEnvironment(t)
+		ctx := context.Background()
+
+		defer driver.Drop(ctx, object)
+
+		object.SetObjectID(id.NewObjectID())
+
+		err := driver.Update(ctx, object)
+		assert.NotNil(t, err)
+		assert.True(t, driver.IsErrNoRows(err))
+	})
+
+	t.Run("Updating an object without _id", func(t *testing.T) {
+		driver, object := prepareEnvironment(t)
+		ctx := context.Background()
+		defer driver.Drop(ctx, object)
+
+		err := driver.Update(ctx, object)
+		assert.NotNil(t, err)
+		assert.False(t, driver.IsErrNoRows(err))
+	})
+}
