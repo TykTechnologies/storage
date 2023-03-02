@@ -13,6 +13,7 @@ import (
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type dummyDBObject struct {
@@ -42,7 +43,7 @@ func (d dummyDBObject) TableName() string {
 
 func prepareEnvironment(t *testing.T) (*mongoDriver, *dummyDBObject) {
 	t.Helper()
-	// create a new mgo driver connection
+	// create a new mongo driver connection
 	mgo, err := NewMongoDriver(&model.ClientOpts{
 		ConnectionString: "mongodb://localhost:27017/test",
 		UseSSL:           false,
@@ -443,4 +444,127 @@ func TestUpdate(t *testing.T) {
 		assert.NotNil(t, err)
 		assert.False(t, driver.IsErrNoRows(err))
 	})
+}
+
+func TestDeleteWhere(t *testing.T) {
+	dummyData := []dummyDBObject{
+		{Name: "John", Email: "john@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
+		{Name: "Jane", Email: "jane@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
+		{Name: "Bob", Email: "bob@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25},
+		{Name: "Alice", Email: "alice@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45},
+		{Name: "Peter", Email: "peter@test.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12},
+	}
+
+	tests := []struct {
+		name              string
+		query             model.DBM
+		expectedNewValues []dummyDBObject
+		errorExpected     error
+	}{
+		{
+			name:              "delete all",
+			query:             model.DBM{},
+			expectedNewValues: []dummyDBObject(nil),
+		},
+		{
+			name: "delete by email ending with tyk.com",
+			query: model.DBM{
+				"email": model.DBM{
+					"$regex": "tyk.com$",
+				},
+			},
+			expectedNewValues: []dummyDBObject{dummyData[0], dummyData[2], dummyData[4]},
+		},
+		{
+			name: "delete by name starting with A",
+			query: model.DBM{
+				"testName": model.DBM{
+					"$regex": "^A",
+				},
+			},
+			expectedNewValues: []dummyDBObject{dummyData[0], dummyData[1], dummyData[2], dummyData[4]},
+		},
+		{
+			name: "delete by country name",
+			query: model.DBM{
+				"country.country_name": "TestCountry",
+			},
+			expectedNewValues: []dummyDBObject{dummyData[1], dummyData[2], dummyData[4]},
+		},
+		{
+			name: "delete by id",
+			query: model.DBM{
+				"_id": dummyData[0].GetObjectID(),
+			},
+			expectedNewValues: []dummyDBObject{dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
+		},
+		{
+			name: "delete by age",
+			query: model.DBM{
+				"age": 10,
+			},
+			expectedNewValues: []dummyDBObject{dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
+		},
+		{
+			name: "delete by age and country name",
+			query: model.DBM{
+				"age":                  10,
+				"country.country_name": "TestCountry",
+			},
+			expectedNewValues: []dummyDBObject{dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
+		},
+		{
+			name: "delete by emails starting with j",
+			query: model.DBM{
+				"email": model.DBM{
+					"$regex": "^j",
+				},
+			},
+			expectedNewValues: []dummyDBObject{dummyData[2], dummyData[3], dummyData[4]},
+		},
+		{
+			name: "delete by emails starting with j and age lower than 10",
+			query: model.DBM{
+				"email": model.DBM{
+					"$regex": "^j",
+				},
+				"age": model.DBM{
+					"$lt": 10,
+				},
+			},
+			expectedNewValues: []dummyDBObject{dummyData[0], dummyData[2], dummyData[3], dummyData[4]},
+		},
+		{
+			name: "delete invalid value",
+			query: model.DBM{
+				"email": model.DBM{
+					"$regex": "^x",
+				},
+			},
+			expectedNewValues: []dummyDBObject{dummyData[0], dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
+			errorExpected:     mongo.ErrNoDocuments,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			driver, object := prepareEnvironment(t)
+			ctx := context.Background()
+			defer driver.Drop(ctx, object)
+
+			for _, obj := range dummyData {
+				err := driver.Insert(ctx, &obj)
+				assert.Nil(t, err)
+			}
+
+			err := driver.DeleteWhere(ctx, object, tt.query)
+			assert.Equal(t, tt.errorExpected, err)
+
+			var result []dummyDBObject
+			err = driver.Query(context.Background(), object, &result, model.DBM{})
+			assert.Nil(t, err)
+
+			assert.EqualValues(t, tt.expectedNewValues, result)
+		})
+	}
 }

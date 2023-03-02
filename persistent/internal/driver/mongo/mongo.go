@@ -124,15 +124,27 @@ func (d *mongoDriver) Drop(ctx context.Context, row id.DBObject) error {
 	return collection.Drop(ctx)
 }
 
-func (d *mongoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query model.DBM) error {
-	panic("implement me")
-}
-
 func (d *mongoDriver) Update(ctx context.Context, row id.DBObject) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	result, err := collection.UpdateOne(ctx, bson.M{"_id": row.GetObjectID()}, bson.D{{Key: "$set", Value: row}})
 	if err == nil && result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return err
+}
+
+func (d *mongoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query model.DBM) error {
+	colName, ok := query["_collection"].(string)
+	if !ok {
+		colName = row.TableName()
+	}
+
+	collection := d.client.Database(d.database).Collection(colName)
+
+	result, err := collection.DeleteMany(ctx, buildQuery(query))
+	if err == nil && result.DeletedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
 
