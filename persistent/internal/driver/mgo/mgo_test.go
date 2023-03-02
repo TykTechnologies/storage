@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mgo
 
 import (
@@ -789,6 +786,140 @@ func TestDeleteWhere(t *testing.T) {
 
 			if !reflect.DeepEqual(result, tt.expectedNewValues) {
 				t.Errorf("Expected output %v, but got %v", tt.expectedNewValues, result)
+			}
+
+		})
+	}
+}
+
+func TestUpdateWhere(t *testing.T) {
+	dummyData := []dummyDBObject{
+		{Name: "John", Email: "john@example.com", Id: id.ObjectId(bson.NewObjectId()), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
+		{Name: "Jane", Email: "jane@tyk.com", Id: id.ObjectId(bson.NewObjectId()), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
+		{Name: "Bob", Email: "bob@example.com", Id: id.ObjectId(bson.NewObjectId()), Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25},
+		{Name: "Alice", Email: "alice@tyk.com", Id: id.ObjectId(bson.NewObjectId()), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45},
+		{Name: "Peter", Email: "peter@test.com", Id: id.ObjectId(bson.NewObjectId()), Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12},
+	}
+
+	tests := []struct {
+		name            string
+		query           model.DBM
+		update          model.DBM
+		expectedUpdated []dummyDBObject
+		errorExpected   error
+	}{
+		{
+			name:   "update all",
+			query:  model.DBM{},
+			update: model.DBM{"$set": model.DBM{"age": 100}},
+			expectedUpdated: []dummyDBObject{
+				{Name: "John", Email: "john@example.com", Id: dummyData[0].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 100},
+				{Name: "Jane", Email: "jane@tyk.com", Id: dummyData[1].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 100},
+				{Name: "Bob", Email: "bob@example.com", Id: dummyData[2].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 100},
+				{Name: "Alice", Email: "alice@tyk.com", Id: dummyData[3].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 100},
+				{Name: "Peter", Email: "peter@test.com", Id: dummyData[4].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 100},
+			},
+		},
+		{
+			name:   "update by emails starting with j",
+			query:  model.DBM{"email": model.DBM{"$regex": "^j"}},
+			update: model.DBM{"$set": model.DBM{"age": 100}},
+			expectedUpdated: []dummyDBObject{
+				{Name: "John", Email: "john@example.com", Id: dummyData[0].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 100},
+				{Name: "Jane", Email: "jane@tyk.com", Id: dummyData[1].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 100},
+				dummyData[2],
+				dummyData[3],
+				dummyData[4],
+			},
+		},
+		{
+			name:  "increase age by 10 of all users",
+			query: model.DBM{},
+			update: model.DBM{
+				"$inc": model.DBM{
+					"age": 10,
+				},
+			},
+			expectedUpdated: []dummyDBObject{
+				{Name: "John", Email: "john@example.com", Id: dummyData[0].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: dummyData[0].Age + 10},
+				{Name: "Jane", Email: "jane@tyk.com", Id: dummyData[1].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: dummyData[1].Age + 10},
+				{Name: "Bob", Email: "bob@example.com", Id: dummyData[2].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: dummyData[2].Age + 10},
+				{Name: "Alice", Email: "alice@tyk.com", Id: dummyData[3].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: dummyData[3].Age + 10},
+				{Name: "Peter", Email: "peter@test.com", Id: dummyData[4].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: dummyData[4].Age + 10},
+			},
+		},
+		{
+			name: "modify country name of users with age > 10",
+			query: model.DBM{
+				"age": model.DBM{
+					"$gt": 10,
+				},
+			},
+			update: model.DBM{
+				"$set": model.DBM{
+					"country.country_name": "UpdatedCountryName",
+				},
+			},
+			expectedUpdated: []dummyDBObject{
+				dummyData[0],
+				dummyData[1],
+				{Name: "Bob", Email: "bob@example.com", Id: dummyData[2].GetObjectID(), Country: dummyCountryField{CountryName: "UpdatedCountryName", Continent: "TestContinent3"}, Age: 25},
+				{Name: "Alice", Email: "alice@tyk.com", Id: dummyData[3].GetObjectID(), Country: dummyCountryField{CountryName: "UpdatedCountryName", Continent: "TestContinent"}, Age: 45},
+				{Name: "Peter", Email: "peter@test.com", Id: dummyData[4].GetObjectID(), Country: dummyCountryField{CountryName: "UpdatedCountryName", Continent: "TestContinent4"}, Age: 12},
+			},
+		},
+		{
+			name: "decrease age by 10 of users with age > 40",
+			query: model.DBM{
+				"age": model.DBM{
+					"$gt": 40,
+				},
+			},
+			update: model.DBM{
+				"$inc": model.DBM{
+					"age": -10,
+				},
+			},
+			expectedUpdated: []dummyDBObject{
+				dummyData[0],
+				dummyData[1],
+				dummyData[2],
+				{Name: "Alice", Email: "alice@tyk.com", Id: dummyData[3].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: dummyData[3].Age - 10},
+				dummyData[4],
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			mgo, object, sess := prepareEnvironment(t)
+			defer cleanEnvironment(t, object, sess)
+
+			for _, obj := range dummyData {
+				err := mgo.Insert(context.Background(), &obj)
+				assert.Nil(t, err)
+			}
+
+			err := mgo.UpdateWhere(context.Background(), object, tt.query, tt.update)
+			if err != nil {
+				if tt.errorExpected != nil {
+					assert.True(t, errors.Is(err, tt.errorExpected))
+					return
+				}
+				t.Errorf("UpdateWhere() error = %v", err)
+				return
+			}
+
+			var result []dummyDBObject
+			err = mgo.Query(context.Background(), object, &result, model.DBM{})
+			if err != nil {
+				t.Errorf("Query() error = %v", err)
+				return
+			}
+
+			if !reflect.DeepEqual(result, tt.expectedUpdated) {
+				t.Errorf("Expected output %v, but got %v", tt.expectedUpdated, result)
 			}
 
 		})

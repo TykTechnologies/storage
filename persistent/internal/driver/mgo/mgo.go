@@ -208,6 +208,22 @@ func (d *mgoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query mode
 	return err
 }
 
+func (d *mgoDriver) UpdateWhere(ctx context.Context, row id.DBObject, query model.DBM, updateQuery model.DBM) error {
+	session := d.session.Copy()
+
+	colName, ok := query["_collection"].(string)
+	if !ok {
+		colName = row.TableName()
+	}
+
+	col := session.DB("").C(colName)
+	defer col.Database.Session.Close()
+
+	_, err := col.UpdateAll(d.buildQuery(query), d.buildQuery(updateQuery))
+
+	return err
+}
+
 func (d *mgoDriver) IsErrNoRows(err error) bool {
 	return errors.Is(err, mgo.ErrNotFound)
 }

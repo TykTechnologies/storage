@@ -131,3 +131,7 @@ func (d *mongoDriver) Drop(ctx context.Context, row id.DBObject) error {
 func (d *mongoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query model.DBM) error {
 	panic("implement me")
 }
+
+func (d *mongoDriver) UpdateWhere(context.Context, id.DBObject, model.DBM) error {
+	panic("implement me")
+}
