@@ -1,11 +1,9 @@
-//go:build mongo
-// +build mongo
-
 package mgo
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"testing"
@@ -795,7 +793,7 @@ func TestDeleteWhere(t *testing.T) {
 	}
 }
 
-func TestUpdateWhere(t *testing.T) {
+func TestUpdateWhereDBM(t *testing.T) {
 	dummyData := []dummyDBObject{
 		{Name: "John", Email: "john@example.com", Id: id.ObjectId(bson.NewObjectId()), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
 		{Name: "Jane", Email: "jane@tyk.com", Id: id.ObjectId(bson.NewObjectId()), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
@@ -806,14 +804,14 @@ func TestUpdateWhere(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		query           model.DBM
-		update          model.DBM
+		query           interface{}
+		update          interface{}
 		expectedUpdated []dummyDBObject
 		errorExpected   error
 	}{
 		{
 			name:   "update all",
-			query:  model.DBM{},
+			query:  nil,
 			update: model.DBM{"$set": model.DBM{"age": 100}},
 			expectedUpdated: []dummyDBObject{
 				{Name: "John", Email: "john@example.com", Id: dummyData[0].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 100},
@@ -891,6 +889,81 @@ func TestUpdateWhere(t *testing.T) {
 				dummyData[4],
 			},
 		},
+		{
+			name: "slice of queries to update",
+			query: []model.DBM{
+				{
+					"age": model.DBM{
+						"$gt": 10,
+					},
+				},
+				{
+					"age": model.DBM{
+						"$lt": 9,
+					},
+				},
+			},
+			update: model.DBM{
+				"$set": model.DBM{
+					"country.country_name": "UpdatedCountryName",
+				},
+			},
+			expectedUpdated: []dummyDBObject{
+				dummyData[0],
+				{Name: "Jane", Email: "jane@tyk.com", Id: dummyData[1].GetObjectID(), Country: dummyCountryField{CountryName: "UpdatedCountryName", Continent: "TestContinent2"}, Age: 8},
+				{Name: "Bob", Email: "bob@example.com", Id: dummyData[2].GetObjectID(), Country: dummyCountryField{CountryName: "UpdatedCountryName", Continent: "TestContinent3"}, Age: 25},
+				{Name: "Alice", Email: "alice@tyk.com", Id: dummyData[3].GetObjectID(), Country: dummyCountryField{CountryName: "UpdatedCountryName", Continent: "TestContinent"}, Age: 45},
+				{Name: "Peter", Email: "peter@test.com", Id: dummyData[4].GetObjectID(), Country: dummyCountryField{CountryName: "UpdatedCountryName", Continent: "TestContinent4"}, Age: 12},
+			},
+		},
+		{
+			name: "slice of queries with an slice of objects to update",
+			query: []model.DBM{
+				{"email": model.DBM{"$regex": "^j"}},
+				{"email": model.DBM{"$regex": "^a"}},
+			},
+			update: []model.DBM{
+				{"$set": model.DBM{"age": 100}},
+				{"$set": model.DBM{"age": 1}},
+			},
+			expectedUpdated: []dummyDBObject{
+				{Name: "John", Email: "john@example.com", Id: dummyData[0].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 100},
+				{Name: "Jane", Email: "jane@tyk.com", Id: dummyData[1].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 100},
+				dummyData[2],
+				{Name: "Alice", Email: "alice@tyk.com", Id: dummyData[3].GetObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 1},
+				dummyData[4],
+			},
+		},
+		{
+			name: "slice of queries and slice of objects to update with different length",
+			query: []model.DBM{
+				{"email": model.DBM{"$regex": "^j"}},
+				{"email": model.DBM{"$regex": "^a"}},
+			},
+			update: []model.DBM{
+				{"$set": model.DBM{"age": 100}},
+			},
+			errorExpected: fmt.Errorf("query and object must have the same length"),
+		},
+		{
+			name: "slice of queries and an invalid object value",
+			query: []model.DBM{
+				{"email": model.DBM{"$regex": "^j"}},
+				{"email": model.DBM{"$regex": "^a"}},
+			},
+			update:        "invalid",
+			errorExpected: fmt.Errorf("object must be of type model.DBM or []model.DBM"),
+		},
+		{
+			name:  "sending invalid query",
+			query: "invalid",
+			update: model.DBM{
+				"$set": model.DBM{
+					"country.country_name": "UpdatedCountryName",
+				},
+			},
+			errorExpected: fmt.Errorf("query must be a model.DBM, []model.DBM or nil"),
+		},
 	}
 
 	for _, tt := range tests {
@@ -904,10 +977,10 @@ func TestUpdateWhere(t *testing.T) {
 				assert.Nil(t, err)
 			}
 
-			err := mgo.UpdateWhere(context.Background(), object, tt.query, tt.update)
+			err := mgo.UpdateWhere_DBM(context.Background(), tt.query, tt.update)
 			if err != nil {
 				if tt.errorExpected != nil {
-					assert.True(t, errors.Is(err, tt.errorExpected))
+					assert.True(t, err.Error() == tt.errorExpected.Error())
 					return
 				}
 				t.Errorf("UpdateWhere() error = %v", err)
