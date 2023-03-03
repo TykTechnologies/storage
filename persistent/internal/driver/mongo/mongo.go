@@ -47,7 +47,16 @@ func (d *mongoDriver) Insert(ctx context.Context, row id.DBObject) error {
 
 	_, err := collection.InsertOne(ctx, row)
 
-	return err
+	if err != nil {
+		rErr := d.handleStoreError(err)
+		if rErr != nil {
+			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Insert error: " + err.Error())
+		}
+
+		return err
+	}
+
+	return nil
 }
 
 func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject) error {
@@ -55,6 +64,11 @@ func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject) error {
 
 	res, err := collection.DeleteOne(ctx, bson.M{"_id": row.GetObjectID()})
 	if err != nil {
+		rErr := d.handleStoreError(err)
+		if rErr != nil {
+			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Delete error: " + err.Error())
+		}
+
 		return err
 	}
 
@@ -70,7 +84,16 @@ func (d *mongoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 
 	count, err := collection.CountDocuments(ctx, bson.D{})
 
-	return int(count), err
+	if err != nil {
+		rErr := d.handleStoreError(err)
+		if rErr != nil {
+			return 0, errors.New("error reconnecting to mongo: " + rErr.Error() + " after Count error: " + err.Error())
+		}
+
+		return 0, err
+	}
+
+	return int(count), nil
 }
 
 func (d *mongoDriver) IsErrNoRows(err error) bool {
@@ -115,24 +138,53 @@ func (d *mongoDriver) Query(ctx context.Context, row id.DBObject, result interfa
 		err = collection.FindOne(ctx, search, findOneOpts).Decode(result)
 	}
 
-	return err
+	if err != nil {
+		rErr := d.handleStoreError(err)
+		if rErr != nil {
+			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Query error: " + err.Error())
+		}
+
+		return err
+	}
+
+	return nil
 }
 
 func (d *mongoDriver) Drop(ctx context.Context, row id.DBObject) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
-	return collection.Drop(ctx)
+	err := collection.Drop(ctx)
+	if err != nil {
+		rErr := d.handleStoreError(err)
+		if rErr != nil {
+			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Drop error: " + err.Error())
+		}
+
+		return err
+	}
+
+	return nil
 }
 
 func (d *mongoDriver) Update(ctx context.Context, row id.DBObject) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	result, err := collection.UpdateOne(ctx, bson.M{"_id": row.GetObjectID()}, bson.D{{Key: "$set", Value: row}})
-	if err == nil && result.MatchedCount == 0 {
+
+	if err != nil {
+		rErr := d.handleStoreError(err)
+		if rErr != nil {
+			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Update error: " + err.Error())
+		}
+
+		return err
+	}
+
+	if result.MatchedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
 
-	return err
+	return nil
 }
 
 func (d *mongoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query model.DBM) error {
@@ -144,11 +196,21 @@ func (d *mongoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query mo
 	collection := d.client.Database(d.database).Collection(colName)
 
 	result, err := collection.DeleteMany(ctx, buildQuery(query))
-	if err == nil && result.DeletedCount == 0 {
+
+	if err != nil {
+		rErr := d.handleStoreError(err)
+		if rErr != nil {
+			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after DeleteWhere error: " + err.Error())
+		}
+
+		return err
+	}
+
+	if result.DeletedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
 
-	return err
+	return nil
 }
 
 func (d *mongoDriver) handleStoreError(err error) error {
