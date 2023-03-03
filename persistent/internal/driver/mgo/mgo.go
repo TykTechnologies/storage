@@ -52,7 +52,7 @@ func (d *mgoDriver) Insert(ctx context.Context, row id.DBObject) error {
 	if err != nil {
 		rErr := d.HandleStoreError(err)
 		if rErr != nil {
-			return fmt.Errorf("error reconnecting to mongo: %w after Insert error: %v", rErr, err)
+			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Insert error: " + err.Error())
 		}
 
 		return err
@@ -71,7 +71,7 @@ func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject) error {
 	if err != nil {
 		rErr := d.HandleStoreError(err)
 		if rErr != nil {
-			return fmt.Errorf("error reconnecting to mongo: %w after Delete error: %v", rErr, err)
+			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Delete error: " + err.Error())
 		}
 
 		return err
@@ -90,7 +90,7 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject) error {
 	if err != nil {
 		rErr := d.HandleStoreError(err)
 		if rErr != nil {
-			return fmt.Errorf("error reconnecting to mongo: %w after Update error: %v", rErr, err)
+			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Update error: " + err.Error())
 		}
 
 		return err
@@ -156,7 +156,7 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 	if err != nil {
 		rErr := d.HandleStoreError(err)
 		if rErr != nil {
-			return fmt.Errorf("error reconnecting to mongo: %w after Query error: %v", rErr, err)
+			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Query error: " + err.Error())
 		}
 
 		return err
@@ -180,7 +180,7 @@ func (d *mgoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query mode
 	if err != nil {
 		rErr := d.HandleStoreError(err)
 		if rErr != nil {
-			return fmt.Errorf("error reconnecting to mongo: %w after DeleteWhere error: %v", rErr, err)
+			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after DeleteWhere error: " + err.Error())
 		}
 	}
 
@@ -208,7 +208,7 @@ func (d *mgoDriver) HandleStoreError(err error) error {
 		if strings.Contains(err.Error(), substr) {
 			connErr := d.Connect(&d.options)
 			if connErr != nil {
-				return fmt.Errorf("failure while connecting to mongo: %w", connErr)
+				return connErr
 			}
 
 			return nil
