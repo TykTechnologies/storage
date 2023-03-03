@@ -46,7 +46,6 @@ func (d *mongoDriver) Insert(ctx context.Context, row id.DBObject) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	_, err := collection.InsertOne(ctx, row)
-
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
@@ -83,7 +82,6 @@ func (d *mongoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	count, err := collection.CountDocuments(ctx, bson.D{})
-
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
@@ -170,7 +168,6 @@ func (d *mongoDriver) Update(ctx context.Context, row id.DBObject) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	result, err := collection.UpdateOne(ctx, bson.M{"_id": row.GetObjectID()}, bson.D{{Key: "$set", Value: row}})
-
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
@@ -196,7 +193,6 @@ func (d *mongoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query mo
 	collection := d.client.Database(d.database).Collection(colName)
 
 	result, err := collection.DeleteMany(ctx, buildQuery(query))
-
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
