@@ -4,8 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
-	"regexp"
+	"strings"
 	"time"
 
 	"github.com/TykTechnologies/storage/persistent/id"
@@ -14,7 +13,6 @@ import (
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 
 	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
 )
 
 type mgoDriver struct {
@@ -50,7 +48,17 @@ func (d *mgoDriver) Insert(ctx context.Context, row id.DBObject) error {
 
 	col := sess.DB("").C(row.TableName())
 
-	return col.Insert(row)
+	err := col.Insert(row)
+	if err != nil {
+		rErr := d.HandleStoreError(err)
+		if rErr != nil {
+			return fmt.Errorf("error reconnecting to mongo: %v after Insert error: %w", rErr, err)
+		}
+
+		return err
+	}
+
+	return nil
 }
 
 func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject) error {
@@ -59,7 +67,17 @@ func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject) error {
 
 	col := sess.DB("").C(row.TableName())
 
-	return col.Remove(row)
+	err := col.Remove(row)
+	if err != nil {
+		rErr := d.HandleStoreError(err)
+		if rErr != nil {
+			return fmt.Errorf("error reconnecting to mongo: %v after Delete error: %w", rErr, err)
+		}
+
+		return err
+	}
+
+	return nil
 }
 
 func (d *mgoDriver) Update(ctx context.Context, row id.DBObject) error {
@@ -68,7 +86,17 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject) error {
 
 	col := sess.DB("").C(row.TableName())
 
-	return col.UpdateId(row.GetObjectID(), row)
+	err := col.UpdateId(row.GetObjectID(), row)
+	if err != nil {
+		rErr := d.HandleStoreError(err)
+		if rErr != nil {
+			return fmt.Errorf("error reconnecting to mongo: %v after Update error: %w", rErr, err)
+		}
+
+		return err
+	}
+
+	return nil
 }
 
 func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
@@ -77,7 +105,17 @@ func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 
 	col := sess.DB("").C(row.TableName())
 
-	return col.Find(nil).Count()
+	n, err := col.Find(nil).Count()
+	if err != nil {
+		rErr := d.HandleStoreError(err)
+		if rErr != nil {
+			return 0, fmt.Errorf("error reconnecting to mongo: %v after Count error: %w", rErr, err)
+		}
+
+		return 0, err
+	}
+
+	return n, nil
 }
 
 func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query model.DBM) error {
@@ -91,7 +129,7 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 	col := session.DB("").C(colName)
 	defer col.Database.Session.Close()
 
-	search := d.buildQuery(query)
+	search := buildQuery(query)
 
 	q := col.Find(search)
 
@@ -115,81 +153,16 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 		err = q.One(result)
 	}
 
+	if err != nil {
+		rErr := d.HandleStoreError(err)
+		if rErr != nil {
+			return fmt.Errorf("error reconnecting to mongo: %v after Query error: %w", rErr, err)
+		}
+
+		return err
+	}
+
 	return err
-}
-
-func (m *mgoDriver) buildQuery(query model.DBM) bson.M {
-	search := bson.M{}
-
-	for key, value := range query {
-		switch key {
-		case "_sort", "_collection", "_limit", "_offset", "_date_sharding":
-			continue
-		case "_id":
-			if id, ok := value.(id.ObjectId); ok {
-				search[key] = id
-				continue
-			}
-
-			handleQueryValue(key, value, search)
-		default:
-			handleQueryValue(key, value, search)
-		}
-	}
-
-	return search
-}
-
-func handleQueryValue(key string, value interface{}, search bson.M) {
-	switch {
-	case isNestedQuery(value):
-		handleNestedQuery(search, key, value)
-	case reflect.ValueOf(value).Kind() == reflect.Slice && key != "$or":
-		strSlice, isStr := value.([]string)
-
-		if isStr && key == "_id" {
-			objectIDs := []id.ObjectId{}
-			for _, str := range strSlice {
-				objectIDs = append(objectIDs, id.ObjectIdHex(str))
-			}
-
-			search[key] = bson.M{"$in": objectIDs}
-
-			return
-		}
-
-		search[key] = bson.M{"$in": value}
-	default:
-		search[key] = value
-	}
-}
-
-func isNestedQuery(value interface{}) bool {
-	_, ok := value.(model.DBM)
-	return ok
-}
-
-func handleNestedQuery(search bson.M, key string, value interface{}) {
-	nestedQuery, ok := value.(model.DBM)
-	if !ok {
-		return
-	}
-
-	for nestedKey, nestedValue := range nestedQuery {
-		switch nestedKey {
-		case "$i":
-			if stringValue, ok := nestedValue.(string); ok {
-				quoted := regexp.QuoteMeta(stringValue)
-				search[key] = &bson.RegEx{Pattern: fmt.Sprintf("^%s$", quoted), Options: "i"}
-			}
-		case "$text":
-			if stringValue, ok := nestedValue.(string); ok {
-				search[key] = bson.M{"$regex": bson.RegEx{Pattern: regexp.QuoteMeta(stringValue), Options: "i"}}
-			}
-		default:
-			search[key] = bson.M{nestedKey: nestedValue}
-		}
-	}
 }
 
 func (d *mgoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query model.DBM) error {
@@ -203,11 +176,44 @@ func (d *mgoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query mode
 	col := session.DB("").C(colName)
 	defer col.Database.Session.Close()
 
-	_, err := col.RemoveAll(d.buildQuery(query))
+	_, err := col.RemoveAll(buildQuery(query))
+	if err != nil {
+		rErr := d.HandleStoreError(err)
+		if rErr != nil {
+			return fmt.Errorf("error reconnecting to mongo: %v after DeleteWhere error: %w", rErr, err)
+		}
+	}
 
 	return err
 }
 
 func (d *mgoDriver) IsErrNoRows(err error) bool {
 	return errors.Is(err, mgo.ErrNotFound)
+}
+
+func (d *mgoDriver) HandleStoreError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	listOfErrors := []string{
+		"EOF",
+		"Closed explicitly",
+		"reset by peer",
+		"no reachable servers",
+		"i/o timeout",
+	}
+
+	for _, substr := range listOfErrors {
+		if strings.Contains(err.Error(), substr) {
+			connErr := d.Connect(&d.options)
+			if connErr != nil {
+				return fmt.Errorf("failure while connecting to mongo: %w", connErr)
+			}
+
+			return nil
+		}
+	}
+
+	return nil
 }
