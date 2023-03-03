@@ -124,15 +124,41 @@ func (d *mongoDriver) Drop(ctx context.Context, row id.DBObject) error {
 	return collection.Drop(ctx)
 }
 
-func (d *mongoDriver) Update(ctx context.Context, row id.DBObject) error {
+// 0 ... N
+// Update(ctx,row)
+// Update(ctx, row, dbm)
+// Update(ctx, row, []dbm)
+func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...model.DBM) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
-	result, err := collection.UpdateOne(ctx, bson.M{"_id": row.GetObjectID()}, bson.D{{Key: "$set", Value: row}})
+	if len(query) > 1{
+		return errors.New("multiple queries for only 1 row")
+	}
+
+	if len(query) == 0 {
+		query = append(query,model.DBM{"$set":row})
+	}
+
+	finalQuery := []bson.M{}
+	for i := range query{
+		finalQuery= append(finalQuery, buildQuery(query[i]))
+	}
+
+	result, err := collection.UpdateOne(ctx, bson.M{"_id": row.GetObjectID()}, finalQuery)
 	if err == nil && result.MatchedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
 
 	return err
+}
+
+func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.ObjectId, query ...model.DBM) error{
+	if len(rows) != len(query){
+		return errors.New("different len of row and query")
+	}
+
+
+	return nil
 }
 
 func (d *mongoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query model.DBM) error {
