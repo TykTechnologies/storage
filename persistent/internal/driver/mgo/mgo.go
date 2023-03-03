@@ -52,7 +52,7 @@ func (d *mgoDriver) Insert(ctx context.Context, row id.DBObject) error {
 	if err != nil {
 		rErr := d.HandleStoreError(err)
 		if rErr != nil {
-			return fmt.Errorf("error reconnecting to mongo: %v after Insert error: %w", rErr, err)
+			return fmt.Errorf("error reconnecting to mongo: %w after Insert error: %v", rErr, err)
 		}
 
 		return err
@@ -71,7 +71,7 @@ func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject) error {
 	if err != nil {
 		rErr := d.HandleStoreError(err)
 		if rErr != nil {
-			return fmt.Errorf("error reconnecting to mongo: %v after Delete error: %w", rErr, err)
+			return fmt.Errorf("error reconnecting to mongo: %w after Delete error: %v", rErr, err)
 		}
 
 		return err
@@ -90,7 +90,7 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject) error {
 	if err != nil {
 		rErr := d.HandleStoreError(err)
 		if rErr != nil {
-			return fmt.Errorf("error reconnecting to mongo: %v after Update error: %w", rErr, err)
+			return fmt.Errorf("error reconnecting to mongo: %w after Update error: %v", rErr, err)
 		}
 
 		return err
@@ -109,7 +109,7 @@ func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 	if err != nil {
 		rErr := d.HandleStoreError(err)
 		if rErr != nil {
-			return 0, fmt.Errorf("error reconnecting to mongo: %v after Count error: %w", rErr, err)
+			return 0, fmt.Errorf("error reconnecting to mongo: %w after Count error: %v", rErr, err)
 		}
 
 		return 0, err
@@ -156,7 +156,7 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 	if err != nil {
 		rErr := d.HandleStoreError(err)
 		if rErr != nil {
-			return fmt.Errorf("error reconnecting to mongo: %v after Query error: %w", rErr, err)
+			return fmt.Errorf("error reconnecting to mongo: %w after Query error: %v", rErr, err)
 		}
 
 		return err
@@ -180,7 +180,7 @@ func (d *mgoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query mode
 	if err != nil {
 		rErr := d.HandleStoreError(err)
 		if rErr != nil {
-			return fmt.Errorf("error reconnecting to mongo: %v after DeleteWhere error: %w", rErr, err)
+			return fmt.Errorf("error reconnecting to mongo: %w after DeleteWhere error: %v", rErr, err)
 		}
 	}
 
