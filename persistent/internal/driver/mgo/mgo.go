@@ -3,7 +3,6 @@ package mgo
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -109,7 +108,7 @@ func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 	if err != nil {
 		rErr := d.HandleStoreError(err)
 		if rErr != nil {
-			return 0, fmt.Errorf("error reconnecting to mongo: %w after Count error: %v", rErr, err)
+			return 0, errors.New("error reconnecting to mongo: " + rErr.Error() + " after Count error: " + err.Error())
 		}
 
 		return 0, err
