@@ -627,14 +627,14 @@ func TestHandleStoreError(t *testing.T) {
 					ConnectionString:  "mongodb://host:port/invalid",
 					ConnectionTimeout: 1,
 				}
-				err := invalidMgo.HandleStoreError(test.inputErr)
+				err := invalidMgo.handleStoreError(test.inputErr)
 				if err == nil {
 					t.Errorf("expected error to be returned when mgo is nil")
 				}
 				return
 			}
 
-			gotErr := mgo.HandleStoreError(test.inputErr)
+			gotErr := mgo.handleStoreError(test.inputErr)
 
 			if test.wantReconnect {
 				if sess == mgo.session {

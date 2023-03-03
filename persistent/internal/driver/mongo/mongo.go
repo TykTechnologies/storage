@@ -150,3 +150,32 @@ func (d *mongoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query mo
 
 	return err
 }
+
+func (d *mongoDriver) handleStoreError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	// Check if the error is a network error
+	if mongo.IsNetworkError(err) {
+		// Reconnect to the MongoDB instance
+		if connErr := d.Connect(d.options); connErr != nil {
+			return connErr
+		}
+
+		return nil
+	}
+
+	// Check for a mongo.ServerError or any of its underlying wrapped errors
+	var serverErr mongo.ServerError
+	if errors.As(err, &serverErr) {
+		// Reconnect to the MongoDB instance
+		if connErr := d.Connect(d.options); connErr != nil {
+			return connErr
+		}
+
+		return nil
+	}
+
+	return nil
+}

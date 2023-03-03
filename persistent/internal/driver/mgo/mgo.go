@@ -49,7 +49,7 @@ func (d *mgoDriver) Insert(ctx context.Context, row id.DBObject) error {
 
 	err := col.Insert(row)
 	if err != nil {
-		rErr := d.HandleStoreError(err)
+		rErr := d.handleStoreError(err)
 		if rErr != nil {
 			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Insert error: " + err.Error())
 		}
@@ -68,7 +68,7 @@ func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject) error {
 
 	err := col.Remove(row)
 	if err != nil {
-		rErr := d.HandleStoreError(err)
+		rErr := d.handleStoreError(err)
 		if rErr != nil {
 			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Delete error: " + err.Error())
 		}
@@ -87,7 +87,7 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject) error {
 
 	err := col.UpdateId(row.GetObjectID(), row)
 	if err != nil {
-		rErr := d.HandleStoreError(err)
+		rErr := d.handleStoreError(err)
 		if rErr != nil {
 			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Update error: " + err.Error())
 		}
@@ -106,7 +106,7 @@ func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 
 	n, err := col.Find(nil).Count()
 	if err != nil {
-		rErr := d.HandleStoreError(err)
+		rErr := d.handleStoreError(err)
 		if rErr != nil {
 			return 0, errors.New("error reconnecting to mongo: " + rErr.Error() + " after Count error: " + err.Error())
 		}
@@ -153,7 +153,7 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 	}
 
 	if err != nil {
-		rErr := d.HandleStoreError(err)
+		rErr := d.handleStoreError(err)
 		if rErr != nil {
 			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Query error: " + err.Error())
 		}
@@ -177,7 +177,7 @@ func (d *mgoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query mode
 
 	_, err := col.RemoveAll(buildQuery(query))
 	if err != nil {
-		rErr := d.HandleStoreError(err)
+		rErr := d.handleStoreError(err)
 		if rErr != nil {
 			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after DeleteWhere error: " + err.Error())
 		}
@@ -190,7 +190,7 @@ func (d *mgoDriver) IsErrNoRows(err error) bool {
 	return errors.Is(err, mgo.ErrNotFound)
 }
 
-func (d *mgoDriver) HandleStoreError(err error) error {
+func (d *mgoDriver) handleStoreError(err error) error {
 	if err == nil {
 		return nil
 	}
