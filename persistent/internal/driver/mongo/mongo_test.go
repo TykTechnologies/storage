@@ -545,7 +545,11 @@ func TestUpdateMany(t *testing.T) {
 			},
 			query: []model.DBM{{"_id": dummyData[0].GetObjectID()}, {"testName": "Jane"}},
 		},
-
+		{
+			testName:      "update error - empty rows",
+			givenObjects:  []id.DBObject{},
+			errorExpected: errors.New("rows cannot be empty"),
+		},
 		{
 			testName: "update error - different params len",
 			givenObjects: []id.DBObject{

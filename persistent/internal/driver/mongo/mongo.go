@@ -145,6 +145,10 @@ func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query 
 		return errors.New("query and row lens should be the same")
 	}
 
+	if len(rows) == 0 {
+		return errors.New("rows cannot be empty")
+	}
+
 	var bulkQuery []mongo.WriteModel
 
 	for i := range rows {
