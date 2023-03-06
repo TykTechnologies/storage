@@ -176,20 +176,11 @@ func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...mode
 	}
 
 	result, err := collection.UpdateOne(ctx, query[0], bson.D{{Key: "$set", Value: row}})
-	if err != nil {
-		rErr := d.handleStoreError(err)
-		if rErr != nil {
-			return rErr
-		}
-
-		return err
-	}
-
-	if result.MatchedCount == 0 {
+	if err == nil && result.MatchedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
 
-	return nil
+	return d.handleStoreError(err)
 }
 
 func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...model.DBM) error {
@@ -214,20 +205,11 @@ func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query 
 	collection := d.client.Database(d.database).Collection(rows[0].TableName())
 
 	result, err := collection.BulkWrite(ctx, bulkQuery)
-	if err != nil {
-		rErr := d.handleStoreError(err)
-		if rErr != nil {
-			return rErr
-		}
-
-		return err
-	}
-
-	if result.MatchedCount == 0 {
+	if err == nil && result.MatchedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
 
-	return nil
+	return d.handleStoreError(err)
 }
 
 func (d *mongoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query model.DBM) error {
@@ -260,19 +242,10 @@ func (d *mongoDriver) handleStoreError(err error) error {
 		return nil
 	}
 
-	// Check if the error is a network error
-	if mongo.IsNetworkError(err) {
-		// Reconnect to the MongoDB instance
-		if connErr := d.Connect(d.options); connErr != nil {
-			return errors.New("error reconnecting to mongo: " + connErr.Error() + " after error: " + err.Error())
-		}
-
-		return nil
-	}
-
 	// Check for a mongo.ServerError or any of its underlying wrapped errors
 	var serverErr mongo.ServerError
-	if errors.As(err, &serverErr) {
+	// Check if the error is a network error
+	if mongo.IsNetworkError(err) || errors.As(err, &serverErr) {
 		// Reconnect to the MongoDB instance
 		if connErr := d.Connect(d.options); connErr != nil {
 			return errors.New("error reconnecting to mongo: " + connErr.Error() + " after error: " + err.Error())
@@ -281,5 +254,5 @@ func (d *mongoDriver) handleStoreError(err error) error {
 		return nil
 	}
 
-	return nil
+	return err
 }
