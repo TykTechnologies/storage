@@ -6,6 +6,7 @@ package mongo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"testing"
 
@@ -442,8 +443,159 @@ func TestUpdate(t *testing.T) {
 
 		err := driver.Update(ctx, object)
 		assert.NotNil(t, err)
+		fmt.Println(err)
 		assert.False(t, driver.IsErrNoRows(err))
 	})
+}
+
+func TestUpdateMany(t *testing.T) {
+	dummyData := []dummyDBObject{
+		{Name: "John", Email: "john@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
+		{Name: "Jane", Email: "jane@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
+		{Name: "Bob", Email: "bob@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25},
+		{Name: "Alice", Email: "alice@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45},
+		{Name: "Peter", Email: "peter@test.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12},
+	}
+
+	tcs := []struct {
+		testName          string
+		query             []model.DBM
+		givenObjects      []id.DBObject
+		expectedNewValues []id.DBObject
+		errorExpected     error
+	}{
+		{
+			testName:          "update only one - without modifying values",
+			givenObjects:      []id.DBObject{&dummyData[0]},
+			expectedNewValues: []id.DBObject{&dummyData[0]},
+		},
+		{
+			testName:          "update only one - modifying values",
+			givenObjects:      []id.DBObject{&dummyDBObject{Name: "Test", Email: "test@test.com", Id: dummyData[0].Id, Country: dummyData[0].Country, Age: dummyData[0].Age}},
+			expectedNewValues: []id.DBObject{&dummyDBObject{Name: "Test", Email: "test@test.com", Id: dummyData[0].Id, Country: dummyData[0].Country, Age: dummyData[0].Age}},
+		},
+		{
+			testName: "update two - without query",
+			givenObjects: []id.DBObject{
+				&dummyDBObject{
+					Name:    "Test",
+					Email:   "test@test.com",
+					Id:      dummyData[0].Id,
+					Country: dummyData[0].Country,
+					Age:     dummyData[0].Age,
+				},
+				&dummyDBObject{
+					Name:    "Testina",
+					Email:   "test@test.com",
+					Id:      dummyData[1].Id,
+					Country: dummyData[1].Country,
+					Age:     dummyData[1].Age,
+				},
+			},
+			expectedNewValues: []id.DBObject{
+				&dummyDBObject{
+					Name:    "Test",
+					Email:   "test@test.com",
+					Id:      dummyData[0].Id,
+					Country: dummyData[0].Country,
+					Age:     dummyData[0].Age,
+				},
+				&dummyDBObject{
+					Name:    "Testina",
+					Email:   "test@test.com",
+					Id:      dummyData[1].Id,
+					Country: dummyData[1].Country,
+					Age:     dummyData[1].Age,
+				},
+			},
+		},
+		{
+			testName: "update two - filter with query",
+			givenObjects: []id.DBObject{
+				&dummyDBObject{
+					Name:    "Test",
+					Email:   "test@test.com",
+					Id:      dummyData[0].Id,
+					Country: dummyData[0].Country,
+					Age:     dummyData[0].Age,
+				},
+				&dummyDBObject{
+					Name:    "Testina",
+					Email:   "test@test.com",
+					Id:      dummyData[1].Id,
+					Country: dummyData[1].Country,
+					Age:     dummyData[1].Age,
+				},
+			},
+			expectedNewValues: []id.DBObject{
+				&dummyDBObject{
+					Name:    "Test",
+					Email:   "test@test.com",
+					Id:      dummyData[0].Id,
+					Country: dummyData[0].Country,
+					Age:     dummyData[0].Age,
+				},
+				&dummyDBObject{
+					Name:    "Testina",
+					Email:   "test@test.com",
+					Id:      dummyData[1].Id,
+					Country: dummyData[1].Country,
+					Age:     dummyData[1].Age,
+				},
+			},
+			query: []model.DBM{{"_id": dummyData[0].GetObjectID()}, {"testName": "Jane"}},
+		},
+
+		{
+			testName: "update error - different params len",
+			givenObjects: []id.DBObject{
+				&dummyDBObject{
+					Name:    "Test",
+					Email:   "test@test.com",
+					Id:      dummyData[0].Id,
+					Country: dummyData[0].Country,
+					Age:     dummyData[0].Age,
+				},
+				&dummyDBObject{
+					Name:    "Testina",
+					Email:   "test@test.com",
+					Id:      dummyData[1].Id,
+					Country: dummyData[1].Country,
+					Age:     dummyData[1].Age,
+				},
+			},
+			expectedNewValues: []id.DBObject{
+				&dummyData[0],
+				&dummyData[1],
+			},
+			query:         []model.DBM{{"testName": "Jane"}},
+			errorExpected: errors.New("query and row lens should be the same"),
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.testName, func(t *testing.T) {
+			driver, object := prepareEnvironment(t)
+			ctx := context.Background()
+			defer driver.Drop(ctx, object)
+
+			for _, obj := range dummyData {
+				err := driver.Insert(ctx, &obj)
+				assert.Nil(t, err)
+			}
+
+			err := driver.UpdateMany(ctx, tc.givenObjects, tc.query...)
+			assert.Equal(t, tc.errorExpected, err)
+
+			var result []dummyDBObject
+			err = driver.Query(context.Background(), object, &result, model.DBM{})
+			assert.Nil(t, err)
+
+			for i, expected := range tc.expectedNewValues {
+				assert.EqualValues(t, expected, &result[i])
+			}
+		})
+	}
 }
 
 func TestDeleteWhere(t *testing.T) {
@@ -565,6 +717,84 @@ func TestDeleteWhere(t *testing.T) {
 			assert.Nil(t, err)
 
 			assert.EqualValues(t, tt.expectedNewValues, result)
+		})
+	}
+}
+
+func TestHandleStoreError(t *testing.T) {
+	// Define a slice of test cases
+	testCases := []struct {
+		name              string
+		inputErr          error
+		expectedReconnect bool
+	}{
+		{
+			name:              "no error",
+			inputErr:          nil,
+			expectedReconnect: false,
+		},
+		{
+			name: "server error",
+			inputErr: mongo.CommandError{
+				Message: "server error",
+			},
+			expectedReconnect: true,
+		},
+		{
+			name: "network error",
+			inputErr: mongo.CommandError{
+				Message: "network error",
+				Labels: []string{
+					"NetworkError",
+				},
+			},
+			expectedReconnect: true,
+		},
+		{
+			name:              "ErrNilDocument error",
+			inputErr:          mongo.ErrNilDocument,
+			expectedReconnect: false,
+		},
+		{
+			name:              "ErrNonStringIndexName error",
+			inputErr:          mongo.ErrNonStringIndexName,
+			expectedReconnect: false,
+		},
+		{
+			name:              "ErrNoDocuments error",
+			inputErr:          mongo.ErrNoDocuments,
+			expectedReconnect: false,
+		},
+		{
+			name:              "ErrClientDisconnected error",
+			inputErr:          mongo.ErrClientDisconnected,
+			expectedReconnect: false,
+		},
+		{
+			name:              "BulkWrite exception",
+			inputErr:          mongo.BulkWriteException{},
+			expectedReconnect: true,
+		},
+	}
+
+	// Run each test case as a subtest
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Call the function with the input error
+			// Set up a mock driver
+			d, _ := prepareEnvironment(t)
+			defer d.Close()
+
+			sess := d.client
+
+			err := d.handleStoreError(tc.inputErr)
+			assert.Nil(t, err)
+
+			if tc.expectedReconnect {
+				assert.NotEqual(t, sess, d.client)
+			} else {
+				assert.Equal(t, sess, d.client)
+			}
 		})
 	}
 }
