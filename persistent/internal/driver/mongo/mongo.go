@@ -164,7 +164,7 @@ func (d *mongoDriver) Drop(ctx context.Context, row id.DBObject) error {
 	return nil
 }
 
-func (d *mongoDriver) Update(ctx context.Context, row id.DBObject) error {
+func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...model.DBM) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	result, err := collection.UpdateOne(ctx, bson.M{"_id": row.GetObjectID()}, bson.D{{Key: "$set", Value: row}})
