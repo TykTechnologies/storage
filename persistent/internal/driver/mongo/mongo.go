@@ -164,10 +164,6 @@ func (d *mongoDriver) Drop(ctx context.Context, row id.DBObject) error {
 	return nil
 }
 
-// 0 ... N
-// Update(ctx,row)
-// Update(ctx, row, dbm)
-// Update(ctx, row, []dbm)
 func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...model.DBM) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
