@@ -108,12 +108,12 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, query ...model.
 }
 
 func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...model.DBM) error {
+	if len(rows) == 0 {
+		return errors.New("no rows provided")
+	}
+
 	// if no query is provided, we assume that the rows are already updated
 	if len(query) == 0 {
-		if len(rows) == 0 {
-			return errors.New("no rows provided")
-		}
-
 		sess := d.session.Copy()
 		defer sess.Close()
 
@@ -121,25 +121,7 @@ func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ..
 		col := sess.DB("").C(colName)
 		bulk := col.Bulk()
 
-		for _, row := range rows {
-			if row.TableName() != colName {
-				return errors.New("rows must be of the same collection")
-			}
-
-			query := model.DBM{"$set": row}
-			bulk.Update(bson.M{"_id": row.GetObjectID()}, buildQuery(query))
-		}
-
-		res, err := bulk.Run()
-		if err != nil {
-			return err
-		}
-
-		if res.Modified == 0 {
-			return mgo.ErrNotFound
-		}
-
-		return nil
+		return updateManyWithoutQueries(bulk, rows, colName)
 	}
 
 	if len(rows) != len(query) {
@@ -157,6 +139,23 @@ func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ..
 	col := sess.DB("").C(colName)
 	bulk := col.Bulk()
 
+	return updateManyWithQueries(bulk, rows, colName, query...)
+}
+
+func updateManyWithoutQueries(bulk *mgo.Bulk, rows []id.DBObject, colName string) error {
+	for _, row := range rows {
+		if row.TableName() != colName {
+			return errors.New("rows must be of the same collection")
+		}
+
+		query := model.DBM{"$set": row}
+		bulk.Update(bson.M{"_id": row.GetObjectID()}, buildQuery(query))
+	}
+
+	return runBulk(bulk)
+}
+
+func updateManyWithQueries(bulk *mgo.Bulk, rows []id.DBObject, colName string, query ...model.DBM) error {
 	for i := range rows {
 		newColName, err := getColName(query[i], rows[i])
 		if err != nil {
@@ -170,6 +169,10 @@ func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ..
 		bulk.Update(bson.M{"_id": rows[i].GetObjectID()}, buildQuery(query[i]))
 	}
 
+	return runBulk(bulk)
+}
+
+func runBulk(bulk *mgo.Bulk) error {
 	res, err := bulk.Run()
 	if err != nil {
 		return err
