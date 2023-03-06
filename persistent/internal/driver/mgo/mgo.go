@@ -51,7 +51,7 @@ func (d *mgoDriver) Insert(ctx context.Context, row id.DBObject) error {
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
-			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Insert error: " + err.Error())
+			return rErr
 		}
 
 		return err
@@ -70,7 +70,7 @@ func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject) error {
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
-			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Delete error: " + err.Error())
+			return rErr
 		}
 
 		return err
@@ -89,7 +89,7 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject) error {
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
-			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Update error: " + err.Error())
+			return rErr
 		}
 
 		return err
@@ -108,7 +108,7 @@ func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
-			return 0, errors.New("error reconnecting to mongo: " + rErr.Error() + " after Count error: " + err.Error())
+			return 0, rErr
 		}
 
 		return 0, err
@@ -155,7 +155,7 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
-			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Query error: " + err.Error())
+			return rErr
 		}
 
 		return err
@@ -179,7 +179,7 @@ func (d *mgoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query mode
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
-			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after DeleteWhere error: " + err.Error())
+			return rErr
 		}
 	}
 
@@ -207,7 +207,7 @@ func (d *mgoDriver) handleStoreError(err error) error {
 		if strings.Contains(err.Error(), substr) {
 			connErr := d.Connect(&d.options)
 			if connErr != nil {
-				return connErr
+				return errors.New("error reconnecting to mongo: " + connErr.Error() + " after error: " + err.Error())
 			}
 
 			return nil

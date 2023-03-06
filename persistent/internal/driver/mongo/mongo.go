@@ -49,7 +49,7 @@ func (d *mongoDriver) Insert(ctx context.Context, row id.DBObject) error {
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
-			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Insert error: " + err.Error())
+			return rErr
 		}
 
 		return err
@@ -65,7 +65,7 @@ func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject) error {
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
-			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Delete error: " + err.Error())
+			return rErr
 		}
 
 		return err
@@ -85,7 +85,7 @@ func (d *mongoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
-			return 0, errors.New("error reconnecting to mongo: " + rErr.Error() + " after Count error: " + err.Error())
+			return 0, rErr
 		}
 
 		return 0, err
@@ -139,7 +139,7 @@ func (d *mongoDriver) Query(ctx context.Context, row id.DBObject, result interfa
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
-			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Query error: " + err.Error())
+			return rErr
 		}
 
 		return err
@@ -155,7 +155,7 @@ func (d *mongoDriver) Drop(ctx context.Context, row id.DBObject) error {
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
-			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Drop error: " + err.Error())
+			return rErr
 		}
 
 		return err
@@ -171,7 +171,7 @@ func (d *mongoDriver) Update(ctx context.Context, row id.DBObject) error {
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
-			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after Update error: " + err.Error())
+			return rErr
 		}
 
 		return err
@@ -196,7 +196,7 @@ func (d *mongoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query mo
 	if err != nil {
 		rErr := d.handleStoreError(err)
 		if rErr != nil {
-			return errors.New("error reconnecting to mongo: " + rErr.Error() + " after DeleteWhere error: " + err.Error())
+			return rErr
 		}
 
 		return err
@@ -218,7 +218,7 @@ func (d *mongoDriver) handleStoreError(err error) error {
 	if mongo.IsNetworkError(err) {
 		// Reconnect to the MongoDB instance
 		if connErr := d.Connect(d.options); connErr != nil {
-			return connErr
+			return errors.New("error reconnecting to mongo: " + connErr.Error() + " after error: " + err.Error())
 		}
 
 		return nil
@@ -229,7 +229,7 @@ func (d *mongoDriver) handleStoreError(err error) error {
 	if errors.As(err, &serverErr) {
 		// Reconnect to the MongoDB instance
 		if connErr := d.Connect(d.options); connErr != nil {
-			return connErr
+			return errors.New("error reconnecting to mongo: " + connErr.Error() + " after error: " + err.Error())
 		}
 
 		return nil
