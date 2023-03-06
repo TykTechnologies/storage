@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mgo
 
 import (
@@ -518,7 +515,7 @@ func TestQuery(t *testing.T) {
 			name: "4 objects",
 			args: args{
 				result: &[]dummyDBObject{},
-				query:  model.DBM{},
+				query:  nil,
 			},
 			expectedResult: &dummyData,
 		},
