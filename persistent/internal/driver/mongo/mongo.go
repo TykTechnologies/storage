@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"errors"
+	"github.com/TykTechnologies/storage/persistent/dbm"
 
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
@@ -98,7 +99,7 @@ func (d *mongoDriver) IsErrNoRows(err error) bool {
 	return errors.Is(err, mongo.ErrNoDocuments)
 }
 
-func (d *mongoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query model.DBM) error {
+func (d *mongoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query dbm.DBM) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	search := buildQuery(query)
@@ -184,7 +185,7 @@ func (d *mongoDriver) Update(ctx context.Context, row id.DBObject) error {
 	return nil
 }
 
-func (d *mongoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query model.DBM) error {
+func (d *mongoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query dbm.DBM) error {
 	colName, ok := query["_collection"].(string)
 	if !ok {
 		colName = row.TableName()

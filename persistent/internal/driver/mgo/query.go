@@ -2,15 +2,15 @@ package mgo
 
 import (
 	"fmt"
+	"github.com/TykTechnologies/storage/persistent/dbm"
 	"reflect"
 	"regexp"
 
 	"github.com/TykTechnologies/storage/persistent/id"
-	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"gopkg.in/mgo.v2/bson"
 )
 
-func buildQuery(query model.DBM) bson.M {
+func buildQuery(query dbm.DBM) bson.M {
 	search := bson.M{}
 
 	for key, value := range query {
@@ -57,12 +57,12 @@ func handleQueryValue(key string, value interface{}, search bson.M) {
 }
 
 func isNestedQuery(value interface{}) bool {
-	_, ok := value.(model.DBM)
+	_, ok := value.(dbm.DBM)
 	return ok
 }
 
 func handleNestedQuery(search bson.M, key string, value interface{}) {
-	nestedQuery, ok := value.(model.DBM)
+	nestedQuery, ok := value.(dbm.DBM)
 	if !ok {
 		return
 	}

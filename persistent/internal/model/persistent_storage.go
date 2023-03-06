@@ -2,11 +2,10 @@ package model
 
 import (
 	"context"
+	"github.com/TykTechnologies/storage/persistent/dbm"
 
 	"github.com/TykTechnologies/storage/persistent/id"
 )
-
-type DBM map[string]interface{}
 
 type PersistentStorage interface {
 	// Insert a DbObject into the database
@@ -18,9 +17,9 @@ type PersistentStorage interface {
 	// Count counts all rows for a DBTable
 	Count(context.Context, id.DBObject) (int, error)
 	// Query one or multiple DBObjects from the database
-	Query(context.Context, id.DBObject, interface{}, DBM) error
+	Query(context.Context, id.DBObject, interface{}, dbm.DBM) error
 	// DeleteWhere deletes all rows that match the query
-	DeleteWhere(context.Context, id.DBObject, DBM) error
+	DeleteWhere(context.Context, id.DBObject, dbm.DBM) error
 	// IsErrNoRows Checking if an error is a "no rows error"
 	IsErrNoRows(err error) bool
 }

@@ -1,29 +1,29 @@
 package mgo
 
 import (
+	"github.com/TykTechnologies/storage/persistent/dbm"
 	"reflect"
 	"testing"
 
 	"github.com/TykTechnologies/storage/persistent/id"
-	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"gopkg.in/mgo.v2/bson"
 )
 
 func TestBuildQuery(t *testing.T) {
 	tests := []struct {
 		name   string
-		input  model.DBM
+		input  dbm.DBM
 		output bson.M
 	}{
 		{
 			name:   "Test empty input",
-			input:  model.DBM{},
+			input:  dbm.DBM{},
 			output: bson.M{},
 		},
 		{
 			name: "Test with nested query",
-			input: model.DBM{
-				"name": model.DBM{
+			input: dbm.DBM{
+				"name": dbm.DBM{
 					"$ne": "123",
 				},
 			},
@@ -35,7 +35,7 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			name: "Test with $in query",
-			input: model.DBM{
+			input: dbm.DBM{
 				"age": []int{20, 30, 40},
 			},
 			output: bson.M{
@@ -46,7 +46,7 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			name: "Test with _id",
-			input: model.DBM{
+			input: dbm.DBM{
 				"_id": id.ObjectIdHex("61634c7b5f46cc8c296edc36"),
 			},
 			output: bson.M{
@@ -55,7 +55,7 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			name: "Test with invalid _id",
-			input: model.DBM{
+			input: dbm.DBM{
 				"_id": "invalid_id",
 			},
 			output: bson.M{
@@ -64,8 +64,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			name: "Test with $regex",
-			input: model.DBM{
-				"name": model.DBM{
+			input: dbm.DBM{
+				"name": dbm.DBM{
 					"$regex": "tyk.com$",
 				},
 			},
@@ -78,8 +78,8 @@ func TestBuildQuery(t *testing.T) {
 
 		{
 			name: "Test with $in",
-			input: model.DBM{
-				"age": model.DBM{
+			input: dbm.DBM{
+				"age": dbm.DBM{
 					"$in": []int{25, 30, 35},
 				},
 			},
@@ -91,8 +91,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			name: "Test with $i",
-			input: model.DBM{
-				"name": model.DBM{
+			input: dbm.DBM{
+				"name": dbm.DBM{
 					"$i": "tyk",
 				},
 			},
@@ -105,8 +105,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			name: "Test with $text",
-			input: model.DBM{
-				"name": model.DBM{
+			input: dbm.DBM{
+				"name": dbm.DBM{
 					"$text": "tyk",
 				},
 			},
@@ -121,8 +121,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			name: "Test with unsupported operator",
-			input: model.DBM{
-				"name": model.DBM{
+			input: dbm.DBM{
+				"name": dbm.DBM{
 					"$foo": "bar",
 				},
 			},
@@ -134,7 +134,7 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			name: "Test with slice of strings and _id key",
-			input: model.DBM{
+			input: dbm.DBM{
 				"_id": []string{"61634c7b5f46cc8c296edc36", "61634c7b5f46cc8c296edc37"},
 			},
 			output: bson.M{
@@ -148,8 +148,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			name: "Test with $min",
-			input: model.DBM{
-				"age": model.DBM{
+			input: dbm.DBM{
+				"age": dbm.DBM{
 					"$min": 20,
 				},
 			},
@@ -161,8 +161,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			name: "Test with $max",
-			input: model.DBM{
-				"age": model.DBM{
+			input: dbm.DBM{
+				"age": dbm.DBM{
 					"$max": 20,
 				},
 			},
@@ -174,8 +174,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			name: "Test with $inc",
-			input: model.DBM{
-				"age": model.DBM{
+			input: dbm.DBM{
+				"age": dbm.DBM{
 					"$inc": 20,
 				},
 			},
@@ -187,8 +187,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			name: "Test with $set",
-			input: model.DBM{
-				"age": model.DBM{
+			input: dbm.DBM{
+				"age": dbm.DBM{
 					"$set": 20,
 				},
 			},
@@ -200,7 +200,7 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			name: "Default value",
-			input: model.DBM{
+			input: dbm.DBM{
 				"name":      "John",
 				"age":       30,
 				"is_active": true,

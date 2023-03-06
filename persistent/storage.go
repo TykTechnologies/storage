@@ -18,7 +18,6 @@ const (
 type (
 	ClientOpts        model.ClientOpts
 	PersistentStorage model.PersistentStorage
-	DBM               model.DBM
 )
 
 // NewPersistentStorage returns a persistent storage object that uses the given driver

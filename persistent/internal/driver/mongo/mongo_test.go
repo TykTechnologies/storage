@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"github.com/stretchr/testify/assert"
@@ -224,7 +225,7 @@ func TestCount(t *testing.T) {
 func TestQuery(t *testing.T) {
 	type args struct {
 		result interface{}
-		query  model.DBM
+		query  dbm.DBM
 	}
 
 	dummyData := []dummyDBObject{
@@ -245,7 +246,7 @@ func TestQuery(t *testing.T) {
 			name: "4 objects",
 			args: args{
 				result: &[]dummyDBObject{},
-				query:  model.DBM{},
+				query:  dbm.DBM{},
 			},
 			expectedResult: &dummyData,
 		},
@@ -253,7 +254,7 @@ func TestQuery(t *testing.T) {
 			name: "4 objects with limit 2",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
+				query: dbm.DBM{
 					"_limit": 2,
 				},
 			},
@@ -263,7 +264,7 @@ func TestQuery(t *testing.T) {
 			name: "4 objects with limit 2 and offset 2",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
+				query: dbm.DBM{
 					"_limit":  2,
 					"_offset": 2,
 				},
@@ -274,7 +275,7 @@ func TestQuery(t *testing.T) {
 			name: "4 objects with limit 2 and offset 2 and sort by testName",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
+				query: dbm.DBM{
 					"_limit":  2,
 					"_offset": 2,
 					"_sort":   "testName",
@@ -286,8 +287,8 @@ func TestQuery(t *testing.T) {
 			name: "filter by email ending with tyk.com",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
-					"email": model.DBM{
+				query: dbm.DBM{
+					"email": dbm.DBM{
 						"$regex": "tyk.com$",
 					},
 				},
@@ -298,8 +299,8 @@ func TestQuery(t *testing.T) {
 			name: "filter by email ending with tyk.com and sort by testName",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
-					"email": model.DBM{
+				query: dbm.DBM{
+					"email": dbm.DBM{
 						"$regex": "tyk.com$",
 					},
 					"_sort": "testName",
@@ -311,8 +312,8 @@ func TestQuery(t *testing.T) {
 			name: "filter by testName starting with A",
 			args: args{
 				result: &dummyDBObject{},
-				query: model.DBM{
-					"testName": model.DBM{
+				query: dbm.DBM{
+					"testName": dbm.DBM{
 						"$regex": "^A",
 					},
 				},
@@ -323,8 +324,8 @@ func TestQuery(t *testing.T) {
 			name: "filter by testName starting with J and sort by testName",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
-					"testName": model.DBM{
+				query: dbm.DBM{
+					"testName": dbm.DBM{
 						"$regex": "^J",
 					},
 					"_sort": "testName",
@@ -336,7 +337,7 @@ func TestQuery(t *testing.T) {
 			name: "filter by country testName",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
+				query: dbm.DBM{
 					"country.country_name": "TestCountry",
 				},
 			},
@@ -346,7 +347,7 @@ func TestQuery(t *testing.T) {
 			name: "filter by country testName and sort by testName",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
+				query: dbm.DBM{
 					"country.country_name": "TestCountry",
 					"_sort":                "testName",
 				},
@@ -358,7 +359,7 @@ func TestQuery(t *testing.T) {
 			name: "filter by id",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
+				query: dbm.DBM{
 					"_id": dummyData[0].GetObjectID(),
 				},
 			},
@@ -368,8 +369,8 @@ func TestQuery(t *testing.T) {
 			name: "filter by slice of ids",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
-					"_id": model.DBM{
+				query: dbm.DBM{
+					"_id": dbm.DBM{
 						"$in": []id.ObjectId{dummyData[0].GetObjectID(), dummyData[1].GetObjectID()},
 					},
 				},

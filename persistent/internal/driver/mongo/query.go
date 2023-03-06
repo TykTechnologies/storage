@@ -2,12 +2,12 @@ package mongo
 
 import (
 	"fmt"
+	"github.com/TykTechnologies/storage/persistent/dbm"
 	"reflect"
 	"regexp"
 	"strings"
 
 	"github.com/TykTechnologies/storage/persistent/id"
-	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -74,16 +74,16 @@ func handleQueryValue(key string, value interface{}, search bson.M) {
 	}
 }
 
-// isNestedQuery returns true if the value is model.DBM
+// isNestedQuery returns true if the value is dbm.DBM
 func isNestedQuery(value interface{}) bool {
-	_, ok := value.(model.DBM)
+	_, ok := value.(dbm.DBM)
 	return ok
 }
 
 // handleNestedQuery replace children queries by it nested values.
-// For example, transforms a model.DBM{"testName": model.DBM{"$ne": "123"}} to {"testName":{"$ne":"123"}}
+// For example, transforms a dbm.DBM{"testName": dbm.DBM{"$ne": "123"}} to {"testName":{"$ne":"123"}}
 func handleNestedQuery(search bson.M, key string, value interface{}) {
-	nestedQuery, ok := value.(model.DBM)
+	nestedQuery, ok := value.(dbm.DBM)
 	if !ok {
 		return
 	}
@@ -105,9 +105,9 @@ func handleNestedQuery(search bson.M, key string, value interface{}) {
 	}
 }
 
-// buildQuery transforms model.DBM into bson.M (primitive.M) it does some special treatment to nestedQueries
+// buildQuery transforms dbm.DBM into bson.M (primitive.M) it does some special treatment to nestedQueries
 // using handleNestedQuery func.
-func buildQuery(query model.DBM) bson.M {
+func buildQuery(query dbm.DBM) bson.M {
 	search := bson.M{}
 
 	for key, value := range query {

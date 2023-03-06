@@ -3,6 +3,7 @@ package mgo
 import (
 	"context"
 	"errors"
+	"github.com/TykTechnologies/storage/persistent/dbm"
 	"strings"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
-
 	"gopkg.in/mgo.v2"
 )
 
@@ -117,7 +117,7 @@ func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 	return n, nil
 }
 
-func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query model.DBM) error {
+func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query dbm.DBM) error {
 	session := d.session.Copy()
 
 	colName, ok := query["_collection"].(string)
@@ -164,7 +164,7 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 	return err
 }
 
-func (d *mgoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query model.DBM) error {
+func (d *mgoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query dbm.DBM) error {
 	session := d.session.Copy()
 
 	colName, ok := query["_collection"].(string)
