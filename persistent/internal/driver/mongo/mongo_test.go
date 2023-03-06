@@ -568,3 +568,81 @@ func TestDeleteWhere(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleStoreError(t *testing.T) {
+	// Define a slice of test cases
+	testCases := []struct {
+		name              string
+		inputErr          error
+		expectedReconnect bool
+	}{
+		{
+			name:              "no error",
+			inputErr:          nil,
+			expectedReconnect: false,
+		},
+		{
+			name: "server error",
+			inputErr: mongo.CommandError{
+				Message: "server error",
+			},
+			expectedReconnect: true,
+		},
+		{
+			name: "network error",
+			inputErr: mongo.CommandError{
+				Message: "network error",
+				Labels: []string{
+					"NetworkError",
+				},
+			},
+			expectedReconnect: true,
+		},
+		{
+			name:              "ErrNilDocument error",
+			inputErr:          mongo.ErrNilDocument,
+			expectedReconnect: false,
+		},
+		{
+			name:              "ErrNonStringIndexName error",
+			inputErr:          mongo.ErrNonStringIndexName,
+			expectedReconnect: false,
+		},
+		{
+			name:              "ErrNoDocuments error",
+			inputErr:          mongo.ErrNoDocuments,
+			expectedReconnect: false,
+		},
+		{
+			name:              "ErrClientDisconnected error",
+			inputErr:          mongo.ErrClientDisconnected,
+			expectedReconnect: false,
+		},
+		{
+			name:              "BulkWrite exception",
+			inputErr:          mongo.BulkWriteException{},
+			expectedReconnect: true,
+		},
+	}
+
+	// Run each test case as a subtest
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Call the function with the input error
+			// Set up a mock driver
+			d, _ := prepareEnvironment(t)
+			defer d.Close()
+
+			sess := d.client
+
+			err := d.handleStoreError(tc.inputErr)
+			assert.Nil(t, err)
+
+			if tc.expectedReconnect {
+				assert.NotEqual(t, sess, d.client)
+			} else {
+				assert.Equal(t, sess, d.client)
+			}
+		})
+	}
+}
