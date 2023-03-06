@@ -2,9 +2,10 @@ package mgo
 
 import (
 	"fmt"
-	"github.com/TykTechnologies/storage/persistent/dbm"
 	"reflect"
 	"regexp"
+
+	"github.com/TykTechnologies/storage/persistent/dbm"
 
 	"github.com/TykTechnologies/storage/persistent/id"
 	"gopkg.in/mgo.v2/bson"

@@ -1,9 +1,10 @@
 package mgo
 
 import (
-	"github.com/TykTechnologies/storage/persistent/dbm"
 	"reflect"
 	"testing"
+
+	"github.com/TykTechnologies/storage/persistent/dbm"
 
 	"github.com/TykTechnologies/storage/persistent/id"
 	"gopkg.in/mgo.v2/bson"

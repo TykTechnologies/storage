@@ -2,10 +2,11 @@ package mongo
 
 import (
 	"fmt"
-	"github.com/TykTechnologies/storage/persistent/dbm"
 	"reflect"
 	"regexp"
 	"strings"
+
+	"github.com/TykTechnologies/storage/persistent/dbm"
 
 	"github.com/TykTechnologies/storage/persistent/id"
 	"go.mongodb.org/mongo-driver/bson"
