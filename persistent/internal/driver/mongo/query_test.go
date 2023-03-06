@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"encoding/json"
+	"github.com/TykTechnologies/storage/persistent/dbm"
 	"testing"
 
 	"github.com/TykTechnologies/storage/persistent/id"
