@@ -395,7 +395,7 @@ func TestQuery(t *testing.T) {
 			name: "filter by id",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
+				query: dbm.DBM{
 					"_id": dummyData[0].GetObjectID(),
 				},
 			},
@@ -405,8 +405,8 @@ func TestQuery(t *testing.T) {
 			name: "filter by slice of ids",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
-					"_id": model.DBM{
+				query: dbm.DBM{
+					"_id": dbm.DBM{
 						"$in": []id.ObjectId{dummyData[0].GetObjectID(), dummyData[1].GetObjectID()},
 					},
 				},
@@ -418,7 +418,7 @@ func TestQuery(t *testing.T) {
 			name: "invalid db name",
 			args: args{
 				result: &[]dummyDBObject{},
-				query:  model.DBM{},
+				query:  dbm.DBM{},
 			},
 			wantErr:        true,
 			expectedResult: &[]dummyDBObject{},
@@ -455,19 +455,19 @@ func TestDeleteWhere(t *testing.T) {
 
 	tests := []struct {
 		name              string
-		query             model.DBM
+		query             dbm.DBM
 		expectedNewValues []dummyDBObject
 		errorExpected     error
 	}{
 		{
 			name:              "delete all",
-			query:             model.DBM{},
+			query:             dbm.DBM{},
 			expectedNewValues: []dummyDBObject(nil),
 		},
 		{
 			name: "delete by email ending with tyk.com",
-			query: model.DBM{
-				"email": model.DBM{
+			query: dbm.DBM{
+				"email": dbm.DBM{
 					"$regex": "tyk.com$",
 				},
 			},
@@ -475,8 +475,8 @@ func TestDeleteWhere(t *testing.T) {
 		},
 		{
 			name: "delete by name starting with A",
-			query: model.DBM{
-				"name": model.DBM{
+			query: dbm.DBM{
+				"name": dbm.DBM{
 					"$regex": "^A",
 				},
 			},
@@ -484,28 +484,28 @@ func TestDeleteWhere(t *testing.T) {
 		},
 		{
 			name: "delete by country name",
-			query: model.DBM{
+			query: dbm.DBM{
 				"country.country_name": "TestCountry",
 			},
 			expectedNewValues: []dummyDBObject{dummyData[1], dummyData[2], dummyData[4]},
 		},
 		{
 			name: "delete by id",
-			query: model.DBM{
+			query: dbm.DBM{
 				"_id": dummyData[0].GetObjectID(),
 			},
 			expectedNewValues: []dummyDBObject{dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
 		},
 		{
 			name: "delete by age",
-			query: model.DBM{
+			query: dbm.DBM{
 				"age": 10,
 			},
 			expectedNewValues: []dummyDBObject{dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
 		},
 		{
 			name: "delete by age and country name",
-			query: model.DBM{
+			query: dbm.DBM{
 				"age":                  10,
 				"country.country_name": "TestCountry",
 			},
@@ -513,8 +513,8 @@ func TestDeleteWhere(t *testing.T) {
 		},
 		{
 			name: "delete by emails starting with j",
-			query: model.DBM{
-				"email": model.DBM{
+			query: dbm.DBM{
+				"email": dbm.DBM{
 					"$regex": "^j",
 				},
 			},
@@ -522,11 +522,11 @@ func TestDeleteWhere(t *testing.T) {
 		},
 		{
 			name: "delete by emails starting with j and age lower than 10",
-			query: model.DBM{
-				"email": model.DBM{
+			query: dbm.DBM{
+				"email": dbm.DBM{
 					"$regex": "^j",
 				},
-				"age": model.DBM{
+				"age": dbm.DBM{
 					"$lt": 10,
 				},
 			},
@@ -534,8 +534,8 @@ func TestDeleteWhere(t *testing.T) {
 		},
 		{
 			name: "delete invalid value",
-			query: model.DBM{
-				"email": model.DBM{
+			query: dbm.DBM{
+				"email": dbm.DBM{
 					"$regex": "^x",
 				},
 			},
@@ -565,7 +565,7 @@ func TestDeleteWhere(t *testing.T) {
 			}
 
 			var result []dummyDBObject
-			err = mgo.Query(context.Background(), object, &result, model.DBM{})
+			err = mgo.Query(context.Background(), object, &result, dbm.DBM{})
 			if err != nil {
 				t.Errorf("Query() error = %v", err)
 				return
