@@ -788,7 +788,11 @@ func TestHandleStoreError(t *testing.T) {
 			sess := d.client
 
 			err := d.handleStoreError(tc.inputErr)
-			assert.Nil(t, err)
+			if tc.inputErr == nil {
+				assert.Nil(t, err)
+			} else {
+				assert.NotNil(t, err)
+			}
 
 			if tc.expectedReconnect {
 				assert.NotEqual(t, sess, d.client)

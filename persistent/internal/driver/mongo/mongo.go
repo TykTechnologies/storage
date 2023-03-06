@@ -46,52 +46,28 @@ func (d *mongoDriver) Insert(ctx context.Context, row id.DBObject) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	_, err := collection.InsertOne(ctx, row)
-	if err != nil {
-		rErr := d.handleStoreError(err)
-		if rErr != nil {
-			return rErr
-		}
 
-		return err
-	}
-
-	return nil
+	return d.handleStoreError(err)
 }
 
 func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	res, err := collection.DeleteOne(ctx, bson.M{"_id": row.GetObjectID()})
-	if err != nil {
-		rErr := d.handleStoreError(err)
-		if rErr != nil {
-			return rErr
-		}
 
-		return err
-	}
-
-	if res.DeletedCount == 0 {
+	if err == nil && res.DeletedCount == 0 {
 		return errors.New("error deleting a non existing object")
 	}
 
-	return nil
+	return d.handleStoreError(err)
 }
 
 func (d *mongoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	count, err := collection.CountDocuments(ctx, bson.D{})
-	if err != nil {
-		rErr := d.handleStoreError(err)
-		if rErr != nil {
-			return 0, rErr
-		}
 
-		return 0, err
-	}
-
-	return int(count), nil
+	return int(count), d.handleStoreError(err)
 }
 
 func (d *mongoDriver) IsErrNoRows(err error) bool {
@@ -136,32 +112,13 @@ func (d *mongoDriver) Query(ctx context.Context, row id.DBObject, result interfa
 		err = collection.FindOne(ctx, search, findOneOpts).Decode(result)
 	}
 
-	if err != nil {
-		rErr := d.handleStoreError(err)
-		if rErr != nil {
-			return rErr
-		}
-
-		return err
-	}
-
-	return nil
+	return d.handleStoreError(err)
 }
 
 func (d *mongoDriver) Drop(ctx context.Context, row id.DBObject) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
-	err := collection.Drop(ctx)
-	if err != nil {
-		rErr := d.handleStoreError(err)
-		if rErr != nil {
-			return rErr
-		}
-
-		return err
-	}
-
-	return nil
+	return d.handleStoreError(collection.Drop(ctx))
 }
 
 func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...model.DBM) error {
@@ -250,8 +207,6 @@ func (d *mongoDriver) handleStoreError(err error) error {
 		if connErr := d.Connect(d.options); connErr != nil {
 			return errors.New("error reconnecting to mongo: " + connErr.Error() + " after error: " + err.Error())
 		}
-
-		return nil
 	}
 
 	return err
