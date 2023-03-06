@@ -182,19 +182,6 @@ func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ..
 	return nil
 }
 
-func getColName(query model.DBM, row id.DBObject) (string, error) {
-	colName, ok := query["_collection"].(string)
-	if !ok {
-		if row == nil {
-			return "", errors.New("unable to find collection name")
-		}
-
-		colName = row.TableName()
-	}
-
-	return colName, nil
-}
-
 func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 	sess := d.session.Copy()
 	defer sess.Close()

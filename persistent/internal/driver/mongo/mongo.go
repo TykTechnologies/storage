@@ -237,3 +237,7 @@ func (d *mongoDriver) handleStoreError(err error) error {
 
 	return nil
 }
+
+func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...model.DBM) error {
+	panic("implement me")
+}
