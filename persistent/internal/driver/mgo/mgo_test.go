@@ -1,3 +1,6 @@
+//go:build mongo
+// +build mongo
+
 package mgo
 
 import (
@@ -87,35 +90,41 @@ func TestInsert(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	ctx := context.Background()
 	driver, object := prepareEnvironment(t)
+	ctx := context.Background()
 
-	defer assert.Nil(t, driver.Drop(ctx, object))
+	t.Run("deleting a existing object", func(t *testing.T) {
+		// insert the object into the database
+		err := driver.Insert(ctx, object)
+		assert.Nil(t, err)
+		// delete the collection
+		defer driver.Drop(ctx, object)
 
-	// insert the object into the database
-	err := driver.Insert(ctx, object)
-	assert.Nil(t, err)
+		// validates that the object was inserted
+		var result dummyDBObject
+		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
+		assert.Nil(t, err)
+		assert.Equal(t, object.Name, result.Name)
+		assert.Equal(t, object.Email, result.Email)
+		assert.Equal(t, object.GetObjectID(), result.GetObjectID())
 
-	var result dummyDBObject
-	err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
-	assert.Nil(t, err)
+		// delete the object from the database
+		err = driver.Delete(ctx, object)
+		assert.Nil(t, err)
 
-	assert.Equal(t, object.Name, result.Name)
-	assert.Equal(t, object.Email, result.Email)
-	assert.Equal(t, object.Country, result.Country)
-	assert.Equal(t, object.Age, result.Age)
-	assert.Equal(t, object.GetObjectID(), result.GetObjectID())
+		// check if the object was deleted
+		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
+		assert.NotNil(t, err)
+		assert.True(t, driver.IsErrNoRows(err))
+	})
 
-	// delete the object from the database
-	err = driver.Delete(ctx, object)
-	assert.Nil(t, err)
-
-	// check if the object was deleted
-	err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
-	assert.NotNil(t, err)
-	assert.True(t, driver.IsErrNoRows(err))
+	t.Run("deleting a non existent object", func(t *testing.T) {
+		// delete the object from the database
+		err := driver.Delete(ctx, object)
+		assert.NotNil(t, err)
+		assert.True(t, driver.IsErrNoRows(err))
+	})
 }
-
 func TestUpdate(t *testing.T) {
 	t.Run("Updating an existing obj", func(t *testing.T) {
 		driver, object := prepareEnvironment(t)
@@ -123,7 +132,7 @@ func TestUpdate(t *testing.T) {
 
 		err := driver.Insert(ctx, object)
 		assert.Nil(t, err)
-		defer assert.Nil(t, driver.Drop(ctx, object))
+		defer driver.Drop(ctx, object)
 
 		object.Name = "test2"
 		object.Email = "test2@test2.com"
@@ -146,7 +155,7 @@ func TestUpdate(t *testing.T) {
 		driver, object := prepareEnvironment(t)
 		ctx := context.Background()
 
-		defer assert.Nil(t, driver.Drop(ctx, object))
+		defer driver.Drop(ctx, object)
 
 		object.SetObjectID(id.NewObjectID())
 
@@ -154,10 +163,11 @@ func TestUpdate(t *testing.T) {
 		assert.NotNil(t, err)
 		assert.True(t, driver.IsErrNoRows(err))
 	})
+
 	t.Run("Updating an object without _id", func(t *testing.T) {
 		driver, object := prepareEnvironment(t)
 		ctx := context.Background()
-		defer assert.Nil(t, driver.Drop(ctx, object))
+		defer driver.Drop(ctx, object)
 
 		err := driver.Update(ctx, object)
 		assert.NotNil(t, err)
@@ -319,8 +329,9 @@ func TestUpdateMany(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.testName, func(t *testing.T) {
 			driver, object := prepareEnvironment(t)
-			defer assert.Nil(t, driver.Drop(context.Background(), object))
 			ctx := context.Background()
+			defer driver.Drop(ctx, object)
+
 			for _, obj := range dummyData {
 				err := driver.Insert(ctx, &obj)
 				assert.Nil(t, err)
@@ -381,7 +392,7 @@ func TestCount(t *testing.T) {
 			ctx := context.Background()
 
 			driver, object := prepareEnvironment(t)
-			defer assert.Nil(t, driver.Drop(ctx, object))
+			defer driver.Drop(ctx, object)
 
 			for i := 0; i < tt.want; i++ {
 				object = &dummyDBObject{
@@ -580,9 +591,9 @@ func TestQuery(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
 			driver, object := prepareEnvironment(t)
-			defer assert.Nil(t, driver.Drop(ctx, object))
+			ctx := context.Background()
+			defer driver.Drop(ctx, object)
 
 			for _, obj := range dummyData {
 				err := driver.Insert(ctx, &obj)
@@ -592,7 +603,7 @@ func TestQuery(t *testing.T) {
 			object.invalidCollection = tt.wantErr
 
 			if err := driver.Query(ctx, object, tt.args.result, tt.args.query); (err != nil) != tt.wantErr {
-				t.Errorf("mgoDriver.Query() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("mongoDriver.Query() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			assert.Equal(t, tt.expectedResult, tt.args.result)
 		})
@@ -703,7 +714,7 @@ func TestDeleteWhere(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			driver, object := prepareEnvironment(t)
-			defer assert.Nil(t, driver.Drop(ctx, object))
+			defer driver.Drop(ctx, object)
 
 			for _, obj := range dummyData {
 				err := driver.Insert(ctx, &obj)

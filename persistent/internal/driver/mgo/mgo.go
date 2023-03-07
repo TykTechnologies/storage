@@ -74,7 +74,7 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...mode
 		queries = append(queries, model.DBM{"_id": row.GetObjectID()})
 	}
 
-	return d.handleStoreError(col.Update(queries[0], bson.M{"$set": row}))
+	return d.handleStoreError(col.Update(buildQuery(queries[0]), bson.M{"$set": row}))
 }
 
 func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...model.DBM) error {
