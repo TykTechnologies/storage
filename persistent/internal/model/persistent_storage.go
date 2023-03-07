@@ -23,4 +23,6 @@ type PersistentStorage interface {
 	DeleteWhere(context.Context, id.DBObject, DBM) error
 	// IsErrNoRows Checking if an error is a "no rows error"
 	IsErrNoRows(err error) bool
+	// Drop drops the collection given the TableName() of the id.DBObject
+	Drop(context.Context, id.DBObject) error
 }

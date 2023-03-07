@@ -209,7 +209,7 @@ func TestCount(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			driver, object := tc.prepareTc(t)
-			defer driver.Drop(ctx,object)
+			defer driver.Drop(ctx, object)
 
 			got, err := driver.Count(ctx, object)
 			assert.Equal(t, tc.want, got)

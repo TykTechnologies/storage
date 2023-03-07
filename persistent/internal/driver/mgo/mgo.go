@@ -186,6 +186,13 @@ func (d *mgoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query mode
 	return err
 }
 
+func (d *mgoDriver) Drop(ctx context.Context, row id.DBObject) error {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	return sess.DB("").C(row.TableName()).DropCollection()
+}
+
 func (d *mgoDriver) IsErrNoRows(err error) bool {
 	return errors.Is(err, mgo.ErrNotFound)
 }
