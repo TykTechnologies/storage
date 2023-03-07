@@ -48,17 +48,7 @@ func (d *mgoDriver) Insert(ctx context.Context, row id.DBObject) error {
 
 	col := sess.DB("").C(row.TableName())
 
-	err := col.Insert(row)
-	if err != nil {
-		rErr := d.handleStoreError(err)
-		if rErr != nil {
-			return rErr
-		}
-
-		return err
-	}
-
-	return nil
+	return d.handleStoreError(col.Insert(row))
 }
 
 func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject) error {
@@ -67,17 +57,7 @@ func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject) error {
 
 	col := sess.DB("").C(row.TableName())
 
-	err := col.Remove(row)
-	if err != nil {
-		rErr := d.handleStoreError(err)
-		if rErr != nil {
-			return rErr
-		}
-
-		return err
-	}
-
-	return nil
+	return d.handleStoreError(col.Remove(row))
 }
 
 func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...model.DBM) error {
@@ -87,23 +67,23 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...mode
 	col := sess.DB("").C(row.TableName())
 
 	if len(queries) > 1 {
-		return errors.New("multiple queries for only 1 row")
+		return errors.New(model.ErrorMultipleQueryForSingleRow)
 	}
 
 	if len(queries) == 0 {
 		queries = append(queries, model.DBM{"_id": row.GetObjectID()})
 	}
 
-	return col.Update(queries[0], bson.M{"$set": row})
+	return d.handleStoreError(col.Update(queries[0], bson.M{"$set": row}))
 }
 
 func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...model.DBM) error {
 	if len(rows) == 0 {
-		return errors.New("no rows provided")
+		return errors.New(model.ErrorEmptyRow)
 	}
 
 	if len(rows) != len(query) && len(query) != 0 {
-		return errors.New("different length of row and query")
+		return errors.New(model.ErrorRowQueryDiffLenght)
 	}
 
 	sess := d.session.Copy()
@@ -123,16 +103,12 @@ func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ..
 		bulk.Update(buildQuery(query[i]), bson.M{"$set": rows[i]})
 	}
 
-	return runBulk(bulk)
-}
-
-func runBulk(bulk *mgo.Bulk) error {
-	_, err := bulk.Run()
-	if err != nil {
-		return err
+	res, err := bulk.Run()
+	if err == nil && res.Modified == 0 {
+		return mgo.ErrNotFound
 	}
 
-	return nil
+	return d.handleStoreError(err)
 }
 
 func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
@@ -142,16 +118,8 @@ func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 	col := sess.DB("").C(row.TableName())
 
 	n, err := col.Find(nil).Count()
-	if err != nil {
-		rErr := d.handleStoreError(err)
-		if rErr != nil {
-			return 0, rErr
-		}
 
-		return 0, err
-	}
-
-	return n, nil
+	return n, d.handleStoreError(err)
 }
 
 func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query model.DBM) error {
@@ -188,16 +156,7 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 		err = q.One(result)
 	}
 
-	if err != nil {
-		rErr := d.handleStoreError(err)
-		if rErr != nil {
-			return rErr
-		}
-
-		return err
-	}
-
-	return err
+	return d.handleStoreError(err)
 }
 
 func (d *mgoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query model.DBM) error {
@@ -211,22 +170,20 @@ func (d *mgoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query mode
 	col := session.DB("").C(colName)
 	defer col.Database.Session.Close()
 
-	_, err = col.RemoveAll(buildQuery(query))
-	if err != nil {
-		rErr := d.handleStoreError(err)
-		if rErr != nil {
-			return rErr
-		}
+	res, err := col.RemoveAll(buildQuery(query))
+
+	if err == nil && res.Removed == 0 {
+		return mgo.ErrNotFound
 	}
 
-	return err
+	return d.handleStoreError(err)
 }
 
 func (d *mgoDriver) Drop(ctx context.Context, row id.DBObject) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
-	return sess.DB("").C(row.TableName()).DropCollection()
+	return d.handleStoreError(sess.DB("").C(row.TableName()).DropCollection())
 }
 
 func (d *mgoDriver) IsErrNoRows(err error) bool {
@@ -253,9 +210,9 @@ func (d *mgoDriver) handleStoreError(err error) error {
 				return errors.New("error reconnecting to mongo: " + connErr.Error() + " after error: " + err.Error())
 			}
 
-			return nil
+			return err
 		}
 	}
 
-	return nil
+	return err
 }

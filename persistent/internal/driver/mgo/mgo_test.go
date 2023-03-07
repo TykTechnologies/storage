@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mgo
 
 import (
@@ -92,7 +89,8 @@ func TestInsert(t *testing.T) {
 func TestDelete(t *testing.T) {
 	ctx := context.Background()
 	driver, object := prepareEnvironment(t)
-	defer driver.Drop(ctx, object)
+
+	defer assert.Nil(t, driver.Drop(ctx, object))
 
 	// insert the object into the database
 	err := driver.Insert(ctx, object)
@@ -125,7 +123,7 @@ func TestUpdate(t *testing.T) {
 
 		err := driver.Insert(ctx, object)
 		assert.Nil(t, err)
-		defer driver.Drop(ctx, object)
+		defer assert.Nil(t, driver.Drop(ctx, object))
 
 		object.Name = "test2"
 		object.Email = "test2@test2.com"
@@ -148,7 +146,7 @@ func TestUpdate(t *testing.T) {
 		driver, object := prepareEnvironment(t)
 		ctx := context.Background()
 
-		defer driver.Drop(ctx, object)
+		defer assert.Nil(t, driver.Drop(ctx, object))
 
 		object.SetObjectID(id.NewObjectID())
 
@@ -159,7 +157,7 @@ func TestUpdate(t *testing.T) {
 	t.Run("Updating an object without _id", func(t *testing.T) {
 		driver, object := prepareEnvironment(t)
 		ctx := context.Background()
-		defer driver.Drop(ctx, object)
+		defer assert.Nil(t, driver.Drop(ctx, object))
 
 		err := driver.Update(ctx, object)
 		assert.NotNil(t, err)
@@ -169,11 +167,26 @@ func TestUpdate(t *testing.T) {
 
 func TestUpdateMany(t *testing.T) {
 	dummyData := []dummyDBObject{
-		{Name: "John", Email: "john@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
-		{Name: "Jane", Email: "jane@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
-		{Name: "Bob", Email: "bob@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25},
-		{Name: "Alice", Email: "alice@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45},
-		{Name: "Peter", Email: "peter@test.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12},
+		{
+			Name: "John", Email: "john@example.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10,
+		},
+		{
+			Name: "Jane", Email: "jane@tyk.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8,
+		},
+		{
+			Name: "Bob", Email: "bob@example.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25,
+		},
+		{
+			Name: "Alice", Email: "alice@tyk.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45,
+		},
+		{
+			Name: "Peter", Email: "peter@test.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12,
+		},
 	}
 
 	tcs := []struct {
@@ -187,11 +200,18 @@ func TestUpdateMany(t *testing.T) {
 			testName:          "update only one - without modifying values",
 			givenObjects:      []id.DBObject{&dummyData[0]},
 			expectedNewValues: []id.DBObject{&dummyData[0]},
+			errorExpected:     mgo.ErrNotFound,
 		},
 		{
-			testName:          "update only one - modifying values",
-			givenObjects:      []id.DBObject{&dummyDBObject{Name: "Test", Email: "test@test.com", Id: dummyData[0].Id, Country: dummyData[0].Country, Age: dummyData[0].Age}},
-			expectedNewValues: []id.DBObject{&dummyDBObject{Name: "Test", Email: "test@test.com", Id: dummyData[0].Id, Country: dummyData[0].Country, Age: dummyData[0].Age}},
+			testName: "update only one - modifying values",
+			givenObjects: []id.DBObject{&dummyDBObject{
+				Name: "Test", Email: "test@test.com", Id: dummyData[0].Id,
+				Country: dummyData[0].Country, Age: dummyData[0].Age,
+			}},
+			expectedNewValues: []id.DBObject{&dummyDBObject{
+				Name: "Test", Email: "test@test.com", Id: dummyData[0].Id,
+				Country: dummyData[0].Country, Age: dummyData[0].Age,
+			}},
 		},
 		{
 			testName: "update two - without query",
@@ -267,7 +287,7 @@ func TestUpdateMany(t *testing.T) {
 		{
 			testName:      "update error - empty rows",
 			givenObjects:  []id.DBObject{},
-			errorExpected: errors.New("no rows provided"),
+			errorExpected: errors.New(model.ErrorEmptyRow),
 		},
 		{
 			testName: "update error - different params len",
@@ -292,14 +312,14 @@ func TestUpdateMany(t *testing.T) {
 				&dummyData[1],
 			},
 			query:         []model.DBM{{"testName": "Jane"}},
-			errorExpected: errors.New("different length of row and query"),
+			errorExpected: errors.New(model.ErrorRowQueryDiffLenght),
 		},
 	}
 
 	for _, tc := range tcs {
 		t.Run(tc.testName, func(t *testing.T) {
 			driver, object := prepareEnvironment(t)
-			defer driver.Drop(context.Background(), object)
+			defer assert.Nil(t, driver.Drop(context.Background(), object))
 			ctx := context.Background()
 			for _, obj := range dummyData {
 				err := driver.Insert(ctx, &obj)
@@ -361,7 +381,7 @@ func TestCount(t *testing.T) {
 			ctx := context.Background()
 
 			driver, object := prepareEnvironment(t)
-			defer driver.Drop(ctx, object)
+			defer assert.Nil(t, driver.Drop(ctx, object))
 
 			for i := 0; i < tt.want; i++ {
 				object = &dummyDBObject{
@@ -562,7 +582,7 @@ func TestQuery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			driver, object := prepareEnvironment(t)
-			defer driver.Drop(ctx, object)
+			defer assert.Nil(t, driver.Drop(ctx, object))
 
 			for _, obj := range dummyData {
 				err := driver.Insert(ctx, &obj)
@@ -683,7 +703,7 @@ func TestDeleteWhere(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			driver, object := prepareEnvironment(t)
-			defer driver.Drop(ctx, object)
+			defer assert.Nil(t, driver.Drop(ctx, object))
 
 			for _, obj := range dummyData {
 				err := driver.Insert(ctx, &obj)
@@ -718,37 +738,32 @@ func TestHandleStoreError(t *testing.T) {
 	driver, _ := prepareEnvironment(t)
 
 	tests := []struct {
-		name          string
-		inputErr      error
-		wantErr       error
+		name     string
+		inputErr error
+
 		wantReconnect bool
 	}{
 		{
 			name:     "Nil input error",
 			inputErr: nil,
-			wantErr:  nil,
 		},
 		{
 			name:          "Known connection error",
 			inputErr:      errors.New("no reachable servers"),
-			wantErr:       nil,
 			wantReconnect: true,
 		},
 		{
 			name:     "Unknown connection error",
 			inputErr: errors.New("unknown error"),
-			wantErr:  nil,
 		},
 		{
 			name:          "i/o timeout",
 			inputErr:      errors.New("i/o timeout"),
-			wantErr:       nil,
 			wantReconnect: true,
 		},
 		{
 			name:          "failing when reconnecting",
 			inputErr:      errors.New("reset by peer"),
-			wantErr:       errors.New("reset by peer"),
 			wantReconnect: false,
 		},
 	}
@@ -758,7 +773,7 @@ func TestHandleStoreError(t *testing.T) {
 			sess := driver.session
 			defer sess.Close()
 
-			if test.wantErr != nil {
+			if test.inputErr != nil {
 				invalidMgo := *driver
 				invalidMgo.options = model.ClientOpts{
 					ConnectionString:  "mongodb://host:port/invalid",
@@ -783,8 +798,8 @@ func TestHandleStoreError(t *testing.T) {
 				}
 			}
 
-			if !errors.Is(gotErr, test.wantErr) {
-				t.Errorf("got error %v, want error %v", gotErr, test.wantErr)
+			if !errors.Is(gotErr, test.inputErr) {
+				t.Errorf("got error %v, want error %v", gotErr, test.inputErr)
 			}
 		})
 	}
