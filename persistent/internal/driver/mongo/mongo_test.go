@@ -12,7 +12,6 @@ import (
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"github.com/stretchr/testify/assert"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -93,17 +92,16 @@ func TestNewMongoDriver(t *testing.T) {
 func TestInsert(t *testing.T) {
 	driver, object := prepareEnvironment(t)
 	ctx := context.Background()
-	collection := driver.client.Database("test").Collection(object.TableName())
 
 	// insert the object into the database
 	err := driver.Insert(ctx, object)
 	assert.Nil(t, err)
 	// delete the collection
-	defer collection.Drop(ctx)
+	defer driver.Drop(ctx, object)
 
 	// check if the object was inserted
 	var result dummyDBObject
-	err = collection.FindOne(ctx, bson.M{"_id": object.GetObjectID()}).Decode(&result)
+	err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
 	assert.Nil(t, err)
 
 	assert.Equal(t, object.Name, result.Name)
@@ -114,18 +112,17 @@ func TestInsert(t *testing.T) {
 func TestDelete(t *testing.T) {
 	driver, object := prepareEnvironment(t)
 	ctx := context.Background()
-	collection := driver.client.Database("test").Collection(object.TableName())
 
 	t.Run("deleting a existing object", func(t *testing.T) {
 		// insert the object into the database
 		err := driver.Insert(ctx, object)
 		assert.Nil(t, err)
 		// delete the collection
-		defer collection.Drop(ctx)
+		defer driver.Drop(ctx, object)
 
 		// validates that the object was inserted
 		var result dummyDBObject
-		err = collection.FindOne(ctx, bson.M{"_id": object.GetObjectID()}).Decode(&result)
+		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
 		assert.Nil(t, err)
 		assert.Equal(t, object.Name, result.Name)
 		assert.Equal(t, object.Email, result.Email)
@@ -136,7 +133,7 @@ func TestDelete(t *testing.T) {
 		assert.Nil(t, err)
 
 		// check if the object was deleted
-		err = collection.FindOne(ctx, bson.M{"_id": object.GetObjectID()}).Decode(&result)
+		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
 		assert.NotNil(t, err)
 		assert.True(t, driver.IsErrNoRows(err))
 	})
@@ -212,7 +209,7 @@ func TestCount(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			driver, object := tc.prepareTc(t)
-			defer driver.client.Database(driver.database).Collection(object.TableName()).Drop(ctx)
+			defer driver.Drop(ctx, object)
 
 			got, err := driver.Count(ctx, object)
 			assert.Equal(t, tc.want, got)
