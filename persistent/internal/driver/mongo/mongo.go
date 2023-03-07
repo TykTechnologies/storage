@@ -3,7 +3,6 @@ package mongo
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
@@ -67,8 +66,6 @@ func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject, query ...mode
 	if err == nil && result.DeletedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
-
-	fmt.Println(err.Error())
 
 	return d.handleStoreError(err)
 }
