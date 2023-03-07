@@ -6,7 +6,6 @@ package mongo
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"testing"
 
@@ -443,7 +442,6 @@ func TestUpdate(t *testing.T) {
 
 		err := driver.Update(ctx, object)
 		assert.NotNil(t, err)
-		fmt.Println(err)
 		assert.False(t, driver.IsErrNoRows(err))
 	})
 }
