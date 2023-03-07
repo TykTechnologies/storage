@@ -81,22 +81,21 @@ func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject) error {
 	return nil
 }
 
-func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, query ...model.DBM) error {
-
+func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...model.DBM) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
 	col := sess.DB("").C(row.TableName())
 
-	if len(query) > 1 {
+	if len(queries) > 1 {
 		return errors.New("multiple queries for only 1 row")
 	}
 
-	if len(query) == 0 {
-		query = append(query, model.DBM{"_id": row.GetObjectID()})
+	if len(queries) == 0 {
+		queries = append(queries, model.DBM{"_id": row.GetObjectID()})
 	}
 
-	return col.Update(query[0], bson.M{"$set": row})
+	return col.Update(queries[0], bson.M{"$set": row})
 }
 
 func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...model.DBM) error {
@@ -223,6 +222,13 @@ func (d *mgoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query mode
 	}
 
 	return err
+}
+
+func (d *mgoDriver) Drop(ctx context.Context, row id.DBObject) error {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	return sess.DB("").C(row.TableName()).DropCollection()
 }
 
 func (d *mgoDriver) IsErrNoRows(err error) bool {
