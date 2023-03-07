@@ -79,7 +79,7 @@ func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject) error {
 	return nil
 }
 
-func (d *mgoDriver) Update(ctx context.Context, row id.DBObject) error {
+func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...model.DBM) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
@@ -214,5 +214,9 @@ func (d *mgoDriver) handleStoreError(err error) error {
 		}
 	}
 
+	return nil
+}
+
+func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...model.DBM) error {
 	return nil
 }
