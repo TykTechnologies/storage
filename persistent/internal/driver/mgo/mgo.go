@@ -3,7 +3,6 @@ package mgo
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -116,16 +115,15 @@ func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ..
 
 	for i := range rows {
 		if len(query) == 0 {
-			fmt.Println("query == 0")
 			bulk.Update(bson.M{"_id": rows[i].GetObjectID()}, bson.M{"$set": rows[i]})
+
 			continue
 		}
-		fmt.Println("query:", buildQuery(query[i]))
+
 		bulk.Update(buildQuery(query[i]), bson.M{"$set": rows[i]})
 	}
 
 	return runBulk(bulk)
-
 }
 
 func runBulk(bulk *mgo.Bulk) error {

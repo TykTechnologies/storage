@@ -166,6 +166,7 @@ func TestUpdate(t *testing.T) {
 		assert.False(t, driver.IsErrNoRows(err))
 	})
 }
+
 func TestUpdateMany(t *testing.T) {
 	dummyData := []dummyDBObject{
 		{Name: "John", Email: "john@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
@@ -313,7 +314,6 @@ func TestUpdateMany(t *testing.T) {
 			assert.Nil(t, err)
 
 			for i, expected := range tc.expectedNewValues {
-
 				assert.EqualValues(t, expected, &result[i])
 			}
 		})
