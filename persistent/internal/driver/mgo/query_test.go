@@ -1,3 +1,6 @@
+//go:build mongo
+// +build mongo
+
 package mgo
 
 import (
@@ -219,6 +222,62 @@ func TestBuildQuery(t *testing.T) {
 
 			if !reflect.DeepEqual(result, test.output) {
 				t.Errorf("Expected output %v, but got %v", test.output, result)
+			}
+		})
+	}
+}
+
+func Test_getColName(t *testing.T) {
+	type args struct {
+		query model.DBM
+		row   id.DBObject
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "get collection name from query",
+			args: args{
+				query: model.DBM{
+					"_collection": "test",
+				},
+				row: nil,
+			},
+			want:    "test",
+			wantErr: false,
+		},
+		{
+			name: "get collection name from row",
+			args: args{
+				query: nil,
+				row:   &dummyDBObject{},
+			},
+			want:    "dummy",
+			wantErr: false,
+		},
+		{
+			name: "no collection name",
+			args: args{
+				query: nil,
+				row:   nil,
+			},
+			want:    "",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getColName(tt.args.query, tt.args.row)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getColName() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("getColName() = %v, want %v", got, tt.want)
 			}
 		})
 	}

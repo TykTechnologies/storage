@@ -21,9 +21,8 @@ type PersistentStorage interface {
 	Query(context.Context, id.DBObject, interface{}, DBM) error
 	// DeleteWhere deletes all rows that match the query
 	DeleteWhere(context.Context, id.DBObject, DBM) error
-	// UpdateMany
+	// UpdateMany updates multiple rows
 	UpdateMany(context.Context, []id.DBObject, ...DBM) error
-
 	// IsErrNoRows Checking if an error is a "no rows error"
 	IsErrNoRows(err error) bool
 	// Drop drops the collection given the TableName() of the id.DBObject
