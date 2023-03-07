@@ -122,15 +122,15 @@ func (d *mongoDriver) Drop(ctx context.Context, row id.DBObject) error {
 }
 
 func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...model.DBM) error {
-	collection := d.client.Database(d.database).Collection(row.TableName())
-
 	if len(query) > 1 {
-		return errors.New("multiple queries for only 1 row")
+		return errors.New(model.ErrorMultipleQueryForSingleRow)
 	}
 
 	if len(query) == 0 {
 		query = append(query, model.DBM{"_id": row.GetObjectID()})
 	}
+
+	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	result, err := collection.UpdateOne(ctx, query[0], bson.D{{Key: "$set", Value: row}})
 	if err == nil && result.MatchedCount == 0 {
@@ -142,11 +142,11 @@ func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...mode
 
 func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...model.DBM) error {
 	if len(query) > 0 && len(query) != len(rows) {
-		return errors.New("query and row lens should be the same")
+		return errors.New(model.ErrorRowQueryDiffLenght)
 	}
 
 	if len(rows) == 0 {
-		return errors.New("rows cannot be empty")
+		return errors.New(model.ErrorEmptyRow)
 	}
 
 	var bulkQuery []mongo.WriteModel
@@ -209,7 +209,7 @@ func (d *mongoDriver) handleStoreError(err error) error {
 	if mongo.IsNetworkError(err) || errors.As(err, &serverErr) {
 		// Reconnect to the MongoDB instance
 		if connErr := d.Connect(d.options); connErr != nil {
-			return errors.New("error reconnecting to mongo: " + connErr.Error() + " after error: " + err.Error())
+			return errors.New(model.ErrorReconnecting + ": " + connErr.Error() + " after error: " + err.Error())
 		}
 	}
 

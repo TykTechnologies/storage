@@ -548,7 +548,7 @@ func TestUpdateMany(t *testing.T) {
 		{
 			testName:      "update error - empty rows",
 			givenObjects:  []id.DBObject{},
-			errorExpected: errors.New("rows cannot be empty"),
+			errorExpected: errors.New(model.ErrorEmptyRow),
 		},
 		{
 			testName: "update error - different params len",
@@ -573,7 +573,7 @@ func TestUpdateMany(t *testing.T) {
 				&dummyData[1],
 			},
 			query:         []model.DBM{{"testName": "Jane"}},
-			errorExpected: errors.New("query and row lens should be the same"),
+			errorExpected: errors.New(model.ErrorRowQueryDiffLenght),
 		},
 	}
 
