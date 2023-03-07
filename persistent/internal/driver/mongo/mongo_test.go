@@ -140,9 +140,10 @@ func TestDelete(t *testing.T) {
 
 	t.Run("deleting a non existent object", func(t *testing.T) {
 		// delete the object from the database
+		object.SetObjectID(id.NewObjectID())
 		err := driver.Delete(ctx, object)
 		assert.NotNil(t, err)
-		assert.Equal(t, errors.New("error deleting a non existing object"), err)
+		assert.True(t, driver.IsErrNoRows(err))
 	})
 }
 
@@ -597,7 +598,7 @@ func TestUpdateMany(t *testing.T) {
 	}
 }
 
-func TestDeleteWhere(t *testing.T) {
+func TestDeleteWithQuery(t *testing.T) {
 	dummyData := []dummyDBObject{
 		{Name: "John", Email: "john@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
 		{Name: "Jane", Email: "jane@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
@@ -708,7 +709,7 @@ func TestDeleteWhere(t *testing.T) {
 				assert.Nil(t, err)
 			}
 
-			err := driver.DeleteWhere(ctx, object, tt.query)
+			err := driver.Delete(ctx, object, tt.query)
 			assert.Equal(t, tt.errorExpected, err)
 
 			var result []dummyDBObject
