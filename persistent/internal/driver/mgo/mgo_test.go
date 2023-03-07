@@ -8,6 +8,7 @@ import (
 	"errors"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/TykTechnologies/storage/persistent/id"
@@ -68,9 +69,19 @@ func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject) {
 	return mgo, object
 }
 
+func dropCollection(t *testing.T, driver *mgoDriver, object *dummyDBObject) {
+	t.Helper()
+	object.invalidCollection = false
+	err := driver.Drop(context.Background(), object)
+	// if the collection does not exist, avoid failing the test
+	if err != nil && !strings.Contains(err.Error(), "ns not found") {
+		t.Fatal(err)
+	}
+}
+
 func TestInsert(t *testing.T) {
 	driver, object := prepareEnvironment(t)
-	defer driver.Drop(context.Background(), object)
+	defer dropCollection(t, driver, object)
 
 	// insert the object into the database
 	err := driver.Insert(context.Background(), object)
@@ -98,7 +109,7 @@ func TestDelete(t *testing.T) {
 		err := driver.Insert(ctx, object)
 		assert.Nil(t, err)
 		// delete the collection
-		defer driver.Drop(ctx, object)
+		defer dropCollection(t, driver, object)
 
 		// validates that the object was inserted
 		var result dummyDBObject
@@ -126,13 +137,13 @@ func TestDelete(t *testing.T) {
 	})
 }
 func TestUpdate(t *testing.T) {
+	driver, object := prepareEnvironment(t)
+	ctx := context.Background()
+	defer dropCollection(t, driver, object)
 	t.Run("Updating an existing obj", func(t *testing.T) {
-		driver, object := prepareEnvironment(t)
-		ctx := context.Background()
 
 		err := driver.Insert(ctx, object)
 		assert.Nil(t, err)
-		defer driver.Drop(ctx, object)
 
 		object.Name = "test2"
 		object.Email = "test2@test2.com"
@@ -155,8 +166,6 @@ func TestUpdate(t *testing.T) {
 		driver, object := prepareEnvironment(t)
 		ctx := context.Background()
 
-		defer driver.Drop(ctx, object)
-
 		object.SetObjectID(id.NewObjectID())
 
 		err := driver.Update(ctx, object)
@@ -167,7 +176,6 @@ func TestUpdate(t *testing.T) {
 	t.Run("Updating an object without _id", func(t *testing.T) {
 		driver, object := prepareEnvironment(t)
 		ctx := context.Background()
-		defer driver.Drop(ctx, object)
 
 		err := driver.Update(ctx, object)
 		assert.NotNil(t, err)
@@ -330,7 +338,7 @@ func TestUpdateMany(t *testing.T) {
 		t.Run(tc.testName, func(t *testing.T) {
 			driver, object := prepareEnvironment(t)
 			ctx := context.Background()
-			defer driver.Drop(ctx, object)
+			defer dropCollection(t, driver, object)
 
 			for _, obj := range dummyData {
 				err := driver.Insert(ctx, &obj)
@@ -392,7 +400,7 @@ func TestCount(t *testing.T) {
 			ctx := context.Background()
 
 			driver, object := prepareEnvironment(t)
-			defer driver.Drop(ctx, object)
+			defer dropCollection(t, driver, object)
 
 			for i := 0; i < tt.want; i++ {
 				object = &dummyDBObject{
@@ -593,7 +601,7 @@ func TestQuery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			driver, object := prepareEnvironment(t)
 			ctx := context.Background()
-			defer driver.Drop(ctx, object)
+			defer dropCollection(t, driver, object)
 
 			for _, obj := range dummyData {
 				err := driver.Insert(ctx, &obj)
@@ -714,7 +722,7 @@ func TestDeleteWhere(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			driver, object := prepareEnvironment(t)
-			defer driver.Drop(ctx, object)
+			defer dropCollection(t, driver, object)
 
 			for _, obj := range dummyData {
 				err := driver.Insert(ctx, &obj)
