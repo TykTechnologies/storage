@@ -1,12 +1,8 @@
-//go:build mongo
-// +build mongo
-
 package mgo
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"strconv"
 	"testing"
@@ -135,282 +131,205 @@ func TestDelete(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	tests := []struct {
-		name      string
-		wantErr   bool
-		newObject *dummyDBObject
-		queries   []model.DBM
-	}{
-		{
-			name: "update object",
-			newObject: &dummyDBObject{
-				Name:    "test2",
-				Email:   "test2@test.com",
-				Country: dummyCountryField{CountryName: "test_country", Continent: "test_continent"},
-				Age:     20,
-			},
-		},
-		{
-			name: "update object with query",
-			newObject: &dummyDBObject{
-				Name:    "test",
-				Email:   "test@test.com",
-				Country: dummyCountryField{CountryName: "test_country", Continent: "test_continent"},
-				Age:     100,
-			},
-			queries: []model.DBM{
-				{"$set": model.DBM{"age": 100}},
-			},
-		},
-		{
-			name:      "multiple queries for one object",
-			newObject: &dummyDBObject{},
-			queries: []model.DBM{
-				{
-					"name": "test2",
-				},
-				{
-					"email": "test@test.com",
-				},
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mgo, object, sess := prepareEnvironment(t)
-			defer cleanEnvironment(t, object, sess)
-			// insert the object into the database
-			err := mgo.Insert(context.Background(), object)
-			assert.Nil(t, err)
-
-			tt.newObject.Id = object.GetObjectID()
-			// updating the object
-			err = mgo.Update(context.Background(), tt.newObject, tt.queries...)
-			if tt.wantErr {
-				assert.NotNil(t, err)
-				return
-			}
-			assert.Nil(t, err)
-
-			// check if the object was updated
-			col := sess.DB("").C(object.TableName())
-
-			var result dummyDBObject
-			err = col.Find(bson.M{"_id": object.GetObjectID()}).One(&result)
-			assert.Nil(t, err)
-
-			assert.Equal(t, tt.newObject.Name, result.Name)
-			assert.Equal(t, tt.newObject.Email, result.Email)
-			assert.Equal(t, tt.newObject.Country, result.Country)
-			assert.Equal(t, tt.newObject.Age, result.Age)
-			assert.Equal(t, tt.newObject.GetObjectID(), result.GetObjectID())
-		})
-	}
-}
-
-func TestUpdateMany(t *testing.T) {
-	tests := []struct {
-		name            string
-		wantErr         bool
-		newObjects      []id.DBObject
-		queries         []model.DBM
-		expectedObjects []*dummyDBObject
-	}{
-		{
-			name: "update object",
-			newObjects: []id.DBObject{
-				&dummyDBObject{
-					Name:    "test2",
-					Email:   "test2@test.com",
-					Country: dummyCountryField{CountryName: "test_country", Continent: "test_continent"},
-					Age:     20,
-				},
-			},
-			expectedObjects: []*dummyDBObject{
-				{
-					Name:    "test2",
-					Email:   "test2@test.com",
-					Country: dummyCountryField{CountryName: "test_country", Continent: "test_continent"},
-					Age:     20,
-				},
-			},
-		},
-		{
-			name: "update object with query",
-			newObjects: []id.DBObject{
-				&dummyDBObject{},
-			},
-			queries: []model.DBM{
-				{"$set": model.DBM{"age": 100}},
-			},
-			expectedObjects: []*dummyDBObject{
-				{
-					Name:    "test",
-					Email:   "test@test.com",
-					Country: dummyCountryField{CountryName: "test_country", Continent: "test_continent"},
-					Age:     100,
-				},
-			},
-		},
-		{
-			name:       "different length of objects and queries",
-			newObjects: []id.DBObject{},
-			queries: []model.DBM{
-				{
-					"name": "test2",
-				},
-				{
-					"email": "test@test.com",
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "multiple objects and multiple queries",
-			newObjects: []id.DBObject{
-				&dummyDBObject{},
-				&dummyDBObject{},
-			},
-			queries: []model.DBM{
-				{
-					"$set": model.DBM{"name": "test1"},
-				},
-				{
-					"$set": model.DBM{"name": "test2"},
-				},
-			},
-			expectedObjects: []*dummyDBObject{
-				{
-					Name:    "test1",
-					Email:   "test@test.com",
-					Country: dummyCountryField{CountryName: "test_country", Continent: "test_continent"},
-					Age:     10,
-				},
-				{
-					Name:    "test2",
-					Email:   "test@test.com",
-					Country: dummyCountryField{CountryName: "test_country", Continent: "test_continent"},
-					Age:     10,
-				},
-			},
-		},
-		{
-			name:            "no rows provided",
-			newObjects:      []id.DBObject{},
-			queries:         []model.DBM{},
-			expectedObjects: []*dummyDBObject{},
-			wantErr:         true,
-		},
-		{
-			name: "queries with different collections",
-			newObjects: []id.DBObject{
-				&dummyDBObject{},
-				&dummyDBObject{},
-			},
-			queries: []model.DBM{
-				{
-					"$set": model.DBM{"name": "test1"},
-				},
-				{
-					"$set":        model.DBM{"name": "test2"},
-					"_collection": "invalid_collection",
-				},
-			},
-			expectedObjects: []*dummyDBObject{
-				{},
-				{},
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mgo, object, sess := prepareEnvironment(t)
-			defer cleanEnvironment(t, object, sess)
-
-			// insert the objects into the database
-			ids := make([]id.ObjectId, len(tt.newObjects))
-
-			assert.Equal(t, len(tt.newObjects), len(tt.expectedObjects))
-
-			for i := range tt.newObjects {
-				newId := id.NewObjectID()
-				object.SetObjectID(newId)
-				tt.expectedObjects[i].SetObjectID(newId)
-				tt.newObjects[i].SetObjectID(newId)
-				ids[i] = newId
-
-				err := mgo.Insert(context.Background(), object)
-				assert.Nil(t, err)
-			}
-
-			err := mgo.UpdateMany(context.Background(), tt.newObjects, tt.queries...)
-			if tt.wantErr {
-				assert.NotNil(t, err)
-				return
-			}
-			assert.Nil(t, err)
-
-			// check if the object was updated
-			col := sess.DB("").C(object.TableName())
-			for index, id := range ids {
-				var result dummyDBObject
-				err = col.Find(bson.M{"_id": id}).One(&result)
-				assert.Nil(t, err)
-
-				assert.Equal(t, tt.expectedObjects[index].Name, result.Name)
-				assert.Equal(t, tt.expectedObjects[index].Email, result.Email)
-				assert.Equal(t, tt.expectedObjects[index].Country, result.Country)
-				assert.Equal(t, tt.expectedObjects[index].Age, result.Age)
-				assert.Equal(t, tt.expectedObjects[index].GetObjectID(), result.GetObjectID())
-			}
-		})
-	}
-
-	t.Run("updating unexisting object", func(t *testing.T) {
-		mgo, object, sess := prepareEnvironment(t)
+	t.Run("Updating an existing obj", func(t *testing.T) {
+		driver, object, sess := prepareEnvironment(t)
 		defer cleanEnvironment(t, object, sess)
+		ctx := context.Background()
 
-		// insert the object into the database
-		err := mgo.Insert(context.Background(), object)
+		err := driver.Insert(ctx, object)
 		assert.Nil(t, err)
 
-		// update a random object
-		object.SetObjectID(id.NewObjectID())
-		err = mgo.UpdateMany(context.Background(), []id.DBObject{object})
-		assert.NotNil(t, err)
+		object.Name = "test2"
+		object.Email = "test2@test2.com"
+		object.Age = 20
+		err = driver.Update(ctx, object)
+		assert.Nil(t, err)
+
+		// check if the object was updated
+		result := &dummyDBObject{}
+		result.SetObjectID(object.GetObjectID())
+		err = driver.Query(ctx, object, result, model.DBM{"_id": result.GetObjectID()})
+		assert.Nil(t, err)
+
+		assert.Equal(t, object.Name, result.Name)
+		assert.Equal(t, object.Email, result.Email)
+		assert.Equal(t, object.GetObjectID(), result.GetObjectID())
 	})
 
-	t.Run("updating unexisting objects", func(t *testing.T) {
-		mgo, object, sess := prepareEnvironment(t)
+	t.Run("Updating a non existing obj", func(t *testing.T) {
+		driver, object, sess := prepareEnvironment(t)
 		defer cleanEnvironment(t, object, sess)
+		ctx := context.Background()
 
-		// insert the objects into the database
-		objects := make([]id.DBObject, 3)
+		object.SetObjectID(id.NewObjectID())
 
-		for i := 0; i < 3; i++ {
-			newId := id.NewObjectID()
-			object.SetObjectID(newId)
+		err := driver.Update(ctx, object)
+		assert.NotNil(t, err)
+		assert.True(t, driver.IsErrNoRows(err))
+	})
 
-			err := mgo.Insert(context.Background(), object)
+	t.Run("Updating an object without _id", func(t *testing.T) {
+		driver, object, sess := prepareEnvironment(t)
+		defer cleanEnvironment(t, object, sess)
+		ctx := context.Background()
+
+		err := driver.Update(ctx, object)
+		assert.NotNil(t, err)
+		assert.False(t, driver.IsErrNoRows(err))
+	})
+}
+func TestUpdateMany(t *testing.T) {
+	dummyData := []dummyDBObject{
+		{Name: "John", Email: "john@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
+		{Name: "Jane", Email: "jane@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
+		{Name: "Bob", Email: "bob@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25},
+		{Name: "Alice", Email: "alice@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45},
+		{Name: "Peter", Email: "peter@test.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12},
+	}
+
+	tcs := []struct {
+		testName          string
+		query             []model.DBM
+		givenObjects      []id.DBObject
+		expectedNewValues []id.DBObject
+		errorExpected     error
+	}{
+		{
+			testName:          "update only one - without modifying values",
+			givenObjects:      []id.DBObject{&dummyData[0]},
+			expectedNewValues: []id.DBObject{&dummyData[0]},
+		},
+		{
+			testName:          "update only one - modifying values",
+			givenObjects:      []id.DBObject{&dummyDBObject{Name: "Test", Email: "test@test.com", Id: dummyData[0].Id, Country: dummyData[0].Country, Age: dummyData[0].Age}},
+			expectedNewValues: []id.DBObject{&dummyDBObject{Name: "Test", Email: "test@test.com", Id: dummyData[0].Id, Country: dummyData[0].Country, Age: dummyData[0].Age}},
+		},
+		{
+			testName: "update two - without query",
+			givenObjects: []id.DBObject{
+				&dummyDBObject{
+					Name:    "Test",
+					Email:   "test@test.com",
+					Id:      dummyData[0].Id,
+					Country: dummyData[0].Country,
+					Age:     dummyData[0].Age,
+				},
+				&dummyDBObject{
+					Name:    "Testina",
+					Email:   "test@test.com",
+					Id:      dummyData[1].Id,
+					Country: dummyData[1].Country,
+					Age:     dummyData[1].Age,
+				},
+			},
+			expectedNewValues: []id.DBObject{
+				&dummyDBObject{
+					Name:    "Test",
+					Email:   "test@test.com",
+					Id:      dummyData[0].Id,
+					Country: dummyData[0].Country,
+					Age:     dummyData[0].Age,
+				},
+				&dummyDBObject{
+					Name:    "Testina",
+					Email:   "test@test.com",
+					Id:      dummyData[1].Id,
+					Country: dummyData[1].Country,
+					Age:     dummyData[1].Age,
+				},
+			},
+		},
+		{
+			testName: "update two - filter with query",
+			givenObjects: []id.DBObject{
+				&dummyDBObject{
+					Name:    "Test",
+					Email:   "test@test.com",
+					Id:      dummyData[0].Id,
+					Country: dummyData[0].Country,
+					Age:     dummyData[0].Age,
+				},
+				&dummyDBObject{
+					Name:    "Testina",
+					Email:   "test@test.com",
+					Id:      dummyData[1].Id,
+					Country: dummyData[1].Country,
+					Age:     dummyData[1].Age,
+				},
+			},
+			expectedNewValues: []id.DBObject{
+				&dummyDBObject{
+					Name:    "Test",
+					Email:   "test@test.com",
+					Id:      dummyData[0].Id,
+					Country: dummyData[0].Country,
+					Age:     dummyData[0].Age,
+				},
+				&dummyDBObject{
+					Name:    "Testina",
+					Email:   "test@test.com",
+					Id:      dummyData[1].Id,
+					Country: dummyData[1].Country,
+					Age:     dummyData[1].Age,
+				},
+			},
+			query: []model.DBM{{"_id": dummyData[0].GetObjectID()}, {"name": "Jane"}},
+		},
+		{
+			testName:      "update error - empty rows",
+			givenObjects:  []id.DBObject{},
+			errorExpected: errors.New("no rows provided"),
+		},
+		{
+			testName: "update error - different params len",
+			givenObjects: []id.DBObject{
+				&dummyDBObject{
+					Name:    "Test",
+					Email:   "test@test.com",
+					Id:      dummyData[0].Id,
+					Country: dummyData[0].Country,
+					Age:     dummyData[0].Age,
+				},
+				&dummyDBObject{
+					Name:    "Testina",
+					Email:   "test@test.com",
+					Id:      dummyData[1].Id,
+					Country: dummyData[1].Country,
+					Age:     dummyData[1].Age,
+				},
+			},
+			expectedNewValues: []id.DBObject{
+				&dummyData[0],
+				&dummyData[1],
+			},
+			query:         []model.DBM{{"testName": "Jane"}},
+			errorExpected: errors.New("different length of row and query"),
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.testName, func(t *testing.T) {
+			driver, object, sess := prepareEnvironment(t)
+			defer cleanEnvironment(t, object, sess)
+			ctx := context.Background()
+			for _, obj := range dummyData {
+				err := driver.Insert(ctx, &obj)
+				assert.Nil(t, err)
+			}
+
+			err := driver.UpdateMany(ctx, tc.givenObjects, tc.query...)
+			assert.Equal(t, tc.errorExpected, err)
+
+			var result []dummyDBObject
+			err = driver.Query(context.Background(), object, &result, model.DBM{})
 			assert.Nil(t, err)
 
-			object.SetObjectID(id.NewObjectID())
-			objects[i] = object
-		}
+			for i, expected := range tc.expectedNewValues {
 
-		// update a random object
-		object.SetObjectID(id.NewObjectID())
-		queries := []model.DBM{
-			{}, {}, {},
-		}
-		err := mgo.UpdateMany(context.Background(), objects, queries...)
-		fmt.Println("Error: ", err)
-		assert.NotNil(t, err)
-	})
+				assert.EqualValues(t, expected, &result[i])
+			}
+		})
+	}
 }
 
 func TestIsErrNoRows(t *testing.T) {

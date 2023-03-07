@@ -3,6 +3,7 @@ package mgo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -81,30 +82,21 @@ func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject) error {
 }
 
 func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, query ...model.DBM) error {
+
 	sess := d.session.Copy()
 	defer sess.Close()
+
+	col := sess.DB("").C(row.TableName())
 
 	if len(query) > 1 {
 		return errors.New("multiple queries for only 1 row")
 	}
 
 	if len(query) == 0 {
-		query = append(query, model.DBM{"$set": row})
+		query = append(query, model.DBM{"_id": row.GetObjectID()})
 	}
 
-	colName, err := getColName(query[0], row)
-	if err != nil {
-		return err
-	}
-
-	col := sess.DB("").C(colName)
-
-	finalQuery := []bson.M{}
-	for i := range query {
-		finalQuery = append(finalQuery, buildQuery(query[i]))
-	}
-
-	return col.Update(bson.M{"_id": row.GetObjectID()}, finalQuery)
+	return col.Update(query[0], bson.M{"$set": row})
 }
 
 func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...model.DBM) error {
@@ -112,74 +104,35 @@ func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ..
 		return errors.New("no rows provided")
 	}
 
-	// if no query is provided, we assume that the rows are already updated
-	if len(query) == 0 {
-		sess := d.session.Copy()
-		defer sess.Close()
-
-		colName := rows[0].TableName()
-		col := sess.DB("").C(colName)
-		bulk := col.Bulk()
-
-		return updateManyWithoutQueries(bulk, rows, colName)
-	}
-
-	if len(rows) != len(query) {
+	if len(rows) != len(query) && len(query) != 0 {
 		return errors.New("different length of row and query")
 	}
 
 	sess := d.session.Copy()
 	defer sess.Close()
 
-	colName, err := getColName(query[0], rows[0])
-	if err != nil {
-		return err
-	}
-
+	colName := rows[0].TableName()
 	col := sess.DB("").C(colName)
 	bulk := col.Bulk()
 
-	return updateManyWithQueries(bulk, rows, colName, query...)
-}
-
-func updateManyWithoutQueries(bulk *mgo.Bulk, rows []id.DBObject, colName string) error {
-	for _, row := range rows {
-		if row.TableName() != colName {
-			return errors.New("rows must be of the same collection")
-		}
-
-		query := model.DBM{"$set": row}
-		bulk.Update(bson.M{"_id": row.GetObjectID()}, buildQuery(query))
-	}
-
-	return runBulk(bulk)
-}
-
-func updateManyWithQueries(bulk *mgo.Bulk, rows []id.DBObject, colName string, query ...model.DBM) error {
 	for i := range rows {
-		newColName, err := getColName(query[i], rows[i])
-		if err != nil {
-			return err
+		if len(query) == 0 {
+			fmt.Println("query == 0")
+			bulk.Update(bson.M{"_id": rows[i].GetObjectID()}, bson.M{"$set": rows[i]})
+			continue
 		}
-
-		if newColName != colName {
-			return errors.New("rows must be of the same collection")
-		}
-
-		bulk.Update(bson.M{"_id": rows[i].GetObjectID()}, buildQuery(query[i]))
+		fmt.Println("query:", buildQuery(query[i]))
+		bulk.Update(buildQuery(query[i]), bson.M{"$set": rows[i]})
 	}
 
 	return runBulk(bulk)
+
 }
 
 func runBulk(bulk *mgo.Bulk) error {
-	res, err := bulk.Run()
+	_, err := bulk.Run()
 	if err != nil {
 		return err
-	}
-
-	if res.Modified == 0 {
-		return mgo.ErrNotFound
 	}
 
 	return nil
