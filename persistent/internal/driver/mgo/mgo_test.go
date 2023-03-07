@@ -611,6 +611,9 @@ func TestQuery(t *testing.T) {
 }
 
 func TestDeleteWithQuery(t *testing.T) {
+	driver, obj := prepareEnvironment(t)
+	driver.Drop(context.Background(), obj)
+
 	dummyData := []dummyDBObject{
 		{Name: "John", Email: "john@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
 		{Name: "Jane", Email: "jane@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
@@ -625,6 +628,12 @@ func TestDeleteWithQuery(t *testing.T) {
 		expectedNewValues []dummyDBObject
 		errorExpected     error
 	}{
+		{
+			name:              "empty query",
+			query:             []model.DBM{},
+			expectedNewValues: []dummyDBObject{dummyData[0], dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
+			errorExpected:     errors.New("not found"),
+		},
 		{
 			name: "delete by email ending with tyk.com",
 			query: []model.DBM{
@@ -736,6 +745,7 @@ func TestDeleteWithQuery(t *testing.T) {
 				assert.Nil(t, err)
 			}
 
+			object.SetObjectID(id.NewObjectID())
 			err := driver.Delete(ctx, object, tt.query...)
 			assert.Equal(t, tt.errorExpected, err)
 			if tt.errorExpected == nil {

@@ -614,6 +614,12 @@ func TestDeleteWithQuery(t *testing.T) {
 		errorExpected     error
 	}{
 		{
+			name:              "empty query",
+			query:             []model.DBM{},
+			expectedNewValues: []dummyDBObject{dummyData[0], dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
+			errorExpected:     errors.New("mongo: no documents in result"),
+		},
+		{
 			name: "delete by email ending with tyk.com",
 			query: []model.DBM{
 				{
@@ -724,6 +730,7 @@ func TestDeleteWithQuery(t *testing.T) {
 				assert.Nil(t, err)
 			}
 
+			object.SetObjectID(id.NewObjectID())
 			err := driver.Delete(ctx, object, tt.query...)
 			if tt.errorExpected == nil {
 				assert.Nil(t, err)
