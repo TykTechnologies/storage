@@ -725,10 +725,15 @@ func TestDeleteWithQuery(t *testing.T) {
 			}
 
 			err := driver.Delete(ctx, object, tt.query...)
-			assert.Equal(t, tt.errorExpected, err)
+			if tt.errorExpected == nil {
+				assert.Nil(t, err)
+			} else {
+				assert.NotNil(t, err)
+				assert.Equal(t, tt.errorExpected, err)
+			}
 
 			var result []dummyDBObject
-			err = driver.Query(context.Background(), object, &result, model.DBM{})
+			err = driver.Query(ctx, object, &result, model.DBM{})
 			assert.Nil(t, err)
 
 			assert.EqualValues(t, tt.expectedNewValues, result)
