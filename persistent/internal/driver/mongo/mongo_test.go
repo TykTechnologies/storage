@@ -609,92 +609,107 @@ func TestDeleteWithQuery(t *testing.T) {
 
 	tests := []struct {
 		name              string
-		query             model.DBM
+		query             []model.DBM
 		expectedNewValues []dummyDBObject
 		errorExpected     error
 	}{
 		{
-			name:              "delete all",
-			query:             model.DBM{},
-			expectedNewValues: []dummyDBObject(nil),
-		},
-		{
 			name: "delete by email ending with tyk.com",
-			query: model.DBM{
-				"email": model.DBM{
-					"$regex": "tyk.com$",
+			query: []model.DBM{
+				{
+					"email": model.DBM{
+						"$regex": "tyk.com$",
+					},
 				},
 			},
 			expectedNewValues: []dummyDBObject{dummyData[0], dummyData[2], dummyData[4]},
 		},
 		{
 			name: "delete by name starting with A",
-			query: model.DBM{
-				"testName": model.DBM{
-					"$regex": "^A",
+			query: []model.DBM{
+				{
+					"testName": model.DBM{
+						"$regex": "^A",
+					},
 				},
 			},
 			expectedNewValues: []dummyDBObject{dummyData[0], dummyData[1], dummyData[2], dummyData[4]},
 		},
 		{
 			name: "delete by country name",
-			query: model.DBM{
+			query: []model.DBM{{
 				"country.country_name": "TestCountry",
-			},
+			}},
 			expectedNewValues: []dummyDBObject{dummyData[1], dummyData[2], dummyData[4]},
 		},
 		{
 			name: "delete by id",
-			query: model.DBM{
+			query: []model.DBM{{
 				"_id": dummyData[0].GetObjectID(),
-			},
+			}},
 			expectedNewValues: []dummyDBObject{dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
 		},
 		{
 			name: "delete by age",
-			query: model.DBM{
+			query: []model.DBM{{
 				"age": 10,
-			},
+			}},
 			expectedNewValues: []dummyDBObject{dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
 		},
 		{
 			name: "delete by age and country name",
-			query: model.DBM{
+			query: []model.DBM{{
 				"age":                  10,
 				"country.country_name": "TestCountry",
-			},
+			}},
 			expectedNewValues: []dummyDBObject{dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
 		},
 		{
 			name: "delete by emails starting with j",
-			query: model.DBM{
-				"email": model.DBM{
-					"$regex": "^j",
+			query: []model.DBM{
+				{
+					"email": model.DBM{
+						"$regex": "^j",
+					},
 				},
 			},
 			expectedNewValues: []dummyDBObject{dummyData[2], dummyData[3], dummyData[4]},
 		},
 		{
 			name: "delete by emails starting with j and age lower than 10",
-			query: model.DBM{
+			query: []model.DBM{{
 				"email": model.DBM{
 					"$regex": "^j",
 				},
 				"age": model.DBM{
 					"$lt": 10,
 				},
-			},
+			}},
 			expectedNewValues: []dummyDBObject{dummyData[0], dummyData[2], dummyData[3], dummyData[4]},
 		},
 		{
 			name: "delete invalid value",
-			query: model.DBM{
+			query: []model.DBM{{
 				"email": model.DBM{
 					"$regex": "^x",
 				},
-			},
+			}},
 			expectedNewValues: []dummyDBObject{dummyData[0], dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
 			errorExpected:     mongo.ErrNoDocuments,
+		},
+		{
+			name: "delete invalid value",
+			query: []model.DBM{{
+				"email": model.DBM{
+					"$regex": "^x",
+				},
+			}, {
+				"email": model.DBM{
+					"$regex": "^x",
+				},
+			}},
+			expectedNewValues: []dummyDBObject{dummyData[0], dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
+			errorExpected:     errors.New(model.ErrorMultipleQueryForSingleRow),
 		},
 	}
 
@@ -709,7 +724,7 @@ func TestDeleteWithQuery(t *testing.T) {
 				assert.Nil(t, err)
 			}
 
-			err := driver.Delete(ctx, object, tt.query)
+			err := driver.Delete(ctx, object, tt.query...)
 			assert.Equal(t, tt.errorExpected, err)
 
 			var result []dummyDBObject
