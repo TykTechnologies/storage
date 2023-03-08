@@ -5,4 +5,5 @@ const (
 	ErrorEmptyRow                  = "rows cannot be empty"
 	ErrorMultipleQueryForSingleRow = "multiple queries for one row"
 	ErrorReconnecting              = "error reconnecting"
+	ErrorSessionClosed             = "session closed"
 )
