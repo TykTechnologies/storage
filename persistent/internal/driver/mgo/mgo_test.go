@@ -834,3 +834,26 @@ func TestHandleStoreError(t *testing.T) {
 		})
 	}
 }
+
+func TestPing(t *testing.T) {
+	tests := []struct {
+		name    string
+		wantErr bool
+	}{
+		{
+			name: "ping test",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			driver, _ := prepareEnvironment(t)
+			defer driver.Close()
+
+			ctx := context.Background()
+
+			if err := driver.Ping(ctx); (err != nil) != tt.wantErr {
+				t.Errorf("mgoDriver.Ping() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

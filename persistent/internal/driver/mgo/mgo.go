@@ -180,6 +180,13 @@ func (d *mgoDriver) Drop(ctx context.Context, row id.DBObject) error {
 	return d.handleStoreError(sess.DB("").C(row.TableName()).DropCollection())
 }
 
+func (d *mgoDriver) Ping(ctx context.Context) error {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	return d.handleStoreError(sess.Ping())
+}
+
 func (d *mgoDriver) IsErrNoRows(err error) bool {
 	return errors.Is(err, mgo.ErrNotFound)
 }

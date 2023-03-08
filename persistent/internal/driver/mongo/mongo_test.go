@@ -829,3 +829,34 @@ func TestHandleStoreError(t *testing.T) {
 		})
 	}
 }
+
+func Test_mongoDriver_Ping(t *testing.T) {
+	tests := []struct {
+		name    string
+		wantErr bool
+	}{
+		{
+			name:    "ping",
+			wantErr: false,
+		},
+		{
+			name:    "ping with error",
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			driver, _ := prepareEnvironment(t)
+			defer driver.Close()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tt.wantErr {
+				cancel()
+			}
+
+			if err := driver.Ping(ctx); (err != nil) != tt.wantErr {
+				t.Errorf("mongoDriver.Ping() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
