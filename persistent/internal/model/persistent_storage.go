@@ -12,7 +12,7 @@ type PersistentStorage interface {
 	// Insert a DbObject into the database
 	Insert(context.Context, id.DBObject) error
 	// Delete a DbObject from the database
-	Delete(context.Context, id.DBObject, ...DBM) error
+	Delete(context.Context, id.DBObject, ...dbm.DBM) error
 	// Update a DbObject in the database
 	Update(context.Context, id.DBObject, ...dbm.DBM) error
 	// Count counts all rows for a DBTable
