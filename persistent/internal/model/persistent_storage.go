@@ -14,7 +14,7 @@ type PersistentStorage interface {
 	// Delete a DbObject from the database
 	Delete(context.Context, id.DBObject) error
 	// Update a DbObject in the database
-	Update(context.Context, id.DBObject, ...DBM) error
+	Update(context.Context, id.DBObject, ...dbm.DBM) error
 	// Count counts all rows for a DBTable
 	Count(context.Context, id.DBObject) (int, error)
 	// Query one or multiple DBObjects from the database
