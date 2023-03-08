@@ -20,7 +20,6 @@ type lifeCycle struct {
 
 // Connect connects to the mongo database given the ClientOpts.
 func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
-
 	dialInfo, err := mgo.ParseURL(opts.ConnectionString)
 	if err != nil {
 		return err

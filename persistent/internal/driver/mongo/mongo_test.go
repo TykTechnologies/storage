@@ -851,5 +851,4 @@ func TestPing(t *testing.T) {
 		assert.NotNil(t, err)
 		assert.Equal(t, context.Canceled, err)
 	})
-
 }
