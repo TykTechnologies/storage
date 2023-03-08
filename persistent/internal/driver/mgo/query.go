@@ -1,6 +1,7 @@
 package mgo
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -83,4 +84,17 @@ func handleNestedQuery(search bson.M, key string, value interface{}) {
 			search[key] = bson.M{nestedKey: nestedValue}
 		}
 	}
+}
+
+func getColName(query model.DBM, row id.DBObject) (string, error) {
+	colName, ok := query["_collection"].(string)
+	if !ok {
+		if row == nil {
+			return "", errors.New("unable to find collection name")
+		}
+
+		colName = row.TableName()
+	}
+
+	return colName, nil
 }

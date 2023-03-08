@@ -48,7 +48,7 @@ func (d dummyDBObject) TableName() string {
 }
 
 // prepareEnvironment returns a new mgo driver connection and a dummy object to test
-func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject, *mgo.Session) {
+func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject) {
 	t.Helper()
 	// create a new mgo driver connection
 	mgo, err := NewMgoDriver(&model.ClientOpts{
@@ -66,34 +66,21 @@ func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject, *mgo.Session)
 		Age:     10,
 	}
 
-	// create a session
-	sess := mgo.session.Copy()
-	dropCollection(sess, object, t)
-
-	return mgo, object, sess
-}
-
-func cleanEnvironment(t *testing.T, object *dummyDBObject, sess *mgo.Session) {
-	t.Helper()
-
-	object.invalidCollection = false
-	dropCollection(sess, object, t)
-	sess.Close()
+	return mgo, object
 }
 
 func TestInsert(t *testing.T) {
-	mgo, object, sess := prepareEnvironment(t)
-	defer cleanEnvironment(t, object, sess)
+	driver, object := prepareEnvironment(t)
+	defer driver.Drop(context.Background(), object)
 
 	// insert the object into the database
-	err := mgo.Insert(context.Background(), object)
+	err := driver.Insert(context.Background(), object)
 	assert.Nil(t, err)
 
 	// check if the object was inserted
-	col := sess.DB("").C(object.TableName())
 
 	var result dummyDBObject
-	err = col.Find(bson.M{"_id": object.GetObjectID()}).One(&result)
+	err = driver.Query(context.Background(), object, &result, model.DBM{"_id": object.GetObjectID()})
 	assert.Nil(t, err)
 
 	assert.Equal(t, object.Name, result.Name)
@@ -104,77 +91,266 @@ func TestInsert(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	mgo, object, sess := prepareEnvironment(t)
-	defer cleanEnvironment(t, object, sess)
+	driver, object := prepareEnvironment(t)
+	ctx := context.Background()
 
-	// insert the object into the database
-	err := mgo.Insert(context.Background(), object)
-	assert.Nil(t, err)
+	t.Run("deleting a existing object", func(t *testing.T) {
+		// insert the object into the database
+		err := driver.Insert(ctx, object)
+		assert.Nil(t, err)
+		// delete the collection
+		defer driver.Drop(ctx, object)
 
-	// check if the object was inserted
-	col := sess.DB("").C(object.TableName())
+		// validates that the object was inserted
+		var result dummyDBObject
+		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
+		assert.Nil(t, err)
+		assert.Equal(t, object.Name, result.Name)
+		assert.Equal(t, object.Email, result.Email)
+		assert.Equal(t, object.GetObjectID(), result.GetObjectID())
 
-	var result dummyDBObject
-	err = col.Find(bson.M{"_id": object.GetObjectID()}).One(&result)
-	assert.Nil(t, err)
+		// delete the object from the database
+		err = driver.Delete(ctx, object)
+		assert.Nil(t, err)
 
-	assert.Equal(t, object.Name, result.Name)
-	assert.Equal(t, object.Email, result.Email)
-	assert.Equal(t, object.Country, result.Country)
-	assert.Equal(t, object.Age, result.Age)
-	assert.Equal(t, object.GetObjectID(), result.GetObjectID())
+		// check if the object was deleted
+		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
+		assert.NotNil(t, err)
+		assert.True(t, driver.IsErrNoRows(err))
+	})
 
-	// delete the object from the database
-	err = mgo.Delete(context.Background(), object)
-	assert.Nil(t, err)
-
-	// check if the object was deleted
-	err = col.Find(bson.M{"_id": object.GetObjectID()}).One(&result)
-	assert.NotNil(t, err)
-	assert.True(t, mgo.IsErrNoRows(err))
+	t.Run("deleting a non existent object", func(t *testing.T) {
+		// delete the object from the database
+		err := driver.Delete(ctx, object)
+		assert.NotNil(t, err)
+		assert.True(t, driver.IsErrNoRows(err))
+	})
 }
 
 func TestUpdate(t *testing.T) {
-	mgo, object, sess := prepareEnvironment(t)
-	defer cleanEnvironment(t, object, sess)
-	// insert the object into the database
-	err := mgo.Insert(context.Background(), object)
-	assert.Nil(t, err)
+	t.Run("Updating an existing obj", func(t *testing.T) {
+		driver, object := prepareEnvironment(t)
+		ctx := context.Background()
 
-	// check if the object was inserted
-	col := sess.DB("").C(object.TableName())
+		err := driver.Insert(ctx, object)
+		assert.Nil(t, err)
+		defer driver.Drop(ctx, object)
 
-	defer func() {
-		err = mgo.Delete(context.Background(), object)
-		if err != nil {
-			t.Fatal("Error deleting object", err)
-		}
-	}()
+		object.Name = "test2"
+		object.Email = "test2@test2.com"
+		object.Age = 20
+		err = driver.Update(ctx, object)
+		assert.Nil(t, err)
 
-	var result dummyDBObject
-	err = col.Find(bson.M{"_id": object.GetObjectID()}).One(&result)
-	assert.Nil(t, err)
+		// check if the object was updated
+		result := &dummyDBObject{}
+		result.SetObjectID(object.GetObjectID())
+		err = driver.Query(ctx, object, result, model.DBM{"_id": result.GetObjectID()})
+		assert.Nil(t, err)
 
-	assert.Equal(t, object.Name, result.Name)
-	assert.Equal(t, object.Email, result.Email)
-	assert.Equal(t, object.Country, result.Country)
-	assert.Equal(t, object.Age, result.Age)
-	assert.Equal(t, object.GetObjectID(), result.GetObjectID())
+		assert.Equal(t, object.Name, result.Name)
+		assert.Equal(t, object.Email, result.Email)
+		assert.Equal(t, object.GetObjectID(), result.GetObjectID())
+	})
 
-	// update the object
-	object.Name = "test2"
-	object.Email = "test2@test2.com"
-	object.Age = 20
-	err = mgo.Update(context.Background(), object)
-	assert.Nil(t, err)
+	t.Run("Updating a non existing obj", func(t *testing.T) {
+		driver, object := prepareEnvironment(t)
+		ctx := context.Background()
 
-	// check if the object was updated
-	err = col.Find(bson.M{"_id": object.GetObjectID()}).One(&result)
-	assert.Nil(t, err)
+		defer driver.Drop(ctx, object)
 
-	assert.Equal(t, object.Name, result.Name)
-	assert.Equal(t, object.Email, result.Email)
-	assert.Equal(t, object.GetObjectID(), result.GetObjectID())
+		object.SetObjectID(id.NewObjectID())
+
+		err := driver.Update(ctx, object)
+		assert.NotNil(t, err)
+		assert.True(t, driver.IsErrNoRows(err))
+	})
+
+	t.Run("Updating an object without _id", func(t *testing.T) {
+		driver, object := prepareEnvironment(t)
+		ctx := context.Background()
+		defer driver.Drop(ctx, object)
+
+		err := driver.Update(ctx, object)
+		assert.NotNil(t, err)
+		assert.False(t, driver.IsErrNoRows(err))
+	})
+}
+
+func TestUpdateMany(t *testing.T) {
+	dummyData := []dummyDBObject{
+		{
+			Name: "John", Email: "john@example.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10,
+		},
+		{
+			Name: "Jane", Email: "jane@tyk.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8,
+		},
+		{
+			Name: "Bob", Email: "bob@example.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25,
+		},
+		{
+			Name: "Alice", Email: "alice@tyk.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45,
+		},
+		{
+			Name: "Peter", Email: "peter@test.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12,
+		},
+	}
+
+	tcs := []struct {
+		testName          string
+		query             []model.DBM
+		givenObjects      []id.DBObject
+		expectedNewValues []id.DBObject
+		errorExpected     error
+	}{
+		{
+			testName:          "update only one - without modifying values",
+			givenObjects:      []id.DBObject{&dummyData[0]},
+			expectedNewValues: []id.DBObject{&dummyData[0]},
+			errorExpected:     mgo.ErrNotFound,
+		},
+		{
+			testName: "update only one - modifying values",
+			givenObjects: []id.DBObject{&dummyDBObject{
+				Name: "Test", Email: "test@test.com", Id: dummyData[0].Id,
+				Country: dummyData[0].Country, Age: dummyData[0].Age,
+			}},
+			expectedNewValues: []id.DBObject{&dummyDBObject{
+				Name: "Test", Email: "test@test.com", Id: dummyData[0].Id,
+				Country: dummyData[0].Country, Age: dummyData[0].Age,
+			}},
+		},
+		{
+			testName: "update two - without query",
+			givenObjects: []id.DBObject{
+				&dummyDBObject{
+					Name:    "Test",
+					Email:   "test@test.com",
+					Id:      dummyData[0].Id,
+					Country: dummyData[0].Country,
+					Age:     dummyData[0].Age,
+				},
+				&dummyDBObject{
+					Name:    "Testina",
+					Email:   "test@test.com",
+					Id:      dummyData[1].Id,
+					Country: dummyData[1].Country,
+					Age:     dummyData[1].Age,
+				},
+			},
+			expectedNewValues: []id.DBObject{
+				&dummyDBObject{
+					Name:    "Test",
+					Email:   "test@test.com",
+					Id:      dummyData[0].Id,
+					Country: dummyData[0].Country,
+					Age:     dummyData[0].Age,
+				},
+				&dummyDBObject{
+					Name:    "Testina",
+					Email:   "test@test.com",
+					Id:      dummyData[1].Id,
+					Country: dummyData[1].Country,
+					Age:     dummyData[1].Age,
+				},
+			},
+		},
+		{
+			testName: "update two - filter with query",
+			givenObjects: []id.DBObject{
+				&dummyDBObject{
+					Name:    "Test",
+					Email:   "test@test.com",
+					Id:      dummyData[0].Id,
+					Country: dummyData[0].Country,
+					Age:     dummyData[0].Age,
+				},
+				&dummyDBObject{
+					Name:    "Testina",
+					Email:   "test@test.com",
+					Id:      dummyData[1].Id,
+					Country: dummyData[1].Country,
+					Age:     dummyData[1].Age,
+				},
+			},
+			expectedNewValues: []id.DBObject{
+				&dummyDBObject{
+					Name:    "Test",
+					Email:   "test@test.com",
+					Id:      dummyData[0].Id,
+					Country: dummyData[0].Country,
+					Age:     dummyData[0].Age,
+				},
+				&dummyDBObject{
+					Name:    "Testina",
+					Email:   "test@test.com",
+					Id:      dummyData[1].Id,
+					Country: dummyData[1].Country,
+					Age:     dummyData[1].Age,
+				},
+			},
+			query: []model.DBM{{"_id": dummyData[0].GetObjectID()}, {"name": "Jane"}},
+		},
+		{
+			testName:      "update error - empty rows",
+			givenObjects:  []id.DBObject{},
+			errorExpected: errors.New(model.ErrorEmptyRow),
+		},
+		{
+			testName: "update error - different params len",
+			givenObjects: []id.DBObject{
+				&dummyDBObject{
+					Name:    "Test",
+					Email:   "test@test.com",
+					Id:      dummyData[0].Id,
+					Country: dummyData[0].Country,
+					Age:     dummyData[0].Age,
+				},
+				&dummyDBObject{
+					Name:    "Testina",
+					Email:   "test@test.com",
+					Id:      dummyData[1].Id,
+					Country: dummyData[1].Country,
+					Age:     dummyData[1].Age,
+				},
+			},
+			expectedNewValues: []id.DBObject{
+				&dummyData[0],
+				&dummyData[1],
+			},
+			query:         []model.DBM{{"testName": "Jane"}},
+			errorExpected: errors.New(model.ErrorRowQueryDiffLenght),
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.testName, func(t *testing.T) {
+			driver, object := prepareEnvironment(t)
+			ctx := context.Background()
+			defer driver.Drop(ctx, object)
+
+			for _, obj := range dummyData {
+				err := driver.Insert(ctx, &obj)
+				assert.Nil(t, err)
+			}
+
+			err := driver.UpdateMany(ctx, tc.givenObjects, tc.query...)
+			assert.Equal(t, tc.errorExpected, err)
+
+			var result []dummyDBObject
+			err = driver.Query(context.Background(), object, &result, model.DBM{})
+			assert.Nil(t, err)
+
+			for i, expected := range tc.expectedNewValues {
+				assert.EqualValues(t, expected, &result[i])
+			}
+		})
+	}
 }
 
 func TestIsErrNoRows(t *testing.T) {
@@ -215,8 +391,10 @@ func TestCount(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mgo, object, sess := prepareEnvironment(t)
-			defer cleanEnvironment(t, object, sess)
+			ctx := context.Background()
+
+			driver, object := prepareEnvironment(t)
+			defer driver.Drop(ctx, object)
 
 			for i := 0; i < tt.want; i++ {
 				object = &dummyDBObject{
@@ -229,13 +407,13 @@ func TestCount(t *testing.T) {
 					Age: i,
 				}
 
-				err := mgo.Insert(context.Background(), object)
+				err := driver.Insert(ctx, object)
 				assert.Nil(t, err)
 			}
 
 			object.invalidCollection = tt.wantErr
 
-			got, err := mgo.Count(context.Background(), object)
+			got, err := driver.Count(ctx, object)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("mgoDriver.Count() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -244,17 +422,6 @@ func TestCount(t *testing.T) {
 				t.Errorf("mgoDriver.Count() = %v, want %v", got, tt.want)
 			}
 		})
-	}
-}
-
-func dropCollection(sess *mgo.Session, object *dummyDBObject, t *testing.T) {
-	col := sess.DB("").C(object.TableName())
-	err := col.DropCollection()
-	if err != nil {
-		// If no object has been inserted yet, the collection does not exist
-		if err.Error() != "ns not found" {
-			t.Fatal("Error dropping collection", err)
-		}
 	}
 }
 
@@ -282,7 +449,11 @@ func TestQuery(t *testing.T) {
 			name: "4 objects",
 			args: args{
 				result: &[]dummyDBObject{},
+<<<<<<< HEAD
 				query:  dbm.DBM{},
+=======
+				query:  nil,
+>>>>>>> main
 			},
 			expectedResult: &dummyData,
 		},
@@ -426,18 +597,19 @@ func TestQuery(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mgo, object, sess := prepareEnvironment(t)
-			defer cleanEnvironment(t, object, sess)
+			driver, object := prepareEnvironment(t)
+			ctx := context.Background()
+			defer driver.Drop(ctx, object)
 
 			for _, obj := range dummyData {
-				err := mgo.Insert(context.Background(), &obj)
+				err := driver.Insert(ctx, &obj)
 				assert.Nil(t, err)
 			}
 
 			object.invalidCollection = tt.wantErr
 
-			if err := mgo.Query(context.Background(), object, tt.args.result, tt.args.query); (err != nil) != tt.wantErr {
-				t.Errorf("mgoDriver.Query() error = %v, wantErr %v", err, tt.wantErr)
+			if err := driver.Query(ctx, object, tt.args.result, tt.args.query); (err != nil) != tt.wantErr {
+				t.Errorf("mongoDriver.Query() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			assert.Equal(t, tt.expectedResult, tt.args.result)
 		})
@@ -546,15 +718,16 @@ func TestDeleteWhere(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mgo, object, sess := prepareEnvironment(t)
-			defer cleanEnvironment(t, object, sess)
+			ctx := context.Background()
+			driver, object := prepareEnvironment(t)
+			defer driver.Drop(ctx, object)
 
 			for _, obj := range dummyData {
-				err := mgo.Insert(context.Background(), &obj)
+				err := driver.Insert(ctx, &obj)
 				assert.Nil(t, err)
 			}
 
-			err := mgo.DeleteWhere(context.Background(), object, tt.query)
+			err := driver.DeleteWhere(ctx, object, tt.query)
 			if err != nil {
 				if tt.errorExpected != nil {
 					assert.True(t, errors.Is(err, tt.errorExpected))
@@ -565,7 +738,7 @@ func TestDeleteWhere(t *testing.T) {
 			}
 
 			var result []dummyDBObject
-			err = mgo.Query(context.Background(), object, &result, dbm.DBM{})
+			err = driver.Query(ctx, object, &result, dbm.DBM{})
 			if err != nil {
 				t.Errorf("Query() error = %v", err)
 				return
@@ -579,76 +752,71 @@ func TestDeleteWhere(t *testing.T) {
 }
 
 func TestHandleStoreError(t *testing.T) {
-	mgo, _, _ := prepareEnvironment(t)
+	driver, _ := prepareEnvironment(t)
 
 	tests := []struct {
-		name          string
-		inputErr      error
-		wantErr       error
+		name     string
+		inputErr error
+
 		wantReconnect bool
 	}{
 		{
 			name:     "Nil input error",
 			inputErr: nil,
-			wantErr:  nil,
 		},
 		{
 			name:          "Known connection error",
 			inputErr:      errors.New("no reachable servers"),
-			wantErr:       nil,
 			wantReconnect: true,
 		},
 		{
 			name:     "Unknown connection error",
 			inputErr: errors.New("unknown error"),
-			wantErr:  nil,
 		},
 		{
 			name:          "i/o timeout",
 			inputErr:      errors.New("i/o timeout"),
-			wantErr:       nil,
 			wantReconnect: true,
 		},
 		{
 			name:          "failing when reconnecting",
 			inputErr:      errors.New("reset by peer"),
-			wantErr:       errors.New("reset by peer"),
 			wantReconnect: false,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			sess := mgo.session
+			sess := driver.session
 			defer sess.Close()
 
-			if test.wantErr != nil {
-				invalidMgo := *mgo
+			if test.inputErr != nil {
+				invalidMgo := *driver
 				invalidMgo.options = model.ClientOpts{
 					ConnectionString:  "mongodb://host:port/invalid",
 					ConnectionTimeout: 1,
 				}
 				err := invalidMgo.handleStoreError(test.inputErr)
 				if err == nil {
-					t.Errorf("expected error to be returned when mgo is nil")
+					t.Errorf("expected error to be returned when driver is nil")
 				}
 				return
 			}
 
-			gotErr := mgo.handleStoreError(test.inputErr)
+			gotErr := driver.handleStoreError(test.inputErr)
 
 			if test.wantReconnect {
-				if sess == mgo.session {
+				if sess == driver.session {
 					t.Errorf("session was not reconnected when it should have been")
 				}
 			} else {
-				if sess != mgo.session {
+				if sess != driver.session {
 					t.Errorf("session was reconnected when it shouldn't have been")
 				}
 			}
 
-			if !errors.Is(gotErr, test.wantErr) {
-				t.Errorf("got error %v, want error %v", gotErr, test.wantErr)
+			if !errors.Is(gotErr, test.inputErr) {
+				t.Errorf("got error %v, want error %v", gotErr, test.inputErr)
 			}
 		})
 	}
