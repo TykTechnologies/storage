@@ -588,7 +588,7 @@ func TestUpdateMany(t *testing.T) {
 			assert.Equal(t, tc.errorExpected, err)
 
 			var result []dummyDBObject
-			err = driver.Query(context.Background(), object, &result, model.DBM{})
+			err = driver.Query(context.Background(), object, &result, dbm.DBM{})
 			assert.Nil(t, err)
 
 			for i, expected := range tc.expectedNewValues {
