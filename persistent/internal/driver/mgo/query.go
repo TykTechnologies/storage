@@ -86,7 +86,7 @@ func handleNestedQuery(search bson.M, key string, value interface{}) {
 	}
 }
 
-func getColName(query model.DBM, row id.DBObject) (string, error) {
+func getColName(query dbm.DBM, row id.DBObject) (string, error) {
 	colName, ok := query["_collection"].(string)
 	if !ok {
 		if row == nil {

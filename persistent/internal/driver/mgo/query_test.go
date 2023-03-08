@@ -230,7 +230,7 @@ func TestBuildQuery(t *testing.T) {
 
 func Test_getColName(t *testing.T) {
 	type args struct {
-		query model.DBM
+		query dbm.DBM
 		row   id.DBObject
 	}
 	tests := []struct {
@@ -242,7 +242,7 @@ func Test_getColName(t *testing.T) {
 		{
 			name: "get collection name from query",
 			args: args{
-				query: model.DBM{
+				query: dbm.DBM{
 					"_collection": "test",
 				},
 				row: nil,

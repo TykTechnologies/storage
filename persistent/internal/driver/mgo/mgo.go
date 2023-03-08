@@ -61,7 +61,7 @@ func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject) error {
 	return d.handleStoreError(col.Remove(row))
 }
 
-func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...model.DBM) error {
+func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...dbm.DBM) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
@@ -72,13 +72,13 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...mode
 	}
 
 	if len(queries) == 0 {
-		queries = append(queries, model.DBM{"_id": row.GetObjectID()})
+		queries = append(queries, dbm.DBM{"_id": row.GetObjectID()})
 	}
 
 	return d.handleStoreError(col.Update(buildQuery(queries[0]), bson.M{"$set": row}))
 }
 
-func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...model.DBM) error {
+func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
 	if len(rows) == 0 {
 		return errors.New(model.ErrorEmptyRow)
 	}

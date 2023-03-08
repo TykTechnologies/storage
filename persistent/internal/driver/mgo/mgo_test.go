@@ -80,7 +80,7 @@ func TestInsert(t *testing.T) {
 	// check if the object was inserted
 
 	var result dummyDBObject
-	err = driver.Query(context.Background(), object, &result, model.DBM{"_id": object.GetObjectID()})
+	err = driver.Query(context.Background(), object, &result, dbm.DBM{"_id": object.GetObjectID()})
 	assert.Nil(t, err)
 
 	assert.Equal(t, object.Name, result.Name)
@@ -103,7 +103,7 @@ func TestDelete(t *testing.T) {
 
 		// validates that the object was inserted
 		var result dummyDBObject
-		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
+		err = driver.Query(ctx, object, &result, dbm.DBM{"_id": object.GetObjectID()})
 		assert.Nil(t, err)
 		assert.Equal(t, object.Name, result.Name)
 		assert.Equal(t, object.Email, result.Email)
@@ -114,7 +114,7 @@ func TestDelete(t *testing.T) {
 		assert.Nil(t, err)
 
 		// check if the object was deleted
-		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
+		err = driver.Query(ctx, object, &result, dbm.DBM{"_id": object.GetObjectID()})
 		assert.NotNil(t, err)
 		assert.True(t, driver.IsErrNoRows(err))
 	})
@@ -145,7 +145,7 @@ func TestUpdate(t *testing.T) {
 		// check if the object was updated
 		result := &dummyDBObject{}
 		result.SetObjectID(object.GetObjectID())
-		err = driver.Query(ctx, object, result, model.DBM{"_id": result.GetObjectID()})
+		err = driver.Query(ctx, object, result, dbm.DBM{"_id": result.GetObjectID()})
 		assert.Nil(t, err)
 
 		assert.Equal(t, object.Name, result.Name)
@@ -203,7 +203,7 @@ func TestUpdateMany(t *testing.T) {
 
 	tcs := []struct {
 		testName          string
-		query             []model.DBM
+		query             []dbm.DBM
 		givenObjects      []id.DBObject
 		expectedNewValues []id.DBObject
 		errorExpected     error
@@ -294,7 +294,7 @@ func TestUpdateMany(t *testing.T) {
 					Age:     dummyData[1].Age,
 				},
 			},
-			query: []model.DBM{{"_id": dummyData[0].GetObjectID()}, {"name": "Jane"}},
+			query: []dbm.DBM{{"_id": dummyData[0].GetObjectID()}, {"name": "Jane"}},
 		},
 		{
 			testName:      "update error - empty rows",
@@ -323,7 +323,7 @@ func TestUpdateMany(t *testing.T) {
 				&dummyData[0],
 				&dummyData[1],
 			},
-			query:         []model.DBM{{"testName": "Jane"}},
+			query:         []dbm.DBM{{"testName": "Jane"}},
 			errorExpected: errors.New(model.ErrorRowQueryDiffLenght),
 		},
 	}
