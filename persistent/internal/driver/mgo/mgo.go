@@ -53,7 +53,6 @@ func (d *mgoDriver) Insert(ctx context.Context, row id.DBObject) error {
 }
 
 func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject, queries ...dbm.DBM) error {
-
 	if len(queries) > 1 {
 		return errors.New(model.ErrorMultipleQueryForSingleRow)
 	}
