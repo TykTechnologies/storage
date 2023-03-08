@@ -631,7 +631,7 @@ func TestDeleteWithQuery(t *testing.T) {
 	}{
 		{
 			name:              "empty query",
-			query:             []model.DBM{},
+			query:             []dbm.DBM{},
 			expectedNewValues: []dummyDBObject{dummyData[0], dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
 			errorExpected:     errors.New("not found"),
 		},
@@ -690,7 +690,7 @@ func TestDeleteWithQuery(t *testing.T) {
 			name: "delete by emails starting with j",
 			query: []dbm.DBM{
 				{
-					"email": model.DBM{
+					"email": dbm.DBM{
 						"$regex": "^j",
 					},
 				},
@@ -721,12 +721,12 @@ func TestDeleteWithQuery(t *testing.T) {
 		},
 		{
 			name: "delete invalid value",
-			query: []model.DBM{{
-				"email": model.DBM{
+			query: []dbm.DBM{{
+				"email": dbm.DBM{
 					"$regex": "^x",
 				},
 			}, {
-				"email": model.DBM{
+				"email": dbm.DBM{
 					"$regex": "^x",
 				},
 			}},

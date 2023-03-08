@@ -76,13 +76,13 @@ func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject, queries ...dbm.
 	return d.handleStoreError(err)
 }
 
-func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...model.DBM) error {
+func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...dbm.DBM) error {
 	if len(queries) > 1 {
 		return errors.New(model.ErrorMultipleQueryForSingleRow)
 	}
 
 	if len(queries) == 0 {
-		queries = append(queries, model.DBM{"_id": row.GetObjectID()})
+		queries = append(queries, dbm.DBM{"_id": row.GetObjectID()})
 	}
 
 	sess := d.session.Copy()
