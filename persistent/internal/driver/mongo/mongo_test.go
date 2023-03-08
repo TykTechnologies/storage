@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"github.com/stretchr/testify/assert"
@@ -101,7 +102,7 @@ func TestInsert(t *testing.T) {
 
 	// check if the object was inserted
 	var result dummyDBObject
-	err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
+	err = driver.Query(ctx, object, &result, dbm.DBM{"_id": object.GetObjectID()})
 	assert.Nil(t, err)
 
 	assert.Equal(t, object.Name, result.Name)
@@ -122,7 +123,7 @@ func TestDelete(t *testing.T) {
 
 		// validates that the object was inserted
 		var result dummyDBObject
-		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
+		err = driver.Query(ctx, object, &result, dbm.DBM{"_id": object.GetObjectID()})
 		assert.Nil(t, err)
 		assert.Equal(t, object.Name, result.Name)
 		assert.Equal(t, object.Email, result.Email)
@@ -133,7 +134,7 @@ func TestDelete(t *testing.T) {
 		assert.Nil(t, err)
 
 		// check if the object was deleted
-		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
+		err = driver.Query(ctx, object, &result, dbm.DBM{"_id": object.GetObjectID()})
 		assert.NotNil(t, err)
 		assert.True(t, driver.IsErrNoRows(err))
 	})
@@ -222,7 +223,7 @@ func TestCount(t *testing.T) {
 func TestQuery(t *testing.T) {
 	type args struct {
 		result interface{}
-		query  model.DBM
+		query  dbm.DBM
 	}
 
 	dummyData := []dummyDBObject{
@@ -243,7 +244,7 @@ func TestQuery(t *testing.T) {
 			name: "4 objects",
 			args: args{
 				result: &[]dummyDBObject{},
-				query:  model.DBM{},
+				query:  dbm.DBM{},
 			},
 			expectedResult: &dummyData,
 		},
@@ -251,7 +252,7 @@ func TestQuery(t *testing.T) {
 			name: "4 objects with limit 2",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
+				query: dbm.DBM{
 					"_limit": 2,
 				},
 			},
@@ -261,7 +262,7 @@ func TestQuery(t *testing.T) {
 			name: "4 objects with limit 2 and offset 2",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
+				query: dbm.DBM{
 					"_limit":  2,
 					"_offset": 2,
 				},
@@ -272,7 +273,7 @@ func TestQuery(t *testing.T) {
 			name: "4 objects with limit 2 and offset 2 and sort by testName",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
+				query: dbm.DBM{
 					"_limit":  2,
 					"_offset": 2,
 					"_sort":   "testName",
@@ -284,8 +285,8 @@ func TestQuery(t *testing.T) {
 			name: "filter by email ending with tyk.com",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
-					"email": model.DBM{
+				query: dbm.DBM{
+					"email": dbm.DBM{
 						"$regex": "tyk.com$",
 					},
 				},
@@ -296,8 +297,8 @@ func TestQuery(t *testing.T) {
 			name: "filter by email ending with tyk.com and sort by testName",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
-					"email": model.DBM{
+				query: dbm.DBM{
+					"email": dbm.DBM{
 						"$regex": "tyk.com$",
 					},
 					"_sort": "testName",
@@ -309,8 +310,8 @@ func TestQuery(t *testing.T) {
 			name: "filter by testName starting with A",
 			args: args{
 				result: &dummyDBObject{},
-				query: model.DBM{
-					"testName": model.DBM{
+				query: dbm.DBM{
+					"testName": dbm.DBM{
 						"$regex": "^A",
 					},
 				},
@@ -321,8 +322,8 @@ func TestQuery(t *testing.T) {
 			name: "filter by testName starting with J and sort by testName",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
-					"testName": model.DBM{
+				query: dbm.DBM{
+					"testName": dbm.DBM{
 						"$regex": "^J",
 					},
 					"_sort": "testName",
@@ -334,7 +335,7 @@ func TestQuery(t *testing.T) {
 			name: "filter by country testName",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
+				query: dbm.DBM{
 					"country.country_name": "TestCountry",
 				},
 			},
@@ -344,7 +345,7 @@ func TestQuery(t *testing.T) {
 			name: "filter by country testName and sort by testName",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
+				query: dbm.DBM{
 					"country.country_name": "TestCountry",
 					"_sort":                "testName",
 				},
@@ -356,7 +357,7 @@ func TestQuery(t *testing.T) {
 			name: "filter by id",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
+				query: dbm.DBM{
 					"_id": dummyData[0].GetObjectID(),
 				},
 			},
@@ -366,8 +367,8 @@ func TestQuery(t *testing.T) {
 			name: "filter by slice of ids",
 			args: args{
 				result: &[]dummyDBObject{},
-				query: model.DBM{
-					"_id": model.DBM{
+				query: dbm.DBM{
+					"_id": dbm.DBM{
 						"$in": []id.ObjectId{dummyData[0].GetObjectID(), dummyData[1].GetObjectID()},
 					},
 				},
@@ -412,7 +413,7 @@ func TestUpdate(t *testing.T) {
 		// check if the object was updated
 		result := &dummyDBObject{}
 		result.SetObjectID(object.GetObjectID())
-		err = driver.Query(ctx, object, result, model.DBM{"_id": result.GetObjectID()})
+		err = driver.Query(ctx, object, result, dbm.DBM{"_id": result.GetObjectID()})
 		assert.Nil(t, err)
 
 		assert.Equal(t, object.Name, result.Name)
@@ -455,7 +456,7 @@ func TestUpdateMany(t *testing.T) {
 
 	tcs := []struct {
 		testName          string
-		query             []model.DBM
+		query             []dbm.DBM
 		givenObjects      []id.DBObject
 		expectedNewValues []id.DBObject
 		errorExpected     error
@@ -539,7 +540,7 @@ func TestUpdateMany(t *testing.T) {
 					Age:     dummyData[1].Age,
 				},
 			},
-			query: []model.DBM{{"_id": dummyData[0].GetObjectID()}, {"testName": "Jane"}},
+			query: []dbm.DBM{{"_id": dummyData[0].GetObjectID()}, {"testName": "Jane"}},
 		},
 		{
 			testName:      "update error - empty rows",
@@ -568,7 +569,7 @@ func TestUpdateMany(t *testing.T) {
 				&dummyData[0],
 				&dummyData[1],
 			},
-			query:         []model.DBM{{"testName": "Jane"}},
+			query:         []dbm.DBM{{"testName": "Jane"}},
 			errorExpected: errors.New(model.ErrorRowQueryDiffLenght),
 		},
 	}
@@ -588,7 +589,7 @@ func TestUpdateMany(t *testing.T) {
 			assert.Equal(t, tc.errorExpected, err)
 
 			var result []dummyDBObject
-			err = driver.Query(context.Background(), object, &result, model.DBM{})
+			err = driver.Query(context.Background(), object, &result, dbm.DBM{})
 			assert.Nil(t, err)
 
 			for i, expected := range tc.expectedNewValues {
@@ -609,21 +610,21 @@ func TestDeleteWithQuery(t *testing.T) {
 
 	tests := []struct {
 		name              string
-		query             []model.DBM
+		query             []dbm.DBM
 		expectedNewValues []dummyDBObject
 		errorExpected     error
 	}{
 		{
 			name:              "empty query",
-			query:             []model.DBM{},
+			query:             []dbm.DBM{},
 			expectedNewValues: []dummyDBObject{dummyData[0], dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
 			errorExpected:     errors.New("mongo: no documents in result"),
 		},
 		{
 			name: "delete by email ending with tyk.com",
-			query: []model.DBM{
+			query: []dbm.DBM{
 				{
-					"email": model.DBM{
+					"email": dbm.DBM{
 						"$regex": "tyk.com$",
 					},
 				},
@@ -632,9 +633,9 @@ func TestDeleteWithQuery(t *testing.T) {
 		},
 		{
 			name: "delete by name starting with A",
-			query: []model.DBM{
+			query: []dbm.DBM{
 				{
-					"testName": model.DBM{
+					"testName": dbm.DBM{
 						"$regex": "^A",
 					},
 				},
@@ -643,28 +644,28 @@ func TestDeleteWithQuery(t *testing.T) {
 		},
 		{
 			name: "delete by country name",
-			query: []model.DBM{{
+			query: []dbm.DBM{{
 				"country.country_name": "TestCountry",
 			}},
 			expectedNewValues: []dummyDBObject{dummyData[1], dummyData[2], dummyData[4]},
 		},
 		{
 			name: "delete by id",
-			query: []model.DBM{{
+			query: []dbm.DBM{{
 				"_id": dummyData[0].GetObjectID(),
 			}},
 			expectedNewValues: []dummyDBObject{dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
 		},
 		{
 			name: "delete by age",
-			query: []model.DBM{{
+			query: []dbm.DBM{{
 				"age": 10,
 			}},
 			expectedNewValues: []dummyDBObject{dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
 		},
 		{
 			name: "delete by age and country name",
-			query: []model.DBM{{
+			query: []dbm.DBM{{
 				"age":                  10,
 				"country.country_name": "TestCountry",
 			}},
@@ -672,9 +673,9 @@ func TestDeleteWithQuery(t *testing.T) {
 		},
 		{
 			name: "delete by emails starting with j",
-			query: []model.DBM{
+			query: []dbm.DBM{
 				{
-					"email": model.DBM{
+					"email": dbm.DBM{
 						"$regex": "^j",
 					},
 				},
@@ -683,11 +684,11 @@ func TestDeleteWithQuery(t *testing.T) {
 		},
 		{
 			name: "delete by emails starting with j and age lower than 10",
-			query: []model.DBM{{
-				"email": model.DBM{
+			query: []dbm.DBM{{
+				"email": dbm.DBM{
 					"$regex": "^j",
 				},
-				"age": model.DBM{
+				"age": dbm.DBM{
 					"$lt": 10,
 				},
 			}},
@@ -695,8 +696,8 @@ func TestDeleteWithQuery(t *testing.T) {
 		},
 		{
 			name: "delete invalid value",
-			query: []model.DBM{{
-				"email": model.DBM{
+			query: []dbm.DBM{{
+				"email": dbm.DBM{
 					"$regex": "^x",
 				},
 			}},
@@ -705,12 +706,12 @@ func TestDeleteWithQuery(t *testing.T) {
 		},
 		{
 			name: "delete invalid value",
-			query: []model.DBM{{
-				"email": model.DBM{
+			query: []dbm.DBM{{
+				"email": dbm.DBM{
 					"$regex": "^x",
 				},
 			}, {
-				"email": model.DBM{
+				"email": dbm.DBM{
 					"$regex": "^x",
 				},
 			}},
@@ -740,7 +741,7 @@ func TestDeleteWithQuery(t *testing.T) {
 			}
 
 			var result []dummyDBObject
-			err = driver.Query(ctx, object, &result, model.DBM{})
+			err = driver.Query(ctx, object, &result, dbm.DBM{})
 			assert.Nil(t, err)
 
 			assert.EqualValues(t, tt.expectedNewValues, result)
