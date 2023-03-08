@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mongo
 
 import (
@@ -830,33 +827,29 @@ func TestHandleStoreError(t *testing.T) {
 	}
 }
 
-func Test_mongoDriver_Ping(t *testing.T) {
-	tests := []struct {
-		name    string
-		wantErr bool
-	}{
-		{
-			name:    "ping",
-			wantErr: false,
-		},
-		{
-			name:    "ping with error",
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			driver, _ := prepareEnvironment(t)
-			defer driver.Close()
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			if tt.wantErr {
-				cancel()
-			}
+func TestPing(t *testing.T) {
+	t.Run("ping ok", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		err := driver.Ping(context.Background())
+		assert.Nil(t, err)
+	})
+	t.Run("ping sess closed", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		driver.Close()
+		err := driver.Ping(context.Background())
+		assert.NotNil(t, err)
+		assert.Equal(t, mongo.ErrClientDisconnected, err)
+	})
+	t.Run("ping canceled context", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
 
-			if err := driver.Ping(ctx); (err != nil) != tt.wantErr {
-				t.Errorf("mongoDriver.Ping() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
+		ctx := context.Background()
+		ctx, cancel := context.WithCancel(ctx)
+		cancel()
+
+		err := driver.Ping(ctx)
+		assert.NotNil(t, err)
+		assert.Equal(t, context.Canceled, err)
+	})
+
 }

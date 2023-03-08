@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mgo
 
 import (
@@ -836,29 +833,6 @@ func TestHandleStoreError(t *testing.T) {
 }
 
 func TestPing(t *testing.T) {
-	tests := []struct {
-		name    string
-		wantErr bool
-	}{
-		{
-			name: "ping test",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			driver, _ := prepareEnvironment(t)
-			defer driver.Close()
-
-			ctx := context.Background()
-
-			if err := driver.Ping(ctx); (err != nil) != tt.wantErr {
-				t.Errorf("mgoDriver.Ping() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestPingTom(t *testing.T) {
 	t.Run("ping ok", func(t *testing.T) {
 		driver, _ := prepareEnvironment(t)
 		err := driver.Ping(context.Background())
@@ -877,8 +851,5 @@ func TestPingTom(t *testing.T) {
 		err := driver.Ping(context.Background())
 		assert.NotNil(t, err)
 		assert.Equal(t, errors.New(model.ErrorSessionClosed+" from panic"), err)
-	})
-	t.Run(" ", func(t *testing.T) {
-		// TODO check how to kill current mongo instance
 	})
 }

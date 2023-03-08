@@ -3,7 +3,6 @@ package mgo
 import (
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"net"
 	"time"
 
@@ -21,14 +20,12 @@ type lifeCycle struct {
 
 // Connect connects to the mongo database given the ClientOpts.
 func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
-	fmt.Println(opts.ConnectionString)
+
 	dialInfo, err := mgo.ParseURL(opts.ConnectionString)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(dialInfo.Addrs)
-	fmt.Println(dialInfo.ServiceHost)
 	dialInfo.Timeout = model.DEFAULT_CONN_TIMEOUT
 	if opts.ConnectionTimeout != 0 {
 		dialInfo.Timeout = time.Second * time.Duration(opts.ConnectionTimeout)
