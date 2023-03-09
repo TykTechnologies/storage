@@ -7,6 +7,7 @@ import (
 	"github.com/TykTechnologies/storage/persistent/dbm"
 
 	"github.com/TykTechnologies/storage/persistent/id"
+	"github.com/TykTechnologies/storage/persistent/index"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"go.mongodb.org/mongo-driver/bson"
@@ -199,4 +200,88 @@ func (d *mongoDriver) handleStoreError(err error) error {
 	}
 
 	return err
+}
+
+func (d *mongoDriver) CreateIndex(ctx context.Context, row id.DBObject, index index.Index) error {
+	if len(index.Keys) == 0 {
+		return errors.New(model.ErrorIndexEmpty)
+	} else if len(index.Keys) > 1 && index.IsTTLIndex {
+		return errors.New(model.ErrorIndexComposedTTL)
+	}
+
+	keys := bson.D{}
+
+	for _, key := range index.Keys {
+		builtQuery := buildQuery(key)
+		for name, val := range builtQuery {
+			keys = append(keys, bson.E{Key: name, Value: val})
+		}
+	}
+
+	opts := options.Index()
+
+	//nolint:staticcheck
+	opts.SetBackground(index.Background)
+
+	if name := index.Name; name != "" {
+		opts.SetName(name)
+	}
+
+	if index.IsTTLIndex {
+		opts.SetExpireAfterSeconds(int32(index.TTL))
+	}
+
+	indexModel := mongo.IndexModel{
+		Keys:    keys,
+		Options: opts,
+	}
+
+	collection := d.client.Database(d.database).Collection(row.TableName())
+
+	_, err := collection.Indexes().CreateOne(ctx, indexModel)
+
+	return err
+}
+
+func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.Index, error) {
+	collection := d.client.Database(d.database).Collection(row.TableName())
+
+	var indexes []index.Index
+
+	indexesSpec, err := collection.Indexes().ListSpecifications(ctx)
+	if err != nil {
+		return indexes, err
+	}
+
+	// parse from mongo IndexSpec to our index.Index again
+	for _, thisIndex := range indexesSpec {
+		bsonKeys := bson.D{}
+
+		if errUnmarshal := bson.Unmarshal(thisIndex.KeysDocument, &bsonKeys); err != nil {
+			return indexes, errUnmarshal
+		}
+
+		var newKeys []dbm.DBM
+
+		for _, v := range bsonKeys {
+			newKey := dbm.DBM{}
+			newKey[v.Key] = v.Value
+
+			newKeys = append(newKeys, newKey)
+		}
+
+		newIndex := index.Index{
+			Name: thisIndex.Name,
+			Keys: newKeys,
+		}
+
+		if TTL := thisIndex.ExpireAfterSeconds; TTL != nil {
+			newIndex.TTL = int(*TTL)
+			newIndex.IsTTLIndex = true
+		}
+
+		indexes = append(indexes, newIndex)
+	}
+
+	return indexes, nil
 }

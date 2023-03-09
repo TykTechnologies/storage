@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
+	"github.com/TykTechnologies/storage/persistent/index"
 
 	"github.com/TykTechnologies/storage/persistent/id"
 )
@@ -21,9 +22,12 @@ type PersistentStorage interface {
 	Query(context.Context, id.DBObject, interface{}, dbm.DBM) error
 	// UpdateMany updates multiple rows
 	UpdateMany(context.Context, []id.DBObject, ...dbm.DBM) error
-
 	// IsErrNoRows Checking if an error is a "no rows error"
 	IsErrNoRows(err error) bool
 	// Drop drops the collection given the TableName() of the id.DBObject
 	Drop(context.Context, id.DBObject) error
+	// CreateIndex creates an index.Index in row id.DBObject TableName()
+	CreateIndex(ctx context.Context, row id.DBObject, index index.Index) error
+	// GetIndexes returns all the index.Index associated to row id.DBObject
+	GetIndexes(ctx context.Context, row id.DBObject) ([]index.Index, error)
 }

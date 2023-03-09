@@ -6,11 +6,13 @@ package mongo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"testing"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
+	"github.com/TykTechnologies/storage/persistent/index"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -827,6 +829,165 @@ func TestHandleStoreError(t *testing.T) {
 			} else {
 				assert.Equal(t, sess, d.client)
 			}
+		})
+	}
+}
+
+func TestIndexes(t *testing.T) {
+	tcs := []struct {
+		testName          string
+		givenIndex        index.Index
+		expectedCreateErr error
+		expectedIndexes   []index.Index
+		expectedGetError  error
+	}{
+		{
+			testName:          "no index case",
+			givenIndex:        index.Index{},
+			expectedCreateErr: errors.New(model.ErrorIndexEmpty),
+		},
+		{
+			testName: "simple index case",
+			givenIndex: index.Index{
+				Name: "test",
+				Keys: []dbm.DBM{{"apiid": 1}},
+			},
+			expectedIndexes: []index.Index{
+				{
+					Name: "_id_",
+					Keys: []dbm.DBM{{"_id": int32(1)}},
+				},
+				{
+					Name: "test",
+					Keys: []dbm.DBM{{"apiid": int32(1)}},
+				},
+			},
+		},
+		{
+			testName: "simple index without name",
+			givenIndex: index.Index{
+				Name: "",
+				Keys: []dbm.DBM{{"apiid": 1}},
+			},
+			expectedIndexes: []index.Index{
+				{
+					Name: "_id_",
+					Keys: []dbm.DBM{{"_id": int32(1)}},
+				},
+				{
+					Name: "apiid_1",
+					Keys: []dbm.DBM{{"apiid": int32(1)}},
+				},
+			},
+		},
+		{
+			testName: "composed index case",
+			givenIndex: index.Index{
+				Name: "logBrowser",
+				Keys: []dbm.DBM{{"timestamp": -1}, {"apiid": 1}, {"orgid": 1}},
+			},
+			expectedIndexes: []index.Index{
+				{
+					Name: "_id_",
+					Keys: []dbm.DBM{{"_id": int32(1)}},
+				},
+				{
+					Name: "logBrowser",
+					Keys: []dbm.DBM{{"timestamp": int32(-1)}, {"apiid": int32(1)}, {"orgid": int32(1)}},
+				},
+			},
+		},
+		{
+			testName: "simple index with TTL case",
+			givenIndex: index.Index{
+				Name:       "test",
+				Keys:       []dbm.DBM{{"apiid": 1}},
+				IsTTLIndex: true,
+				TTL:        1,
+			},
+			expectedIndexes: []index.Index{
+				{
+					Name: "_id_",
+					Keys: []dbm.DBM{{"_id": int32(1)}},
+				},
+				{
+					Name:       "test",
+					Keys:       []dbm.DBM{{"apiid": int32(1)}},
+					TTL:        1,
+					IsTTLIndex: true,
+				},
+			},
+		},
+		{
+			testName: "simple index with TTL 0 case",
+			givenIndex: index.Index{
+				Name:       "test",
+				Keys:       []dbm.DBM{{"apiid": 1}},
+				IsTTLIndex: true,
+				TTL:        0,
+			},
+			expectedIndexes: []index.Index{
+				{
+					Name: "_id_",
+					Keys: []dbm.DBM{{"_id": int32(1)}},
+				},
+				{
+					Name:       "test",
+					Keys:       []dbm.DBM{{"apiid": int32(1)}},
+					TTL:        0,
+					IsTTLIndex: true,
+				},
+			},
+		},
+		{
+			testName: "compound index with TTL case",
+			givenIndex: index.Index{
+				Name:       "test",
+				Keys:       []dbm.DBM{{"apiid": 1}, {"orgid": -1}},
+				IsTTLIndex: true,
+				TTL:        1,
+			},
+			expectedCreateErr: errors.New(model.ErrorIndexComposedTTL),
+			expectedIndexes:   []index.Index{},
+		},
+		{
+			// cover https://www.mongodb.com/docs/drivers/go/v1.8/fundamentals/indexes/#geospatial-indexes
+			testName: "compound case with string value",
+			givenIndex: index.Index{
+				Name: "test",
+				Keys: []dbm.DBM{{"location.geo": "2dsphere"}},
+			},
+			expectedIndexes: []index.Index{
+				{
+					Name: "_id_",
+					Keys: []dbm.DBM{{"_id": int32(1)}},
+				},
+				{
+					Name: "test",
+					Keys: []dbm.DBM{{"location.geo": "2dsphere"}},
+				},
+			},
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.testName, func(t *testing.T) {
+			ctx := context.Background()
+			driver, obj := prepareEnvironment(t)
+			defer driver.Drop(ctx, obj)
+
+			err := driver.CreateIndex(context.Background(), obj, tc.givenIndex)
+			assert.Equal(t, tc.expectedCreateErr, err)
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+
+			actualIndexes, err := driver.GetIndexes(context.Background(), obj)
+			assert.Equal(t, tc.expectedCreateErr, err)
+
+			assert.Len(t, actualIndexes, len(tc.expectedIndexes))
+			assert.EqualValues(t, tc.expectedIndexes, actualIndexes)
 		})
 	}
 }
