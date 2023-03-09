@@ -886,7 +886,10 @@ func TestHasTable(t *testing.T) {
 	t.Run("HasTable ok", func(t *testing.T) {
 		// Test when collection exists
 		driver, object := prepareEnvironment(t)
-		driver.Insert(context.Background(), object)
+		err := driver.Insert(context.Background(), object)
+		if err != nil {
+			t.Errorf("HasTable(): unexpected error, err=%v", err)
+		}
 		defer dropCollection(t, driver, object)
 		result, err := driver.HasTable(context.Background(), "dummy")
 		if !result || err != nil {
