@@ -869,18 +869,18 @@ func TestHasTable(t *testing.T) {
 		driver.Close()
 		// Test when session is nil
 		result, err := driver.HasTable(context.Background(), "dummy")
-		if result || err == nil || err.Error() != model.ErrorSessionClosed {
-			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
-		}
+		assert.NotNil(t, err)
+		assert.Equal(t, errors.New(model.ErrorSessionClosed), err)
+		assert.False(t, result)
 	})
 	t.Run("HasTable internat sess closed", func(t *testing.T) {
 		// Test when session is closed
 		driver, _ := prepareEnvironment(t)
 		driver.session.Close() // mock a closed session
 		result, err := driver.HasTable(context.Background(), "dummy")
-		if result || err == nil || err.Error() != model.ErrorSessionClosed+" from panic" {
-			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
-		}
+		assert.NotNil(t, err)
+		assert.Equal(t, errors.New(model.ErrorSessionClosed+" from panic"), err)
+		assert.False(t, result)
 	})
 
 	t.Run("HasTable ok", func(t *testing.T) {
@@ -892,17 +892,15 @@ func TestHasTable(t *testing.T) {
 		}
 		defer dropCollection(t, driver, object)
 		result, err := driver.HasTable(context.Background(), "dummy")
-		if !result || err != nil {
-			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
-		}
+		assert.Nil(t, err)
+		assert.True(t, result)
 	})
 
 	t.Run("HasTable when collection does not exist", func(t *testing.T) {
 		// Test when collection does not exist
 		driver, _ := prepareEnvironment(t)
 		result, err := driver.HasTable(context.Background(), "dummy")
-		if result || err != nil {
-			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
-		}
+		assert.Nil(t, err)
+		assert.False(t, result)
 	})
 }
