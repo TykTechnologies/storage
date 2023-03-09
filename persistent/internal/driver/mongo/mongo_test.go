@@ -872,7 +872,12 @@ func TestHasTable(t *testing.T) {
 		if err != nil {
 			t.Errorf("Insert(): unexpected error, err=%v", err)
 		}
-		defer driver.Drop(context.Background(), object)
+		defer func() {
+			err = driver.Drop(context.Background(), object)
+			if err != nil {
+				t.Errorf("Drop(): unexpected error, err=%v", err)
+			}
+		}()
 		result, err := driver.HasTable(context.Background(), "dummy")
 		if !result || err != nil {
 			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
