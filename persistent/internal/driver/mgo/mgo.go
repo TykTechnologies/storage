@@ -6,11 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/TykTechnologies/storage/persistent/dbm"
+
 	"github.com/TykTechnologies/storage/persistent/id"
 
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
-
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -51,33 +52,47 @@ func (d *mgoDriver) Insert(ctx context.Context, row id.DBObject) error {
 	return d.handleStoreError(col.Insert(row))
 }
 
-func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject) error {
-	sess := d.session.Copy()
-	defer sess.Close()
-
-	col := sess.DB("").C(row.TableName())
-
-	return d.handleStoreError(col.Remove(row))
-}
-
-func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...model.DBM) error {
-	sess := d.session.Copy()
-	defer sess.Close()
-
-	col := sess.DB("").C(row.TableName())
-
+func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject, queries ...dbm.DBM) error {
 	if len(queries) > 1 {
 		return errors.New(model.ErrorMultipleQueryForSingleRow)
 	}
 
 	if len(queries) == 0 {
-		queries = append(queries, model.DBM{"_id": row.GetObjectID()})
+		queries = append(queries, dbm.DBM{"_id": row.GetObjectID()})
 	}
+
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	col := sess.DB("").C(row.TableName())
+
+	res, err := col.RemoveAll(buildQuery(queries[0]))
+
+	if err == nil && res.Removed == 0 {
+		return mgo.ErrNotFound
+	}
+
+	return d.handleStoreError(err)
+}
+
+func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...dbm.DBM) error {
+	if len(queries) > 1 {
+		return errors.New(model.ErrorMultipleQueryForSingleRow)
+	}
+
+	if len(queries) == 0 {
+		queries = append(queries, dbm.DBM{"_id": row.GetObjectID()})
+	}
+
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	col := sess.DB("").C(row.TableName())
 
 	return d.handleStoreError(col.Update(buildQuery(queries[0]), bson.M{"$set": row}))
 }
 
-func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...model.DBM) error {
+func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
 	if len(rows) == 0 {
 		return errors.New(model.ErrorEmptyRow)
 	}
@@ -122,7 +137,7 @@ func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
 	return n, d.handleStoreError(err)
 }
 
-func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query model.DBM) error {
+func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query dbm.DBM) error {
 	session := d.session.Copy()
 
 	colName, err := getColName(query, row)
@@ -154,26 +169,6 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 		err = q.All(result)
 	} else {
 		err = q.One(result)
-	}
-
-	return d.handleStoreError(err)
-}
-
-func (d *mgoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query model.DBM) error {
-	session := d.session.Copy()
-
-	colName, err := getColName(query, row)
-	if err != nil {
-		return err
-	}
-
-	col := session.DB("").C(colName)
-	defer col.Database.Session.Close()
-
-	res, err := col.RemoveAll(buildQuery(query))
-
-	if err == nil && res.Removed == 0 {
-		return mgo.ErrNotFound
 	}
 
 	return d.handleStoreError(err)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/TykTechnologies/storage/persistent/dbm"
+
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
@@ -50,13 +52,21 @@ func (d *mongoDriver) Insert(ctx context.Context, row id.DBObject) error {
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject) error {
+func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject, query ...dbm.DBM) error {
+	if len(query) > 1 {
+		return errors.New(model.ErrorMultipleQueryForSingleRow)
+	}
+
+	if len(query) == 0 {
+		query = append(query, dbm.DBM{"_id": row.GetObjectID()})
+	}
+
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
-	res, err := collection.DeleteOne(ctx, bson.M{"_id": row.GetObjectID()})
+	result, err := collection.DeleteMany(ctx, buildQuery(query[0]))
 
-	if err == nil && res.DeletedCount == 0 {
-		return errors.New("error deleting a non existing object")
+	if err == nil && result.DeletedCount == 0 {
+		return mongo.ErrNoDocuments
 	}
 
 	return d.handleStoreError(err)
@@ -74,7 +84,7 @@ func (d *mongoDriver) IsErrNoRows(err error) bool {
 	return errors.Is(err, mongo.ErrNoDocuments)
 }
 
-func (d *mongoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query model.DBM) error {
+func (d *mongoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query dbm.DBM) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	search := buildQuery(query)
@@ -121,18 +131,18 @@ func (d *mongoDriver) Drop(ctx context.Context, row id.DBObject) error {
 	return d.handleStoreError(collection.Drop(ctx))
 }
 
-func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...model.DBM) error {
+func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...dbm.DBM) error {
 	if len(query) > 1 {
 		return errors.New(model.ErrorMultipleQueryForSingleRow)
 	}
 
 	if len(query) == 0 {
-		query = append(query, model.DBM{"_id": row.GetObjectID()})
+		query = append(query, dbm.DBM{"_id": row.GetObjectID()})
 	}
 
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
-	result, err := collection.UpdateOne(ctx, query[0], bson.D{{Key: "$set", Value: row}})
+	result, err := collection.UpdateOne(ctx, buildQuery(query[0]), bson.D{{Key: "$set", Value: row}})
 	if err == nil && result.MatchedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
@@ -140,7 +150,7 @@ func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...mode
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...model.DBM) error {
+func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
 	if len(query) > 0 && len(query) != len(rows) {
 		return errors.New(model.ErrorRowQueryDiffLenght)
 	}
@@ -155,7 +165,7 @@ func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query 
 		update := mongo.NewUpdateOneModel().SetUpdate(bson.D{{Key: "$set", Value: rows[i]}})
 
 		if len(query) == 0 {
-			update.SetFilter(model.DBM{"_id": rows[i].GetObjectID()})
+			update.SetFilter(dbm.DBM{"_id": rows[i].GetObjectID()})
 		} else {
 			update.SetFilter(query[i])
 		}
@@ -171,31 +181,6 @@ func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query 
 	}
 
 	return d.handleStoreError(err)
-}
-
-func (d *mongoDriver) DeleteWhere(ctx context.Context, row id.DBObject, query model.DBM) error {
-	colName, ok := query["_collection"].(string)
-	if !ok {
-		colName = row.TableName()
-	}
-
-	collection := d.client.Database(d.database).Collection(colName)
-
-	result, err := collection.DeleteMany(ctx, buildQuery(query))
-	if err != nil {
-		rErr := d.handleStoreError(err)
-		if rErr != nil {
-			return rErr
-		}
-
-		return err
-	}
-
-	if result.DeletedCount == 0 {
-		return mongo.ErrNoDocuments
-	}
-
-	return nil
 }
 
 func (d *mongoDriver) handleStoreError(err error) error {
