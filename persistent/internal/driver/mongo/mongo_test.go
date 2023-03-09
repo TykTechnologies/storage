@@ -853,3 +853,48 @@ func TestPing(t *testing.T) {
 		assert.Equal(t, context.Canceled, err)
 	})
 }
+
+func TestHasTable(t *testing.T) {
+	t.Run("HasTable sess closed", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		driver.Close()
+		// Test when session is nil
+		result, err := driver.HasTable(context.Background(), "dummy")
+		if result || err == nil || err.Error() != mongo.ErrClientDisconnected.Error() {
+			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
+		}
+	})
+
+	t.Run("HasTable ok", func(t *testing.T) {
+		// Test when collection exists
+		driver, object := prepareEnvironment(t)
+		driver.Insert(context.Background(), object)
+		defer driver.Drop(context.Background(), object)
+		result, err := driver.HasTable(context.Background(), "dummy")
+		if !result || err != nil {
+			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
+		}
+	})
+
+	t.Run("HasTable when collection does not exist", func(t *testing.T) {
+		// Test when collection does not exist
+		driver, _ := prepareEnvironment(t)
+		result, err := driver.HasTable(context.Background(), "dummy")
+		if result || err != nil {
+			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
+		}
+	})
+
+	t.Run("HasTable with canceled context", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+
+		ctx := context.Background()
+		ctx, cancel := context.WithCancel(ctx)
+		cancel()
+
+		result, err := driver.HasTable(ctx, "dummy")
+		if result || err == nil || err.Error() != context.Canceled.Error() {
+			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
+		}
+	})
+}

@@ -198,6 +198,34 @@ func (d *mgoDriver) Ping(ctx context.Context) (result error) {
 	return d.handleStoreError(sess.Ping())
 }
 
+func (d *mgoDriver) HasTable(ctx context.Context, collection string) (result bool, errResult error) {
+	if d.session == nil {
+		return false, errors.New(model.ErrorSessionClosed)
+	}
+
+	defer func() {
+		if err := recover(); err != nil {
+			errResult = errors.New(model.ErrorSessionClosed + " from panic")
+		}
+	}()
+
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	names, err := sess.DB("").CollectionNames()
+	if err != nil {
+		return false, err
+	}
+
+	for _, name := range names {
+		if name == collection {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 func (d *mgoDriver) IsErrNoRows(err error) bool {
 	return errors.Is(err, mgo.ErrNotFound)
 }

@@ -183,6 +183,11 @@ func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query 
 	return d.handleStoreError(err)
 }
 
+func (d *mongoDriver) HasTable(ctx context.Context, collection string) (bool, error) {
+	collections, err := d.client.Database(d.database).ListCollectionNames(ctx, bson.M{"name": collection})
+	return len(collections) > 0, err
+}
+
 func (d *mongoDriver) Ping(ctx context.Context) error {
 	return d.handleStoreError(d.client.Ping(ctx, nil))
 }

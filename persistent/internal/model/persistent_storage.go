@@ -21,11 +21,12 @@ type PersistentStorage interface {
 	Query(context.Context, id.DBObject, interface{}, dbm.DBM) error
 	// UpdateMany updates multiple rows
 	UpdateMany(context.Context, []id.DBObject, ...dbm.DBM) error
-
 	// IsErrNoRows Checking if an error is a "no rows error"
 	IsErrNoRows(err error) bool
 	// Drop drops the collection given the TableName() of the id.DBObject
 	Drop(context.Context, id.DBObject) error
 	// Ping checks if the database is reachable
 	Ping(context.Context) error
+	// HasTable checks if the table/collection exists
+	HasTable(context.Context, string) (bool, error)
 }

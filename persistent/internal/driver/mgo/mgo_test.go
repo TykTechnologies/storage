@@ -139,7 +139,6 @@ func TestUpdate(t *testing.T) {
 	ctx := context.Background()
 	defer dropCollection(t, driver, object)
 	t.Run("Updating an existing obj", func(t *testing.T) {
-
 		err := driver.Insert(ctx, object)
 		assert.Nil(t, err)
 
@@ -747,7 +746,6 @@ func TestDeleteWithQuery(t *testing.T) {
 
 			ctx := context.Background()
 
-
 			for _, obj := range dummyData {
 				err := driver.Insert(ctx, &obj)
 				assert.Nil(t, err)
@@ -862,5 +860,46 @@ func TestPing(t *testing.T) {
 		err := driver.Ping(context.Background())
 		assert.NotNil(t, err)
 		assert.Equal(t, errors.New(model.ErrorSessionClosed+" from panic"), err)
+	})
+}
+
+func TestHasTable(t *testing.T) {
+	t.Run("HasTable sess closed", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		driver.Close()
+		// Test when session is nil
+		result, err := driver.HasTable(context.Background(), "dummy")
+		if result || err == nil || err.Error() != model.ErrorSessionClosed {
+			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
+		}
+	})
+	t.Run("HasTable internat sess closed", func(t *testing.T) {
+		// Test when session is closed
+		driver, _ := prepareEnvironment(t)
+		driver.session.Close() // mock a closed session
+		result, err := driver.HasTable(context.Background(), "dummy")
+		if result || err == nil || err.Error() != model.ErrorSessionClosed+" from panic" {
+			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
+		}
+	})
+
+	t.Run("HasTable ok", func(t *testing.T) {
+		// Test when collection exists
+		driver, object := prepareEnvironment(t)
+		driver.Insert(context.Background(), object)
+		defer dropCollection(t, driver, object)
+		result, err := driver.HasTable(context.Background(), "dummy")
+		if !result || err != nil {
+			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
+		}
+	})
+
+	t.Run("HasTable when collection does not exist", func(t *testing.T) {
+		// Test when collection does not exist
+		driver, _ := prepareEnvironment(t)
+		result, err := driver.HasTable(context.Background(), "dummy")
+		if result || err != nil {
+			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
+		}
 	})
 }
