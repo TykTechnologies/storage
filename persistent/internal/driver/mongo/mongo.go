@@ -183,6 +183,10 @@ func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query 
 	return d.handleStoreError(err)
 }
 
+func (d *mongoDriver) Ping(ctx context.Context) error {
+	return d.handleStoreError(d.client.Ping(ctx, nil))
+}
+
 func (d *mongoDriver) handleStoreError(err error) error {
 	if err == nil {
 		return nil

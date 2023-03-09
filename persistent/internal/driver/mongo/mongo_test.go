@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mongo
 
 import (
@@ -829,4 +826,30 @@ func TestHandleStoreError(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPing(t *testing.T) {
+	t.Run("ping ok", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		err := driver.Ping(context.Background())
+		assert.Nil(t, err)
+	})
+	t.Run("ping sess closed", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		driver.Close()
+		err := driver.Ping(context.Background())
+		assert.NotNil(t, err)
+		assert.Equal(t, mongo.ErrClientDisconnected, err)
+	})
+	t.Run("ping canceled context", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+
+		ctx := context.Background()
+		ctx, cancel := context.WithCancel(ctx)
+		cancel()
+
+		err := driver.Ping(ctx)
+		assert.NotNil(t, err)
+		assert.Equal(t, context.Canceled, err)
+	})
 }

@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mgo
 
 import (
@@ -52,7 +49,7 @@ func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject) {
 	t.Helper()
 	// create a new mgo driver connection
 	mgo, err := NewMgoDriver(&model.ClientOpts{
-		ConnectionString: "mongodb://localhost:27017/test",
+		ConnectionString: "mongodb://localhost:27017,localhost:27018,tyk-mongo:27019/test",
 		UseSSL:           false,
 	})
 	if err != nil {
@@ -844,4 +841,26 @@ func TestHandleStoreError(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPing(t *testing.T) {
+	t.Run("ping ok", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		err := driver.Ping(context.Background())
+		assert.Nil(t, err)
+	})
+	t.Run("ping sess closed", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		driver.Close()
+		err := driver.Ping(context.Background())
+		assert.NotNil(t, err)
+		assert.Equal(t, errors.New(model.ErrorSessionClosed), err)
+	})
+	t.Run("ping internal sess closed", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		driver.session.Close()
+		err := driver.Ping(context.Background())
+		assert.NotNil(t, err)
+		assert.Equal(t, errors.New(model.ErrorSessionClosed+" from panic"), err)
+	})
 }

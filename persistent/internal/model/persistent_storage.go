@@ -26,4 +26,6 @@ type PersistentStorage interface {
 	IsErrNoRows(err error) bool
 	// Drop drops the collection given the TableName() of the id.DBObject
 	Drop(context.Context, id.DBObject) error
+	// Ping checks if the database is reachable
+	Ping(context.Context) error
 }
