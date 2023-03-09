@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/TykTechnologies/storage/persistent/dbm"
+
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
@@ -50,13 +52,13 @@ func (d *mongoDriver) Insert(ctx context.Context, row id.DBObject) error {
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject, query ...model.DBM) error {
+func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject, query ...dbm.DBM) error {
 	if len(query) > 1 {
 		return errors.New(model.ErrorMultipleQueryForSingleRow)
 	}
 
 	if len(query) == 0 {
-		query = append(query, model.DBM{"_id": row.GetObjectID()})
+		query = append(query, dbm.DBM{"_id": row.GetObjectID()})
 	}
 
 	collection := d.client.Database(d.database).Collection(row.TableName())
@@ -82,7 +84,7 @@ func (d *mongoDriver) IsErrNoRows(err error) bool {
 	return errors.Is(err, mongo.ErrNoDocuments)
 }
 
-func (d *mongoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query model.DBM) error {
+func (d *mongoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query dbm.DBM) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	search := buildQuery(query)
@@ -129,13 +131,13 @@ func (d *mongoDriver) Drop(ctx context.Context, row id.DBObject) error {
 	return d.handleStoreError(collection.Drop(ctx))
 }
 
-func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...model.DBM) error {
+func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...dbm.DBM) error {
 	if len(query) > 1 {
 		return errors.New(model.ErrorMultipleQueryForSingleRow)
 	}
 
 	if len(query) == 0 {
-		query = append(query, model.DBM{"_id": row.GetObjectID()})
+		query = append(query, dbm.DBM{"_id": row.GetObjectID()})
 	}
 
 	collection := d.client.Database(d.database).Collection(row.TableName())
@@ -148,7 +150,7 @@ func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...mode
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...model.DBM) error {
+func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
 	if len(query) > 0 && len(query) != len(rows) {
 		return errors.New(model.ErrorRowQueryDiffLenght)
 	}
@@ -163,7 +165,7 @@ func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query 
 		update := mongo.NewUpdateOneModel().SetUpdate(bson.D{{Key: "$set", Value: rows[i]}})
 
 		if len(query) == 0 {
-			update.SetFilter(model.DBM{"_id": rows[i].GetObjectID()})
+			update.SetFilter(dbm.DBM{"_id": rows[i].GetObjectID()})
 		} else {
 			update.SetFilter(query[i])
 		}

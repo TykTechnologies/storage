@@ -6,12 +6,13 @@ import (
 	"reflect"
 	"regexp"
 
+	"github.com/TykTechnologies/storage/persistent/dbm"
+
 	"github.com/TykTechnologies/storage/persistent/id"
-	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"gopkg.in/mgo.v2/bson"
 )
 
-func buildQuery(query model.DBM) bson.M {
+func buildQuery(query dbm.DBM) bson.M {
 	search := bson.M{}
 
 	for key, value := range query {
@@ -58,12 +59,12 @@ func handleQueryValue(key string, value interface{}, search bson.M) {
 }
 
 func isNestedQuery(value interface{}) bool {
-	_, ok := value.(model.DBM)
+	_, ok := value.(dbm.DBM)
 	return ok
 }
 
 func handleNestedQuery(search bson.M, key string, value interface{}) {
-	nestedQuery, ok := value.(model.DBM)
+	nestedQuery, ok := value.(dbm.DBM)
 	if !ok {
 		return
 	}
@@ -85,7 +86,7 @@ func handleNestedQuery(search bson.M, key string, value interface{}) {
 	}
 }
 
-func getColName(query model.DBM, row id.DBObject) (string, error) {
+func getColName(query dbm.DBM, row id.DBObject) (string, error) {
 	colName, ok := query["_collection"].(string)
 	if !ok {
 		if row == nil {
