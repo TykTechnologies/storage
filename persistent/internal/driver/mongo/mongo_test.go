@@ -9,6 +9,7 @@ import (
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/index"
+	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -970,7 +971,7 @@ func TestIndexes(t *testing.T) {
 		t.Run(tc.testName, func(t *testing.T) {
 			ctx := context.Background()
 			driver, obj := prepareEnvironment(t)
-			defer assert.Nil(t, driver.Drop(ctx, obj))
+			defer helper.ErrPrint(driver.Drop(ctx, obj))
 
 			err := driver.CreateIndex(context.Background(), obj, tc.givenIndex)
 			assert.Equal(t, tc.expectedCreateErr, err)
