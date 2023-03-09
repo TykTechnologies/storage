@@ -6,7 +6,7 @@ import (
 )
 
 func IsSlice(o interface{}) bool {
-	return reflect.TypeOf(o).Kind() == reflect.Slice
+	return reflect.TypeOf(o).Elem().Kind() == reflect.Slice
 }
 
 func ErrPrint(err error) {
