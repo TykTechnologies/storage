@@ -46,6 +46,9 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 		return err
 	}
 
+	sess.SetSocketTimeout(dialInfo.Timeout)
+	sess.SetSyncTimeout(dialInfo.Timeout)
+
 	lc.session = sess
 
 	lc.setSessionConsistency(opts)

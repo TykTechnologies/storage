@@ -1,13 +1,10 @@
-//go:build mongo
-// +build mongo
-
 package mgo
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
@@ -53,7 +50,7 @@ func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject) {
 	t.Helper()
 	// create a new mgo driver connection
 	mgo, err := NewMgoDriver(&model.ClientOpts{
-		ConnectionString: "mongodb://localhost:27017/test",
+		ConnectionString: "mongodb://localhost:27017,localhost:27018,tyk-mongo:27019/test",
 		UseSSL:           false,
 	})
 	if err != nil {
@@ -70,9 +67,19 @@ func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject) {
 	return mgo, object
 }
 
+func dropCollection(t *testing.T, driver *mgoDriver, object *dummyDBObject) {
+	t.Helper()
+	object.invalidCollection = false
+	err := driver.Drop(context.Background(), object)
+	// if the collection does not exist, avoid failing the test
+	if err != nil && !strings.Contains(err.Error(), "ns not found") {
+		t.Fatal(err)
+	}
+}
+
 func TestInsert(t *testing.T) {
 	driver, object := prepareEnvironment(t)
-	defer driver.Drop(context.Background(), object)
+	defer dropCollection(t, driver, object)
 
 	// insert the object into the database
 	err := driver.Insert(context.Background(), object)
@@ -100,7 +107,7 @@ func TestDelete(t *testing.T) {
 		err := driver.Insert(ctx, object)
 		assert.Nil(t, err)
 		// delete the collection
-		defer driver.Drop(ctx, object)
+		defer dropCollection(t, driver, object)
 
 		// validates that the object was inserted
 		var result dummyDBObject
@@ -129,13 +136,12 @@ func TestDelete(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
+	driver, object := prepareEnvironment(t)
+	ctx := context.Background()
+	defer dropCollection(t, driver, object)
 	t.Run("Updating an existing obj", func(t *testing.T) {
-		driver, object := prepareEnvironment(t)
-		ctx := context.Background()
-
 		err := driver.Insert(ctx, object)
 		assert.Nil(t, err)
-		defer driver.Drop(ctx, object)
 
 		object.Name = "test2"
 		object.Email = "test2@test2.com"
@@ -158,8 +164,6 @@ func TestUpdate(t *testing.T) {
 		driver, object := prepareEnvironment(t)
 		ctx := context.Background()
 
-		defer driver.Drop(ctx, object)
-
 		object.SetObjectID(id.NewObjectID())
 
 		err := driver.Update(ctx, object)
@@ -170,7 +174,6 @@ func TestUpdate(t *testing.T) {
 	t.Run("Updating an object without _id", func(t *testing.T) {
 		driver, object := prepareEnvironment(t)
 		ctx := context.Background()
-		defer driver.Drop(ctx, object)
 
 		err := driver.Update(ctx, object)
 		assert.NotNil(t, err)
@@ -333,7 +336,7 @@ func TestUpdateMany(t *testing.T) {
 		t.Run(tc.testName, func(t *testing.T) {
 			driver, object := prepareEnvironment(t)
 			ctx := context.Background()
-			defer driver.Drop(ctx, object)
+			defer dropCollection(t, driver, object)
 
 			for _, obj := range dummyData {
 				err := driver.Insert(ctx, &obj)
@@ -395,7 +398,7 @@ func TestCount(t *testing.T) {
 			ctx := context.Background()
 
 			driver, object := prepareEnvironment(t)
-			defer driver.Drop(ctx, object)
+			defer dropCollection(t, driver, object)
 
 			for i := 0; i < tt.want; i++ {
 				object = &dummyDBObject{
@@ -596,7 +599,7 @@ func TestQuery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			driver, object := prepareEnvironment(t)
 			ctx := context.Background()
-			defer driver.Drop(ctx, object)
+			defer dropCollection(t, driver, object)
 
 			for _, obj := range dummyData {
 				err := driver.Insert(ctx, &obj)
@@ -740,8 +743,9 @@ func TestDeleteWithQuery(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			driver, object := prepareEnvironment(t)
+			defer dropCollection(t, driver, object)
+
 			ctx := context.Background()
-			defer driver.Drop(ctx, object)
 
 			for _, obj := range dummyData {
 				err := driver.Insert(ctx, &obj)
@@ -958,12 +962,11 @@ func TestIndexes(t *testing.T) {
 		t.Run(tc.testName, func(t *testing.T) {
 			ctx := context.Background()
 			driver, obj := prepareEnvironment(t)
-			defer driver.Drop(ctx, obj)
+			defer assert.Nil(t, driver.Drop(ctx, obj))
 
 			err := driver.CreateIndex(context.Background(), obj, tc.givenIndex)
 			assert.Equal(t, tc.expectedCreateErr, err)
 			if err != nil {
-				fmt.Println(err.Error())
 				return
 			}
 
@@ -974,4 +977,26 @@ func TestIndexes(t *testing.T) {
 			assert.EqualValues(t, tc.expectedIndexes, actualIndexes)
 		})
 	}
+}
+
+func TestPing(t *testing.T) {
+	t.Run("ping ok", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		err := driver.Ping(context.Background())
+		assert.Nil(t, err)
+	})
+	t.Run("ping sess closed", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		driver.Close()
+		err := driver.Ping(context.Background())
+		assert.NotNil(t, err)
+		assert.Equal(t, errors.New(model.ErrorSessionClosed), err)
+	})
+	t.Run("ping internal sess closed", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		driver.session.Close()
+		err := driver.Ping(context.Background())
+		assert.NotNil(t, err)
+		assert.Equal(t, errors.New(model.ErrorSessionClosed+" from panic"), err)
+	})
 }

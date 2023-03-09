@@ -1,12 +1,8 @@
-//go:build mongo
-// +build mongo
-
 package mongo
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"testing"
 
@@ -974,12 +970,11 @@ func TestIndexes(t *testing.T) {
 		t.Run(tc.testName, func(t *testing.T) {
 			ctx := context.Background()
 			driver, obj := prepareEnvironment(t)
-			defer driver.Drop(ctx, obj)
+			defer assert.Nil(t, driver.Drop(ctx, obj))
 
 			err := driver.CreateIndex(context.Background(), obj, tc.givenIndex)
 			assert.Equal(t, tc.expectedCreateErr, err)
 			if err != nil {
-				fmt.Println(err.Error())
 				return
 			}
 
@@ -990,4 +985,30 @@ func TestIndexes(t *testing.T) {
 			assert.EqualValues(t, tc.expectedIndexes, actualIndexes)
 		})
 	}
+}
+
+func TestPing(t *testing.T) {
+	t.Run("ping ok", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		err := driver.Ping(context.Background())
+		assert.Nil(t, err)
+	})
+	t.Run("ping sess closed", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		driver.Close()
+		err := driver.Ping(context.Background())
+		assert.NotNil(t, err)
+		assert.Equal(t, mongo.ErrClientDisconnected, err)
+	})
+	t.Run("ping canceled context", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+
+		ctx := context.Background()
+		ctx, cancel := context.WithCancel(ctx)
+		cancel()
+
+		err := driver.Ping(ctx)
+		assert.NotNil(t, err)
+		assert.Equal(t, context.Canceled, err)
+	})
 }

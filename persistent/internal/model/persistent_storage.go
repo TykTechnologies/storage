@@ -30,4 +30,6 @@ type PersistentStorage interface {
 	CreateIndex(ctx context.Context, row id.DBObject, index index.Index) error
 	// GetIndexes returns all the index.Index associated to row id.DBObject
 	GetIndexes(ctx context.Context, row id.DBObject) ([]index.Index, error)
+	// Ping checks if the database is reachable
+	Ping(context.Context) error
 }
