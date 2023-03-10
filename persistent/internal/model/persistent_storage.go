@@ -24,7 +24,7 @@ type PersistentStorage interface {
 	BulkUpdate(context.Context, []id.DBObject, ...dbm.DBM) error
 	// UpdateAll executes the update query dbm.DBM over
 	// the elements filtered by query dbm.DBM in the row id.DBObject collection
-	UpdateAll(ctx context.Context, row id.DBObject, query, update dbm.DBM)
+	UpdateAll(ctx context.Context, row id.DBObject, query, update dbm.DBM) error
 	// IsErrNoRows Checking if an error is a "no rows error"
 	IsErrNoRows(err error) bool
 	// Drop drops the collection given the TableName() of the id.DBObject
