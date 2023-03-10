@@ -1020,29 +1020,35 @@ func TestHasTable(t *testing.T) {
 		driver.Close()
 		// Test when session is nil
 		result, err := driver.HasTable(context.Background(), "dummy")
-		if result || err == nil || err.Error() != mongo.ErrClientDisconnected.Error() {
-			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
-		}
+		assert.False(t, result)
+		assert.NotNil(t, err)
+		assert.EqualError(t, err, mongo.ErrClientDisconnected.Error())
 	})
 
 	t.Run("HasTable ok", func(t *testing.T) {
 		// Test when collection exists
 		driver, object := prepareEnvironment(t)
-		driver.Insert(context.Background(), object)
-		defer driver.Drop(context.Background(), object)
-		result, err := driver.HasTable(context.Background(), "dummy")
-		if !result || err != nil {
-			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
+		err := driver.Insert(context.Background(), object)
+		if err != nil {
+			t.Errorf("Insert(): unexpected error, err=%v", err)
 		}
+		defer func() {
+			err = driver.Drop(context.Background(), object)
+			if err != nil {
+				t.Errorf("Drop(): unexpected error, err=%v", err)
+			}
+		}()
+		result, err := driver.HasTable(context.Background(), "dummy")
+		assert.True(t, result)
+		assert.Nil(t, err)
 	})
 
 	t.Run("HasTable when collection does not exist", func(t *testing.T) {
 		// Test when collection does not exist
 		driver, _ := prepareEnvironment(t)
 		result, err := driver.HasTable(context.Background(), "dummy")
-		if result || err != nil {
-			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
-		}
+		assert.False(t, result)
+		assert.Nil(t, err)
 	})
 
 	t.Run("HasTable with canceled context", func(t *testing.T) {
@@ -1053,8 +1059,20 @@ func TestHasTable(t *testing.T) {
 		cancel()
 
 		result, err := driver.HasTable(ctx, "dummy")
-		if result || err == nil || err.Error() != context.Canceled.Error() {
-			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
+		assert.False(t, result)
+		assert.NotNil(t, err)
+		assert.Equal(t, context.Canceled, err)
+	})
+
+	t.Run("Nil mongo client", func(t *testing.T) {
+		driver := &mongoDriver{
+			lifeCycle: &lifeCycle{
+				client: nil,
+			},
 		}
+		result, err := driver.HasTable(context.Background(), "dummy")
+		assert.False(t, result)
+		assert.NotNil(t, err)
+		assert.EqualError(t, err, model.ErrorSessionClosed)
 	})
 }
