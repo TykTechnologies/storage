@@ -3,7 +3,6 @@ package mgo
 import (
 	"context"
 	"errors"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -65,9 +64,13 @@ func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject) {
 		Age:     10,
 	}
 
-	assert.Nil(t, mgo.Drop(context.Background(), object))
-
 	return mgo, object
+}
+
+func cleanDB(t *testing.T) {
+	t.Helper()
+	d, _ := prepareEnvironment(t)
+	helper.ErrPrint(d.session.DB("").DropDatabase())
 }
 
 func dropCollection(t *testing.T, driver *mgoDriver, object *dummyDBObject) {
@@ -81,6 +84,7 @@ func dropCollection(t *testing.T, driver *mgoDriver, object *dummyDBObject) {
 }
 
 func TestInsert(t *testing.T) {
+	defer cleanDB(t)
 	driver, object := prepareEnvironment(t)
 	defer dropCollection(t, driver, object)
 
@@ -102,6 +106,8 @@ func TestInsert(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
+	defer cleanDB(t)
+
 	driver, object := prepareEnvironment(t)
 	ctx := context.Background()
 
@@ -139,6 +145,8 @@ func TestDelete(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
+	defer cleanDB(t)
+
 	driver, object := prepareEnvironment(t)
 	ctx := context.Background()
 	defer dropCollection(t, driver, object)
@@ -185,6 +193,8 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestBulkUpdate(t *testing.T) {
+	defer cleanDB(t)
+
 	dummyData := []dummyDBObject{
 		{
 			Name: "John", Email: "john@example.com", Id: id.NewObjectID(),
@@ -361,6 +371,8 @@ func TestBulkUpdate(t *testing.T) {
 }
 
 func TestUpdateAll(t *testing.T) {
+	defer cleanDB(t)
+
 	dummyData := []dummyDBObject{
 		{
 			Name: "John", Email: "john@example.com",
@@ -529,6 +541,8 @@ func TestUpdateAll(t *testing.T) {
 }
 
 func TestIsErrNoRows(t *testing.T) {
+	defer cleanDB(t)
+
 	mgoDriver := mgoDriver{}
 
 	assert.True(t, mgoDriver.IsErrNoRows(mgo.ErrNotFound))
@@ -537,6 +551,11 @@ func TestIsErrNoRows(t *testing.T) {
 }
 
 func TestCount(t *testing.T) {
+	defer cleanDB(t)
+
+	driver, object := prepareEnvironment(t)
+	dropCollection(t, driver, object)
+
 	tests := []struct {
 		name    string
 		want    int
@@ -572,15 +591,7 @@ func TestCount(t *testing.T) {
 			defer dropCollection(t, driver, object)
 
 			for i := 0; i < tt.want; i++ {
-				object = &dummyDBObject{
-					Name:  "test" + strconv.Itoa(i),
-					Email: "test@test.com",
-					Country: dummyCountryField{
-						CountryName: "TestCountry" + strconv.Itoa(i),
-						Continent:   "TestContinent",
-					},
-					Age: i,
-				}
+				object.SetObjectID(id.NewObjectID())
 
 				err := driver.Insert(ctx, object)
 				assert.Nil(t, err)
@@ -601,6 +612,8 @@ func TestCount(t *testing.T) {
 }
 
 func TestQuery(t *testing.T) {
+	defer cleanDB(t)
+
 	type args struct {
 		result interface{}
 		query  dbm.DBM
@@ -788,6 +801,8 @@ func TestQuery(t *testing.T) {
 }
 
 func TestDeleteWithQuery(t *testing.T) {
+	defer cleanDB(t)
+
 	driver, obj := prepareEnvironment(t)
 	driver.Drop(context.Background(), obj)
 
@@ -943,6 +958,8 @@ func TestDeleteWithQuery(t *testing.T) {
 }
 
 func TestHandleStoreError(t *testing.T) {
+	defer cleanDB(t)
+
 	driver, _ := prepareEnvironment(t)
 
 	tests := []struct {
@@ -1014,6 +1031,8 @@ func TestHandleStoreError(t *testing.T) {
 }
 
 func TestIndexes(t *testing.T) {
+	defer cleanDB(t)
+
 	tcs := []struct {
 		testName          string
 		givenIndex        index.Index
@@ -1151,6 +1170,8 @@ func TestIndexes(t *testing.T) {
 }
 
 func TestPing(t *testing.T) {
+	defer cleanDB(t)
+
 	t.Run("ping ok", func(t *testing.T) {
 		driver, _ := prepareEnvironment(t)
 		err := driver.Ping(context.Background())
@@ -1173,6 +1194,8 @@ func TestPing(t *testing.T) {
 }
 
 func TestHasTable(t *testing.T) {
+	defer cleanDB(t)
+
 	t.Run("HasTable sess closed", func(t *testing.T) {
 		driver, _ := prepareEnvironment(t)
 		driver.Close()

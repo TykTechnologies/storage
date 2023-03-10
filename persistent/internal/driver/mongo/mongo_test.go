@@ -56,12 +56,18 @@ func prepareEnvironment(t *testing.T) (*mongoDriver, *dummyDBObject) {
 		Email: "test@test.com",
 	}
 
-	assert.Nil(t, mongo.Drop(context.Background(), object))
-
 	return mongo, object
 }
 
+func cleanDB(t *testing.T) {
+	t.Helper()
+	d, _ := prepareEnvironment(t)
+	helper.ErrPrint(d.client.Database(d.database).Drop(context.Background()))
+}
+
 func TestNewMongoDriver(t *testing.T) {
+	defer cleanDB(t)
+
 	t.Run("new driver with connection string", func(t *testing.T) {
 		newDriver, err := NewMongoDriver(&model.ClientOpts{
 			ConnectionString: "mongodb://localhost:27017/test",
@@ -75,7 +81,8 @@ func TestNewMongoDriver(t *testing.T) {
 	})
 	t.Run("new driver with invalid connection string", func(t *testing.T) {
 		newDriver, err := NewMongoDriver(&model.ClientOpts{
-			ConnectionString: "test",
+			ConnectionString:  "test",
+			ConnectionTimeout: 1,
 		})
 
 		assert.NotNil(t, err)
@@ -92,6 +99,8 @@ func TestNewMongoDriver(t *testing.T) {
 }
 
 func TestInsert(t *testing.T) {
+	defer cleanDB(t)
+
 	driver, object := prepareEnvironment(t)
 	ctx := context.Background()
 
@@ -112,6 +121,8 @@ func TestInsert(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
+	defer cleanDB(t)
+
 	driver, object := prepareEnvironment(t)
 	ctx := context.Background()
 
@@ -150,6 +161,8 @@ func TestDelete(t *testing.T) {
 }
 
 func TestCount(t *testing.T) {
+	defer cleanDB(t)
+
 	ctx := context.Background()
 
 	tcs := []struct {
@@ -222,6 +235,8 @@ func TestCount(t *testing.T) {
 }
 
 func TestQuery(t *testing.T) {
+	defer cleanDB(t)
+
 	type args struct {
 		result interface{}
 		query  dbm.DBM
@@ -397,6 +412,8 @@ func TestQuery(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
+	defer cleanDB(t)
+
 	t.Run("Updating an existing obj", func(t *testing.T) {
 		driver, object := prepareEnvironment(t)
 		ctx := context.Background()
@@ -447,6 +464,8 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestBulkUpdate(t *testing.T) {
+	defer cleanDB(t)
+
 	dummyData := []dummyDBObject{
 		{Name: "John", Email: "john@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
 		{Name: "Jane", Email: "jane@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
@@ -601,6 +620,8 @@ func TestBulkUpdate(t *testing.T) {
 }
 
 func TestUpdateAll(t *testing.T) {
+	defer cleanDB(t)
+
 	dummyData := []dummyDBObject{
 		{
 			Name: "John", Email: "john@example.com",
@@ -769,6 +790,8 @@ func TestUpdateAll(t *testing.T) {
 }
 
 func TestDeleteWithQuery(t *testing.T) {
+	defer cleanDB(t)
+
 	dummyData := []dummyDBObject{
 		{Name: "John", Email: "john@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
 		{Name: "Jane", Email: "jane@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
@@ -919,6 +942,8 @@ func TestDeleteWithQuery(t *testing.T) {
 }
 
 func TestHandleStoreError(t *testing.T) {
+	defer cleanDB(t)
+
 	// Define a slice of test cases
 	testCases := []struct {
 		name              string
@@ -1001,6 +1026,8 @@ func TestHandleStoreError(t *testing.T) {
 }
 
 func TestIndexes(t *testing.T) {
+	defer cleanDB(t)
+
 	tcs := []struct {
 		testName          string
 		givenIndex        index.Index
@@ -1159,6 +1186,8 @@ func TestIndexes(t *testing.T) {
 }
 
 func TestPing(t *testing.T) {
+	defer cleanDB(t)
+
 	t.Run("ping ok", func(t *testing.T) {
 		driver, _ := prepareEnvironment(t)
 		err := driver.Ping(context.Background())
@@ -1185,6 +1214,8 @@ func TestPing(t *testing.T) {
 }
 
 func TestHasTable(t *testing.T) {
+	defer cleanDB(t)
+
 	t.Run("HasTable sess closed", func(t *testing.T) {
 		driver, _ := prepareEnvironment(t)
 		driver.Close()
