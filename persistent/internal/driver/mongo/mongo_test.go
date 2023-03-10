@@ -903,4 +903,17 @@ func TestHasTable(t *testing.T) {
 		assert.NotNil(t, err)
 		assert.Equal(t, context.Canceled, err)
 	})
+
+	t.Run("Nil mongo client", func(t *testing.T) {
+		driver := &mongoDriver{
+			lifeCycle: &lifeCycle{
+				client: nil,
+			},
+		}
+		result, err := driver.HasTable(context.Background(), "dummy")
+		assert.False(t, result)
+		assert.NotNil(t, err)
+		assert.EqualError(t, err, model.ErrorSessionClosed)
+	})
+
 }

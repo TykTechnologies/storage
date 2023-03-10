@@ -184,6 +184,11 @@ func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query 
 }
 
 func (d *mongoDriver) HasTable(ctx context.Context, collection string) (bool, error) {
+
+	if d.client == nil {
+		return false, errors.New(model.ErrorSessionClosed)
+	}
+
 	collections, err := d.client.Database(d.database).ListCollectionNames(ctx, bson.M{"name": collection})
 	return len(collections) > 0, err
 }
