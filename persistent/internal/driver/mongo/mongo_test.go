@@ -1181,3 +1181,66 @@ func TestPing(t *testing.T) {
 		assert.Equal(t, context.Canceled, err)
 	})
 }
+
+func TestHasTable(t *testing.T) {
+	t.Run("HasTable sess closed", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		driver.Close()
+		// Test when session is nil
+		result, err := driver.HasTable(context.Background(), "dummy")
+		assert.False(t, result)
+		assert.NotNil(t, err)
+		assert.EqualError(t, err, mongo.ErrClientDisconnected.Error())
+	})
+
+	t.Run("HasTable ok", func(t *testing.T) {
+		// Test when collection exists
+		driver, object := prepareEnvironment(t)
+		err := driver.Insert(context.Background(), object)
+		if err != nil {
+			t.Errorf("Insert(): unexpected error, err=%v", err)
+		}
+		defer func() {
+			err = driver.Drop(context.Background(), object)
+			if err != nil {
+				t.Errorf("Drop(): unexpected error, err=%v", err)
+			}
+		}()
+		result, err := driver.HasTable(context.Background(), "dummy")
+		assert.True(t, result)
+		assert.Nil(t, err)
+	})
+
+	t.Run("HasTable when collection does not exist", func(t *testing.T) {
+		// Test when collection does not exist
+		driver, _ := prepareEnvironment(t)
+		result, err := driver.HasTable(context.Background(), "dummy")
+		assert.False(t, result)
+		assert.Nil(t, err)
+	})
+
+	t.Run("HasTable with canceled context", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+
+		ctx := context.Background()
+		ctx, cancel := context.WithCancel(ctx)
+		cancel()
+
+		result, err := driver.HasTable(ctx, "dummy")
+		assert.False(t, result)
+		assert.NotNil(t, err)
+		assert.Equal(t, context.Canceled, err)
+	})
+
+	t.Run("Nil mongo client", func(t *testing.T) {
+		driver := &mongoDriver{
+			lifeCycle: &lifeCycle{
+				client: nil,
+			},
+		}
+		result, err := driver.HasTable(context.Background(), "dummy")
+		assert.False(t, result)
+		assert.NotNil(t, err)
+		assert.EqualError(t, err, model.ErrorSessionClosed)
+	})
+}

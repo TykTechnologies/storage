@@ -194,6 +194,16 @@ func (d *mongoDriver) UpdateAll(ctx context.Context, row id.DBObject, query, upd
 	return d.handleStoreError(err)
 }
 
+func (d *mongoDriver) HasTable(ctx context.Context, collection string) (bool, error) {
+	if d.client == nil {
+		return false, errors.New(model.ErrorSessionClosed)
+	}
+
+	collections, err := d.client.Database(d.database).ListCollectionNames(ctx, bson.M{"name": collection})
+
+	return len(collections) > 0, err
+}
+
 func (d *mongoDriver) Ping(ctx context.Context) error {
 	return d.handleStoreError(d.client.Ping(ctx, nil))
 }

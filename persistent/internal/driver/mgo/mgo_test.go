@@ -1169,3 +1169,45 @@ func TestPing(t *testing.T) {
 		assert.Equal(t, errors.New(model.ErrorSessionClosed+" from panic"), err)
 	})
 }
+
+func TestHasTable(t *testing.T) {
+	t.Run("HasTable sess closed", func(t *testing.T) {
+		driver, _ := prepareEnvironment(t)
+		driver.Close()
+		// Test when session is nil
+		result, err := driver.HasTable(context.Background(), "dummy")
+		assert.NotNil(t, err)
+		assert.Equal(t, errors.New(model.ErrorSessionClosed), err)
+		assert.False(t, result)
+	})
+	t.Run("HasTable internat sess closed", func(t *testing.T) {
+		// Test when session is closed
+		driver, _ := prepareEnvironment(t)
+		driver.session.Close() // mock a closed session
+		result, err := driver.HasTable(context.Background(), "dummy")
+		assert.NotNil(t, err)
+		assert.Equal(t, errors.New(model.ErrorSessionClosed+" from panic"), err)
+		assert.False(t, result)
+	})
+
+	t.Run("HasTable ok", func(t *testing.T) {
+		// Test when collection exists
+		driver, object := prepareEnvironment(t)
+		err := driver.Insert(context.Background(), object)
+		if err != nil {
+			t.Errorf("HasTable(): unexpected error, err=%v", err)
+		}
+		defer dropCollection(t, driver, object)
+		result, err := driver.HasTable(context.Background(), "dummy")
+		assert.Nil(t, err)
+		assert.True(t, result)
+	})
+
+	t.Run("HasTable when collection does not exist", func(t *testing.T) {
+		// Test when collection does not exist
+		driver, _ := prepareEnvironment(t)
+		result, err := driver.HasTable(context.Background(), "dummy")
+		assert.Nil(t, err)
+		assert.False(t, result)
+	})
+}

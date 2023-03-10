@@ -35,4 +35,6 @@ type PersistentStorage interface {
 	GetIndexes(ctx context.Context, row id.DBObject) ([]index.Index, error)
 	// Ping checks if the database is reachable
 	Ping(context.Context) error
+	// HasTable checks if the table/collection exists
+	HasTable(context.Context, string) (bool, error)
 }
