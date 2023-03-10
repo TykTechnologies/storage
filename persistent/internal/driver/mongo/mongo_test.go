@@ -915,5 +915,4 @@ func TestHasTable(t *testing.T) {
 		assert.NotNil(t, err)
 		assert.EqualError(t, err, model.ErrorSessionClosed)
 	})
-
 }
