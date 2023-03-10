@@ -65,6 +65,8 @@ func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject) {
 		Age:     10,
 	}
 
+	assert.Nil(t, mgo.Drop(context.Background(), object))
+
 	return mgo, object
 }
 

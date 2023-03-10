@@ -43,7 +43,7 @@ func (d dummyDBObject) TableName() string {
 func prepareEnvironment(t *testing.T) (*mongoDriver, *dummyDBObject) {
 	t.Helper()
 	// create a new mongo driver connection
-	mgo, err := NewMongoDriver(&model.ClientOpts{
+	mongo, err := NewMongoDriver(&model.ClientOpts{
 		ConnectionString: "mongodb://localhost:27017/test",
 		UseSSL:           false,
 	})
@@ -56,7 +56,9 @@ func prepareEnvironment(t *testing.T) (*mongoDriver, *dummyDBObject) {
 		Email: "test@test.com",
 	}
 
-	return mgo, object
+	assert.Nil(t, mongo.Drop(context.Background(), object))
+
+	return mongo, object
 }
 
 func TestNewMongoDriver(t *testing.T) {
