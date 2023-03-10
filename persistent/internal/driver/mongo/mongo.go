@@ -143,7 +143,7 @@ func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...dbm.
 
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
-	result, err := collection.UpdateOne(ctx, buildQuery(query[0]), bson.D{{Key: "$set", Value: row}})
+	result, err := collection.UpdateMany(ctx, buildQuery(query[0]), bson.D{{Key: "$set", Value: row}})
 	if err == nil && result.MatchedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
@@ -151,7 +151,7 @@ func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...dbm.
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
+func (d *mongoDriver) BulkUpdate(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
 	if len(query) > 0 && len(query) != len(rows) {
 		return errors.New(model.ErrorRowQueryDiffLenght)
 	}
@@ -168,15 +168,25 @@ func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query 
 		if len(query) == 0 {
 			update.SetFilter(dbm.DBM{"_id": rows[i].GetObjectID()})
 		} else {
-			update.SetFilter(query[i])
+			update.SetFilter(buildQuery(query[i]))
 		}
 
 		bulkQuery = append(bulkQuery, update)
 	}
 
 	collection := d.client.Database(d.database).Collection(rows[0].TableName())
-
 	result, err := collection.BulkWrite(ctx, bulkQuery)
+	if err == nil && result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return d.handleStoreError(err)
+}
+
+func (d *mongoDriver) UpdateAll(ctx context.Context, row id.DBObject, query, update dbm.DBM) error {
+	collection := d.client.Database(d.database).Collection(row.TableName())
+
+	result, err := collection.UpdateMany(ctx, buildQuery(query), buildQuery(update))
 	if err == nil && result.MatchedCount == 0 {
 		return mongo.ErrNoDocuments
 	}

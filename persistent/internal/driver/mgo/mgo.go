@@ -8,9 +8,8 @@ import (
 	"time"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
-	"github.com/TykTechnologies/storage/persistent/index"
-
 	"github.com/TykTechnologies/storage/persistent/id"
+	"github.com/TykTechnologies/storage/persistent/index"
 
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
@@ -94,7 +93,7 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...dbm.
 	return d.handleStoreError(col.Update(buildQuery(queries[0]), bson.M{"$set": row}))
 }
 
-func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
+func (d *mgoDriver) BulkUpdate(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
 	if len(rows) == 0 {
 		return errors.New(model.ErrorEmptyRow)
 	}
@@ -122,6 +121,20 @@ func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ..
 
 	res, err := bulk.Run()
 	if err == nil && res.Modified == 0 {
+		return mgo.ErrNotFound
+	}
+
+	return d.handleStoreError(err)
+}
+
+func (d *mgoDriver) UpdateAll(ctx context.Context, row id.DBObject, query, update dbm.DBM) error {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	col := sess.DB("").C(row.TableName())
+
+	result, err := col.UpdateAll(buildQuery(query), buildQuery(update))
+	if err == nil && result.Matched == 0 {
 		return mgo.ErrNotFound
 	}
 

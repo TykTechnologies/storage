@@ -182,7 +182,7 @@ func TestUpdate(t *testing.T) {
 	})
 }
 
-func TestUpdateMany(t *testing.T) {
+func TestBulkUpdate(t *testing.T) {
 	dummyData := []dummyDBObject{
 		{
 			Name: "John", Email: "john@example.com", Id: id.NewObjectID(),
@@ -344,7 +344,7 @@ func TestUpdateMany(t *testing.T) {
 				assert.Nil(t, err)
 			}
 
-			err := driver.UpdateMany(ctx, tc.givenObjects, tc.query...)
+			err := driver.BulkUpdate(ctx, tc.givenObjects, tc.query...)
 			assert.Equal(t, tc.errorExpected, err)
 
 			var result []dummyDBObject
@@ -352,6 +352,174 @@ func TestUpdateMany(t *testing.T) {
 			assert.Nil(t, err)
 
 			for i, expected := range tc.expectedNewValues {
+				assert.EqualValues(t, expected, &result[i])
+			}
+		})
+	}
+}
+
+func TestUpdateAll(t *testing.T) {
+	dummyData := []dummyDBObject{
+		{
+			Name: "John", Email: "john@example.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
+			Age:     10,
+		},
+		{
+			Name:  "Jane",
+			Email: "jane@tyk.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"},
+			Age:     8,
+		},
+		{
+			Name:    "Bob",
+			Email:   "bob@example.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"},
+			Age:     25,
+		},
+		{
+			Name: "Alice", Email: "alice@tyk.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
+			Age:     45,
+		},
+		{
+			Name:    "Peter",
+			Email:   "peter@test.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"},
+			Age:     12,
+		},
+	}
+
+	tcs := []struct {
+		testName          string
+		givenQuery        dbm.DBM
+		givenUpdate       dbm.DBM
+		givenObject       id.DBObject
+		expectedNewValues func() []*dummyDBObject
+		errorExpected     error
+	}{
+		{
+			testName:    "unset all age",
+			givenQuery:  dbm.DBM{},
+			givenObject: &dummyDBObject{},
+			givenUpdate: dbm.DBM{"$unset": dbm.DBM{"age": 0}},
+			expectedNewValues: func() []*dummyDBObject {
+				var newDummies []*dummyDBObject
+
+				for i := range dummyData {
+					dummy := dummyData[i]
+					dummy.Age = 0
+
+					newDummies = append(newDummies, &dummy)
+				}
+
+				return newDummies
+			},
+		},
+		{
+			testName:    "set all age to 50",
+			givenQuery:  dbm.DBM{},
+			givenObject: &dummyDBObject{},
+			givenUpdate: dbm.DBM{"$set": dbm.DBM{"age": 50}},
+			expectedNewValues: func() []*dummyDBObject {
+				var newDummies []*dummyDBObject
+
+				for i := range dummyData {
+					dummy := dummyData[i]
+					dummy.Age = 50
+
+					newDummies = append(newDummies, &dummy)
+				}
+
+				return newDummies
+			},
+		},
+		{
+			testName: "increment age by those with tyk.com email by 10",
+			givenQuery: dbm.DBM{
+				"email": dbm.DBM{
+					"$regex": "tyk.com$",
+				},
+			},
+			givenObject: &dummyDBObject{},
+			givenUpdate: dbm.DBM{"$inc": dbm.DBM{"age": 10}},
+			expectedNewValues: func() []*dummyDBObject {
+				var newDummies []*dummyDBObject
+
+				for i := range dummyData {
+					dummy := dummyData[i]
+					newDummies = append(newDummies, &dummy)
+				}
+
+				newDummies[1].Age = 18
+				newDummies[3].Age = 55
+				return newDummies
+			},
+		},
+		{
+			testName: "set nested Country.CountryName value of John",
+			givenQuery: dbm.DBM{
+				"name": "John",
+			},
+			givenObject: &dummyDBObject{},
+			givenUpdate: dbm.DBM{"$set": dbm.DBM{"country.country_name": "test"}},
+			expectedNewValues: func() []*dummyDBObject {
+				var newDummies []*dummyDBObject
+
+				for i := range dummyData {
+					dummy := dummyData[i]
+					newDummies = append(newDummies, &dummy)
+				}
+				newDummies[0].Country = dummyCountryField{
+					CountryName: "test",
+					Continent:   "TestContinent",
+				}
+				return newDummies
+			},
+		},
+		{
+			testName: "no document query should return all the same",
+			givenQuery: dbm.DBM{
+				"random": "query",
+			},
+			givenObject:   &dummyDBObject{},
+			errorExpected: mgo.ErrNotFound,
+			givenUpdate:   dbm.DBM{"$set": dbm.DBM{"country.country_name": "test"}},
+			expectedNewValues: func() []*dummyDBObject {
+				var newDummies []*dummyDBObject
+
+				for i := range dummyData {
+					dummy := dummyData[i]
+					newDummies = append(newDummies, &dummy)
+				}
+				return newDummies
+			},
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.testName, func(t *testing.T) {
+			driver, object := prepareEnvironment(t)
+			ctx := context.Background()
+			defer helper.ErrPrint(driver.Drop(ctx, object))
+
+			for _, obj := range dummyData {
+				err := driver.Insert(ctx, &obj)
+				assert.Nil(t, err)
+			}
+
+			err := driver.UpdateAll(ctx, tc.givenObject, tc.givenQuery, tc.givenUpdate)
+			assert.Equal(t, tc.errorExpected, err)
+
+			var result []dummyDBObject
+			err = driver.Query(ctx, tc.givenObject, &result, dbm.DBM{})
+			assert.Nil(t, err)
+
+			for i, expected := range tc.expectedNewValues() {
 				assert.EqualValues(t, expected, &result[i])
 			}
 		})
