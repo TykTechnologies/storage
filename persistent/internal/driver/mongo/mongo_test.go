@@ -1309,5 +1309,4 @@ func TestDropDatabase(t *testing.T) {
 	}
 
 	assert.Equal(t, initialDatabaseCount, len(databases))
-
 }
