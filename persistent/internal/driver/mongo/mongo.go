@@ -311,5 +311,5 @@ func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.
 }
 
 func (d *mongoDriver) DropDatabase(ctx context.Context) error {
-	d.client.Database(d.database).Drop(ctx)
+	return d.client.Database(d.database).Drop(ctx)
 }
