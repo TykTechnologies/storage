@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"testing"
 
+	"go.mongodb.org/mongo-driver/bson"
+
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/index"
@@ -1276,4 +1278,36 @@ func TestHasTable(t *testing.T) {
 		assert.NotNil(t, err)
 		assert.EqualError(t, err, model.ErrorSessionClosed)
 	})
+}
+
+func TestDropDatabase(t *testing.T) {
+	defer cleanDB(t)
+
+	driver, dbObject := prepareEnvironment(t)
+	ctx := context.Background()
+
+	initialDatabases, err := driver.client.ListDatabaseNames(ctx, bson.D{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	initialDatabaseCount := len(initialDatabases)
+	// insert object so we force the database-collection creation
+	err = driver.Insert(context.Background(), dbObject)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = driver.DropDatabase(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	databases, err := driver.client.ListDatabaseNames(ctx, bson.D{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, initialDatabaseCount, len(databases))
+
 }
