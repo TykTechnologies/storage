@@ -294,3 +294,36 @@ func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.
 
 	return indexes, nil
 }
+
+func (d *mongoDriver) AutoMigrate(ctx context.Context, rows []id.DBObject, opts ...dbm.DBM) error {
+	if len(opts) > 0 && len(opts) != len(rows) {
+		return errors.New(model.ErrorRowOptDiffLenght)
+	}
+
+	for i, row := range rows {
+		has, err := d.HasTable(ctx, row.TableName())
+		if err != nil {
+			return errors.New("error looking for table: " + err.Error())
+		}
+
+		if !has {
+			if len(opts) > 0 {
+				opt := buildOpt(opts[i])
+
+				err := d.client.Database(d.database).CreateCollection(ctx, row.TableName(), opt)
+				if err != nil {
+					return err
+				}
+
+				continue
+			}
+
+			err := d.client.Database(d.database).CreateCollection(ctx, row.TableName())
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}

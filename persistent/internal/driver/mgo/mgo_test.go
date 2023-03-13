@@ -1025,7 +1025,8 @@ func TestHasTable(t *testing.T) {
 	t.Run("HasTable ok", func(t *testing.T) {
 		// Test when collection exists
 		driver, object := prepareEnvironment(t)
-		driver.Insert(context.Background(), object)
+		err := driver.Insert(context.Background(), object)
+		assert.Nil(t, err)
 		defer dropCollection(t, driver, object)
 		result, err := driver.HasTable(context.Background(), "dummy")
 		if !result || err != nil {
@@ -1040,5 +1041,87 @@ func TestHasTable(t *testing.T) {
 		if result || err != nil {
 			t.Errorf("HasTable(): unexpected result or error, result=%v, err=%v", result, err)
 		}
+	})
+}
+
+func TestAutoMigrate(t *testing.T) {
+	t.Run("AutoMigrate 1 object with no opts", func(t *testing.T) {
+		driver, obj := prepareEnvironment(t)
+		defer dropCollection(t, driver, obj)
+		colNames, err := driver.db.CollectionNames()
+		assert.Nil(t, err)
+
+		for _, colName := range colNames {
+			err := driver.db.C(colName).DropCollection()
+			assert.Nil(t, err)
+		}
+
+		objs := []id.DBObject{obj}
+
+		err = driver.AutoMigrate(context.Background(), objs)
+		assert.Nil(t, err)
+
+		cols, err := driver.db.CollectionNames()
+		assert.Nil(t, err)
+
+		assert.Len(t, cols, 1)
+		assert.Equal(t, "dummy", cols[0])
+	})
+
+	t.Run("AutoMigrate 1 object with opts", func(t *testing.T) {
+		driver, obj := prepareEnvironment(t)
+		defer dropCollection(t, driver, obj)
+		colNames, err := driver.db.CollectionNames()
+		assert.Nil(t, err)
+
+		for _, colName := range colNames {
+			err := driver.db.C(colName).DropCollection()
+			assert.Nil(t, err)
+		}
+
+		objs := []id.DBObject{obj}
+		opt := dbm.DBM{
+			"capped":   true,
+			"maxBytes": 1234,
+		}
+
+		err = driver.AutoMigrate(context.Background(), objs, opt)
+		assert.Nil(t, err)
+
+		cols, err := driver.db.CollectionNames()
+		assert.Nil(t, err)
+
+		assert.Len(t, cols, 1)
+		assert.Equal(t, "dummy", cols[0])
+
+		stats := bson.M{}
+		err = driver.db.Run(bson.M{"collStats": "dummy"}, &stats)
+		assert.Nil(t, err)
+
+		assert.True(t, stats["capped"].(bool))
+	})
+
+	t.Run("AutoMigrate 1 object with multiple opts", func(t *testing.T) {
+		driver, obj := prepareEnvironment(t)
+		colNames, err := driver.db.CollectionNames()
+		assert.Nil(t, err)
+
+		for _, colName := range colNames {
+			err := driver.db.C(colName).DropCollection()
+			assert.Nil(t, err)
+		}
+
+		objs := []id.DBObject{obj}
+		opt := dbm.DBM{
+			"capped":   true,
+			"maxBytes": 1234,
+		}
+		opt2 := dbm.DBM{
+			"size": 1234,
+		}
+
+		err = driver.AutoMigrate(context.Background(), objs, opt, opt2)
+		assert.NotNil(t, err)
+		assert.Equal(t, err.Error(), model.ErrorRowOptDiffLenght)
 	})
 }
