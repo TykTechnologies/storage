@@ -64,7 +64,7 @@ func prepareEnvironment(t *testing.T) (*mongoDriver, *dummyDBObject) {
 func cleanDB(t *testing.T) {
 	t.Helper()
 	d, _ := prepareEnvironment(t)
-	helper.ErrPrint(d.client.Database(d.database).Drop(context.Background()))
+	helper.ErrPrint(d.DropDatabase(context.Background()))
 }
 
 func TestNewMongoDriver(t *testing.T) {

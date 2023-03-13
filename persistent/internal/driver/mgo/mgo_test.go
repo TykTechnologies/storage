@@ -70,7 +70,7 @@ func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject) {
 func cleanDB(t *testing.T) {
 	t.Helper()
 	d, _ := prepareEnvironment(t)
-	helper.ErrPrint(d.session.DB("").DropDatabase())
+	helper.ErrPrint(d.DropDatabase(context.Background()))
 }
 
 func dropCollection(t *testing.T, driver *mgoDriver, object *dummyDBObject) {
