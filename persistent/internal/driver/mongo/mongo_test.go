@@ -43,7 +43,7 @@ func (d dummyDBObject) TableName() string {
 func prepareEnvironment(t *testing.T) (*mongoDriver, *dummyDBObject) {
 	t.Helper()
 	// create a new mongo driver connection
-	mgo, err := NewMongoDriver(&model.ClientOpts{
+	mongo, err := NewMongoDriver(&model.ClientOpts{
 		ConnectionString: "mongodb://localhost:27017/test",
 		UseSSL:           false,
 	})
@@ -56,10 +56,18 @@ func prepareEnvironment(t *testing.T) (*mongoDriver, *dummyDBObject) {
 		Email: "test@test.com",
 	}
 
-	return mgo, object
+	return mongo, object
+}
+
+func cleanDB(t *testing.T) {
+	t.Helper()
+	d, _ := prepareEnvironment(t)
+	helper.ErrPrint(d.client.Database(d.database).Drop(context.Background()))
 }
 
 func TestNewMongoDriver(t *testing.T) {
+	defer cleanDB(t)
+
 	t.Run("new driver with connection string", func(t *testing.T) {
 		newDriver, err := NewMongoDriver(&model.ClientOpts{
 			ConnectionString: "mongodb://localhost:27017/test",
@@ -73,7 +81,8 @@ func TestNewMongoDriver(t *testing.T) {
 	})
 	t.Run("new driver with invalid connection string", func(t *testing.T) {
 		newDriver, err := NewMongoDriver(&model.ClientOpts{
-			ConnectionString: "test",
+			ConnectionString:  "test",
+			ConnectionTimeout: 1,
 		})
 
 		assert.NotNil(t, err)
@@ -90,6 +99,8 @@ func TestNewMongoDriver(t *testing.T) {
 }
 
 func TestInsert(t *testing.T) {
+	defer cleanDB(t)
+
 	driver, object := prepareEnvironment(t)
 	ctx := context.Background()
 
@@ -110,6 +121,8 @@ func TestInsert(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
+	defer cleanDB(t)
+
 	driver, object := prepareEnvironment(t)
 	ctx := context.Background()
 
@@ -148,6 +161,8 @@ func TestDelete(t *testing.T) {
 }
 
 func TestCount(t *testing.T) {
+	defer cleanDB(t)
+
 	ctx := context.Background()
 
 	tcs := []struct {
@@ -220,6 +235,8 @@ func TestCount(t *testing.T) {
 }
 
 func TestQuery(t *testing.T) {
+	defer cleanDB(t)
+
 	type args struct {
 		result interface{}
 		query  dbm.DBM
@@ -395,6 +412,8 @@ func TestQuery(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
+	defer cleanDB(t)
+
 	t.Run("Updating an existing obj", func(t *testing.T) {
 		driver, object := prepareEnvironment(t)
 		ctx := context.Background()
@@ -444,7 +463,9 @@ func TestUpdate(t *testing.T) {
 	})
 }
 
-func TestUpdateMany(t *testing.T) {
+func TestBulkUpdate(t *testing.T) {
+	defer cleanDB(t)
+
 	dummyData := []dummyDBObject{
 		{Name: "John", Email: "john@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
 		{Name: "Jane", Email: "jane@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
@@ -584,7 +605,7 @@ func TestUpdateMany(t *testing.T) {
 				assert.Nil(t, err)
 			}
 
-			err := driver.UpdateMany(ctx, tc.givenObjects, tc.query...)
+			err := driver.BulkUpdate(ctx, tc.givenObjects, tc.query...)
 			assert.Equal(t, tc.errorExpected, err)
 
 			var result []dummyDBObject
@@ -598,7 +619,179 @@ func TestUpdateMany(t *testing.T) {
 	}
 }
 
+func TestUpdateAll(t *testing.T) {
+	defer cleanDB(t)
+
+	dummyData := []dummyDBObject{
+		{
+			Name: "John", Email: "john@example.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
+			Age:     10,
+		},
+		{
+			Name:  "Jane",
+			Email: "jane@tyk.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"},
+			Age:     8,
+		},
+		{
+			Name:    "Bob",
+			Email:   "bob@example.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"},
+			Age:     25,
+		},
+		{
+			Name: "Alice", Email: "alice@tyk.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
+			Age:     45,
+		},
+		{
+			Name:    "Peter",
+			Email:   "peter@test.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"},
+			Age:     12,
+		},
+	}
+
+	tcs := []struct {
+		testName          string
+		givenQuery        dbm.DBM
+		givenUpdate       dbm.DBM
+		givenObject       id.DBObject
+		expectedNewValues func() []*dummyDBObject
+		errorExpected     error
+	}{
+		{
+			testName:    "unset all age",
+			givenQuery:  dbm.DBM{},
+			givenObject: &dummyDBObject{},
+			givenUpdate: dbm.DBM{"$unset": dbm.DBM{"age": 0}},
+			expectedNewValues: func() []*dummyDBObject {
+				var newDummies []*dummyDBObject
+
+				for i := range dummyData {
+					dummy := dummyData[i]
+					dummy.Age = 0
+
+					newDummies = append(newDummies, &dummy)
+				}
+
+				return newDummies
+			},
+		},
+		{
+			testName:    "set all age to 50",
+			givenQuery:  dbm.DBM{},
+			givenObject: &dummyDBObject{},
+			givenUpdate: dbm.DBM{"$set": dbm.DBM{"age": 50}},
+			expectedNewValues: func() []*dummyDBObject {
+				var newDummies []*dummyDBObject
+
+				for i := range dummyData {
+					dummy := dummyData[i]
+					dummy.Age = 50
+
+					newDummies = append(newDummies, &dummy)
+				}
+
+				return newDummies
+			},
+		},
+		{
+			testName: "increment age by those with tyk.com email by 10",
+			givenQuery: dbm.DBM{
+				"email": dbm.DBM{
+					"$regex": "tyk.com$",
+				},
+			},
+			givenObject: &dummyDBObject{},
+			givenUpdate: dbm.DBM{"$inc": dbm.DBM{"age": 10}},
+			expectedNewValues: func() []*dummyDBObject {
+				var newDummies []*dummyDBObject
+
+				for i := range dummyData {
+					dummy := dummyData[i]
+					newDummies = append(newDummies, &dummy)
+				}
+
+				newDummies[1].Age = 18
+				newDummies[3].Age = 55
+				return newDummies
+			},
+		},
+		{
+			testName: "set nested Country.CountryName value of John",
+			givenQuery: dbm.DBM{
+				"testName": "John",
+			},
+			givenObject: &dummyDBObject{},
+			givenUpdate: dbm.DBM{"$set": dbm.DBM{"country.country_name": "test"}},
+			expectedNewValues: func() []*dummyDBObject {
+				var newDummies []*dummyDBObject
+
+				for i := range dummyData {
+					dummy := dummyData[i]
+					newDummies = append(newDummies, &dummy)
+				}
+				newDummies[0].Country = dummyCountryField{
+					CountryName: "test",
+					Continent:   "TestContinent",
+				}
+				return newDummies
+			},
+		},
+		{
+			testName: "no document query should return all the same",
+			givenQuery: dbm.DBM{
+				"random": "query",
+			},
+			givenObject:   &dummyDBObject{},
+			errorExpected: mongo.ErrNoDocuments,
+			givenUpdate:   dbm.DBM{"$set": dbm.DBM{"country.country_name": "test"}},
+			expectedNewValues: func() []*dummyDBObject {
+				var newDummies []*dummyDBObject
+
+				for i := range dummyData {
+					dummy := dummyData[i]
+					newDummies = append(newDummies, &dummy)
+				}
+				return newDummies
+			},
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.testName, func(t *testing.T) {
+			driver, object := prepareEnvironment(t)
+			ctx := context.Background()
+			defer helper.ErrPrint(driver.Drop(ctx, object))
+
+			for _, obj := range dummyData {
+				err := driver.Insert(ctx, &obj)
+				assert.Nil(t, err)
+			}
+
+			err := driver.UpdateAll(ctx, tc.givenObject, tc.givenQuery, tc.givenUpdate)
+			assert.Equal(t, tc.errorExpected, err)
+
+			var result []dummyDBObject
+			err = driver.Query(ctx, tc.givenObject, &result, dbm.DBM{})
+			assert.Nil(t, err)
+
+			for i, expected := range tc.expectedNewValues() {
+				assert.EqualValues(t, expected, &result[i])
+			}
+		})
+	}
+}
+
 func TestDeleteWithQuery(t *testing.T) {
+	defer cleanDB(t)
+
 	dummyData := []dummyDBObject{
 		{Name: "John", Email: "john@example.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10},
 		{Name: "Jane", Email: "jane@tyk.com", Id: id.NewObjectID(), Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8},
@@ -749,6 +942,8 @@ func TestDeleteWithQuery(t *testing.T) {
 }
 
 func TestHandleStoreError(t *testing.T) {
+	defer cleanDB(t)
+
 	// Define a slice of test cases
 	testCases := []struct {
 		name              string
@@ -831,6 +1026,8 @@ func TestHandleStoreError(t *testing.T) {
 }
 
 func TestIndexes(t *testing.T) {
+	defer cleanDB(t)
+
 	tcs := []struct {
 		testName          string
 		givenIndex        index.Index
@@ -989,6 +1186,8 @@ func TestIndexes(t *testing.T) {
 }
 
 func TestPing(t *testing.T) {
+	defer cleanDB(t)
+
 	t.Run("ping ok", func(t *testing.T) {
 		driver, _ := prepareEnvironment(t)
 		err := driver.Ping(context.Background())
@@ -1015,6 +1214,8 @@ func TestPing(t *testing.T) {
 }
 
 func TestHasTable(t *testing.T) {
+	defer cleanDB(t)
+
 	t.Run("HasTable sess closed", func(t *testing.T) {
 		driver, _ := prepareEnvironment(t)
 		driver.Close()
