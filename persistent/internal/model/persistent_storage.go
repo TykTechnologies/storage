@@ -40,4 +40,6 @@ type PersistentStorage interface {
 	Ping(context.Context) error
 	// HasTable checks if the table/collection exists
 	HasTable(context.Context, string) (bool, error)
+	// DropDatabase removes the database
+	DropDatabase(ctx context.Context) error
 }

@@ -371,3 +371,10 @@ func (d *mgoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.In
 
 	return indexes, nil
 }
+
+func (d *mgoDriver) DropDatabase(ctx context.Context) error {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	return sess.DB("").DropDatabase()
+}

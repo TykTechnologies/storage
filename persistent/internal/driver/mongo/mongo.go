@@ -320,3 +320,7 @@ func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.
 
 	return indexes, nil
 }
+
+func (d *mongoDriver) DropDatabase(ctx context.Context) error {
+	return d.client.Database(d.database).Drop(ctx)
+}

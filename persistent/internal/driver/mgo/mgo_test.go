@@ -70,7 +70,7 @@ func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject) {
 func cleanDB(t *testing.T) {
 	t.Helper()
 	d, _ := prepareEnvironment(t)
-	helper.ErrPrint(d.session.DB("").DropDatabase())
+	helper.ErrPrint(d.DropDatabase(context.Background()))
 }
 
 func dropCollection(t *testing.T, driver *mgoDriver, object *dummyDBObject) {
@@ -1310,4 +1310,33 @@ func TestHasTable(t *testing.T) {
 		assert.Nil(t, err)
 		assert.False(t, result)
 	})
+}
+
+func TestDropDatabase(t *testing.T) {
+	defer cleanDB(t)
+	driver, object := prepareEnvironment(t)
+
+	initialDatabases, err := driver.session.DatabaseNames()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	initialDatabaseCount := len(initialDatabases)
+	// insert object so we force the database-collection creation
+	err = driver.Insert(context.Background(), object)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = driver.DropDatabase(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	databases, err := driver.session.DatabaseNames()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, initialDatabaseCount, len(databases))
 }
