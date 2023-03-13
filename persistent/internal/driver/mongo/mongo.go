@@ -323,20 +323,17 @@ func (d *mongoDriver) AutoMigrate(ctx context.Context, rows []id.DBObject, opts 
 		}
 
 		if !has {
+			var err error
+
 			if len(opts) > 0 {
 				opt := buildOpt(opts[i])
-
-				err := d.client.Database(d.database).CreateCollection(ctx, row.TableName(), opt)
-				if err != nil {
-					return err
-				}
-
-				continue
+				err = d.client.Database(d.database).CreateCollection(ctx, row.TableName(), opt)
+			} else {
+				err = d.client.Database(d.database).CreateCollection(ctx, row.TableName())
 			}
 
-			err := d.client.Database(d.database).CreateCollection(ctx, row.TableName())
 			if err != nil {
-				return err
+				return errors.New("error creating table: " + err.Error())
 			}
 		}
 	}
