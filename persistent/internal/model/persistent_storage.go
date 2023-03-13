@@ -17,7 +17,7 @@ type PersistentStorage interface {
 	// Update a DbObject in the database
 	Update(context.Context, id.DBObject, ...dbm.DBM) error
 	// Count counts all rows for a DBTable
-	Count(context.Context, id.DBObject) (int, error)
+	Count(ctx context.Context, row id.DBObject, filter ...dbm.DBM) (int, error)
 	// Query one or multiple DBObjects from the database
 	Query(context.Context, id.DBObject, interface{}, dbm.DBM) error
 	// BulkUpdate updates multiple rows
