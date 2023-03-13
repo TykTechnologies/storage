@@ -15,6 +15,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+var _ model.PersistentStorage = &mongoDriver{}
+
 type mongoDriver struct {
 	*lifeCycle
 	options *model.ClientOpts
@@ -73,10 +75,19 @@ func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject, query ...dbm.
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
+func (d *mongoDriver) Count(ctx context.Context, row id.DBObject, filters ...dbm.DBM) (int, error) {
+	if len(filters) > 1 {
+		return 0, errors.New(model.ErrorMultipleDBM)
+	}
+
+	filter := bson.M{}
+	if len(filters) == 1 {
+		filter = buildQuery(filters[0])
+	}
+
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
-	count, err := collection.CountDocuments(ctx, bson.D{})
+	count, err := collection.CountDocuments(ctx, filter)
 
 	return int(count), d.handleStoreError(err)
 }
