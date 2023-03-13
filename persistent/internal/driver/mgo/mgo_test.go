@@ -553,60 +553,135 @@ func TestIsErrNoRows(t *testing.T) {
 func TestCount(t *testing.T) {
 	defer cleanDB(t)
 
-	driver, object := prepareEnvironment(t)
-	dropCollection(t, driver, object)
+	dummyData := []dummyDBObject{
+		{
+			Name: "John", Email: "john@example.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
+			Age:     10,
+		},
+		{
+			Name:  "Jane",
+			Email: "jane@tyk.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"},
+			Age:     8,
+		},
+		{
+			Name:    "Bob",
+			Email:   "bob@example.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"},
+			Age:     25,
+		},
+		{
+			Name: "Alice", Email: "alice@tyk.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
+			Age:     45,
+		},
+		{
+			Name:    "Peter",
+			Email:   "peter@test.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"},
+			Age:     12,
+		},
+	}
 
-	tests := []struct {
-		name    string
-		want    int
-		wantErr bool
+	ctx := context.Background()
+
+	tcs := []struct {
+		name        string
+		prepareTc   func(*testing.T) (*mgoDriver, *dummyDBObject)
+		givenFilter []dbm.DBM
+		want        int
+		wantErr     error
 	}{
 		{
-			name: "0 objects",
-			want: 0,
+			name:      "0 objects",
+			want:      0,
+			prepareTc: prepareEnvironment,
 		},
 		{
 			name: "1 object",
 			want: 1,
-		},
-		{
-			name: "2 objects",
-			want: 2,
-		},
-		{
-			name: "10 objects",
-			want: 10,
-		},
-		{
-			name:    "failing because of invalid table name",
-			want:    0,
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			prepareTc: func(t *testing.T) (*mgoDriver, *dummyDBObject) {
+				t.Helper()
 
-			driver, object := prepareEnvironment(t)
-			defer dropCollection(t, driver, object)
-
-			for i := 0; i < tt.want; i++ {
-				object.SetObjectID(id.NewObjectID())
+				driver, object := prepareEnvironment(t)
 
 				err := driver.Insert(ctx, object)
 				assert.Nil(t, err)
-			}
 
-			object.invalidCollection = tt.wantErr
+				return driver, object
+			},
+		},
+		{
+			name: "5 objects",
+			want: 5,
+			prepareTc: func(t *testing.T) (*mgoDriver, *dummyDBObject) {
+				t.Helper()
 
-			got, err := driver.Count(ctx, object)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("mgoDriver.Count() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("mgoDriver.Count() = %v, want %v", got, tt.want)
-			}
+				driver, object := prepareEnvironment(t)
+
+				for _, obj := range dummyData {
+					err := driver.Insert(ctx, &obj)
+					assert.Nil(t, err)
+				}
+
+				return driver, object
+			},
+		},
+		{
+			name:        "count with filter",
+			want:        2,
+			givenFilter: []dbm.DBM{{"country.country_name": "TestCountry"}},
+			prepareTc: func(t *testing.T) (*mgoDriver, *dummyDBObject) {
+				t.Helper()
+
+				driver, object := prepareEnvironment(t)
+
+				for _, obj := range dummyData {
+					err := driver.Insert(ctx, &obj)
+					assert.Nil(t, err)
+				}
+
+				return driver, object
+			},
+		},
+		{
+			name:        "count with filter, multiple options",
+			want:        1,
+			givenFilter: []dbm.DBM{{"country.country_name": "TestCountry", "email": "john@example.com"}},
+			prepareTc: func(t *testing.T) (*mgoDriver, *dummyDBObject) {
+				t.Helper()
+
+				driver, object := prepareEnvironment(t)
+
+				for _, obj := range dummyData {
+					err := driver.Insert(ctx, &obj)
+					assert.Nil(t, err)
+				}
+
+				return driver, object
+			},
+		},
+		{
+			name:        "count with multiple filters",
+			want:        0,
+			wantErr:     errors.New(model.ErrorMultipleDBM),
+			givenFilter: []dbm.DBM{{"country.country_name": "TestCountry"}, {"testName": "test"}},
+			prepareTc:   prepareEnvironment,
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			driver, object := tc.prepareTc(t)
+			defer cleanDB(t)
+
+			got, err := driver.Count(ctx, object, tc.givenFilter...)
+			assert.Equal(t, tc.want, got)
+			assert.Equal(t, tc.wantErr, err)
 		})
 	}
 }
