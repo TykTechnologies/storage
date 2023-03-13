@@ -17,6 +17,8 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+var _ model.PersistentStorage = &mgoDriver{}
+
 type mgoDriver struct {
 	*lifeCycle
 	lastConnAttempt time.Time
@@ -141,13 +143,22 @@ func (d *mgoDriver) UpdateAll(ctx context.Context, row id.DBObject, query, updat
 	return d.handleStoreError(err)
 }
 
-func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
+func (d *mgoDriver) Count(ctx context.Context, row id.DBObject, filters ...dbm.DBM) (int, error) {
+	if len(filters) > 1 {
+		return 0, errors.New(model.ErrorMultipleDBM)
+	}
+
+	filter := bson.M{}
+	if len(filters) == 1 {
+		filter = buildQuery(filters[0])
+	}
+
 	sess := d.session.Copy()
 	defer sess.Close()
 
 	col := sess.DB("").C(row.TableName())
 
-	n, err := col.Find(nil).Count()
+	n, err := col.Find(filter).Count()
 
 	return n, d.handleStoreError(err)
 }

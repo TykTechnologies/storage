@@ -3,7 +3,6 @@ package mongo
 import (
 	"context"
 	"errors"
-	"strconv"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -165,25 +164,61 @@ func TestDelete(t *testing.T) {
 func TestCount(t *testing.T) {
 	defer cleanDB(t)
 
+	dummyData := []dummyDBObject{
+		{
+			Name: "John", Email: "john@example.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
+			Age:     10,
+		},
+		{
+			Name:  "Jane",
+			Email: "jane@tyk.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"},
+			Age:     8,
+		},
+		{
+			Name:    "Bob",
+			Email:   "bob@example.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"},
+			Age:     25,
+		},
+		{
+			Name: "Alice", Email: "alice@tyk.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
+			Age:     45,
+		},
+		{
+			Name:    "Peter",
+			Email:   "peter@test.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"},
+			Age:     12,
+		},
+	}
+
 	ctx := context.Background()
 
 	tcs := []struct {
-		name      string
-		prepareTc func(*testing.T) (*mongoDriver, *dummyDBObject)
-		want      int
-		wantErr   error
+		name        string
+		prepareTc   func(*testing.T) (*mongoDriver, *dummyDBObject)
+		givenFilter []dbm.DBM
+		want        int
+		wantErr     error
 	}{
 		{
-			name: "0 objects",
-			want: 0,
-			prepareTc: func(t *testing.T) (*mongoDriver, *dummyDBObject) {
-				return prepareEnvironment(t)
-			},
+			name:      "0 objects",
+			want:      0,
+			prepareTc: prepareEnvironment,
 		},
 		{
 			name: "1 object",
 			want: 1,
 			prepareTc: func(t *testing.T) (*mongoDriver, *dummyDBObject) {
+				t.Helper()
+
 				driver, object := prepareEnvironment(t)
 
 				err := driver.Insert(ctx, object)
@@ -193,18 +228,15 @@ func TestCount(t *testing.T) {
 			},
 		},
 		{
-			name: "10 objects",
-			want: 10,
+			name: "5 objects",
+			want: 5,
 			prepareTc: func(t *testing.T) (*mongoDriver, *dummyDBObject) {
+				t.Helper()
+
 				driver, object := prepareEnvironment(t)
 
-				for i := 0; i < 10; i++ {
-					object = &dummyDBObject{
-						Name:  "test" + strconv.Itoa(i),
-						Email: "test@test.com",
-					}
-
-					err := driver.Insert(ctx, object)
+				for _, obj := range dummyData {
+					err := driver.Insert(ctx, &obj)
 					assert.Nil(t, err)
 				}
 
@@ -215,6 +247,8 @@ func TestCount(t *testing.T) {
 			name: "error when counting on closed connection ",
 			want: 0,
 			prepareTc: func(t *testing.T) (*mongoDriver, *dummyDBObject) {
+				t.Helper()
+
 				driver, object := prepareEnvironment(t)
 
 				driver.Close()
@@ -223,13 +257,54 @@ func TestCount(t *testing.T) {
 			},
 			wantErr: errors.New("client is disconnected"),
 		},
+		{
+			name:        "count with filter",
+			want:        2,
+			givenFilter: []dbm.DBM{{"country.country_name": "TestCountry"}},
+			prepareTc: func(t *testing.T) (*mongoDriver, *dummyDBObject) {
+				t.Helper()
+
+				driver, object := prepareEnvironment(t)
+
+				for _, obj := range dummyData {
+					err := driver.Insert(ctx, &obj)
+					assert.Nil(t, err)
+				}
+
+				return driver, object
+			},
+		},
+		{
+			name:        "count with filter, multiple options",
+			want:        1,
+			givenFilter: []dbm.DBM{{"country.country_name": "TestCountry", "email": "john@example.com"}},
+			prepareTc: func(t *testing.T) (*mongoDriver, *dummyDBObject) {
+				t.Helper()
+
+				driver, object := prepareEnvironment(t)
+
+				for _, obj := range dummyData {
+					err := driver.Insert(ctx, &obj)
+					assert.Nil(t, err)
+				}
+
+				return driver, object
+			},
+		},
+		{
+			name:        "count with multiple filters",
+			want:        0,
+			wantErr:     errors.New(model.ErrorMultipleDBM),
+			givenFilter: []dbm.DBM{{"country.country_name": "TestCountry"}, {"testName": "test"}},
+			prepareTc:   prepareEnvironment,
+		},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			driver, object := tc.prepareTc(t)
-			defer driver.Drop(ctx, object)
+			defer cleanDB(t)
 
-			got, err := driver.Count(ctx, object)
+			got, err := driver.Count(ctx, object, tc.givenFilter...)
 			assert.Equal(t, tc.want, got)
 			assert.Equal(t, tc.wantErr, err)
 		})
