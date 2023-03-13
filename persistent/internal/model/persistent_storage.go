@@ -18,7 +18,7 @@ type PersistentStorage interface {
 	Update(context.Context, id.DBObject, ...dbm.DBM) error
 	// Count counts all rows for a DBTable if no filter dbm.DBM given.
 	// If a filter dbm.DBM is specified it will count the rows given the built query for that filter.
-	// If multiple filters dbm.DBM are specifies, it will to error.
+	// If multiple filters dbm.DBM are specified, it will return an error.
 	// In case of an error, the count result is going to be 0.
 	Count(ctx context.Context, row id.DBObject, filter ...dbm.DBM) (count int, error error)
 	// Query one or multiple DBObjects from the database
