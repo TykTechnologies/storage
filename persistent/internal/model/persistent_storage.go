@@ -20,8 +20,11 @@ type PersistentStorage interface {
 	Count(context.Context, id.DBObject) (int, error)
 	// Query one or multiple DBObjects from the database
 	Query(context.Context, id.DBObject, interface{}, dbm.DBM) error
-	// UpdateMany updates multiple rows
-	UpdateMany(context.Context, []id.DBObject, ...dbm.DBM) error
+	// BulkUpdate updates multiple rows
+	BulkUpdate(context.Context, []id.DBObject, ...dbm.DBM) error
+	// UpdateAll executes the update query dbm.DBM over
+	// the elements filtered by query dbm.DBM in the row id.DBObject collection
+	UpdateAll(ctx context.Context, row id.DBObject, query, update dbm.DBM) error
 	// IsErrNoRows Checking if an error is a "no rows error"
 	IsErrNoRows(err error) bool
 	// Drop drops the collection given the TableName() of the id.DBObject
