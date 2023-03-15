@@ -1390,7 +1390,7 @@ func TestAutoMigrate(t *testing.T) {
 		assert.NotNil(t, err)
 		assert.Equal(t, err.Error(), model.ErrorRowOptDiffLenght)
 	})
- }
+}
 
 func TestDropDatabase(t *testing.T) {
 	defer cleanDB(t)
