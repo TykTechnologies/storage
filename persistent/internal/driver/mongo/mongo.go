@@ -351,3 +351,7 @@ func (d *mongoDriver) AutoMigrate(ctx context.Context, rows []id.DBObject, opts 
 
 	return nil
 }
+
+func (d *mongoDriver) DropDatabase(ctx context.Context) error {
+	return d.client.Database(d.database).Drop(ctx)
+}
