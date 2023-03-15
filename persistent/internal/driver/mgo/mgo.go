@@ -372,6 +372,39 @@ func (d *mgoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.In
 	return indexes, nil
 }
 
+func (d *mgoDriver) AutoMigrate(ctx context.Context, rows []id.DBObject, opts ...map[string]interface{}) error {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	if len(opts) > 0 && len(opts) != len(rows) {
+		return errors.New(model.ErrorRowOptDiffLenght)
+	}
+
+	for i, row := range rows {
+		col := sess.DB("").C(row.TableName())
+
+		if len(opts) > 0 {
+			opt := buildOpt(opts[i])
+
+			err := col.Create(opt)
+
+			if d.handleStoreError(err) != nil {
+				return err
+			}
+
+			continue
+		}
+
+		err := col.Create(&mgo.CollectionInfo{})
+
+		if d.handleStoreError(err) != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (d *mgoDriver) DropDatabase(ctx context.Context) error {
 	sess := d.session.Copy()
 	defer sess.Close()

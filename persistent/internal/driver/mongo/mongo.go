@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
 
@@ -211,7 +212,7 @@ func (d *mongoDriver) HasTable(ctx context.Context, collection string) (bool, er
 	}
 
 	collections, err := d.client.Database(d.database).ListCollectionNames(ctx, bson.M{"name": collection})
-
+	fmt.Println("collections:", collections, "err:", err)
 	return len(collections) > 0, err
 }
 
@@ -319,6 +320,36 @@ func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.
 	}
 
 	return indexes, nil
+}
+
+func (d *mongoDriver) AutoMigrate(ctx context.Context, rows []id.DBObject, opts ...dbm.DBM) error {
+	if len(opts) > 0 && len(opts) != len(rows) {
+		return errors.New(model.ErrorRowOptDiffLenght)
+	}
+
+	for i, row := range rows {
+		has, err := d.HasTable(ctx, row.TableName())
+		if err != nil {
+			return errors.New("error looking for table: " + err.Error())
+		}
+
+		if !has {
+			var err error
+
+			if len(opts) > 0 {
+				opt := buildOpt(opts[i])
+				err = d.client.Database(d.database).CreateCollection(ctx, row.TableName(), opt)
+			} else {
+				err = d.client.Database(d.database).CreateCollection(ctx, row.TableName())
+			}
+
+			if err != nil {
+				return errors.New("error creating table: " + err.Error())
+			}
+		}
+	}
+
+	return nil
 }
 
 func (d *mongoDriver) DropDatabase(ctx context.Context) error {
