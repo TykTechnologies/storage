@@ -31,9 +31,10 @@ func TestConnect(t *testing.T) {
 		{
 			name: "invalid connection_string",
 			opts: &model.ClientOpts{
-				ConnectionString: "invalid_conn_string",
-				UseSSL:           false,
-				Type:             "mongodb",
+				ConnectionString:  "invalid_conn_string",
+				UseSSL:            false,
+				Type:              "mongodb",
+				ConnectionTimeout: 1,
 			},
 			want: errors.New("no reachable servers"),
 		},

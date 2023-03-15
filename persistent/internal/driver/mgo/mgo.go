@@ -8,15 +8,16 @@ import (
 	"time"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
-	"github.com/TykTechnologies/storage/persistent/index"
-
 	"github.com/TykTechnologies/storage/persistent/id"
+	"github.com/TykTechnologies/storage/persistent/index"
 
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
+
+var _ model.PersistentStorage = &mgoDriver{}
 
 type mgoDriver struct {
 	*lifeCycle
@@ -94,7 +95,7 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...dbm.
 	return d.handleStoreError(col.Update(buildQuery(queries[0]), bson.M{"$set": row}))
 }
 
-func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
+func (d *mgoDriver) BulkUpdate(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
 	if len(rows) == 0 {
 		return errors.New(model.ErrorEmptyRow)
 	}
@@ -128,13 +129,36 @@ func (d *mgoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ..
 	return d.handleStoreError(err)
 }
 
-func (d *mgoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
+func (d *mgoDriver) UpdateAll(ctx context.Context, row id.DBObject, query, update dbm.DBM) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
 	col := sess.DB("").C(row.TableName())
 
-	n, err := col.Find(nil).Count()
+	result, err := col.UpdateAll(buildQuery(query), buildQuery(update))
+	if err == nil && result.Matched == 0 {
+		return mgo.ErrNotFound
+	}
+
+	return d.handleStoreError(err)
+}
+
+func (d *mgoDriver) Count(ctx context.Context, row id.DBObject, filters ...dbm.DBM) (int, error) {
+	if len(filters) > 1 {
+		return 0, errors.New(model.ErrorMultipleDBM)
+	}
+
+	filter := bson.M{}
+	if len(filters) == 1 {
+		filter = buildQuery(filters[0])
+	}
+
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	col := sess.DB("").C(row.TableName())
+
+	n, err := col.Find(filter).Count()
 
 	return n, d.handleStoreError(err)
 }
@@ -346,4 +370,44 @@ func (d *mgoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.In
 	}
 
 	return indexes, nil
+}
+
+func (d *mgoDriver) AutoMigrate(ctx context.Context, rows []id.DBObject, opts ...map[string]interface{}) error {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	if len(opts) > 0 && len(opts) != len(rows) {
+		return errors.New(model.ErrorRowOptDiffLenght)
+	}
+
+	for i, row := range rows {
+		col := sess.DB("").C(row.TableName())
+
+		if len(opts) > 0 {
+			opt := buildOpt(opts[i])
+
+			err := col.Create(opt)
+
+			if d.handleStoreError(err) != nil {
+				return err
+			}
+
+			continue
+		}
+
+		err := col.Create(&mgo.CollectionInfo{})
+
+		if d.handleStoreError(err) != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (d *mgoDriver) DropDatabase(ctx context.Context) error {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	return sess.DB("").DropDatabase()
 }

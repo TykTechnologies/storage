@@ -3,7 +3,6 @@ package mgo
 import (
 	"context"
 	"errors"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -68,6 +67,12 @@ func prepareEnvironment(t *testing.T) (*mgoDriver, *dummyDBObject) {
 	return mgo, object
 }
 
+func cleanDB(t *testing.T) {
+	t.Helper()
+	d, _ := prepareEnvironment(t)
+	helper.ErrPrint(d.DropDatabase(context.Background()))
+}
+
 func dropCollection(t *testing.T, driver *mgoDriver, object *dummyDBObject) {
 	t.Helper()
 	object.invalidCollection = false
@@ -79,6 +84,7 @@ func dropCollection(t *testing.T, driver *mgoDriver, object *dummyDBObject) {
 }
 
 func TestInsert(t *testing.T) {
+	defer cleanDB(t)
 	driver, object := prepareEnvironment(t)
 	defer dropCollection(t, driver, object)
 
@@ -100,6 +106,8 @@ func TestInsert(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
+	defer cleanDB(t)
+
 	driver, object := prepareEnvironment(t)
 	ctx := context.Background()
 
@@ -137,6 +145,8 @@ func TestDelete(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
+	defer cleanDB(t)
+
 	driver, object := prepareEnvironment(t)
 	ctx := context.Background()
 	defer dropCollection(t, driver, object)
@@ -182,7 +192,9 @@ func TestUpdate(t *testing.T) {
 	})
 }
 
-func TestUpdateMany(t *testing.T) {
+func TestBulkUpdate(t *testing.T) {
+	defer cleanDB(t)
+
 	dummyData := []dummyDBObject{
 		{
 			Name: "John", Email: "john@example.com", Id: id.NewObjectID(),
@@ -344,7 +356,7 @@ func TestUpdateMany(t *testing.T) {
 				assert.Nil(t, err)
 			}
 
-			err := driver.UpdateMany(ctx, tc.givenObjects, tc.query...)
+			err := driver.BulkUpdate(ctx, tc.givenObjects, tc.query...)
 			assert.Equal(t, tc.errorExpected, err)
 
 			var result []dummyDBObject
@@ -358,7 +370,179 @@ func TestUpdateMany(t *testing.T) {
 	}
 }
 
+func TestUpdateAll(t *testing.T) {
+	defer cleanDB(t)
+
+	dummyData := []dummyDBObject{
+		{
+			Name: "John", Email: "john@example.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
+			Age:     10,
+		},
+		{
+			Name:  "Jane",
+			Email: "jane@tyk.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"},
+			Age:     8,
+		},
+		{
+			Name:    "Bob",
+			Email:   "bob@example.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"},
+			Age:     25,
+		},
+		{
+			Name: "Alice", Email: "alice@tyk.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
+			Age:     45,
+		},
+		{
+			Name:    "Peter",
+			Email:   "peter@test.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"},
+			Age:     12,
+		},
+	}
+
+	tcs := []struct {
+		testName          string
+		givenQuery        dbm.DBM
+		givenUpdate       dbm.DBM
+		givenObject       id.DBObject
+		expectedNewValues func() []*dummyDBObject
+		errorExpected     error
+	}{
+		{
+			testName:    "unset all age",
+			givenQuery:  dbm.DBM{},
+			givenObject: &dummyDBObject{},
+			givenUpdate: dbm.DBM{"$unset": dbm.DBM{"age": 0}},
+			expectedNewValues: func() []*dummyDBObject {
+				var newDummies []*dummyDBObject
+
+				for i := range dummyData {
+					dummy := dummyData[i]
+					dummy.Age = 0
+
+					newDummies = append(newDummies, &dummy)
+				}
+
+				return newDummies
+			},
+		},
+		{
+			testName:    "set all age to 50",
+			givenQuery:  dbm.DBM{},
+			givenObject: &dummyDBObject{},
+			givenUpdate: dbm.DBM{"$set": dbm.DBM{"age": 50}},
+			expectedNewValues: func() []*dummyDBObject {
+				var newDummies []*dummyDBObject
+
+				for i := range dummyData {
+					dummy := dummyData[i]
+					dummy.Age = 50
+
+					newDummies = append(newDummies, &dummy)
+				}
+
+				return newDummies
+			},
+		},
+		{
+			testName: "increment age by those with tyk.com email by 10",
+			givenQuery: dbm.DBM{
+				"email": dbm.DBM{
+					"$regex": "tyk.com$",
+				},
+			},
+			givenObject: &dummyDBObject{},
+			givenUpdate: dbm.DBM{"$inc": dbm.DBM{"age": 10}},
+			expectedNewValues: func() []*dummyDBObject {
+				var newDummies []*dummyDBObject
+
+				for i := range dummyData {
+					dummy := dummyData[i]
+					newDummies = append(newDummies, &dummy)
+				}
+
+				newDummies[1].Age = 18
+				newDummies[3].Age = 55
+				return newDummies
+			},
+		},
+		{
+			testName: "set nested Country.CountryName value of John",
+			givenQuery: dbm.DBM{
+				"name": "John",
+			},
+			givenObject: &dummyDBObject{},
+			givenUpdate: dbm.DBM{"$set": dbm.DBM{"country.country_name": "test"}},
+			expectedNewValues: func() []*dummyDBObject {
+				var newDummies []*dummyDBObject
+
+				for i := range dummyData {
+					dummy := dummyData[i]
+					newDummies = append(newDummies, &dummy)
+				}
+				newDummies[0].Country = dummyCountryField{
+					CountryName: "test",
+					Continent:   "TestContinent",
+				}
+				return newDummies
+			},
+		},
+		{
+			testName: "no document query should return all the same",
+			givenQuery: dbm.DBM{
+				"random": "query",
+			},
+			givenObject:   &dummyDBObject{},
+			errorExpected: mgo.ErrNotFound,
+			givenUpdate:   dbm.DBM{"$set": dbm.DBM{"country.country_name": "test"}},
+			expectedNewValues: func() []*dummyDBObject {
+				var newDummies []*dummyDBObject
+
+				for i := range dummyData {
+					dummy := dummyData[i]
+					newDummies = append(newDummies, &dummy)
+				}
+				return newDummies
+			},
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.testName, func(t *testing.T) {
+			driver, object := prepareEnvironment(t)
+			ctx := context.Background()
+			defer helper.ErrPrint(driver.Drop(ctx, object))
+
+			for _, obj := range dummyData {
+				err := driver.Insert(ctx, &obj)
+				assert.Nil(t, err)
+			}
+
+			err := driver.UpdateAll(ctx, tc.givenObject, tc.givenQuery, tc.givenUpdate)
+			assert.Equal(t, tc.errorExpected, err)
+
+			var result []dummyDBObject
+			err = driver.Query(ctx, tc.givenObject, &result, dbm.DBM{})
+			assert.Nil(t, err)
+
+			for i, expected := range tc.expectedNewValues() {
+				assert.EqualValues(t, expected, &result[i])
+			}
+		})
+	}
+}
+
 func TestIsErrNoRows(t *testing.T) {
+	defer cleanDB(t)
+
 	mgoDriver := mgoDriver{}
 
 	assert.True(t, mgoDriver.IsErrNoRows(mgo.ErrNotFound))
@@ -367,70 +551,144 @@ func TestIsErrNoRows(t *testing.T) {
 }
 
 func TestCount(t *testing.T) {
-	tests := []struct {
-		name    string
-		want    int
-		wantErr bool
+	defer cleanDB(t)
+
+	dummyData := []dummyDBObject{
+		{
+			Name: "John", Email: "john@example.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
+			Age:     10,
+		},
+		{
+			Name:  "Jane",
+			Email: "jane@tyk.com", Id: id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"},
+			Age:     8,
+		},
+		{
+			Name:    "Bob",
+			Email:   "bob@example.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"},
+			Age:     25,
+		},
+		{
+			Name: "Alice", Email: "alice@tyk.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
+			Age:     45,
+		},
+		{
+			Name:    "Peter",
+			Email:   "peter@test.com",
+			Id:      id.NewObjectID(),
+			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"},
+			Age:     12,
+		},
+	}
+
+	ctx := context.Background()
+
+	tcs := []struct {
+		name        string
+		prepareTc   func(*testing.T) (*mgoDriver, *dummyDBObject)
+		givenFilter []dbm.DBM
+		want        int
+		wantErr     error
 	}{
 		{
-			name: "0 objects",
-			want: 0,
+			name:      "0 objects",
+			want:      0,
+			prepareTc: prepareEnvironment,
 		},
 		{
 			name: "1 object",
 			want: 1,
-		},
-		{
-			name: "2 objects",
-			want: 2,
-		},
-		{
-			name: "10 objects",
-			want: 10,
-		},
-		{
-			name:    "failing because of invalid table name",
-			want:    0,
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			prepareTc: func(t *testing.T) (*mgoDriver, *dummyDBObject) {
+				t.Helper()
 
-			driver, object := prepareEnvironment(t)
-			defer dropCollection(t, driver, object)
-
-			for i := 0; i < tt.want; i++ {
-				object = &dummyDBObject{
-					Name:  "test" + strconv.Itoa(i),
-					Email: "test@test.com",
-					Country: dummyCountryField{
-						CountryName: "TestCountry" + strconv.Itoa(i),
-						Continent:   "TestContinent",
-					},
-					Age: i,
-				}
+				driver, object := prepareEnvironment(t)
 
 				err := driver.Insert(ctx, object)
 				assert.Nil(t, err)
-			}
 
-			object.invalidCollection = tt.wantErr
+				return driver, object
+			},
+		},
+		{
+			name: "5 objects",
+			want: 5,
+			prepareTc: func(t *testing.T) (*mgoDriver, *dummyDBObject) {
+				t.Helper()
 
-			got, err := driver.Count(ctx, object)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("mgoDriver.Count() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("mgoDriver.Count() = %v, want %v", got, tt.want)
-			}
+				driver, object := prepareEnvironment(t)
+
+				for _, obj := range dummyData {
+					err := driver.Insert(ctx, &obj)
+					assert.Nil(t, err)
+				}
+
+				return driver, object
+			},
+		},
+		{
+			name:        "count with filter",
+			want:        2,
+			givenFilter: []dbm.DBM{{"country.country_name": "TestCountry"}},
+			prepareTc: func(t *testing.T) (*mgoDriver, *dummyDBObject) {
+				t.Helper()
+
+				driver, object := prepareEnvironment(t)
+
+				for _, obj := range dummyData {
+					err := driver.Insert(ctx, &obj)
+					assert.Nil(t, err)
+				}
+
+				return driver, object
+			},
+		},
+		{
+			name:        "count with filter, multiple options",
+			want:        1,
+			givenFilter: []dbm.DBM{{"country.country_name": "TestCountry", "email": "john@example.com"}},
+			prepareTc: func(t *testing.T) (*mgoDriver, *dummyDBObject) {
+				t.Helper()
+
+				driver, object := prepareEnvironment(t)
+
+				for _, obj := range dummyData {
+					err := driver.Insert(ctx, &obj)
+					assert.Nil(t, err)
+				}
+
+				return driver, object
+			},
+		},
+		{
+			name:        "count with multiple filters",
+			want:        0,
+			wantErr:     errors.New(model.ErrorMultipleDBM),
+			givenFilter: []dbm.DBM{{"country.country_name": "TestCountry"}, {"testName": "test"}},
+			prepareTc:   prepareEnvironment,
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			driver, object := tc.prepareTc(t)
+			defer cleanDB(t)
+
+			got, err := driver.Count(ctx, object, tc.givenFilter...)
+			assert.Equal(t, tc.want, got)
+			assert.Equal(t, tc.wantErr, err)
 		})
 	}
 }
 
 func TestQuery(t *testing.T) {
+	defer cleanDB(t)
+
 	type args struct {
 		result interface{}
 		query  dbm.DBM
@@ -618,6 +876,8 @@ func TestQuery(t *testing.T) {
 }
 
 func TestDeleteWithQuery(t *testing.T) {
+	defer cleanDB(t)
+
 	driver, obj := prepareEnvironment(t)
 	driver.Drop(context.Background(), obj)
 
@@ -773,6 +1033,8 @@ func TestDeleteWithQuery(t *testing.T) {
 }
 
 func TestHandleStoreError(t *testing.T) {
+	defer cleanDB(t)
+
 	driver, _ := prepareEnvironment(t)
 
 	tests := []struct {
@@ -844,6 +1106,8 @@ func TestHandleStoreError(t *testing.T) {
 }
 
 func TestIndexes(t *testing.T) {
+	defer cleanDB(t)
+
 	tcs := []struct {
 		testName          string
 		givenIndex        index.Index
@@ -981,6 +1245,8 @@ func TestIndexes(t *testing.T) {
 }
 
 func TestPing(t *testing.T) {
+	defer cleanDB(t)
+
 	t.Run("ping ok", func(t *testing.T) {
 		driver, _ := prepareEnvironment(t)
 		err := driver.Ping(context.Background())
@@ -1003,6 +1269,8 @@ func TestPing(t *testing.T) {
 }
 
 func TestHasTable(t *testing.T) {
+	defer cleanDB(t)
+
 	t.Run("HasTable sess closed", func(t *testing.T) {
 		driver, _ := prepareEnvironment(t)
 		driver.Close()
@@ -1026,9 +1294,7 @@ func TestHasTable(t *testing.T) {
 		// Test when collection exists
 		driver, object := prepareEnvironment(t)
 		err := driver.Insert(context.Background(), object)
-		if err != nil {
-			t.Errorf("HasTable(): unexpected error, err=%v", err)
-		}
+		assert.Nil(t, err)
 		defer dropCollection(t, driver, object)
 		result, err := driver.HasTable(context.Background(), "dummy")
 		assert.Nil(t, err)
@@ -1042,4 +1308,115 @@ func TestHasTable(t *testing.T) {
 		assert.Nil(t, err)
 		assert.False(t, result)
 	})
+}
+
+func TestAutoMigrate(t *testing.T) {
+	t.Run("AutoMigrate 1 object with no opts", func(t *testing.T) {
+		driver, obj := prepareEnvironment(t)
+		defer dropCollection(t, driver, obj)
+		colNames, err := driver.db.CollectionNames()
+		assert.Nil(t, err)
+
+		for _, colName := range colNames {
+			err := driver.db.C(colName).DropCollection()
+			assert.Nil(t, err)
+		}
+
+		objs := []id.DBObject{obj}
+
+		err = driver.AutoMigrate(context.Background(), objs)
+		assert.Nil(t, err)
+
+		cols, err := driver.db.CollectionNames()
+		assert.Nil(t, err)
+
+		assert.Len(t, cols, 1)
+		assert.Equal(t, "dummy", cols[0])
+	})
+
+	t.Run("AutoMigrate 1 object with opts", func(t *testing.T) {
+		driver, obj := prepareEnvironment(t)
+		defer dropCollection(t, driver, obj)
+		colNames, err := driver.db.CollectionNames()
+		assert.Nil(t, err)
+
+		for _, colName := range colNames {
+			err := driver.db.C(colName).DropCollection()
+			assert.Nil(t, err)
+		}
+
+		objs := []id.DBObject{obj}
+		opt := dbm.DBM{
+			"capped":   true,
+			"maxBytes": 1234,
+		}
+
+		err = driver.AutoMigrate(context.Background(), objs, opt)
+		assert.Nil(t, err)
+
+		cols, err := driver.db.CollectionNames()
+		assert.Nil(t, err)
+
+		assert.Len(t, cols, 1)
+		assert.Equal(t, "dummy", cols[0])
+
+		stats := bson.M{}
+		err = driver.db.Run(bson.M{"collStats": "dummy"}, &stats)
+		assert.Nil(t, err)
+
+		assert.True(t, stats["capped"].(bool))
+	})
+
+	t.Run("AutoMigrate 1 object with multiple opts", func(t *testing.T) {
+		driver, obj := prepareEnvironment(t)
+		colNames, err := driver.db.CollectionNames()
+		assert.Nil(t, err)
+
+		for _, colName := range colNames {
+			err := driver.db.C(colName).DropCollection()
+			assert.Nil(t, err)
+		}
+
+		objs := []id.DBObject{obj}
+		opt := dbm.DBM{
+			"capped":   true,
+			"maxBytes": 1234,
+		}
+		opt2 := dbm.DBM{
+			"size": 1234,
+		}
+
+		err = driver.AutoMigrate(context.Background(), objs, opt, opt2)
+		assert.NotNil(t, err)
+		assert.Equal(t, err.Error(), model.ErrorRowOptDiffLenght)
+	})
+}
+
+func TestDropDatabase(t *testing.T) {
+	defer cleanDB(t)
+	driver, object := prepareEnvironment(t)
+
+	initialDatabases, err := driver.session.DatabaseNames()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	initialDatabaseCount := len(initialDatabases)
+	// insert object so we force the database-collection creation
+	err = driver.Insert(context.Background(), object)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = driver.DropDatabase(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	databases, err := driver.session.DatabaseNames()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, initialDatabaseCount, len(databases))
 }

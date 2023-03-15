@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
 
@@ -14,6 +15,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+var _ model.PersistentStorage = &mongoDriver{}
 
 type mongoDriver struct {
 	*lifeCycle
@@ -73,10 +76,19 @@ func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject, query ...dbm.
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) Count(ctx context.Context, row id.DBObject) (int, error) {
+func (d *mongoDriver) Count(ctx context.Context, row id.DBObject, filters ...dbm.DBM) (int, error) {
+	if len(filters) > 1 {
+		return 0, errors.New(model.ErrorMultipleDBM)
+	}
+
+	filter := bson.M{}
+	if len(filters) == 1 {
+		filter = buildQuery(filters[0])
+	}
+
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
-	count, err := collection.CountDocuments(ctx, bson.D{})
+	count, err := collection.CountDocuments(ctx, filter)
 
 	return int(count), d.handleStoreError(err)
 }
@@ -143,7 +155,7 @@ func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...dbm.
 
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
-	result, err := collection.UpdateOne(ctx, buildQuery(query[0]), bson.D{{Key: "$set", Value: row}})
+	result, err := collection.UpdateMany(ctx, buildQuery(query[0]), bson.D{{Key: "$set", Value: row}})
 	if err == nil && result.MatchedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
@@ -151,7 +163,7 @@ func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...dbm.
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
+func (d *mongoDriver) BulkUpdate(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
 	if len(query) > 0 && len(query) != len(rows) {
 		return errors.New(model.ErrorRowQueryDiffLenght)
 	}
@@ -168,15 +180,25 @@ func (d *mongoDriver) UpdateMany(ctx context.Context, rows []id.DBObject, query 
 		if len(query) == 0 {
 			update.SetFilter(dbm.DBM{"_id": rows[i].GetObjectID()})
 		} else {
-			update.SetFilter(query[i])
+			update.SetFilter(buildQuery(query[i]))
 		}
 
 		bulkQuery = append(bulkQuery, update)
 	}
 
 	collection := d.client.Database(d.database).Collection(rows[0].TableName())
-
 	result, err := collection.BulkWrite(ctx, bulkQuery)
+	if err == nil && result.MatchedCount == 0 {
+		return mongo.ErrNoDocuments
+	}
+
+	return d.handleStoreError(err)
+}
+
+func (d *mongoDriver) UpdateAll(ctx context.Context, row id.DBObject, query, update dbm.DBM) error {
+	collection := d.client.Database(d.database).Collection(row.TableName())
+
+	result, err := collection.UpdateMany(ctx, buildQuery(query), buildQuery(update))
 	if err == nil && result.MatchedCount == 0 {
 		return mongo.ErrNoDocuments
 	}
@@ -190,7 +212,7 @@ func (d *mongoDriver) HasTable(ctx context.Context, collection string) (bool, er
 	}
 
 	collections, err := d.client.Database(d.database).ListCollectionNames(ctx, bson.M{"name": collection})
-
+	fmt.Println("collections:", collections, "err:", err)
 	return len(collections) > 0, err
 }
 
@@ -298,4 +320,38 @@ func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.
 	}
 
 	return indexes, nil
+}
+
+func (d *mongoDriver) AutoMigrate(ctx context.Context, rows []id.DBObject, opts ...dbm.DBM) error {
+	if len(opts) > 0 && len(opts) != len(rows) {
+		return errors.New(model.ErrorRowOptDiffLenght)
+	}
+
+	for i, row := range rows {
+		has, err := d.HasTable(ctx, row.TableName())
+		if err != nil {
+			return errors.New("error looking for table: " + err.Error())
+		}
+
+		if !has {
+			var err error
+
+			if len(opts) > 0 {
+				opt := buildOpt(opts[i])
+				err = d.client.Database(d.database).CreateCollection(ctx, row.TableName(), opt)
+			} else {
+				err = d.client.Database(d.database).CreateCollection(ctx, row.TableName())
+			}
+
+			if err != nil {
+				return errors.New("error creating table: " + err.Error())
+			}
+		}
+	}
+
+	return nil
+}
+
+func (d *mongoDriver) DropDatabase(ctx context.Context) error {
+	return d.client.Database(d.database).Drop(ctx)
 }
