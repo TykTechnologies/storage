@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -105,20 +106,55 @@ func TestInsert(t *testing.T) {
 	driver, object := prepareEnvironment(t)
 	ctx := context.Background()
 
-	// insert the object into the database
-	err := driver.Insert(ctx, object)
-	assert.Nil(t, err)
-	// delete the collection
-	defer driver.Drop(ctx, object)
+	t.Run("inserting a new object", func(t *testing.T) {
+		defer cleanDB(t)
+		// insert the object into the database
+		err := driver.Insert(ctx, object)
+		assert.Nil(t, err)
+		// delete the collection
+		defer cleanDB(t)
 
-	// check if the object was inserted
-	var result dummyDBObject
-	err = driver.Query(ctx, object, &result, dbm.DBM{"_id": object.GetObjectID()})
-	assert.Nil(t, err)
+		// check if the object was inserted
+		var result dummyDBObject
+		err = driver.Query(ctx, object, &result, dbm.DBM{"_id": object.GetObjectID()})
+		assert.Nil(t, err)
 
-	assert.Equal(t, object.Name, result.Name)
-	assert.Equal(t, object.Email, result.Email)
-	assert.Equal(t, object.GetObjectID(), result.GetObjectID())
+		assert.Equal(t, object.Name, result.Name)
+		assert.Equal(t, object.Email, result.Email)
+		assert.Equal(t, object.GetObjectID(), result.GetObjectID())
+	})
+	t.Run("inserting multiple objects", func(t *testing.T) {
+		objects := []id.DBObject{}
+
+		for i := 0; i < 3; i++ {
+			objects = append(objects, &dummyDBObject{
+				Name:  "test" + strconv.Itoa(i),
+				Email: "email@email.com",
+				Id:    id.NewObjectID(),
+			})
+		}
+
+		// insert the objects into the database
+		err := driver.Insert(ctx, objects...)
+		assert.Nil(t, err)
+		// delete the collection
+		defer cleanDB(t)
+
+		// check if the objects were inserted
+		var result []dummyDBObject
+		err = driver.Query(ctx, object, &result, dbm.DBM{})
+		assert.Nil(t, err)
+		assert.Len(t, result, len(objects))
+		for i, obj := range objects {
+			assert.Equal(t, obj.GetObjectID(), result[i].GetObjectID())
+		}
+	})
+
+	t.Run("inserting 0 objects", func(t *testing.T) {
+		err := driver.Insert(ctx)
+		assert.NotNil(t, err)
+		assert.Equal(t, err.Error(), model.ErrorEmptyRow)
+	})
 }
 
 func TestDelete(t *testing.T) {

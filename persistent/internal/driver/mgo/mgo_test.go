@@ -3,6 +3,7 @@ package mgo
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -88,21 +89,58 @@ func TestInsert(t *testing.T) {
 	driver, object := prepareEnvironment(t)
 	defer dropCollection(t, driver, object)
 
-	// insert the object into the database
-	err := driver.Insert(context.Background(), object)
-	assert.Nil(t, err)
+	ctx := context.Background()
 
-	// check if the object was inserted
+	t.Run("inserting one object", func(t *testing.T) {
+		defer dropCollection(t, driver, object)
+		// insert the object into the database
+		err := driver.Insert(ctx, object)
+		assert.Nil(t, err)
 
-	var result dummyDBObject
-	err = driver.Query(context.Background(), object, &result, dbm.DBM{"_id": object.GetObjectID()})
-	assert.Nil(t, err)
+		// check if the object was inserted
 
-	assert.Equal(t, object.Name, result.Name)
-	assert.Equal(t, object.Email, result.Email)
-	assert.Equal(t, object.Country, result.Country)
-	assert.Equal(t, object.Age, result.Age)
-	assert.Equal(t, object.GetObjectID(), result.GetObjectID())
+		var result dummyDBObject
+		err = driver.Query(context.Background(), object, &result, dbm.DBM{"_id": object.GetObjectID()})
+		assert.Nil(t, err)
+
+		assert.Equal(t, object.Name, result.Name)
+		assert.Equal(t, object.Email, result.Email)
+		assert.Equal(t, object.Country, result.Country)
+		assert.Equal(t, object.Age, result.Age)
+		assert.Equal(t, object.GetObjectID(), result.GetObjectID())
+	})
+	t.Run("inserting multiple objects", func(t *testing.T) {
+		objects := []id.DBObject{}
+
+		for i := 0; i < 3; i++ {
+			objects = append(objects, &dummyDBObject{
+				Name:  "test" + strconv.Itoa(i),
+				Email: "email@email.com",
+				Id:    id.NewObjectID(),
+			})
+		}
+
+		// insert the objects into the database
+		err := driver.Insert(ctx, objects...)
+		assert.Nil(t, err)
+		// delete the collection
+		defer dropCollection(t, driver, object)
+
+		// check if the objects were inserted
+		var result []dummyDBObject
+		err = driver.Query(ctx, object, &result, dbm.DBM{})
+		assert.Nil(t, err)
+		assert.Len(t, result, len(objects))
+		for i, obj := range objects {
+			assert.Equal(t, obj.GetObjectID(), result[i].GetObjectID())
+		}
+	})
+
+	t.Run("inserting 0 objects", func(t *testing.T) {
+		err := driver.Insert(ctx)
+		assert.NotNil(t, err)
+		assert.Equal(t, err.Error(), model.ErrorEmptyRow)
+	})
 }
 
 func TestDelete(t *testing.T) {
