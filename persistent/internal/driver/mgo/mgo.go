@@ -42,17 +42,28 @@ func NewMgoDriver(opts *model.ClientOpts) (*mgoDriver, error) {
 	return newDriver, nil
 }
 
-func (d *mgoDriver) Insert(ctx context.Context, row id.DBObject) error {
-	if row.GetObjectID() == "" {
-		row.SetObjectID(id.NewObjectID())
+func (d *mgoDriver) Insert(ctx context.Context, rows ...id.DBObject) error {
+	if len(rows) == 0 {
+		return errors.New(model.ErrorEmptyRow)
 	}
 
 	sess := d.session.Copy()
 	defer sess.Close()
 
-	col := sess.DB("").C(row.TableName())
+	colName := rows[0].TableName()
+	col := sess.DB("").C(colName)
+	bulk := col.Bulk()
 
-	return d.handleStoreError(col.Insert(row))
+	for _, row := range rows {
+		if row.GetObjectID() == "" {
+			row.SetObjectID(id.NewObjectID())
+		}
+		bulk.Insert(row)
+	}
+
+	_, err := bulk.Run()
+
+	return d.handleStoreError(err)
 }
 
 func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject, queries ...dbm.DBM) error {

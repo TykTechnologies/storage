@@ -44,14 +44,25 @@ func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
 	return newDriver, nil
 }
 
-func (d *mongoDriver) Insert(ctx context.Context, row id.DBObject) error {
-	if row.GetObjectID() == "" {
-		row.SetObjectID(id.NewObjectID())
+func (d *mongoDriver) Insert(ctx context.Context, rows ...id.DBObject) error {
+	if len(rows) == 0 {
+		return errors.New(model.ErrorEmptyRow)
 	}
 
-	collection := d.client.Database(d.database).Collection(row.TableName())
+	var bulkQuery []mongo.WriteModel
 
-	_, err := collection.InsertOne(ctx, row)
+	for _, row := range rows {
+
+		if row.GetObjectID() == "" {
+			row.SetObjectID(id.NewObjectID())
+		}
+
+		model := mongo.NewInsertOneModel().SetDocument(row)
+		bulkQuery = append(bulkQuery, model)
+	}
+
+	collection := d.client.Database(d.database).Collection(rows[0].TableName())
+	_, err := collection.BulkWrite(ctx, bulkQuery)
 
 	return d.handleStoreError(err)
 }
