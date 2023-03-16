@@ -1385,8 +1385,8 @@ func TestHasTable(t *testing.T) {
 	})
 }
 
-func TestAutoMigrate(t *testing.T) {
-	t.Run("AutoMigrate 1 object with no opts", func(t *testing.T) {
+func TestMigrate(t *testing.T) {
+	t.Run("Migrate 1 object with no opts", func(t *testing.T) {
 		driver, obj := prepareEnvironment(t)
 		defer helper.ErrPrint(driver.Drop(context.Background(), obj))
 		colNames, err := driver.client.Database(driver.database).ListCollectionNames(context.Background(), bson.M{})
@@ -1399,7 +1399,7 @@ func TestAutoMigrate(t *testing.T) {
 
 		objs := []id.DBObject{obj}
 
-		err = driver.AutoMigrate(context.Background(), objs)
+		err = driver.Migrate(context.Background(), objs)
 		assert.Nil(t, err)
 
 		colNames, err = driver.client.Database(driver.database).ListCollectionNames(context.Background(), bson.M{})
@@ -1409,7 +1409,7 @@ func TestAutoMigrate(t *testing.T) {
 		assert.Equal(t, "dummy", colNames[0])
 	})
 
-	t.Run("AutoMigrate 1 object with opts", func(t *testing.T) {
+	t.Run("Migrate 1 object with opts", func(t *testing.T) {
 		driver, obj := prepareEnvironment(t)
 		defer helper.ErrPrint(driver.Drop(context.Background(), obj))
 		colNames, err := driver.client.Database(driver.database).ListCollectionNames(context.Background(), bson.M{})
@@ -1426,7 +1426,7 @@ func TestAutoMigrate(t *testing.T) {
 			"size":   1234,
 		}
 
-		err = driver.AutoMigrate(context.Background(), objs, opt)
+		err = driver.Migrate(context.Background(), objs, opt)
 		assert.Nil(t, err)
 
 		colNames, err = driver.client.Database(driver.database).ListCollectionNames(context.Background(), bson.M{})
@@ -1446,7 +1446,7 @@ func TestAutoMigrate(t *testing.T) {
 		}
 	})
 
-	t.Run("AutoMigrate 1 object with multiple opts", func(t *testing.T) {
+	t.Run("Migrate 1 object with multiple opts", func(t *testing.T) {
 		driver, obj := prepareEnvironment(t)
 		colNames, err := driver.client.Database(driver.database).ListCollectionNames(context.Background(), bson.M{})
 		assert.Nil(t, err)
@@ -1465,7 +1465,7 @@ func TestAutoMigrate(t *testing.T) {
 			"size": 1234,
 		}
 
-		err = driver.AutoMigrate(context.Background(), objs, opt, opt2)
+		err = driver.Migrate(context.Background(), objs, opt, opt2)
 		assert.NotNil(t, err)
 		assert.Equal(t, err.Error(), model.ErrorRowOptDiffLenght)
 	})
