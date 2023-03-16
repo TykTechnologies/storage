@@ -42,4 +42,6 @@ type PersistentStorage interface {
 	HasTable(context.Context, string) (bool, error)
 	// DropDatabase removes the database
 	DropDatabase(ctx context.Context) error
+	// AutoMigrate creates the table/collection if it doesn't exist
+	AutoMigrate(context.Context, []id.DBObject, ...dbm.DBM) error
 }
