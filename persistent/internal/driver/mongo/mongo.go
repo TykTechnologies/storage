@@ -52,7 +52,6 @@ func (d *mongoDriver) Insert(ctx context.Context, rows ...id.DBObject) error {
 	var bulkQuery []mongo.WriteModel
 
 	for _, row := range rows {
-
 		if row.GetObjectID() == "" {
 			row.SetObjectID(id.NewObjectID())
 		}

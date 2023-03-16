@@ -58,6 +58,7 @@ func (d *mgoDriver) Insert(ctx context.Context, rows ...id.DBObject) error {
 		if row.GetObjectID() == "" {
 			row.SetObjectID(id.NewObjectID())
 		}
+
 		bulk.Insert(row)
 	}
 
