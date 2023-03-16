@@ -332,7 +332,7 @@ func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.
 	return indexes, nil
 }
 
-func (d *mongoDriver) AutoMigrate(ctx context.Context, rows []id.DBObject, opts ...dbm.DBM) error {
+func (d *mongoDriver) Migrate(ctx context.Context, rows []id.DBObject, opts ...dbm.DBM) error {
 	if len(opts) > 0 && len(opts) != len(rows) {
 		return errors.New(model.ErrorRowOptDiffLenght)
 	}

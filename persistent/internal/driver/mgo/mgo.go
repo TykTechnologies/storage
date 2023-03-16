@@ -384,7 +384,7 @@ func (d *mgoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.In
 	return indexes, nil
 }
 
-func (d *mgoDriver) AutoMigrate(ctx context.Context, rows []id.DBObject, opts ...map[string]interface{}) error {
+func (d *mgoDriver) Migrate(ctx context.Context, rows []id.DBObject, opts ...dbm.DBM) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
