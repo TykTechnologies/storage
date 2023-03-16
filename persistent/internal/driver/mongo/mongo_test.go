@@ -105,13 +105,14 @@ func TestInsert(t *testing.T) {
 
 	driver, object := prepareEnvironment(t)
 	ctx := context.Background()
+
 	t.Run("inserting a new object", func(t *testing.T) {
 		defer cleanDB(t)
 		// insert the object into the database
 		err := driver.Insert(ctx, object)
 		assert.Nil(t, err)
 		// delete the collection
-		defer driver.Drop(ctx, object)
+		defer cleanDB(t)
 
 		// check if the object was inserted
 		var result dummyDBObject
@@ -122,9 +123,7 @@ func TestInsert(t *testing.T) {
 		assert.Equal(t, object.Email, result.Email)
 		assert.Equal(t, object.GetObjectID(), result.GetObjectID())
 	})
-
 	t.Run("inserting multiple objects", func(t *testing.T) {
-
 		objects := []id.DBObject{}
 
 		for i := 0; i < 3; i++ {
@@ -139,7 +138,7 @@ func TestInsert(t *testing.T) {
 		err := driver.Insert(ctx, objects...)
 		assert.Nil(t, err)
 		// delete the collection
-		defer driver.Drop(ctx, object)
+		defer cleanDB(t)
 
 		// check if the objects were inserted
 		var result []dummyDBObject
@@ -156,7 +155,6 @@ func TestInsert(t *testing.T) {
 		assert.NotNil(t, err)
 		assert.Equal(t, err.Error(), model.ErrorEmptyRow)
 	})
-
 }
 
 func TestDelete(t *testing.T) {

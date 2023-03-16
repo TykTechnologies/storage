@@ -88,7 +88,9 @@ func TestInsert(t *testing.T) {
 	defer cleanDB(t)
 	driver, object := prepareEnvironment(t)
 	defer dropCollection(t, driver, object)
+
 	ctx := context.Background()
+
 	t.Run("inserting one object", func(t *testing.T) {
 		defer dropCollection(t, driver, object)
 		// insert the object into the database
@@ -107,9 +109,7 @@ func TestInsert(t *testing.T) {
 		assert.Equal(t, object.Age, result.Age)
 		assert.Equal(t, object.GetObjectID(), result.GetObjectID())
 	})
-
 	t.Run("inserting multiple objects", func(t *testing.T) {
-
 		objects := []id.DBObject{}
 
 		for i := 0; i < 3; i++ {
