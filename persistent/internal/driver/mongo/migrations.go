@@ -16,11 +16,11 @@ func buildOpt(opt dbm.DBM) *options.CreateCollectionOptions {
 		opts.SetCollation(buildCollation(val))
 	}
 
-	if val, ok := opt["max"].(int); ok {
+	if val, ok := opt["maxDocs"].(int); ok {
 		opts.SetMaxDocuments(int64(val))
 	}
 
-	if val, ok := opt["size"].(int); ok {
+	if val, ok := opt["maxBytes"].(int); ok {
 		opts.SetSizeInBytes(int64(val))
 	}
 
