@@ -44,4 +44,6 @@ type PersistentStorage interface {
 	DropDatabase(ctx context.Context) error
 	// Migrate creates the table/collection if it doesn't exist
 	Migrate(context.Context, []id.DBObject, ...dbm.DBM) error
+	// Aggregate performs an aggregation query
+	Aggregate(context.Context, id.DBObject, []dbm.DBM) ([]dbm.DBM, error)
 }
