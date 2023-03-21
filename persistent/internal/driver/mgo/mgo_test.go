@@ -1458,3 +1458,225 @@ func TestDropDatabase(t *testing.T) {
 
 	assert.Equal(t, initialDatabaseCount, len(databases))
 }
+
+func TestAggregate(t *testing.T) {
+	defer cleanDB(t)
+	driver, object := prepareEnvironment(t)
+	object.SetObjectID(id.NewObjectID())
+
+	// Insert the object into the database
+	ctx := context.Background()
+	err := driver.Insert(ctx, object)
+	assert.Nil(t, err)
+
+	// Insert the object2 into the database
+	object2 := &dummyDBObject{
+		Name:  "Peter",
+		Email: "peter@email.com",
+		Country: dummyCountryField{
+			Continent:   "Europe",
+			CountryName: "Germany",
+		},
+		Age: 15,
+	}
+	err = driver.Insert(ctx, object2)
+	assert.Nil(t, err)
+
+	// Define an array of test cases
+	tests := []struct {
+		name           string
+		pipeline       []dbm.DBM
+		expectedResult []dbm.DBM
+	}{
+		{
+			name: "aggregating one object",
+			pipeline: []dbm.DBM{
+				{
+					"$match": dbm.DBM{"_id": object.GetObjectID()},
+				},
+			},
+			expectedResult: []dbm.DBM{{
+				"_id":   object.GetObjectID(),
+				"name":  object.Name,
+				"email": object.Email,
+				"country": dbm.DBM{
+					"continent":    object.Country.Continent,
+					"country_name": object.Country.CountryName,
+				},
+				"age": object.Age,
+			}},
+		},
+		{
+			name: "aggregating objects with $project, $sort and $limit",
+			pipeline: []dbm.DBM{
+				{
+					"$project": dbm.DBM{
+						"_id":     1,
+						"name":    1,
+						"country": 1,
+						"age":     1,
+					},
+				},
+				{
+					"$sort": dbm.DBM{"name": 1},
+				},
+				{
+					"$limit": 1,
+				},
+			},
+			expectedResult: []dbm.DBM{
+				{
+					"_id":  object2.GetObjectID(),
+					"name": object2.Name,
+					"country": dbm.DBM{
+						"continent":    object2.Country.Continent,
+						"country_name": object2.Country.CountryName,
+					},
+					"age": object2.Age,
+				},
+			},
+		},
+		{
+			name: "aggregating objects with $group and sorting by age",
+			pipeline: []dbm.DBM{
+				{
+					"$group": dbm.DBM{
+						"_id": "$country.continent",
+					},
+				},
+				{
+					"$sort": dbm.DBM{"age": 1},
+				},
+			},
+			expectedResult: []dbm.DBM{
+				{
+					"_id": object.Country.Continent,
+				},
+				{
+					"_id": object2.Country.Continent,
+				},
+			},
+		},
+		{
+			name: "aggregating objects with $limit and $skip",
+			pipeline: []dbm.DBM{
+				{
+					"$sort": dbm.DBM{"age": 1},
+				},
+				{
+					"$skip": 1,
+				},
+				{
+					"$limit": 1,
+				},
+			},
+			expectedResult: []dbm.DBM{{
+				"_id":  object2.GetObjectID(),
+				"name": object2.Name,
+				"country": dbm.DBM{
+					"continent":    object2.Country.Continent,
+					"country_name": object2.Country.CountryName,
+				},
+				"age":   object2.Age,
+				"email": "peter@email.com",
+			}},
+		},
+		{
+			name: "aggregating objects with $unwind",
+			pipeline: []dbm.DBM{
+				{
+					"$unwind": "$country.country_name",
+				},
+			},
+			expectedResult: []dbm.DBM{
+				{
+					"_id":   object.GetObjectID(),
+					"name":  object.Name,
+					"email": object.Email,
+					"country": dbm.DBM{
+						"continent":    object.Country.Continent,
+						"country_name": object.Country.CountryName,
+					},
+					"age": object.Age,
+				},
+				{
+					"_id":   object2.GetObjectID(),
+					"name":  object2.Name,
+					"email": object2.Email,
+					"country": dbm.DBM{
+						"continent":    object2.Country.Continent,
+						"country_name": object2.Country.CountryName,
+					},
+					"age": object2.Age,
+				},
+			},
+		},
+		{
+			name: "aggregating objects with $match and $group operators",
+			pipeline: []dbm.DBM{
+				{
+					"$match": dbm.DBM{"country.continent": "Europe"},
+				},
+				{
+					"$group": dbm.DBM{
+						"_id":       "$country.country_name",
+						"total_age": dbm.DBM{"$sum": "$age"},
+					},
+				},
+			},
+			expectedResult: []dbm.DBM{{
+				"_id":       "Germany",
+				"total_age": object2.Age,
+			}},
+		},
+		{
+			name: "aggregating objects with $lookup operator",
+			pipeline: []dbm.DBM{
+				{
+					"$lookup": dbm.DBM{
+						"from":         "addresses",
+						"localField":   "_id",
+						"foreignField": "user_id",
+						"as":           "addresses",
+					},
+				},
+			},
+			expectedResult: []dbm.DBM{
+				{
+					"_id":   object.GetObjectID(),
+					"name":  object.Name,
+					"email": object.Email,
+					"country": dbm.DBM{
+						"continent":    object.Country.Continent,
+						"country_name": object.Country.CountryName,
+					},
+					"age":       object.Age,
+					"addresses": []interface{}{},
+				},
+				{
+					"_id":   object2.GetObjectID(),
+					"name":  object2.Name,
+					"email": object2.Email,
+					"country": dbm.DBM{
+						"continent":    object2.Country.Continent,
+						"country_name": object2.Country.CountryName,
+					},
+					"age":       object2.Age,
+					"addresses": []interface{}{},
+				},
+			},
+		},
+	}
+
+	// Run each test case
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Execute the aggregation pipeline
+			result, err := driver.Aggregate(ctx, object, tc.pipeline)
+			assert.Nil(t, err)
+
+			// Check if the result matches the expected result
+			assert.ElementsMatch(t, tc.expectedResult, result)
+		})
+	}
+}
