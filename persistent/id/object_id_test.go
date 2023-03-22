@@ -100,3 +100,11 @@ func TestIsObjectIdHex(t *testing.T) {
 	assert.Equal(t, true, IsObjectIdHex(id.Hex()))
 	assert.Equal(t, false, IsObjectIdHex("any-invalid-value"))
 }
+
+func TestValue(t *testing.T) {
+	id := NewObjectID()
+	val, err := id.Value()
+
+	assert.Equal(t, nil, err)
+	assert.Equal(t, id.Hex(), val)
+}
