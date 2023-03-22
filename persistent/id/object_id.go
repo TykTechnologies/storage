@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"gopkg.in/mgo.v2/bson"
@@ -26,7 +25,8 @@ func (id ObjectId) Hex() string {
 }
 
 func (id ObjectId) String() string {
-	return fmt.Sprintf("ObjectID(%q)", id.Hex())
+	return id.Hex()
+	//	return fmt.Sprintf("ObjectID(%q)", id.Hex())
 }
 
 func (id ObjectId) Timestamp() time.Time {
