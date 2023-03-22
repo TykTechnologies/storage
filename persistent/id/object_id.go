@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"gopkg.in/mgo.v2/bson"
@@ -67,4 +68,24 @@ func IsObjectIdHex(s string) bool {
 // GetBSON only used by mgo
 func (id ObjectId) GetBSON() (interface{}, error) {
 	return bson.ObjectId(id), nil
+}
+
+func (j *ObjectId) Scan(value interface{}) error {
+	var bytes []byte
+	switch v := value.(type) {
+	case []byte:
+		bytes = v
+	case string:
+		bytes = []byte(v)
+	default:
+		return fmt.Errorf("failed to unmarshal JSON value: %v", value)
+	}
+
+	// reflect magic to update existing string without creating new one
+	if len(bytes) > 0 {
+		bs := ObjectId(bson.ObjectIdHex(string(bytes)))
+		*j = bs
+	}
+
+	return nil
 }
