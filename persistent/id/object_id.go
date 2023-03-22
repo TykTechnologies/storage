@@ -1,6 +1,7 @@
 package id
 
 import (
+	"database/sql/driver"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -88,4 +89,8 @@ func (j *ObjectId) Scan(value interface{}) error {
 	}
 
 	return nil
+}
+
+func (j ObjectId) Value() (driver.Value, error) {
+	return bson.ObjectId(j).Hex(), nil
 }
