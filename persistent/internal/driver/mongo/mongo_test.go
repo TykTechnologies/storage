@@ -1503,6 +1503,30 @@ func TestDropDatabase(t *testing.T) {
 	assert.Equal(t, initialDatabaseCount, len(databases))
 }
 
+type SalesExample struct {
+	ID    id.ObjectId `bson:"_id,omitempty"`
+	Items []Items     `bson:"items"`
+}
+
+type Items struct {
+	Name     string        `bson:"name"`
+	Tags     []interface{} `bson:"tags"`
+	Price    float64       `bson:"price"`
+	Quantity int           `bson:"quantity"`
+}
+
+func (SalesExample) TableName() string {
+	return dummyDBObject{}.TableName()
+}
+
+func (s *SalesExample) SetObjectID(id id.ObjectId) {
+	s.ID = id
+}
+
+func (s SalesExample) GetObjectID() id.ObjectId {
+	return s.ID
+}
+
 func TestAggregate(t *testing.T) {
 	defer cleanDB(t)
 	driver, _ := prepareEnvironment(t)
@@ -1730,4 +1754,113 @@ func TestAggregate(t *testing.T) {
 			assert.ElementsMatch(t, tc.expectedResult, result)
 		})
 	}
+
+	t.Run("2 $unwind and 1 $group - follow mongodb documentation example", func(t *testing.T) {
+		// This test case is based on the example from the mongodb documentation:
+		// https://www.mongodb.com/docs/manual/reference/operator/aggregation/unwind/#unwind-embedded-arrays
+		defer cleanDB(t)
+		// Let's create a 2 "sales" objects
+		sales1 := &SalesExample{
+			ID: id.NewObjectID(),
+			Items: []Items{
+				{
+					Name:     "abc",
+					Tags:     []interface{}{"red", "blank"},
+					Price:    12.99,
+					Quantity: 10,
+				},
+				{
+					Name:     "jkl",
+					Tags:     []interface{}{"green", "rough"},
+					Price:    14.99,
+					Quantity: 20,
+				},
+			},
+		}
+		sales2 := &SalesExample{
+			ID: id.NewObjectID(),
+			Items: []Items{
+				{
+					Name:     "xyz",
+					Tags:     []interface{}{"blue", "diamond"},
+					Price:    9.99,
+					Quantity: 5,
+				},
+				{
+					Name:     "ijk",
+					Tags:     []interface{}{"black", "glossy"},
+					Price:    7.99,
+					Quantity: 5,
+				},
+			},
+		}
+
+		// Insert the objects into the database
+		err := driver.Insert(ctx, sales1)
+		assert.Nil(t, err)
+		err = driver.Insert(ctx, sales2)
+		assert.Nil(t, err)
+
+		// Define the aggregation pipeline
+		pipeline := []dbm.DBM{
+			{
+				"$unwind": "$items",
+			},
+			{
+				"$unwind": "$items.tags",
+			},
+			{
+				"$group": dbm.DBM{
+					"_id": "$items.tags",
+					"totalSalesAmount": dbm.DBM{
+						"$sum": dbm.DBM{
+							"$multiply": []interface{}{"$items.price", "$items.quantity"},
+						},
+					},
+				},
+			},
+		}
+
+		// Execute the aggregation pipeline
+		result, err := driver.Aggregate(ctx, sales1, pipeline)
+		assert.Nil(t, err)
+
+		// Check if the result matches the expected result
+		expectedResult := []dbm.DBM{
+			{
+				"_id":              "diamond",
+				"totalSalesAmount": 49.95,
+			},
+			{
+				"_id":              "green",
+				"totalSalesAmount": 299.8,
+			},
+			{
+				"_id":              "glossy",
+				"totalSalesAmount": 39.95,
+			},
+			{
+				"_id":              "black",
+				"totalSalesAmount": 39.95,
+			},
+			{
+				"_id":              "blank",
+				"totalSalesAmount": 129.9,
+			},
+			{
+				"_id":              "rough",
+				"totalSalesAmount": 299.8,
+			},
+			{
+				"_id":              "red",
+				"totalSalesAmount": 129.9,
+			},
+			{
+				"_id":              "blue",
+				"totalSalesAmount": 49.95,
+			},
+		}
+
+		assert.ElementsMatch(t, result, expectedResult)
+	})
 }
