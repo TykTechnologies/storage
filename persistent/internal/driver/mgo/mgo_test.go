@@ -1458,3 +1458,118 @@ func TestDropDatabase(t *testing.T) {
 
 	assert.Equal(t, initialDatabaseCount, len(databases))
 }
+
+func TestGetCollectionStats(t *testing.T) {
+	ctx := context.Background()
+	driver, object := prepareEnvironment(t)
+	tests := []struct {
+		name        string
+		want        dbm.DBM
+		row         func() id.DBObject
+		expectedErr error
+	}{
+		{
+			name: "GetCollectionStats ok",
+			want: dbm.DBM{
+				"count":          0,
+				"indexDetails":   dbm.DBM{},
+				"indexSizes":     dbm.DBM{},
+				"nindexes":       0,
+				"ns":             "test.dummy",
+				"ok":             float64(1),
+				"scaleFactor":    1,
+				"size":           0,
+				"storageSize":    0,
+				"totalIndexSize": 0,
+				"totalSize":      0,
+			},
+			row:         func() id.DBObject { return object },
+			expectedErr: nil,
+		},
+		{
+			name: "GetCollectionStats error",
+			want: dbm.DBM{
+				"code":     73,
+				"errmsg":   "Invalid namespace specified 'test.'",
+				"ok":       float64(0),
+				"codeName": "InvalidNamespace",
+			},
+			row: func() id.DBObject {
+				return &dummyDBObject{
+					Id:                id.NewObjectID(),
+					invalidCollection: true,
+				}
+			},
+			expectedErr: errors.New("Invalid namespace specified 'test.'"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer cleanDB(t)
+			row := tt.row()
+			got, err := driver.GetCollectionStats(ctx, row)
+			if (err != nil) != (tt.expectedErr != nil) {
+				t.Errorf("mgoDriver.GetCollectionStats() error = %v, expectedErr %v", err, tt.expectedErr)
+				return
+			}
+			assert.Equal(t, tt.want, got)
+		})
+	}
+
+	t.Run("GetCollectionStats with 1 object", func(t *testing.T) {
+		defer cleanDB(t)
+		err := driver.Insert(ctx, object)
+		assert.Nil(t, err)
+
+		stats, err := driver.GetCollectionStats(ctx, object)
+		assert.Nil(t, err)
+
+		assert.Equal(t, 1, stats["count"])
+		assert.Equal(t, 1, stats["nindexes"]) // must be 1 because of _id index
+	})
+
+	t.Run("GetCollectionStats with 3 indexes", func(t *testing.T) {
+		defer cleanDB(t)
+		err := driver.Insert(ctx, object)
+		assert.Nil(t, err)
+		err = driver.CreateIndex(ctx, object, index.Index{
+			Keys: []dbm.DBM{{"index1": 1}},
+		})
+		assert.Nil(t, err)
+
+		err = driver.CreateIndex(ctx, object, index.Index{
+			Keys: []dbm.DBM{{"index2": 1}},
+		})
+		assert.Nil(t, err)
+
+		err = driver.CreateIndex(ctx, object, index.Index{
+			Keys: []dbm.DBM{{"index3": 1}},
+		})
+		assert.Nil(t, err)
+
+		stats, err := driver.GetCollectionStats(ctx, object)
+		assert.Nil(t, err)
+
+		assert.Equal(t, 1, stats["count"])
+		assert.Equal(t, 4, stats["nindexes"])
+	},
+	)
+
+	t.Run("GetCollectionStats with capped collection", func(t *testing.T) {
+		defer cleanDB(t)
+		opts := dbm.DBM{
+			"capped":   true,
+			"maxBytes": 9000,
+		}
+
+		err := driver.Migrate(ctx, []id.DBObject{object}, opts)
+		assert.Nil(t, err)
+
+		stats, err := driver.GetCollectionStats(ctx, object)
+		assert.Nil(t, err)
+
+		assert.Equal(t, true, stats["capped"])
+	},
+	)
+
+}

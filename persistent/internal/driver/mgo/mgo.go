@@ -423,3 +423,14 @@ func (d *mgoDriver) DropDatabase(ctx context.Context) error {
 
 	return sess.DB("").DropDatabase()
 }
+
+func (d *mgoDriver) GetCollectionStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
+	var stats dbm.DBM
+
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	err := sess.DB("").Run(dbm.DBM{"collStats": row.TableName()}, &stats)
+
+	return stats, err
+}
