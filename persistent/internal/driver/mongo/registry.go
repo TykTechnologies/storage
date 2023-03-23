@@ -6,6 +6,7 @@ import (
 	"github.com/TykTechnologies/storage/persistent/id"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
+	"go.mongodb.org/mongo-driver/bson/bsonoptions"
 	"go.mongodb.org/mongo-driver/bson/bsonrw"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -51,9 +52,30 @@ func createCustomRegistry() *bsoncodec.RegistryBuilder {
 	rb := bsoncodec.NewRegistryBuilder()
 	bsoncodec.DefaultValueEncoders{}.RegisterDefaultEncoders(rb)
 	bsoncodec.DefaultValueDecoders{}.RegisterDefaultDecoders(rb)
+	structcodec, _ := bsoncodec.NewStructCodec(bsoncodec.DefaultStructTagParser,
+		bsonoptions.StructCodec().
+			SetDecodeZeroStruct(true).
+			SetEncodeOmitDefaultStruct(true).
+			SetOverwriteDuplicatedInlinedFields(false).
+			SetAllowUnexportedFields(true))
+
+	mapCodec := bsoncodec.NewMapCodec(
+		bsonoptions.MapCodec().
+			SetDecodeZerosMap(true).
+			SetEncodeNilAsEmpty(true).
+			SetEncodeKeysWithStringer(true))
+
+
+
+	rb.RegisterDefaultEncoder(reflect.Slice, bsoncodec.NewSliceCodec(bsonoptions.SliceCodec().SetEncodeNilAsEmpty(true)))
 	rb.RegisterTypeEncoder(tOID, bsoncodec.ValueEncoderFunc(objectIDEncodeValue))
 	rb.RegisterTypeDecoder(tOID, bsoncodec.ValueDecoderFunc(objectIDDecodeValue))
+	rb.RegisterDefaultEncoder(reflect.Map, mapCodec)
+	rb.RegisterDefaultDecoder(reflect.Map, mapCodec)
+	rb.RegisterDefaultDecoder(reflect.Struct, structcodec)
+	rb.RegisterDefaultEncoder(reflect.Struct, structcodec)
 	primitiveCodecs.RegisterPrimitiveCodecs(rb)
+
 
 	return rb
 }
