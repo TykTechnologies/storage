@@ -1503,6 +1503,7 @@ func TestGetCollectionStats(t *testing.T) {
 			expectedErr: errors.New("Invalid namespace specified 'test.'"),
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer cleanDB(t)
@@ -1571,5 +1572,4 @@ func TestGetCollectionStats(t *testing.T) {
 		assert.Equal(t, true, stats["capped"])
 	},
 	)
-
 }

@@ -369,7 +369,9 @@ func (d *mongoDriver) DropDatabase(ctx context.Context) error {
 func (d *mongoDriver) GetCollectionStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
 	var stats dbm.DBM
 
-	err := d.client.Database(d.database).RunCommand(ctx, bson.D{{Key: "collStats", Value: row.TableName()}}).Decode(&stats)
+	err := d.client.Database(d.database).RunCommand(ctx, bson.D{
+		{Key: "collStats", Value: row.TableName()},
+	}).Decode(&stats)
 
 	return stats, err
 }
