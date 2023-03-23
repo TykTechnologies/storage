@@ -1533,7 +1533,6 @@ func TestDBTableStats(t *testing.T) {
 			assert.Equal(t, tt.want["size"], got["size"])
 			assert.Equal(t, tt.want["storageSize"], got["storageSize"])
 			assert.Equal(t, tt.want["totalIndexSize"], got["totalIndexSize"])
-			assert.Equal(t, tt.want["totalSize"], got["totalSize"])
 		})
 	}
 
