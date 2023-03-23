@@ -1593,3 +1593,228 @@ func TestDBTableStats(t *testing.T) {
 	},
 	)
 }
+
+type SalesExample struct {
+	ID    id.ObjectId `bson:"_id,omitempty"`
+	Items []Items     `bson:"items"`
+}
+
+type Items struct {
+	Name     string        `bson:"name"`
+	Tags     []interface{} `bson:"tags"`
+	Price    float64       `bson:"price"`
+	Quantity int           `bson:"quantity"`
+}
+
+func (SalesExample) TableName() string {
+	return dummyDBObject{}.TableName()
+}
+
+func (s *SalesExample) SetObjectID(id id.ObjectId) {
+	s.ID = id
+}
+
+func (s SalesExample) GetObjectID() id.ObjectId {
+	return s.ID
+}
+
+func TestAggregate(t *testing.T) {
+	defer cleanDB(t)
+	driver, object := prepareEnvironment(t)
+	object.SetObjectID(id.NewObjectID())
+
+	// Insert the object into the database
+	ctx := context.Background()
+	err := driver.Insert(ctx, object)
+	assert.Nil(t, err)
+
+	// Insert the object2 into the database
+	object2 := &dummyDBObject{
+		Name:  "Peter",
+		Email: "peter@email.com",
+		Country: dummyCountryField{
+			Continent:   "Europe",
+			CountryName: "Germany",
+		},
+		Age: 15,
+	}
+	err = driver.Insert(ctx, object2)
+	assert.Nil(t, err)
+
+	// Define an array of test cases
+	tests := []struct {
+		name           string
+		pipeline       []dbm.DBM
+		expectedResult []dbm.DBM
+	}{
+		{
+			name: "aggregating one object",
+			pipeline: []dbm.DBM{
+				{
+					"$match": dbm.DBM{"_id": object.GetObjectID()},
+				},
+			},
+			expectedResult: []dbm.DBM{{
+				"_id":   object.GetObjectID(),
+				"name":  object.Name,
+				"email": object.Email,
+				"country": dbm.DBM{
+					"continent":    object.Country.Continent,
+					"country_name": object.Country.CountryName,
+				},
+				"age": object.Age,
+			}},
+		},
+		{
+			name: "aggregating objects with $project, $sort and $limit",
+			pipeline: []dbm.DBM{
+				{
+					"$project": dbm.DBM{
+						"_id":     1,
+						"name":    1,
+						"country": 1,
+						"age":     1,
+					},
+				},
+				{
+					"$sort": dbm.DBM{"name": 1},
+				},
+				{
+					"$limit": 1,
+				},
+			},
+			expectedResult: []dbm.DBM{
+				{
+					"_id":  object2.GetObjectID(),
+					"name": object2.Name,
+					"country": dbm.DBM{
+						"continent":    object2.Country.Continent,
+						"country_name": object2.Country.CountryName,
+					},
+					"age": object2.Age,
+				},
+			},
+		},
+	}
+
+	// Run each test case
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Execute the aggregation pipeline
+			result, err := driver.Aggregate(ctx, object, tc.pipeline)
+			assert.Nil(t, err)
+
+			// Check if the result matches the expected result
+			assert.ElementsMatch(t, tc.expectedResult, result)
+		})
+	}
+
+	t.Run("2 $unwind and 1 $group - follow mongodb documentation example", func(t *testing.T) {
+		// This test case is based on the example from the mongodb documentation:
+		// https://www.mongodb.com/docs/manual/reference/operator/aggregation/unwind/#unwind-embedded-arrays
+		defer cleanDB(t)
+		// Let's create a 2 "sales" objects
+		sales1 := &SalesExample{
+			ID: id.NewObjectID(),
+			Items: []Items{
+				{
+					Name:     "abc",
+					Tags:     []interface{}{"red", "blank"},
+					Price:    12.99,
+					Quantity: 10,
+				},
+				{
+					Name:     "jkl",
+					Tags:     []interface{}{"green", "rough"},
+					Price:    14.99,
+					Quantity: 20,
+				},
+			},
+		}
+		sales2 := &SalesExample{
+			ID: id.NewObjectID(),
+			Items: []Items{
+				{
+					Name:     "xyz",
+					Tags:     []interface{}{"blue", "diamond"},
+					Price:    9.99,
+					Quantity: 5,
+				},
+				{
+					Name:     "ijk",
+					Tags:     []interface{}{"black", "glossy"},
+					Price:    7.99,
+					Quantity: 5,
+				},
+			},
+		}
+
+		// Insert the objects into the database
+		err := driver.Insert(ctx, sales1)
+		assert.Nil(t, err)
+		err = driver.Insert(ctx, sales2)
+		assert.Nil(t, err)
+
+		// Define the aggregation pipeline
+		pipeline := []dbm.DBM{
+			{
+				"$unwind": "$items",
+			},
+			{
+				"$unwind": "$items.tags",
+			},
+			{
+				"$group": dbm.DBM{
+					"_id": "$items.tags",
+					"totalSalesAmount": dbm.DBM{
+						"$sum": dbm.DBM{
+							"$multiply": []interface{}{"$items.price", "$items.quantity"},
+						},
+					},
+				},
+			},
+		}
+
+		// Execute the aggregation pipeline
+		result, err := driver.Aggregate(ctx, sales1, pipeline)
+		assert.Nil(t, err)
+
+		// Check if the result matches the expected result
+		expectedResult := []dbm.DBM{
+			{
+				"_id":              "diamond",
+				"totalSalesAmount": 49.95,
+			},
+			{
+				"_id":              "green",
+				"totalSalesAmount": 299.8,
+			},
+			{
+				"_id":              "glossy",
+				"totalSalesAmount": 39.95,
+			},
+			{
+				"_id":              "black",
+				"totalSalesAmount": 39.95,
+			},
+			{
+				"_id":              "blank",
+				"totalSalesAmount": 129.9,
+			},
+			{
+				"_id":              "rough",
+				"totalSalesAmount": 299.8,
+			},
+			{
+				"_id":              "red",
+				"totalSalesAmount": 129.9,
+			},
+			{
+				"_id":              "blue",
+				"totalSalesAmount": 49.95,
+			},
+		}
+
+		assert.ElementsMatch(t, result, expectedResult)
+	})
+}

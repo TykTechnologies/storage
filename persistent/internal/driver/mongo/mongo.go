@@ -3,7 +3,6 @@ package mongo
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -222,7 +222,7 @@ func (d *mongoDriver) HasTable(ctx context.Context, collection string) (bool, er
 	}
 
 	collections, err := d.client.Database(d.database).ListCollectionNames(ctx, bson.M{"name": collection})
-	fmt.Println("collections:", collections, "err:", err)
+
 	return len(collections) > 0, err
 }
 
@@ -368,10 +368,44 @@ func (d *mongoDriver) DropDatabase(ctx context.Context) error {
 
 func (d *mongoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
 	var stats dbm.DBM
-
 	err := d.client.Database(d.database).RunCommand(ctx, bson.D{
 		{Key: "collStats", Value: row.TableName()},
 	}).Decode(&stats)
 
 	return stats, err
+}
+
+func (d *mongoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error) {
+	col := d.client.Database(d.database).Collection(row.TableName())
+
+	cursor, err := col.Aggregate(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	defer cursor.Close(ctx)
+
+	resultSlice := make([]dbm.DBM, 0)
+
+	for cursor.Next(ctx) {
+		var result dbm.DBM
+
+		err := cursor.Decode(&result)
+		if err != nil {
+			return nil, err
+		}
+
+		// Parsing _id from primitive.ObjectID to id.ObjectId
+		if objectId, ok := result["_id"].(primitive.ObjectID); ok {
+			result["_id"] = id.ObjectIdHex(objectId.Hex())
+		}
+
+		resultSlice = append(resultSlice, result)
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+
+	return resultSlice, nil
 }

@@ -434,3 +434,35 @@ func (d *mgoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM,
 
 	return stats, err
 }
+
+func (d *mgoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error) {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	col := sess.DB("").C(row.TableName())
+	pipe := col.Pipe(query)
+	pipe.AllowDiskUse()
+	iter := pipe.Iter()
+
+	resultSlice := make([]dbm.DBM, 0)
+
+	for {
+		var result dbm.DBM
+		if !iter.Next(&result) {
+			break
+		}
+		// Parsing _id from bson.ObjectId to id.ObjectId
+		resultId, ok := result["_id"].(bson.ObjectId)
+		if ok {
+			result["_id"] = id.ObjectIdHex(resultId.Hex())
+		}
+
+		resultSlice = append(resultSlice, result)
+	}
+
+	if iter.Err() != nil {
+		return nil, iter.Err()
+	}
+
+	return resultSlice, nil
+}

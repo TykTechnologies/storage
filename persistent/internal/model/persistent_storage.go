@@ -46,4 +46,8 @@ type PersistentStorage interface {
 	Migrate(context.Context, []id.DBObject, ...dbm.DBM) error
 	// DBTableStats returns the stats of the collection
 	DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error)
+	// Aggregate performs an aggregation query on the row id.DBObject collection
+	// query is the aggregation pipeline to be executed
+	// it returns the aggregation result and an error if any
+	Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error)
 }
