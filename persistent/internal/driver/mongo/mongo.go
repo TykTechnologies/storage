@@ -366,7 +366,7 @@ func (d *mongoDriver) DropDatabase(ctx context.Context) error {
 	return d.client.Database(d.database).Drop(ctx)
 }
 
-func (d *mongoDriver) GetCollectionStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
+func (d *mongoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
 	var stats dbm.DBM
 
 	err := d.client.Database(d.database).RunCommand(ctx, bson.D{

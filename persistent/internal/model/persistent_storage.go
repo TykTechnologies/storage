@@ -44,6 +44,6 @@ type PersistentStorage interface {
 	DropDatabase(ctx context.Context) error
 	// Migrate creates the table/collection if it doesn't exist
 	Migrate(context.Context, []id.DBObject, ...dbm.DBM) error
-	// GetCollectionStats returns the stats of the collection
-	GetCollectionStats(ctx context.Context, row id.DBObject) (dbm.DBM, error)
+	// DBTableStats returns the stats of the collection
+	DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error)
 }

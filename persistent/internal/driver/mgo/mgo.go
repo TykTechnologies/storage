@@ -424,7 +424,7 @@ func (d *mgoDriver) DropDatabase(ctx context.Context) error {
 	return sess.DB("").DropDatabase()
 }
 
-func (d *mgoDriver) GetCollectionStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
+func (d *mgoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
 	var stats dbm.DBM
 
 	sess := d.session.Copy()

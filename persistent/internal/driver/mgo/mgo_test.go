@@ -1459,7 +1459,7 @@ func TestDropDatabase(t *testing.T) {
 	assert.Equal(t, initialDatabaseCount, len(databases))
 }
 
-func TestGetCollectionStats(t *testing.T) {
+func TestDBTableStats(t *testing.T) {
 	ctx := context.Background()
 	driver, object := prepareEnvironment(t)
 	tests := []struct {
@@ -1469,7 +1469,7 @@ func TestGetCollectionStats(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name: "GetCollectionStats ok",
+			name: "DBTableStats ok",
 			want: dbm.DBM{
 				"count":          0,
 				"indexDetails":   dbm.DBM{},
@@ -1487,7 +1487,7 @@ func TestGetCollectionStats(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			name: "GetCollectionStats error",
+			name: "DBTableStats error",
 			want: dbm.DBM{
 				"code":     73,
 				"errmsg":   "Invalid namespace specified 'test.'",
@@ -1508,28 +1508,48 @@ func TestGetCollectionStats(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			defer cleanDB(t)
 			row := tt.row()
-			got, err := driver.GetCollectionStats(ctx, row)
+			got, err := driver.DBTableStats(ctx, row)
 			if (err != nil) != (tt.expectedErr != nil) {
-				t.Errorf("mgoDriver.GetCollectionStats() error = %v, expectedErr %v", err, tt.expectedErr)
+				t.Errorf("mgoDriver.DBTableStats() error = %v, expectedErr %v", err, tt.expectedErr)
 				return
 			}
-			assert.Equal(t, tt.want, got)
+
+			if tt.expectedErr != nil {
+				assert.Equal(t, tt.expectedErr.Error(), err.Error())
+				assert.Equal(t, tt.want["code"], got["code"])
+				assert.Equal(t, tt.want["errmsg"], got["errmsg"])
+				assert.Equal(t, tt.want["ok"], got["ok"])
+				assert.Equal(t, tt.want["codeName"], got["codeName"])
+				return
+			}
+
+			assert.Equal(t, tt.want["count"], got["count"])
+			assert.Equal(t, tt.want["indexDetails"], got["indexDetails"])
+			assert.Equal(t, tt.want["indexSizes"], got["indexSizes"])
+			assert.Equal(t, tt.want["nindexes"], got["nindexes"])
+			assert.Equal(t, tt.want["ns"], got["ns"])
+			assert.Equal(t, tt.want["ok"], got["ok"])
+			assert.Equal(t, tt.want["scaleFactor"], got["scaleFactor"])
+			assert.Equal(t, tt.want["size"], got["size"])
+			assert.Equal(t, tt.want["storageSize"], got["storageSize"])
+			assert.Equal(t, tt.want["totalIndexSize"], got["totalIndexSize"])
+			assert.Equal(t, tt.want["totalSize"], got["totalSize"])
 		})
 	}
 
-	t.Run("GetCollectionStats with 1 object", func(t *testing.T) {
+	t.Run("DBTableStats with 1 object", func(t *testing.T) {
 		defer cleanDB(t)
 		err := driver.Insert(ctx, object)
 		assert.Nil(t, err)
 
-		stats, err := driver.GetCollectionStats(ctx, object)
+		stats, err := driver.DBTableStats(ctx, object)
 		assert.Nil(t, err)
 
 		assert.Equal(t, 1, stats["count"])
 		assert.Equal(t, 1, stats["nindexes"]) // must be 1 because of _id index
 	})
 
-	t.Run("GetCollectionStats with 3 indexes", func(t *testing.T) {
+	t.Run("DBTableStats with 3 indexes", func(t *testing.T) {
 		defer cleanDB(t)
 		err := driver.Insert(ctx, object)
 		assert.Nil(t, err)
@@ -1548,7 +1568,7 @@ func TestGetCollectionStats(t *testing.T) {
 		})
 		assert.Nil(t, err)
 
-		stats, err := driver.GetCollectionStats(ctx, object)
+		stats, err := driver.DBTableStats(ctx, object)
 		assert.Nil(t, err)
 
 		assert.Equal(t, 1, stats["count"])
@@ -1556,7 +1576,7 @@ func TestGetCollectionStats(t *testing.T) {
 	},
 	)
 
-	t.Run("GetCollectionStats with capped collection", func(t *testing.T) {
+	t.Run("DBTableStats with capped collection", func(t *testing.T) {
 		defer cleanDB(t)
 		opts := dbm.DBM{
 			"capped":   true,
@@ -1566,7 +1586,7 @@ func TestGetCollectionStats(t *testing.T) {
 		err := driver.Migrate(ctx, []id.DBObject{object}, opts)
 		assert.Nil(t, err)
 
-		stats, err := driver.GetCollectionStats(ctx, object)
+		stats, err := driver.DBTableStats(ctx, object)
 		assert.Nil(t, err)
 
 		assert.Equal(t, true, stats["capped"])
