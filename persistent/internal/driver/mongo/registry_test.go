@@ -3,7 +3,6 @@ package mongo
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -44,6 +43,7 @@ func (d *TestStruct) SetObjectID(id id.ObjectId) {
 func (d TestStruct) TableName() string {
 	return "dummy"
 }
+
 func TestStructValues(t *testing.T){
 	driver, _ := prepareEnvironment(t)
 	defer cleanDB(t)
@@ -59,7 +59,12 @@ func TestStructValues(t *testing.T){
 	err = driver.Query(ctx, &newObj, &newObj, dbm.DBM{})
 	assert.Nil(t, err)
 
-	byt, _ := json.Marshal(&newObj)
-	fmt.Println(string(byt))
+	byt, err := json.Marshal(&newObj)
+	assert.Nil(t, err)
 
+	result := string(byt)
+
+	assert.Contains(t, result, "\"MapVal\":{}" )
+	assert.Contains(t, result, "\"StringSliceVal\":[]" )
+	assert.Contains(t, result, "\"InterfaceSliceVal\":[]" )
 }

@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -1743,6 +1744,38 @@ func TestAggregate(t *testing.T) {
 		},
 	}
 
+	/*
+
+	listA:
+	        	            	([]dbm.DBM) (len=1) {
+	        	            	 (dbm.DBM) (len=5) {
+	        	            	  (string) (len=3) "_id": (id.ObjectId) (len=12) "d\x1d`\xaat\x932s\x1b\xf2rQ",
+	        	            	  (string) (len=3) "age": (int32) 10,
+	        	            	  (string) (len=7) "country": (dbm.DBM) (len=2) {
+	        	            	   (string) (len=9) "continent": (string) (len=14) "test_continent",
+	        	            	   (string) (len=12) "country_name": (string) (len=12) "test_country"
+	        	            	  },
+	        	            	  (string) (len=5) "email": (string) (len=13) "test@test.com",
+	        	            	  (string) (len=8) "testName": (string) (len=4) "test"
+	        	            	 }
+	        	            	}
+	extra elements in list A:
+	        	            	([]interface {}) (len=1) {
+	        	            	 (dbm.DBM) (len=5) {
+	        	            	  (string) (len=3) "_id": (id.ObjectId) (len=12) "d\x1d`\xaat\x932s\x1b\xf2rQ",
+	        	            	  (string) (len=3) "age": (int32) 10,
+	        	            	  (string) (len=7) "country": (dbm.DBM) (len=2) {
+	        	            	   (string) (len=9) "continent": (string) (len=14) "test_continent",
+	        	            	   (string) (len=12) "country_name": (string) (len=12) "test_country"
+	        	            	  },
+	        	            	  (string) (len=5) "email": (string) (len=13) "test@test.com",
+	        	            	  (string) (len=8) "testName": (string) (len=4) "test"
+	        	            	 }
+	        	            	}
+
+
+	*/
+
 	// Run each test case
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1750,8 +1783,15 @@ func TestAggregate(t *testing.T) {
 			result, err := driver.Aggregate(ctx, object, tc.pipeline)
 			assert.Nil(t, err)
 
+			assert.Len(t, result, len(tc.expectedResult))
+
+			for i := range tc.expectedResult{
+				if !reflect.DeepEqual(result[i], tc.expectedResult[i]) {
+					t.Errorf("Expected output %v, but got %v", tc.expectedResult[i], result[i])
+				}
+			}
 			// Check if the result matches the expected result
-			assert.ElementsMatch(t, tc.expectedResult, result)
+			//assert.ElementsMatch(t, tc.expectedResult, result)
 		})
 	}
 
