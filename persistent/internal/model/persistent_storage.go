@@ -44,6 +44,12 @@ type PersistentStorage interface {
 	DropDatabase(ctx context.Context) error
 	// Migrate creates the table/collection if it doesn't exist
 	Migrate(context.Context, []id.DBObject, ...dbm.DBM) error
+	// DBTableStats retrieves statistics for a specified table in the database.
+	// The function takes a context.Context and an id.DBObject as input parameters,
+	// where the DBObject represents the table to get stats for.
+	// The result is decoded into a dbm.DBM object, along with any error that occurred during the command execution.
+	// Example: stats["capped"] -> true
+	DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error)
 	// Aggregate performs an aggregation query on the row id.DBObject collection
 	// query is the aggregation pipeline to be executed
 	// it returns the aggregation result and an error if any

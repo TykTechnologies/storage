@@ -424,6 +424,17 @@ func (d *mgoDriver) DropDatabase(ctx context.Context) error {
 	return sess.DB("").DropDatabase()
 }
 
+func (d *mgoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
+	var stats dbm.DBM
+
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	err := sess.DB("").Run(dbm.DBM{"collStats": row.TableName()}, &stats)
+
+	return stats, err
+}
+
 func (d *mgoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error) {
 	sess := d.session.Copy()
 	defer sess.Close()

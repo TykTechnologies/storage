@@ -366,6 +366,15 @@ func (d *mongoDriver) DropDatabase(ctx context.Context) error {
 	return d.client.Database(d.database).Drop(ctx)
 }
 
+func (d *mongoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
+	var stats dbm.DBM
+	err := d.client.Database(d.database).RunCommand(ctx, bson.D{
+		{Key: "collStats", Value: row.TableName()},
+	}).Decode(&stats)
+
+	return stats, err
+}
+
 func (d *mongoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error) {
 	col := d.client.Database(d.database).Collection(row.TableName())
 

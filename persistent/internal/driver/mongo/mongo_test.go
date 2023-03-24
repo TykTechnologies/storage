@@ -19,11 +19,12 @@ import (
 )
 
 type dummyDBObject struct {
-	Id      id.ObjectId       `bson:"_id,omitempty"`
-	Name    string            `bson:"testName"`
-	Email   string            `bson:"email"`
-	Country dummyCountryField `bson:"country"`
-	Age     int               `bson:"age"`
+	Id                id.ObjectId       `bson:"_id,omitempty"`
+	Name              string            `bson:"testName"`
+	Email             string            `bson:"email"`
+	Country           dummyCountryField `bson:"country"`
+	Age               int               `bson:"age"`
+	invalidCollection bool
 }
 
 type dummyCountryField struct {
@@ -40,6 +41,9 @@ func (d *dummyDBObject) SetObjectID(id id.ObjectId) {
 }
 
 func (d dummyDBObject) TableName() string {
+	if d.invalidCollection {
+		return ""
+	}
 	return "dummy"
 }
 
@@ -1501,6 +1505,135 @@ func TestDropDatabase(t *testing.T) {
 	}
 
 	assert.Equal(t, initialDatabaseCount, len(databases))
+}
+
+func TestDBTableStats(t *testing.T) {
+	ctx := context.Background()
+	driver, object := prepareEnvironment(t)
+	tests := []struct {
+		name        string
+		want        dbm.DBM
+		row         func() id.DBObject
+		expectedErr error
+	}{
+		{
+			name: "DBTableStats ok",
+			want: dbm.DBM{
+				"count":          int32(0),
+				"indexDetails":   dbm.DBM{},
+				"indexSizes":     dbm.DBM{},
+				"nindexes":       int32(0),
+				"ns":             "test.dummy",
+				"ok":             float64(1),
+				"scaleFactor":    int32(1),
+				"size":           int32(0),
+				"storageSize":    int32(0),
+				"totalIndexSize": int32(0),
+				"totalSize":      int32(0),
+			},
+			row:         func() id.DBObject { return object },
+			expectedErr: nil,
+		},
+		{
+			name: "DBTableStats error",
+			want: dbm.DBM(nil), // official driver returns an empty object if there is an error
+			row: func() id.DBObject {
+				return &dummyDBObject{
+					Id:                id.NewObjectID(),
+					invalidCollection: true,
+				}
+			},
+			expectedErr: errors.New("(InvalidNamespace) Invalid namespace specified 'test.'"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer cleanDB(t)
+			row := tt.row()
+			got, err := driver.DBTableStats(ctx, row)
+			if (err != nil) != (tt.expectedErr != nil) {
+				t.Errorf("mgoDriver.DBTableStats() error = %v, expectedErr %v", err, tt.expectedErr)
+				return
+			}
+
+			if tt.expectedErr != nil {
+				assert.Equal(t, tt.expectedErr.Error(), err.Error())
+				assert.Equal(t, tt.want["code"], got["code"])
+				assert.Equal(t, tt.want["errmsg"], got["errmsg"])
+				assert.Equal(t, tt.want["ok"], got["ok"])
+				assert.Equal(t, tt.want["codeName"], got["codeName"])
+				return
+			}
+
+			assert.Equal(t, tt.want["count"], got["count"])
+			assert.Equal(t, tt.want["indexDetails"], got["indexDetails"])
+			assert.Equal(t, tt.want["indexSizes"], got["indexSizes"])
+			assert.Equal(t, tt.want["nindexes"], got["nindexes"])
+			assert.Equal(t, tt.want["ns"], got["ns"])
+			assert.Equal(t, tt.want["ok"], got["ok"])
+			assert.Equal(t, tt.want["scaleFactor"], got["scaleFactor"])
+			assert.Equal(t, tt.want["size"], got["size"])
+			assert.Equal(t, tt.want["storageSize"], got["storageSize"])
+			assert.Equal(t, tt.want["totalIndexSize"], got["totalIndexSize"])
+		})
+	}
+
+	t.Run("DBTableStats with 1 object", func(t *testing.T) {
+		defer cleanDB(t)
+		err := driver.Insert(ctx, object)
+		assert.Nil(t, err)
+
+		stats, err := driver.DBTableStats(ctx, object)
+		assert.Nil(t, err)
+
+		assert.Equal(t, int32(1), stats["count"])
+		assert.Equal(t, int32(1), stats["nindexes"]) // must be 1 because of _id index
+	})
+
+	t.Run("DBTableStats with 3 indexes", func(t *testing.T) {
+		defer cleanDB(t)
+		err := driver.Insert(ctx, object)
+		assert.Nil(t, err)
+		err = driver.CreateIndex(ctx, object, index.Index{
+			Keys: []dbm.DBM{{"index1": 1}},
+		})
+		assert.Nil(t, err)
+
+		err = driver.CreateIndex(ctx, object, index.Index{
+			Keys: []dbm.DBM{{"index2": 1}},
+		})
+		assert.Nil(t, err)
+
+		err = driver.CreateIndex(ctx, object, index.Index{
+			Keys: []dbm.DBM{{"index3": 1}},
+		})
+		assert.Nil(t, err)
+
+		stats, err := driver.DBTableStats(ctx, object)
+		assert.Nil(t, err)
+
+		assert.Equal(t, int32(1), stats["count"])
+		assert.Equal(t, int32(4), stats["nindexes"])
+	},
+	)
+
+	t.Run("DBTableStats with capped collection", func(t *testing.T) {
+		defer cleanDB(t)
+		opts := dbm.DBM{
+			"capped": true,
+			"size":   9000,
+		}
+
+		err := driver.Migrate(ctx, []id.DBObject{object}, opts)
+		assert.Nil(t, err)
+
+		stats, err := driver.DBTableStats(ctx, object)
+		assert.Nil(t, err)
+
+		assert.Equal(t, true, stats["capped"])
+	},
+	)
 }
 
 type SalesExample struct {
