@@ -409,3 +409,11 @@ func (d *mongoDriver) Aggregate(ctx context.Context, row id.DBObject, query []db
 
 	return resultSlice, nil
 }
+
+func (d *mongoDriver) CleanIndexes(ctx context.Context, row id.DBObject) error {
+	collection := d.client.Database(d.database).Collection(row.TableName())
+
+	_, err := collection.Indexes().DropAll(ctx)
+
+	return d.handleStoreError(err)
+}

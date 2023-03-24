@@ -54,4 +54,6 @@ type PersistentStorage interface {
 	// query is the aggregation pipeline to be executed
 	// it returns the aggregation result and an error if any
 	Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error)
+	// CleanIndexes removes all the indexes from the row id.DBObject collection
+	CleanIndexes(ctx context.Context, row id.DBObject) error
 }
