@@ -3,6 +3,7 @@ package mgo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -1816,4 +1817,53 @@ func TestAggregate(t *testing.T) {
 
 		assert.ElementsMatch(t, result, expectedResult)
 	})
+}
+
+func TestCleanIndexes(t *testing.T) {
+	tests := []struct {
+		name          string
+		insertIndexes int
+		wantErr       bool
+	}{
+		{
+			name:          "clean 10 indexes",
+			insertIndexes: 10,
+			wantErr:       false,
+		},
+		{
+			name:          "clean 1 index",
+			insertIndexes: 1,
+			wantErr:       false,
+		},
+		{
+			name:          "clean 0 index",
+			insertIndexes: 0,
+			wantErr:       false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			driver, object := prepareEnvironment(t)
+
+			// Insert indexes
+			for i := 0; i < tt.insertIndexes; i++ {
+				err := driver.CreateIndex(ctx, object, index.Index{
+					Name: fmt.Sprintf("index_%d", i),
+					Keys: []dbm.DBM{{fmt.Sprintf("key_%d", i): 1}},
+				})
+				assert.Nil(t, err)
+			}
+
+			if err := driver.CleanIndexes(ctx, object); (err != nil) != tt.wantErr {
+				t.Errorf("mgoDriver.CleanIndexes() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			// Check if the indexes were removed
+			indexes, err := driver.GetIndexes(ctx, object)
+			assert.Nil(t, err)
+
+			assert.Equal(t, 1, len(indexes)) // The default _id index is always present
+		})
+	}
 }
