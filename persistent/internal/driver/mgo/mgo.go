@@ -491,7 +491,7 @@ func (d *mgoDriver) CleanIndexes(ctx context.Context, row id.DBObject) error {
 	return nil
 }
 
-func (d *mgoDriver) Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM, result interface{}) error {
+func (d *mgoDriver) Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
@@ -501,7 +501,7 @@ func (d *mgoDriver) Upsert(ctx context.Context, row id.DBObject, query, update d
 		Update:    update,
 		Upsert:    true,
 		ReturnNew: true,
-	}, result)
+	}, row)
 
 	return d.handleStoreError(err)
 }

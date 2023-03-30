@@ -59,7 +59,6 @@ type PersistentStorage interface {
 	// Upsert performs an upsert operation on the row id.DBObject collection
 	// query is the filter to be used to find the document to update
 	// update is the update to be applied to the document
-	// result is the result of the upsert operation
-	// it returns an error if any
-	Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM, result interface{}) error
+	// row is modified with the result of the operation
+	Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM) error
 }
