@@ -490,3 +490,18 @@ func (d *mgoDriver) CleanIndexes(ctx context.Context, row id.DBObject) error {
 
 	return nil
 }
+
+func (d *mgoDriver) Upsert(ctx context.Context, row id.DBObject, query dbm.DBM, update dbm.DBM, result interface{}) error {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	col := sess.DB("").C(row.TableName())
+
+	_, err := col.Find(query).Apply(mgo.Change{
+		Update:    update,
+		Upsert:    true,
+		ReturnNew: true,
+	}, result)
+
+	return d.handleStoreError(err)
+}

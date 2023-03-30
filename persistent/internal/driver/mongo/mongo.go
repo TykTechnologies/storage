@@ -417,3 +417,12 @@ func (d *mongoDriver) CleanIndexes(ctx context.Context, row id.DBObject) error {
 
 	return d.handleStoreError(err)
 }
+
+func (d *mongoDriver) Upsert(ctx context.Context, row id.DBObject, query dbm.DBM, update dbm.DBM, result interface{}) error {
+	coll := d.client.Database(d.database).Collection(row.TableName())
+
+	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+	err := coll.FindOneAndUpdate(ctx, query, update, opts).Decode(result)
+
+	return d.handleStoreError(err)
+}

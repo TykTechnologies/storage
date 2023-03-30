@@ -1867,3 +1867,62 @@ func TestCleanIndexes(t *testing.T) {
 		})
 	}
 }
+
+func TestUpsert(t *testing.T) {
+	ctx := context.Background()
+	driver, object := prepareEnvironment(t)
+	defer cleanDB(t)
+
+	// Insert the object using upsert
+	result := &dummyDBObject{}
+	err := driver.Upsert(ctx, object, dbm.DBM{
+		"age": 10,
+	}, dbm.DBM{
+		"$set": dbm.DBM{
+			"name": "upsert_test",
+		},
+	}, result)
+
+	assert.Nil(t, err)
+
+	assert.Equal(t, "upsert_test", result.Name)
+	assert.Equal(t, 10, result.Age)
+
+	// Check if the object was inserted
+	result = &dummyDBObject{}
+	err = driver.Query(ctx, object, result, dbm.DBM{
+		"age":  10,
+		"name": "upsert_test",
+	})
+	assert.Nil(t, err)
+
+	assert.Equal(t, "upsert_test", result.Name)
+	assert.Equal(t, 10, result.Age)
+
+	// Update the object using upsert
+	result = &dummyDBObject{}
+	err = driver.Upsert(ctx, object, dbm.DBM{
+		"age": 10,
+	}, dbm.DBM{
+		"$set": dbm.DBM{
+			"name": "upsert_test_updated",
+		},
+	}, result)
+
+	assert.Nil(t, err)
+
+	assert.Equal(t, "upsert_test_updated", result.Name)
+	assert.Equal(t, 10, result.Age)
+
+	// Check if the object was updated
+	result = &dummyDBObject{}
+	err = driver.Query(ctx, object, result, dbm.DBM{
+		"age":  10,
+		"name": "upsert_test_updated",
+	})
+	assert.Nil(t, err)
+
+	assert.Equal(t, "upsert_test_updated", result.Name)
+	assert.Equal(t, 10, result.Age)
+
+}
