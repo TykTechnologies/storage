@@ -2051,6 +2051,7 @@ func TestCleanIndexes(t *testing.T) {
 func TestUpsert(t *testing.T) {
 	ctx := context.Background()
 	driver, object := prepareEnvironment(t)
+
 	defer cleanDB(t)
 
 	// Insert the object using upsert

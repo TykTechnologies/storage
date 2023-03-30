@@ -56,4 +56,10 @@ type PersistentStorage interface {
 	Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error)
 	// CleanIndexes removes all the indexes from the row id.DBObject collection
 	CleanIndexes(ctx context.Context, row id.DBObject) error
+	// Upsert performs an upsert operation on the row id.DBObject collection
+	// query is the filter to be used to find the document to update
+	// update is the update to be applied to the document
+	// result is the result of the upsert operation
+	// it returns an error if any
+	Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM, result interface{}) error
 }

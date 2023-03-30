@@ -1871,6 +1871,7 @@ func TestCleanIndexes(t *testing.T) {
 func TestUpsert(t *testing.T) {
 	ctx := context.Background()
 	driver, object := prepareEnvironment(t)
+
 	defer cleanDB(t)
 
 	// Insert the object using upsert
@@ -1924,5 +1925,4 @@ func TestUpsert(t *testing.T) {
 
 	assert.Equal(t, "upsert_test_updated", result.Name)
 	assert.Equal(t, 10, result.Age)
-
 }
