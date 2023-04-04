@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"github.com/TykTechnologies/storage/persistent/databaseinfo"
+	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"net"
 	"time"
 
@@ -15,8 +16,9 @@ import (
 var _ model.StorageLifecycle = &lifeCycle{}
 
 type lifeCycle struct {
-	session *mgo.Session
-	db      *mgo.Database
+	session          *mgo.Session
+	db               *mgo.Database
+	connectionString string
 }
 
 // Connect connects to the mongo database given the ClientOpts.
@@ -53,7 +55,7 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 	lc.session = sess
 
 	lc.setSessionConsistency(opts)
-
+	lc.connectionString = opts.ConnectionString
 	lc.db = lc.session.DB("")
 
 	return nil
@@ -75,6 +77,11 @@ func (lc *lifeCycle) Close() error {
 
 // DBType returns the type of the registered storage driver.
 func (lc *lifeCycle) DBType() databaseinfo.DBType {
+
+	if helper.IsCosmosDB(lc.connectionString) {
+		return databaseinfo.CosmosDB
+	}
+
 	var result struct {
 		Code int `bson:"code"`
 	}

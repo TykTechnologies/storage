@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/TykTechnologies/storage/persistent/databaseinfo"
+	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"time"
 
 	"github.com/TykTechnologies/storage/persistent/internal/model"
@@ -18,7 +19,8 @@ import (
 type lifeCycle struct {
 	client *mongo.Client
 
-	database string
+	connectionString string
+	database         string
 }
 
 var _ model.StorageLifecycle = &lifeCycle{}
@@ -48,6 +50,7 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 		return err
 	}
 
+	lc.connectionString = opts.ConnectionString
 	lc.database = cs.Database
 	lc.client = client
 
@@ -65,6 +68,11 @@ func (lc *lifeCycle) Close() error {
 
 // DBType returns the type of the registered storage driver.
 func (lc *lifeCycle) DBType() databaseinfo.DBType {
+
+	if helper.IsCosmosDB(lc.connectionString) {
+		return databaseinfo.CosmosDB
+	}
+
 	var result struct {
 		Code int `bson:"code"`
 	}
