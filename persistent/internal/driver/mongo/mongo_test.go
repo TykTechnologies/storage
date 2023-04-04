@@ -2110,6 +2110,7 @@ func TestUpsert(t *testing.T) {
 func TestGetDBType(t *testing.T) {
 	driver, _ := prepareEnvironment(t)
 	info, err := driver.GetDatabaseInfo(context.Background())
+
 	if err != nil {
 		t.Fatal(err)
 	}

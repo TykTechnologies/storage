@@ -512,7 +512,8 @@ func (d *mgoDriver) Upsert(ctx context.Context, row id.DBObject, query, update d
 func (d *mgoDriver) GetDatabaseInfo(ctx context.Context) (databaseinfo.Info, error) {
 	result := databaseinfo.Info{}
 
-	err := d.session.DB("admin").Run(bson.D{{"buildInfo", 1}}, &result)
+	db := d.session.DB("admin")
+	err := db.Run(bson.D{{Name: "buildInfo", Value: 1}}, &result)
 	result.Type = d.lifeCycle.DBType()
 
 	return result, err
