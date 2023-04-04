@@ -2109,7 +2109,10 @@ func TestUpsert(t *testing.T) {
 
 func TestGetDBType(t *testing.T) {
 	driver, _ := prepareEnvironment(t)
-	info, _ := driver.GetDatabaseInfo(context.Background())
+	info, err := driver.GetDatabaseInfo(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// ToDo: update for those cases where it returns aws
 	assert.Equal(t, databaseinfo.StandardMongo, info.Type)

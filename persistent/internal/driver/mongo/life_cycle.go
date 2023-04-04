@@ -70,7 +70,6 @@ func (lc *lifeCycle) Close() error {
 
 // DBType returns the type of the registered storage driver.
 func (lc *lifeCycle) DBType() databaseinfo.DBType {
-
 	if helper.IsCosmosDB(lc.connectionString) {
 		return databaseinfo.CosmosDB
 	}
