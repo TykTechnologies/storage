@@ -3,17 +3,19 @@ package mongo
 import (
 	"context"
 	"errors"
-	"github.com/TykTechnologies/storage/persistent/databaseinfo"
-	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
+	"github.com/TykTechnologies/storage/persistent/internal/helper"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/mgocompat"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
+
+	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
 type lifeCycle struct {

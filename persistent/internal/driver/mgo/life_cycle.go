@@ -3,10 +3,11 @@ package mgo
 import (
 	"crypto/tls"
 	"errors"
-	"github.com/TykTechnologies/storage/persistent/databaseinfo"
-	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"net"
 	"time"
+
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
+	"github.com/TykTechnologies/storage/persistent/internal/helper"
 
 	"gopkg.in/mgo.v2"
 

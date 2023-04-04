@@ -3,11 +3,12 @@ package mongo
 import (
 	"reflect"
 
-	"github.com/TykTechnologies/storage/persistent/id"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/bson/bsonrw"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"github.com/TykTechnologies/storage/persistent/id"
 )
 
 var tOID = reflect.TypeOf(id.NewObjectID())

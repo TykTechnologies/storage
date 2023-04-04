@@ -4,8 +4,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/TykTechnologies/storage/persistent/id"
 )
 
 func TestCreateCustomRegistry(t *testing.T) {

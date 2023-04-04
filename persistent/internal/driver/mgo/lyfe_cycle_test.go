@@ -5,8 +5,9 @@ package mgo
 
 import (
 	"errors"
-	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"testing"
+
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/mgo.v2"

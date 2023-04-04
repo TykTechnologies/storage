@@ -3,16 +3,18 @@ package mongo
 import (
 	"context"
 	"errors"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+
 	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/index"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 var _ model.PersistentStorage = &mongoDriver{}
@@ -428,7 +430,7 @@ func (d *mongoDriver) Upsert(ctx context.Context, row id.DBObject, query, update
 
 func (d *mongoDriver) GetDatabaseInfo(ctx context.Context) (databaseinfo.Info, error) {
 	var result databaseinfo.Info
-	
+
 	err := d.client.Database("admin").RunCommand(context.Background(), bson.D{{"buildInfo", 1}}).Decode(&result)
 	result.Type = d.lifeCycle.DBType()
 

@@ -7,9 +7,10 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"testing"
 	"time"
+
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/mongo/options"

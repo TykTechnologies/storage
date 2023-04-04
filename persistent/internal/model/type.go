@@ -1,8 +1,9 @@
 package model
 
 import (
-	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"time"
+
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 )
 
 type StorageLifecycle interface {
