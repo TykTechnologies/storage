@@ -5,6 +5,7 @@ package mgo
 
 import (
 	"errors"
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -146,5 +147,5 @@ func TestDBType(t *testing.T) {
 	assert.Nil(t, err)
 
 	dbType := lc.DBType()
-	assert.Equal(t, model.StandardMongo, dbType)
+	assert.Equal(t, databaseinfo.StandardMongo, dbType)
 }

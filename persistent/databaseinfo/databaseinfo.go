@@ -1,12 +1,13 @@
 package databaseinfo
 
-type DbType int
+type Info struct {
+	Type    DBType
+	Version string
+}
+
+type DBType string
 
 const (
-	StandardMongo = iota
-	AWSDocumentDB
+	StandardMongo DBType = "mongo"
+	AWSDocumentDB DBType = "docdb"
 )
-
-type Info struct {
-	Type DbType
-}

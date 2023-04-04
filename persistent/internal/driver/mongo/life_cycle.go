@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"errors"
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"time"
 
 	"github.com/TykTechnologies/storage/persistent/internal/model"
@@ -63,7 +64,7 @@ func (lc *lifeCycle) Close() error {
 }
 
 // DBType returns the type of the registered storage driver.
-func (lc *lifeCycle) DBType() model.DBType {
+func (lc *lifeCycle) DBType() databaseinfo.DBType {
 	var result struct {
 		Code int `bson:"code"`
 	}
@@ -72,10 +73,10 @@ func (lc *lifeCycle) DBType() model.DBType {
 	singleResult := lc.client.Database("admin").RunCommand(context.Background(), cmd)
 
 	if err := singleResult.Decode(&result); (singleResult.Err() != nil || err != nil) && result.Code == 303 {
-		return model.AWSDocumentDB
+		return databaseinfo.AWSDocumentDB
 	}
 
-	return model.StandardMongo
+	return databaseinfo.StandardMongo
 }
 
 // mongoOptsBuilder build Mongo options.ClientOptions from our own model.ClientOpts. Also sets default values.

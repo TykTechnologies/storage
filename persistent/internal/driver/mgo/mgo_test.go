@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"strconv"
 	"strings"
 	"testing"
@@ -1934,8 +1935,8 @@ func (m *MockSession) Run(cmd interface{}, result interface{}) error {
 
 func TestGetDBType(t *testing.T) {
 	driver, _ := prepareEnvironment(t)
-	info := driver.GetDatabaseInfo(context.Background())
+	info, _ := driver.GetDatabaseInfo(context.Background())
 
 	// ToDo: update for those cases where it returns aws
-	assert.Equal(t, model.StandardMongo, info.Type)
+	assert.Equal(t, databaseinfo.StandardMongo, info.Type)
 }

@@ -3,6 +3,7 @@ package mgo
 import (
 	"crypto/tls"
 	"errors"
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"net"
 	"time"
 
@@ -73,16 +74,16 @@ func (lc *lifeCycle) Close() error {
 }
 
 // DBType returns the type of the registered storage driver.
-func (lc *lifeCycle) DBType() model.DBType {
+func (lc *lifeCycle) DBType() databaseinfo.DBType {
 	var result struct {
 		Code int `bson:"code"`
 	}
 
 	if err := lc.session.Run("features", &result); err != nil && result.Code == 303 {
-		return model.AWSDocumentDB
+		return databaseinfo.AWSDocumentDB
 	}
 
-	return model.StandardMongo
+	return databaseinfo.StandardMongo
 }
 
 func (lc *lifeCycle) setSessionConsistency(opts *model.ClientOpts) {

@@ -1,14 +1,8 @@
 package model
 
 import (
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"time"
-)
-
-type DBType string
-
-const (
-	StandardMongo DBType = "mongo"
-	AWSDocumentDB DBType = "docdb"
 )
 
 type StorageLifecycle interface {
@@ -19,7 +13,7 @@ type StorageLifecycle interface {
 	Close() error
 
 	// DBType returns the type of the registered storage driver.
-	DBType() DBType
+	DBType() databaseinfo.DBType
 }
 
 // DBTable is an interface that should be implemented by

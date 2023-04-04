@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"testing"
 	"time"
 
@@ -197,5 +198,5 @@ func TestDBType(t *testing.T) {
 	assert.Nil(t, err)
 
 	dbType := lc.DBType()
-	assert.Equal(t, model.StandardMongo, dbType)
+	assert.Equal(t, databaseinfo.StandardMongo, dbType)
 }

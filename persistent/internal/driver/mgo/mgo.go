@@ -507,20 +507,11 @@ func (d *mgoDriver) Upsert(ctx context.Context, row id.DBObject, query, update d
 	return d.handleStoreError(err)
 }
 
-func (d *mgoDriver) GetDatabaseInfo(ctx context.Context) databaseinfo.Info {
+func (d *mgoDriver) GetDatabaseInfo(ctx context.Context) (databaseinfo.Info, error) {
+	result := databaseinfo.Info{}
 
-	var result struct {
-		Code int `bson:"code"`
-	}
+	err := d.session.DB("admin").Run(bson.D{{"buildInfo", 1}}, &result)
+	result.Type = d.lifeCycle.DBType()
 
-	d.db.Run("features", &result)
-	if result.Code == 303 {
-		return databaseinfo.Info{
-			Type: databaseinfo.AWSDocumentDB,
-		}
-	}
-
-	return databaseinfo.Info{
-		Type: databaseinfo.StandardMongo,
-	}
+	return result, err
 }
