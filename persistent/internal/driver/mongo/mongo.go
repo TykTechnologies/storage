@@ -430,8 +430,9 @@ func (d *mongoDriver) Upsert(ctx context.Context, row id.DBObject, query, update
 
 func (d *mongoDriver) GetDatabaseInfo(ctx context.Context) (databaseinfo.Info, error) {
 	var result databaseinfo.Info
-
-	err := d.client.Database("admin").RunCommand(context.Background(), bson.D{primitive.E{Key: "buildInfo", Value: 1}}).Decode(&result)
+	
+	database := d.client.Database("admin")
+	err := database.RunCommand(context.Background(), bson.D{primitive.E{Key: "buildInfo", Value: 1}}).Decode(&result)
 	result.Type = d.lifeCycle.DBType()
 
 	return result, err
