@@ -2103,3 +2103,11 @@ func TestUpsert(t *testing.T) {
 	assert.Equal(t, "upsert_test_updated", object.Name)
 	assert.Equal(t, 10, object.Age)
 }
+
+func TestGetDBType(t *testing.T) {
+	driver, _ := prepareEnvironment(t)
+	info := driver.GetDatabaseInfo(context.Background())
+
+	// ToDo: update for those cases where it returns aws
+	assert.Equal(t, model.StandardMongo, info.Type)
+}

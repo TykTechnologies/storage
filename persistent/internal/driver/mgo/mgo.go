@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"strings"
 	"time"
 
@@ -504,4 +505,22 @@ func (d *mgoDriver) Upsert(ctx context.Context, row id.DBObject, query, update d
 	}, row)
 
 	return d.handleStoreError(err)
+}
+
+func (d *mgoDriver) GetDatabaseInfo(ctx context.Context) databaseinfo.Info {
+
+	var result struct {
+		Code int `bson:"code"`
+	}
+
+	d.db.Run("features", &result)
+	if result.Code == 303 {
+		return databaseinfo.Info{
+			Type: databaseinfo.AWSDocumentDB,
+		}
+	}
+
+	return databaseinfo.Info{
+		Type: databaseinfo.StandardMongo,
+	}
 }

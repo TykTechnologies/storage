@@ -1,9 +1,10 @@
 package mongo
 
 import (
+	"bytes"
 	"context"
 	"errors"
-
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"github.com/TykTechnologies/storage/persistent/dbm"
 
 	"github.com/TykTechnologies/storage/persistent/id"
@@ -425,4 +426,23 @@ func (d *mongoDriver) Upsert(ctx context.Context, row id.DBObject, query, update
 	err := coll.FindOneAndUpdate(ctx, query, update, opts).Decode(row)
 
 	return d.handleStoreError(err)
+}
+
+func (d *mongoDriver) GetDatabaseInfo(ctx context.Context) databaseinfo.Info {
+	// Check if the database is AWS DocumentDB
+	isAWSDocumentDB, err := d.client.Database("admin").RunCommand(ctx, bson.M{"isMaster": 1}).DecodeBytes()
+	if err != nil {
+		return databaseinfo.Info{}
+	}
+
+	if bytes.Contains(isAWSDocumentDB, []byte("documentdb")) {
+		return databaseinfo.Info{
+			Type: databaseinfo.AWSDocumentDB,
+		}
+	}
+
+	// Otherwise, assume it is standard MongoDB
+	return databaseinfo.Info{
+		Type: databaseinfo.StandardMongo,
+	}
 }
