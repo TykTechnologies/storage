@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"testing"
+	"time"
 
 	"gopkg.in/mgo.v2/bson"
 
@@ -134,5 +135,19 @@ func TestScan(t *testing.T) {
 				t.Errorf("Scan(%v) = %v, want %v", tc.arg, objID, tc.want)
 			}
 		})
+	}
+}
+
+func TestNewObjectIdWithTime(t *testing.T) {
+	// Create a new time with a known Unix timestamp
+	testTime := time.Date(2022, 3, 24, 12, 0, 0, 0, time.UTC)
+	expectedHex := bson.NewObjectIdWithTime(testTime).Hex()
+
+	// Call the function with the test time
+	result := NewObjectIdWithTime(testTime)
+
+	// Check that the result matches the expected hex string
+	if result.Hex() != expectedHex {
+		t.Errorf("NewObjectIdWithTime(%v) = %v, expected %v", testTime, result.Hex(), expectedHex)
 	}
 }

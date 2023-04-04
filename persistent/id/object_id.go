@@ -17,6 +17,10 @@ func NewObjectID() ObjectId {
 	return ObjectId(bson.NewObjectId())
 }
 
+func NewObjectIdWithTime(t time.Time) ObjectId {
+	return ObjectId(bson.NewObjectIdWithTime(t))
+}
+
 // Valid returns true if id is valid. A valid id must contain exactly 12 bytes.
 func (id ObjectId) Valid() bool {
 	return len(id) == 12
