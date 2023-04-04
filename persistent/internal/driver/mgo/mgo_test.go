@@ -1924,15 +1924,6 @@ func TestUpsert(t *testing.T) {
 	assert.Equal(t, 10, object.Age)
 }
 
-type MockSession struct {
-	*mgo.Session
-	RunFunc func(cmd interface{}, result interface{}) error
-}
-
-func (m *MockSession) Run(cmd interface{}, result interface{}) error {
-	return m.RunFunc(cmd, result)
-}
-
 func TestGetDBType(t *testing.T) {
 	driver, _ := prepareEnvironment(t)
 	info, _ := driver.GetDatabaseInfo(context.Background())
