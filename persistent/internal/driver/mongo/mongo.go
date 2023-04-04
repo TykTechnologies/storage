@@ -430,10 +430,7 @@ func (d *mongoDriver) Upsert(ctx context.Context, row id.DBObject, query, update
 
 func (d *mongoDriver) GetDatabaseInfo(ctx context.Context) databaseinfo.Info {
 	// Check if the database is AWS DocumentDB
-	isAWSDocumentDB, err := d.client.Database("admin").RunCommand(ctx, bson.M{"isMaster": 1}).DecodeBytes()
-	if err != nil {
-		return databaseinfo.Info{}
-	}
+	isAWSDocumentDB, _ := d.client.Database("admin").RunCommand(ctx, bson.M{"isMaster": 1}).DecodeBytes()
 
 	if bytes.Contains(isAWSDocumentDB, []byte("documentdb")) {
 		return databaseinfo.Info{
