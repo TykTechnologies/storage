@@ -78,5 +78,5 @@ func TestStructValues(t *testing.T) {
 	assert.Contains(t, result, "\"StringSliceVal\":[]")
 	assert.Contains(t, result, "\"InterfaceSliceVal\":[]")
 	assert.Contains(t, result, "\"DBMMap\":[{\"test\":\"a\"}]")
-	assert.Contains(t, result, "\"Timestamp\":\"",currentTime.String(),"\"")
+	assert.Contains(t, result, "\"Timestamp\":\"", currentTime.String(), "\"")
 }

@@ -4,12 +4,13 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/id"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/bson/bsonoptions"
 	"go.mongodb.org/mongo-driver/bson/bsonrw"
 	"go.mongodb.org/mongo-driver/bson/mgocompat"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"github.com/TykTechnologies/storage/persistent/id"
 )
 
 // tOID is the type of id.ObjectID

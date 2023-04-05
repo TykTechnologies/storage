@@ -41,3 +41,23 @@ func TestErrPrint(t *testing.T) {
 		})
 	}
 }
+
+func TestIsCosmosDB(t *testing.T) {
+	cases := []struct {
+		connectionString string
+		expectedResult   bool
+	}{
+		{"AccountEndpoint=https://mycosmosdb.documents.azure.com:443/;AccountKey=myaccountkey;Database=mydatabase;", true},
+		{"AccountEndpoint=https://mycosmosdb.documents.azure.com:443/;Database=mydatabase;", true},
+		{"AccountEndpoint=https://mycosmosdb.documents.azure.com:443/;AccountKey=myaccountkey;", true},
+		{"https://mycosmosdb.documents.azure.com:443/;AccountKey=myaccountkey;Database=mydatabase;", true},
+		{"mongodb://localhost:27017/mydatabase", false},
+	}
+
+	for _, c := range cases {
+		result := IsCosmosDB(c.connectionString)
+		if result != c.expectedResult {
+			t.Errorf("IsCosmosDB(%q) == %v, expected %v", c.connectionString, result, c.expectedResult)
+		}
+	}
+}

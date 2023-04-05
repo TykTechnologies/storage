@@ -7,14 +7,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
+
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/index"
 
-	"github.com/TykTechnologies/storage/persistent/internal/helper"
-	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
+
+	"github.com/TykTechnologies/storage/persistent/internal/helper"
+	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
 var _ model.PersistentStorage = &mgoDriver{}
@@ -504,4 +507,14 @@ func (d *mgoDriver) Upsert(ctx context.Context, row id.DBObject, query, update d
 	}, row)
 
 	return d.handleStoreError(err)
+}
+
+func (d *mgoDriver) GetDatabaseInfo(ctx context.Context) (databaseinfo.Info, error) {
+	result := databaseinfo.Info{}
+
+	db := d.session.DB("admin")
+	err := db.Run(bson.D{{Name: "buildInfo", Value: 1}}, &result)
+	result.Type = d.lifeCycle.DBType()
+
+	return result, err
 }

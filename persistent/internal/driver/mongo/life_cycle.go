@@ -5,18 +5,23 @@ import (
 	"errors"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
+	"github.com/TykTechnologies/storage/persistent/internal/helper"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
+
+	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
 type lifeCycle struct {
 	client *mongo.Client
 
-	database string
+	connectionString string
+	database         string
 }
 
 var _ model.StorageLifecycle = &lifeCycle{}
@@ -44,6 +49,7 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 		return err
 	}
 
+	lc.connectionString = opts.ConnectionString
 	lc.database = cs.Database
 	lc.client = client
 
@@ -60,7 +66,11 @@ func (lc *lifeCycle) Close() error {
 }
 
 // DBType returns the type of the registered storage driver.
-func (lc *lifeCycle) DBType() model.DBType {
+func (lc *lifeCycle) DBType() databaseinfo.DBType {
+	if helper.IsCosmosDB(lc.connectionString) {
+		return databaseinfo.CosmosDB
+	}
+
 	var result struct {
 		Code int `bson:"code"`
 	}
@@ -69,10 +79,10 @@ func (lc *lifeCycle) DBType() model.DBType {
 	singleResult := lc.client.Database("admin").RunCommand(context.Background(), cmd)
 
 	if err := singleResult.Decode(&result); (singleResult.Err() != nil || err != nil) && result.Code == 303 {
-		return model.AWSDocumentDB
+		return databaseinfo.AWSDocumentDB
 	}
 
-	return model.StandardMongo
+	return databaseinfo.StandardMongo
 }
 
 // mongoOptsBuilder build Mongo options.ClientOptions from our own model.ClientOpts. Also sets default values.

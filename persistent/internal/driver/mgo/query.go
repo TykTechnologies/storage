@@ -8,8 +8,9 @@ import (
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
 
-	"github.com/TykTechnologies/storage/persistent/id"
 	"gopkg.in/mgo.v2/bson"
+
+	"github.com/TykTechnologies/storage/persistent/id"
 )
 
 func buildQuery(query dbm.DBM) bson.M {

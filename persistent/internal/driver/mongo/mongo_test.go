@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"strconv"
 	"testing"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/TykTechnologies/storage/persistent/index"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
@@ -2108,4 +2110,15 @@ func TestUpsert(t *testing.T) {
 
 	assert.Equal(t, "upsert_test_updated", object.Name)
 	assert.Equal(t, 10, object.Age)
+}
+
+func TestGetDBType(t *testing.T) {
+	driver, _ := prepareEnvironment(t)
+	info, err := driver.GetDatabaseInfo(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ToDo: update for those cases where it returns aws
+	assert.Equal(t, databaseinfo.StandardMongo, info.Type)
 }

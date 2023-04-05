@@ -1,8 +1,9 @@
 package mongo
 
 import (
-	"github.com/TykTechnologies/storage/persistent/dbm"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"github.com/TykTechnologies/storage/persistent/dbm"
 )
 
 func buildOpt(opt dbm.DBM) *options.CreateCollectionOptions {
