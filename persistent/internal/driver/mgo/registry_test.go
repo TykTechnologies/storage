@@ -1,9 +1,8 @@
-package mongo
+package mgo
 
 import (
 	"context"
 	"encoding/json"
-	"reflect"
 	"testing"
 	"time"
 
@@ -11,20 +10,6 @@ import (
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/stretchr/testify/assert"
 )
-
-func TestCreateCustomRegistry(t *testing.T) {
-	customRegistry := createCustomRegistry()
-
-	build := customRegistry.Build()
-
-	encoder, err := build.LookupEncoder(reflect.TypeOf(id.NewObjectID()))
-	assert.Nil(t, err)
-	assert.NotNil(t, encoder)
-
-	decoder, err := build.LookupDecoder(reflect.TypeOf(id.NewObjectID()))
-	assert.Nil(t, err)
-	assert.NotNil(t, decoder)
-}
 
 type testStruct struct {
 	Id                id.ObjectId
@@ -75,5 +60,5 @@ func TestStructValues(t *testing.T) {
 	assert.Contains(t, result, "\"StringSliceVal\":[]")
 	assert.Contains(t, result, "\"InterfaceSliceVal\":[]")
 	assert.Contains(t, result, "\"DBMMap\":[{\"test\":\"a\"}]")
-	assert.Contains(t, result, "\"Timestamp\":\"2023-04-04T12:00:00+02:00\"")
+	assert.Contains(t, result, "\"Timestamp\":\"2023-04-04T10:00:00Z\"")
 }

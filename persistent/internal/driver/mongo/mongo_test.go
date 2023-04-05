@@ -3,19 +3,18 @@ package mongo
 import (
 	"context"
 	"errors"
-	"reflect"
 	"strconv"
 	"testing"
-
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/index"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -1164,7 +1163,7 @@ func TestIndexes(t *testing.T) {
 			expectedIndexes: []index.Index{
 				{
 					Name: "_id_",
-					Keys: []dbm.DBM{{"_id": int32(1)}},
+					Keys: []dbm.DBM{{"_id": 1}},
 				},
 				{
 					Name: "test",
@@ -1579,7 +1578,7 @@ func TestAggregate(t *testing.T) {
 					"continent":    object.Country.Continent,
 					"country_name": object.Country.CountryName,
 				},
-				"age": int32(object.Age),
+				"age": object.Age,
 			}},
 		},
 		{
@@ -1608,7 +1607,7 @@ func TestAggregate(t *testing.T) {
 						"continent":    object2.Country.Continent,
 						"country_name": object2.Country.CountryName,
 					},
-					"age": int32(object2.Age),
+					"age": object2.Age,
 				},
 			},
 		},
@@ -1653,7 +1652,7 @@ func TestAggregate(t *testing.T) {
 					"continent":    object2.Country.Continent,
 					"country_name": object2.Country.CountryName,
 				},
-				"age":   int32(object2.Age),
+				"age":   object2.Age,
 				"email": "peter@email.com",
 			}},
 		},
@@ -1673,7 +1672,7 @@ func TestAggregate(t *testing.T) {
 						"continent":    object.Country.Continent,
 						"country_name": object.Country.CountryName,
 					},
-					"age": int32(object.Age),
+					"age": object.Age,
 				},
 				{
 					"_id":      object2.GetObjectID(),
@@ -1683,7 +1682,7 @@ func TestAggregate(t *testing.T) {
 						"continent":    object2.Country.Continent,
 						"country_name": object2.Country.CountryName,
 					},
-					"age": int32(object2.Age),
+					"age": object2.Age,
 				},
 			},
 		},
@@ -1702,7 +1701,7 @@ func TestAggregate(t *testing.T) {
 			},
 			expectedResult: []dbm.DBM{{
 				"_id":       "Germany",
-				"total_age": int32(object2.Age),
+				"total_age": object2.Age,
 			}},
 		},
 		{
@@ -1726,8 +1725,8 @@ func TestAggregate(t *testing.T) {
 						"continent":    object.Country.Continent,
 						"country_name": object.Country.CountryName,
 					},
-					"age":       int32(object.Age),
-					"addresses": primitive.A{},
+					"age":       object.Age,
+					"addresses": []interface{}{},
 				},
 				{
 					"_id":      object2.GetObjectID(),
@@ -1737,45 +1736,12 @@ func TestAggregate(t *testing.T) {
 						"continent":    object2.Country.Continent,
 						"country_name": object2.Country.CountryName,
 					},
-					"age":       int32(object2.Age),
-					"addresses": primitive.A{},
+					"age":       object2.Age,
+					"addresses": []interface{}{},
 				},
 			},
 		},
 	}
-
-	/*
-
-	listA:
-	        	            	([]dbm.DBM) (len=1) {
-	        	            	 (dbm.DBM) (len=5) {
-	        	            	  (string) (len=3) "_id": (id.ObjectId) (len=12) "d\x1d`\xaat\x932s\x1b\xf2rQ",
-	        	            	  (string) (len=3) "age": (int32) 10,
-	        	            	  (string) (len=7) "country": (dbm.DBM) (len=2) {
-	        	            	   (string) (len=9) "continent": (string) (len=14) "test_continent",
-	        	            	   (string) (len=12) "country_name": (string) (len=12) "test_country"
-	        	            	  },
-	        	            	  (string) (len=5) "email": (string) (len=13) "test@test.com",
-	        	            	  (string) (len=8) "testName": (string) (len=4) "test"
-	        	            	 }
-	        	            	}
-	extra elements in list A:
-	        	            	([]interface {}) (len=1) {
-	        	            	 (dbm.DBM) (len=5) {
-	        	            	  (string) (len=3) "_id": (id.ObjectId) (len=12) "d\x1d`\xaat\x932s\x1b\xf2rQ",
-	        	            	  (string) (len=3) "age": (int32) 10,
-	        	            	  (string) (len=7) "country": (dbm.DBM) (len=2) {
-	        	            	   (string) (len=9) "continent": (string) (len=14) "test_continent",
-	        	            	   (string) (len=12) "country_name": (string) (len=12) "test_country"
-	        	            	  },
-	        	            	  (string) (len=5) "email": (string) (len=13) "test@test.com",
-	        	            	  (string) (len=8) "testName": (string) (len=4) "test"
-	        	            	 }
-	        	            	}
-
-
-	*/
-
 	// Run each test case
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1785,13 +1751,10 @@ func TestAggregate(t *testing.T) {
 
 			assert.Len(t, result, len(tc.expectedResult))
 
-			for i := range tc.expectedResult{
-				if !reflect.DeepEqual(result[i], tc.expectedResult[i]) {
-					t.Errorf("Expected output %v, but got %v", tc.expectedResult[i], result[i])
-				}
+			less := func(a, b string) bool { return a < b }
+			if !cmp.Equal(tc.expectedResult, result, cmpopts.SortSlices(less)) {
+				t.Errorf("Aggregate mismatch (-want +got):\n%s", cmp.Diff(tc.expectedResult, result))
 			}
-			// Check if the result matches the expected result
-			//assert.ElementsMatch(t, tc.expectedResult, result)
 		})
 	}
 
