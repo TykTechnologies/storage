@@ -424,6 +424,17 @@ func (d *mgoDriver) DropDatabase(ctx context.Context) error {
 	return sess.DB("").DropDatabase()
 }
 
+func (d *mgoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
+	var stats dbm.DBM
+
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	err := sess.DB("").Run(dbm.DBM{"collStats": row.TableName()}, &stats)
+
+	return stats, err
+}
+
 func (d *mgoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error) {
 	sess := d.session.Copy()
 	defer sess.Close()
@@ -454,4 +465,43 @@ func (d *mgoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.
 	}
 
 	return resultSlice, nil
+}
+
+func (d *mgoDriver) CleanIndexes(ctx context.Context, row id.DBObject) error {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	col := sess.DB("").C(row.TableName())
+
+	indexes, err := col.Indexes()
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < len(indexes); i++ {
+		index := &indexes[i]      // using pointers to avoid copying and improve performance
+		if index.Name != "_id_" { // cannot drop _id index
+			err = col.DropIndexName(index.Name)
+			if err != nil {
+				return d.handleStoreError(err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (d *mgoDriver) Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM) error {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	col := sess.DB("").C(row.TableName())
+
+	_, err := col.Find(query).Apply(mgo.Change{
+		Update:    update,
+		Upsert:    true,
+		ReturnNew: true,
+	}, row)
+
+	return d.handleStoreError(err)
 }

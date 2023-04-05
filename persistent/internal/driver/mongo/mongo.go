@@ -366,6 +366,15 @@ func (d *mongoDriver) DropDatabase(ctx context.Context) error {
 	return d.client.Database(d.database).Drop(ctx)
 }
 
+func (d *mongoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
+	var stats dbm.DBM
+	err := d.client.Database(d.database).RunCommand(ctx, bson.D{
+		{Key: "collStats", Value: row.TableName()},
+	}).Decode(&stats)
+
+	return stats, err
+}
+
 func (d *mongoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error) {
 	col := d.client.Database(d.database).Collection(row.TableName())
 
@@ -399,4 +408,21 @@ func (d *mongoDriver) Aggregate(ctx context.Context, row id.DBObject, query []db
 	}
 
 	return resultSlice, nil
+}
+
+func (d *mongoDriver) CleanIndexes(ctx context.Context, row id.DBObject) error {
+	collection := d.client.Database(d.database).Collection(row.TableName())
+
+	_, err := collection.Indexes().DropAll(ctx)
+
+	return d.handleStoreError(err)
+}
+
+func (d *mongoDriver) Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM) error {
+	coll := d.client.Database(d.database).Collection(row.TableName())
+
+	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+	err := coll.FindOneAndUpdate(ctx, query, update, opts).Decode(row)
+
+	return d.handleStoreError(err)
 }
