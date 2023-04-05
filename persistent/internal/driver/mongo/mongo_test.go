@@ -1520,17 +1520,17 @@ func TestDBTableStats(t *testing.T) {
 		{
 			name: "DBTableStats ok",
 			want: dbm.DBM{
-				"count":          int32(0),
+				"count":          0,
 				"indexDetails":   dbm.DBM{},
 				"indexSizes":     dbm.DBM{},
-				"nindexes":       int32(0),
+				"nindexes":       0,
 				"ns":             "test.dummy",
 				"ok":             float64(1),
-				"scaleFactor":    int32(1),
-				"size":           int32(0),
-				"storageSize":    int32(0),
-				"totalIndexSize": int32(0),
-				"totalSize":      int32(0),
+				"scaleFactor":    1,
+				"size":           0,
+				"storageSize":    0,
+				"totalIndexSize": 0,
+				"totalSize":      0,
 			},
 			row:         func() id.DBObject { return object },
 			expectedErr: nil,
@@ -1588,8 +1588,8 @@ func TestDBTableStats(t *testing.T) {
 		stats, err := driver.DBTableStats(ctx, object)
 		assert.Nil(t, err)
 
-		assert.Equal(t, int32(1), stats["count"])
-		assert.Equal(t, int32(1), stats["nindexes"]) // must be 1 because of _id index
+		assert.Equal(t, 1, stats["count"])
+		assert.Equal(t, 1, stats["nindexes"]) // must be 1 because of _id index
 	})
 
 	t.Run("DBTableStats with 3 indexes", func(t *testing.T) {
@@ -1614,8 +1614,8 @@ func TestDBTableStats(t *testing.T) {
 		stats, err := driver.DBTableStats(ctx, object)
 		assert.Nil(t, err)
 
-		assert.Equal(t, int32(1), stats["count"])
-		assert.Equal(t, int32(4), stats["nindexes"])
+		assert.Equal(t, 1, stats["count"])
+		assert.Equal(t, 4, stats["nindexes"])
 	},
 	)
 
@@ -1885,7 +1885,7 @@ func TestAggregate(t *testing.T) {
 
 			assert.Len(t, result, len(tc.expectedResult))
 
-			less := func(a, b string) bool { return a < b }
+			less := func(a, b interface{}) bool { return fmt.Sprint(a) < fmt.Sprint(b) }
 			if !cmp.Equal(tc.expectedResult, result, cmpopts.SortSlices(less)) {
 				t.Errorf("Aggregate mismatch (-want +got):\n%s", cmp.Diff(tc.expectedResult, result))
 			}
