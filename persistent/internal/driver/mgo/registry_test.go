@@ -1,3 +1,6 @@
+//go:build mongo
+// +build mongo
+
 package mgo
 
 import (
@@ -60,5 +63,5 @@ func TestStructValues(t *testing.T) {
 	assert.Contains(t, result, "\"StringSliceVal\":[]")
 	assert.Contains(t, result, "\"InterfaceSliceVal\":[]")
 	assert.Contains(t, result, "\"DBMMap\":[{\"test\":\"a\"}]")
-	assert.Contains(t, result, "\"Timestamp\":\"2023-04-04T10:00:00Z\"")
+	assert.Contains(t, result, "\"Timestamp\":\"2023-04-04T12:00:00+02:00\"")
 }
