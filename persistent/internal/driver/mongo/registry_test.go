@@ -54,7 +54,7 @@ func TestStructValues(t *testing.T) {
 	driver, _ := prepareEnvironment(t)
 	defer cleanDB(t)
 
-	currentTime := time.Date(2023, 0o4, 0o4, 10, 0, 0, 0, time.UTC)
+	currentTime := time.Date(2023, 0o4, 0o4, 10, 0, 0, 0, time.Local)
 	testObj := testStruct{
 		Id:        id.NewObjectID(),
 		DBMMap:    []dbm.DBM{{"test": "a"}},
@@ -78,5 +78,5 @@ func TestStructValues(t *testing.T) {
 	assert.Contains(t, result, "\"StringSliceVal\":[]")
 	assert.Contains(t, result, "\"InterfaceSliceVal\":[]")
 	assert.Contains(t, result, "\"DBMMap\":[{\"test\":\"a\"}]")
-	assert.Contains(t, result, "\"Timestamp\":\"2023-04-04T12:00:00+02:00\"")
+	assert.Contains(t, result, "\"Timestamp\":\"",currentTime.String(),"\"")
 }
