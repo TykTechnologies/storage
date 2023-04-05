@@ -17,5 +17,10 @@ func ErrPrint(err error) {
 }
 
 func IsCosmosDB(connectionString string) bool {
-	return strings.Contains(connectionString, ".cosmos.")
+	return strings.Contains(connectionString, ".cosmos.") ||
+		strings.HasPrefix(connectionString, "https://") && strings.Contains(connectionString, ".documents.azure.com") ||
+		strings.HasPrefix(connectionString, "tcp://") && strings.Contains(connectionString, ".documents.azure.com") ||
+		strings.HasPrefix(connectionString, "mongodb://") && strings.Contains(connectionString, ".documents.azure.com") ||
+		strings.Contains(connectionString, "AccountEndpoint=") ||
+		strings.Contains(connectionString, "AccountKey=")
 }
