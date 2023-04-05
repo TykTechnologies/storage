@@ -1,3 +1,6 @@
+//go:build mongo
+// +build mongo
+
 package mongo
 
 import (
@@ -7,19 +10,17 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/TykTechnologies/storage/persistent/databaseinfo"
-
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-
-	"github.com/stretchr/testify/assert"
-	"go.mongodb.org/mongo-driver/mongo"
-
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/index"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/stretchr/testify/assert"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type dummyDBObject struct {
@@ -1523,17 +1524,17 @@ func TestDBTableStats(t *testing.T) {
 		{
 			name: "DBTableStats ok",
 			want: dbm.DBM{
-				"count":          int32(0),
+				"count":          0,
 				"indexDetails":   dbm.DBM{},
 				"indexSizes":     dbm.DBM{},
-				"nindexes":       int32(0),
+				"nindexes":       0,
 				"ns":             "test.dummy",
 				"ok":             float64(1),
-				"scaleFactor":    int32(1),
-				"size":           int32(0),
-				"storageSize":    int32(0),
-				"totalIndexSize": int32(0),
-				"totalSize":      int32(0),
+				"scaleFactor":    1,
+				"size":           0,
+				"storageSize":    0,
+				"totalIndexSize": 0,
+				"totalSize":      0,
 			},
 			row:         func() id.DBObject { return object },
 			expectedErr: nil,
@@ -1591,8 +1592,8 @@ func TestDBTableStats(t *testing.T) {
 		stats, err := driver.DBTableStats(ctx, object)
 		assert.Nil(t, err)
 
-		assert.Equal(t, int32(1), stats["count"])
-		assert.Equal(t, int32(1), stats["nindexes"]) // must be 1 because of _id index
+		assert.Equal(t, 1, stats["count"])
+		assert.Equal(t, 1, stats["nindexes"]) // must be 1 because of _id index
 	})
 
 	t.Run("DBTableStats with 3 indexes", func(t *testing.T) {
@@ -1617,8 +1618,8 @@ func TestDBTableStats(t *testing.T) {
 		stats, err := driver.DBTableStats(ctx, object)
 		assert.Nil(t, err)
 
-		assert.Equal(t, int32(1), stats["count"])
-		assert.Equal(t, int32(4), stats["nindexes"])
+		assert.Equal(t, 1, stats["count"])
+		assert.Equal(t, 4, stats["nindexes"])
 	},
 	)
 
@@ -1715,7 +1716,7 @@ func TestAggregate(t *testing.T) {
 					"continent":    object.Country.Continent,
 					"country_name": object.Country.CountryName,
 				},
-				"age": int32(object.Age),
+				"age": object.Age,
 			}},
 		},
 		{
@@ -1744,7 +1745,7 @@ func TestAggregate(t *testing.T) {
 						"continent":    object2.Country.Continent,
 						"country_name": object2.Country.CountryName,
 					},
-					"age": int32(object2.Age),
+					"age": object2.Age,
 				},
 			},
 		},
@@ -1789,7 +1790,7 @@ func TestAggregate(t *testing.T) {
 					"continent":    object2.Country.Continent,
 					"country_name": object2.Country.CountryName,
 				},
-				"age":   int32(object2.Age),
+				"age":   object2.Age,
 				"email": "peter@email.com",
 			}},
 		},
@@ -1809,7 +1810,7 @@ func TestAggregate(t *testing.T) {
 						"continent":    object.Country.Continent,
 						"country_name": object.Country.CountryName,
 					},
-					"age": int32(object.Age),
+					"age": object.Age,
 				},
 				{
 					"_id":   object2.GetObjectID(),
@@ -1819,7 +1820,7 @@ func TestAggregate(t *testing.T) {
 						"continent":    object2.Country.Continent,
 						"country_name": object2.Country.CountryName,
 					},
-					"age": int32(object2.Age),
+					"age": object2.Age,
 				},
 			},
 		},
@@ -1838,7 +1839,7 @@ func TestAggregate(t *testing.T) {
 			},
 			expectedResult: []dbm.DBM{{
 				"_id":       "Germany",
-				"total_age": int32(object2.Age),
+				"total_age": object2.Age,
 			}},
 		},
 		{
@@ -1862,8 +1863,8 @@ func TestAggregate(t *testing.T) {
 						"continent":    object.Country.Continent,
 						"country_name": object.Country.CountryName,
 					},
-					"age":       int32(object.Age),
-					"addresses": primitive.A{},
+					"age":       object.Age,
+					"addresses": []interface{}{},
 				},
 				{
 					"_id":   object2.GetObjectID(),
@@ -1873,13 +1874,12 @@ func TestAggregate(t *testing.T) {
 						"continent":    object2.Country.Continent,
 						"country_name": object2.Country.CountryName,
 					},
-					"age":       int32(object2.Age),
-					"addresses": primitive.A{},
+					"age":       object2.Age,
+					"addresses": []interface{}{},
 				},
 			},
 		},
 	}
-
 	// Run each test case
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1887,8 +1887,12 @@ func TestAggregate(t *testing.T) {
 			result, err := driver.Aggregate(ctx, object, tc.pipeline)
 			assert.Nil(t, err)
 
-			// Check if the result matches the expected result
-			assert.ElementsMatch(t, tc.expectedResult, result)
+			assert.Len(t, result, len(tc.expectedResult))
+
+			less := func(a, b interface{}) bool { return fmt.Sprint(a) < fmt.Sprint(b) }
+			if !cmp.Equal(tc.expectedResult, result, cmpopts.SortSlices(less)) {
+				t.Errorf("Aggregate mismatch (-want +got):\n%s", cmp.Diff(tc.expectedResult, result))
+			}
 		})
 	}
 

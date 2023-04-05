@@ -1,3 +1,6 @@
+//go:build mongo
+// +build mongo
+
 package mgo
 
 import (

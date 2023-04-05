@@ -9,7 +9,6 @@ import (
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/mgocompat"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -43,9 +42,7 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 		return errors.New(err.Error())
 	}
 
-	// SetRegistry allow us to marshall/unmarshall old mgo type primitives.
-	connOpts.SetRegistry(mgocompat.Registry)
-	// SetRegistry allow us to marshall/unmarshall old mgo ID's structures.
+	// SetRegistry allow us to marshall/unmarshall old mgo ID's structures and mgo default values.
 	connOpts.SetRegistry(createCustomRegistry().Build())
 
 	if client, err = mongo.Connect(context.Background(), connOpts); err != nil {
