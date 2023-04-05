@@ -1163,7 +1163,7 @@ func TestIndexes(t *testing.T) {
 			expectedIndexes: []index.Index{
 				{
 					Name: "_id_",
-					Keys: []dbm.DBM{{"_id": 1}},
+					Keys: []dbm.DBM{{"_id": int32(1)}},
 				},
 				{
 					Name: "test",
