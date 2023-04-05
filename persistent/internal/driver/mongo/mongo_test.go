@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
+
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/index"
