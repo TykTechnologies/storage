@@ -291,7 +291,6 @@ func (d *mongoDriver) CreateIndex(ctx context.Context, row id.DBObject, index in
 }
 
 func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.Index, error) {
-
 	hasTable, err := d.HasTable(ctx, row.TableName())
 	if err != nil {
 		return nil, err

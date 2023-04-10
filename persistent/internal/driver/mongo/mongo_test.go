@@ -7,9 +7,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"strconv"
 	"testing"
+
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
