@@ -9,7 +9,6 @@ import (
 )
 
 func TestIsErrNoRows(t *testing.T) {
-
 	tests := []struct {
 		name  string
 		input error
