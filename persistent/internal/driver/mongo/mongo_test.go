@@ -2128,7 +2128,7 @@ func TestMongoDriver_GetCollections(t *testing.T) {
 
 	defer cleanDB(t)
 
-	err := driver.Migrate(ctx, object)
+	err := driver.Migrate(ctx, []id.DBObject{object})
 	if err != nil {
 		t.Fatal(err)
 	}
