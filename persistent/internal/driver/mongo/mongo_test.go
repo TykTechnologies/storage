@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"testing"
 
-
 	"github.com/TykTechnologies/storage/persistent/utils"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
@@ -1433,8 +1432,8 @@ func TestMigrate(t *testing.T) {
 
 		objs := []id.DBObject{obj}
 		opt := dbm.DBM{
-			"capped": true,
-			"size":   1234,
+			"capped":   true,
+			"maxBytes": 1234,
 		}
 
 		err = driver.Migrate(context.Background(), objs, opt)
@@ -1469,11 +1468,11 @@ func TestMigrate(t *testing.T) {
 
 		objs := []id.DBObject{obj}
 		opt := dbm.DBM{
-			"capped": true,
-			"size":   1234,
+			"capped":   true,
+			"maxBytes": 1234,
 		}
 		opt2 := dbm.DBM{
-			"size": 1234,
+			"maxBytes": 1234,
 		}
 
 		err = driver.Migrate(context.Background(), objs, opt, opt2)
@@ -1627,8 +1626,8 @@ func TestDBTableStats(t *testing.T) {
 	t.Run("DBTableStats with capped collection", func(t *testing.T) {
 		defer cleanDB(t)
 		opts := dbm.DBM{
-			"capped": true,
-			"size":   9000,
+			"capped":   true,
+			"maxBytes": 9000,
 		}
 
 		err := driver.Migrate(ctx, []id.DBObject{object}, opts)

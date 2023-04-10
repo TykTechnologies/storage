@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mongo
 
 import (
@@ -37,8 +34,8 @@ func Test_buildOpt(t *testing.T) {
 						"normalization":   true,
 						"backwards":       true,
 					},
-					"max":                100,
-					"size":               100,
+					"maxDocs":            100,
+					"maxBytes":           100,
 					"storageEngine":      "storageEngine",
 					"validationAction":   "validationAction",
 					"validationLevel":    "validationLevel",
