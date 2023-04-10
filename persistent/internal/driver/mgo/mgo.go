@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gopkg.in/mgo.v2"
 	"strings"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/TykTechnologies/storage/persistent/index"
 	"github.com/TykTechnologies/storage/persistent/utils"
 
-	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
@@ -521,4 +521,8 @@ func (d *mgoDriver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
 	result.Type = d.lifeCycle.DBType()
 
 	return result, err
+}
+
+func (d *mgoDriver) GetCollections(ctx context.Context) ([]string, error) {
+	return d.db.CollectionNames()
 }

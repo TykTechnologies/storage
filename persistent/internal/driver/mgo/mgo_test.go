@@ -1927,3 +1927,21 @@ func TestGetDBType(t *testing.T) {
 	// ToDo: update for those cases where it returns aws
 	assert.Equal(t, utils.StandardMongo, info.Type)
 }
+
+func TestMongoDriver_GetCollections(t *testing.T) {
+	ctx := context.Background()
+	driver, object := prepareEnvironment(t)
+
+	defer cleanDB(t)
+
+	err := driver.Migrate(ctx, object)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	collections, err := driver.GetCollections(ctx)
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(collections))
+
+	assert.Equal(t, object.TableName(), collections[0])
+}

@@ -442,3 +442,7 @@ func (d *mongoDriver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
 
 	return result, err
 }
+
+func (d *mongoDriver) GetCollections(ctx context.Context) ([]string, error) {
+	return d.client.Database(d.database).ListCollectionNames(ctx, nil)
+}
