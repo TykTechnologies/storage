@@ -66,5 +66,5 @@ type PersistentStorage interface {
 	// GetTables return the list of collections for a given database
 	GetTables(ctx context.Context) ([]string, error)
 	// DropTable drops a table/collection from the database
-	DropTable(ctx context.Context, name string) error
+	DropTable(ctx context.Context, name string) (int, error)
 }

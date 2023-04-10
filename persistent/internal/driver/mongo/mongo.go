@@ -446,6 +446,11 @@ func (d *mongoDriver) GetTables(ctx context.Context) ([]string, error) {
 	return d.client.Database(d.database).ListCollectionNames(ctx, bson.D{})
 }
 
-func (d *mongoDriver) DropTable(ctx context.Context, collectionName string) error {
-	return d.client.Database(d.database).Collection(collectionName).Drop(ctx)
+func (d *mongoDriver) DropTable(ctx context.Context, collectionName string) (int, error) {
+	deleteResult, err := d.client.Database(d.database).Collection(collectionName).DeleteMany(ctx, bson.M{})
+	if err != nil {
+		return 0, err
+	}
+
+	return int(deleteResult.DeletedCount), d.client.Database(d.database).Collection(collectionName).Drop(ctx)
 }

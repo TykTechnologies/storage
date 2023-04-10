@@ -1948,8 +1948,9 @@ func TestMongoDriver_GetTables(t *testing.T) {
 
 	// Now test that drop works
 	t.Run("Drop table", func(t *testing.T) {
-		err = driver.DropTable(ctx, object.TableName())
+		removed, err := driver.DropTable(ctx, object.TableName())
 		assert.Nil(t, err)
+		assert.Equal(t, 1, removed)
 		collections, err = driver.GetTables(ctx)
 		assert.Nil(t, err)
 		assert.Equal(t, 0, len(collections))
