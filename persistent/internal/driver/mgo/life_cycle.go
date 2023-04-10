@@ -6,8 +6,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
+	"github.com/TykTechnologies/storage/persistent/utils"
 
 	"gopkg.in/mgo.v2"
 
@@ -77,9 +77,9 @@ func (lc *lifeCycle) Close() error {
 }
 
 // DBType returns the type of the registered storage driver.
-func (lc *lifeCycle) DBType() databaseinfo.DBType {
+func (lc *lifeCycle) DBType() utils.DBType {
 	if helper.IsCosmosDB(lc.connectionString) {
-		return databaseinfo.CosmosDB
+		return utils.CosmosDB
 	}
 
 	var result struct {
@@ -87,10 +87,10 @@ func (lc *lifeCycle) DBType() databaseinfo.DBType {
 	}
 
 	if err := lc.session.Run("features", &result); err != nil && result.Code == 303 {
-		return databaseinfo.AWSDocumentDB
+		return utils.AWSDocumentDB
 	}
 
-	return databaseinfo.StandardMongo
+	return utils.StandardMongo
 }
 
 func (lc *lifeCycle) setSessionConsistency(opts *model.ClientOpts) {

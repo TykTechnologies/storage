@@ -10,7 +10,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/TykTechnologies/storage/persistent/databaseinfo"
+
+	"github.com/TykTechnologies/storage/persistent/utils"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
@@ -197,7 +198,7 @@ func TestDelete(t *testing.T) {
 		// check if the object was deleted
 		err = driver.Query(ctx, object, &result, dbm.DBM{"_id": object.GetObjectID()})
 		assert.NotNil(t, err)
-		assert.True(t, driver.IsErrNoRows(err))
+		assert.True(t, utils.IsErrNoRows(err))
 	})
 
 	t.Run("deleting a non existent object", func(t *testing.T) {
@@ -205,7 +206,7 @@ func TestDelete(t *testing.T) {
 		object.SetObjectID(id.NewObjectID())
 		err := driver.Delete(ctx, object)
 		assert.NotNil(t, err)
-		assert.True(t, driver.IsErrNoRows(err))
+		assert.True(t, utils.IsErrNoRows(err))
 	})
 }
 
@@ -574,7 +575,7 @@ func TestUpdate(t *testing.T) {
 
 		err := driver.Update(ctx, object)
 		assert.NotNil(t, err)
-		assert.True(t, driver.IsErrNoRows(err))
+		assert.True(t, utils.IsErrNoRows(err))
 	})
 
 	t.Run("Updating an object without _id", func(t *testing.T) {
@@ -584,7 +585,7 @@ func TestUpdate(t *testing.T) {
 
 		err := driver.Update(ctx, object)
 		assert.NotNil(t, err)
-		assert.False(t, driver.IsErrNoRows(err))
+		assert.False(t, utils.IsErrNoRows(err))
 	})
 }
 
@@ -2119,5 +2120,5 @@ func TestGetDBType(t *testing.T) {
 	}
 
 	// ToDo: update for those cases where it returns aws
-	assert.Equal(t, databaseinfo.StandardMongo, info.Type)
+	assert.Equal(t, utils.StandardMongo, info.Type)
 }
