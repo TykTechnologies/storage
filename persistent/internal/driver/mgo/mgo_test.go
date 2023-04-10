@@ -1933,9 +1933,9 @@ func TestMongoDriver_GetTables(t *testing.T) {
 	driver, object := prepareEnvironment(t)
 	defer cleanDB(t)
 
-	_, err := driver.client.Database(driver.database).Collection(object.TableName()).InsertOne(ctx, bson.M{"name": "jane"})
+	err := driver.db.C(object.TableName()).Insert(bson.M{"name": "jane"})
 	if err != nil {
-		t.Fatalf("failed to insert test data into collection2: %s", err)
+		t.Fatalf("failed to insert test data into collection: %s", err)
 	}
 
 	collections, err := driver.GetTables(ctx)
