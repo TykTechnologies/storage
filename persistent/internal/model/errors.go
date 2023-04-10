@@ -11,4 +11,5 @@ const (
 	ErrorIndexComposedTTL          = "TTL indexes are single-field indexes, compound indexes do not support TTL"
 	ErrorSessionClosed             = "session closed"
 	ErrorRowOptDiffLenght          = "only one options per row is allowed"
+	ErrorCollectionNotFound        = "collection not found"
 )
