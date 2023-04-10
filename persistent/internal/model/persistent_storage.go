@@ -3,6 +3,8 @@ package model
 import (
 	"context"
 
+	"github.com/TykTechnologies/storage/persistent/utils"
+
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/index"
 
@@ -28,8 +30,6 @@ type PersistentStorage interface {
 	// UpdateAll executes the update query dbm.DBM over
 	// the elements filtered by query dbm.DBM in the row id.DBObject collection
 	UpdateAll(ctx context.Context, row id.DBObject, query, update dbm.DBM) error
-	// IsErrNoRows Checking if an error is a "no rows error"
-	IsErrNoRows(err error) bool
 	// Drop drops the collection given the TableName() of the id.DBObject
 	Drop(context.Context, id.DBObject) error
 	// CreateIndex creates an index.Index in row id.DBObject TableName()
@@ -44,4 +44,23 @@ type PersistentStorage interface {
 	DropDatabase(ctx context.Context) error
 	// Migrate creates the table/collection if it doesn't exist
 	Migrate(context.Context, []id.DBObject, ...dbm.DBM) error
+	// DBTableStats retrieves statistics for a specified table in the database.
+	// The function takes a context.Context and an id.DBObject as input parameters,
+	// where the DBObject represents the table to get stats for.
+	// The result is decoded into a dbm.DBM object, along with any error that occurred during the command execution.
+	// Example: stats["capped"] -> true
+	DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error)
+	// Aggregate performs an aggregation query on the row id.DBObject collection
+	// query is the aggregation pipeline to be executed
+	// it returns the aggregation result and an error if any
+	Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error)
+	// CleanIndexes removes all the indexes from the row id.DBObject collection
+	CleanIndexes(ctx context.Context, row id.DBObject) error
+	// Upsert performs an upsert operation on the row id.DBObject collection
+	// query is the filter to be used to find the document to update
+	// update is the update to be applied to the document
+	// row is modified with the result of the operation
+	Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM) error
+	// GetDatabaseInfo returns information of the database to which the driver is connecting to
+	GetDatabaseInfo(ctx context.Context) (utils.Info, error)
 }

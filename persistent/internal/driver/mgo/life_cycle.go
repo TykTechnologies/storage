@@ -6,6 +6,9 @@ import (
 	"net"
 	"time"
 
+	"github.com/TykTechnologies/storage/persistent/internal/helper"
+	"github.com/TykTechnologies/storage/persistent/utils"
+
 	"gopkg.in/mgo.v2"
 
 	"github.com/TykTechnologies/storage/persistent/internal/model"
@@ -14,8 +17,9 @@ import (
 var _ model.StorageLifecycle = &lifeCycle{}
 
 type lifeCycle struct {
-	session *mgo.Session
-	db      *mgo.Database
+	session          *mgo.Session
+	db               *mgo.Database
+	connectionString string
 }
 
 // Connect connects to the mongo database given the ClientOpts.
@@ -52,7 +56,7 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 	lc.session = sess
 
 	lc.setSessionConsistency(opts)
-
+	lc.connectionString = opts.ConnectionString
 	lc.db = lc.session.DB("")
 
 	return nil
@@ -73,16 +77,20 @@ func (lc *lifeCycle) Close() error {
 }
 
 // DBType returns the type of the registered storage driver.
-func (lc *lifeCycle) DBType() model.DBType {
+func (lc *lifeCycle) DBType() utils.DBType {
+	if helper.IsCosmosDB(lc.connectionString) {
+		return utils.CosmosDB
+	}
+
 	var result struct {
 		Code int `bson:"code"`
 	}
 
 	if err := lc.session.Run("features", &result); err != nil && result.Code == 303 {
-		return model.AWSDocumentDB
+		return utils.AWSDocumentDB
 	}
 
-	return model.StandardMongo
+	return utils.StandardMongo
 }
 
 func (lc *lifeCycle) setSessionConsistency(opts *model.ClientOpts) {

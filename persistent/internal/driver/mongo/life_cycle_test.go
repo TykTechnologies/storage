@@ -15,6 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 
 	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"github.com/TykTechnologies/storage/persistent/utils"
 )
 
 func TestGetReadPrefFromConsistency(t *testing.T) {
@@ -197,5 +198,5 @@ func TestDBType(t *testing.T) {
 	assert.Nil(t, err)
 
 	dbType := lc.DBType()
-	assert.Equal(t, model.StandardMongo, dbType)
+	assert.Equal(t, utils.StandardMongo, dbType)
 }

@@ -5,19 +5,23 @@ import (
 	"errors"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"github.com/TykTechnologies/storage/persistent/internal/helper"
+	"github.com/TykTechnologies/storage/persistent/utils"
+
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/mgocompat"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
+
+	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
 type lifeCycle struct {
 	client *mongo.Client
 
-	database string
+	connectionString string
+	database         string
 }
 
 var _ model.StorageLifecycle = &lifeCycle{}
@@ -38,15 +42,14 @@ func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
 		return errors.New(err.Error())
 	}
 
-	// SetRegistry allow us to marshall/unmarshall old mgo type primitives.
-	connOpts.SetRegistry(mgocompat.Registry)
-	// SetRegistry allow us to marshall/unmarshall old mgo ID's structures.
+	// SetRegistry allow us to marshall/unmarshall old mgo ID's structures and mgo default values.
 	connOpts.SetRegistry(createCustomRegistry().Build())
 
 	if client, err = mongo.Connect(context.Background(), connOpts); err != nil {
 		return err
 	}
 
+	lc.connectionString = opts.ConnectionString
 	lc.database = cs.Database
 	lc.client = client
 
@@ -63,7 +66,11 @@ func (lc *lifeCycle) Close() error {
 }
 
 // DBType returns the type of the registered storage driver.
-func (lc *lifeCycle) DBType() model.DBType {
+func (lc *lifeCycle) DBType() utils.DBType {
+	if helper.IsCosmosDB(lc.connectionString) {
+		return utils.CosmosDB
+	}
+
 	var result struct {
 		Code int `bson:"code"`
 	}
@@ -72,10 +79,10 @@ func (lc *lifeCycle) DBType() model.DBType {
 	singleResult := lc.client.Database("admin").RunCommand(context.Background(), cmd)
 
 	if err := singleResult.Decode(&result); (singleResult.Err() != nil || err != nil) && result.Code == 303 {
-		return model.AWSDocumentDB
+		return utils.AWSDocumentDB
 	}
 
-	return model.StandardMongo
+	return utils.StandardMongo
 }
 
 // mongoOptsBuilder build Mongo options.ClientOptions from our own model.ClientOpts. Also sets default values.

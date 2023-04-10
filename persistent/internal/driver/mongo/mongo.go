@@ -3,17 +3,18 @@ package mongo
 import (
 	"context"
 	"errors"
-	"fmt"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
-
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/index"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/TykTechnologies/storage/persistent/utils"
 )
 
 var _ model.PersistentStorage = &mongoDriver{}
@@ -101,10 +102,6 @@ func (d *mongoDriver) Count(ctx context.Context, row id.DBObject, filters ...dbm
 	count, err := collection.CountDocuments(ctx, filter)
 
 	return int(count), d.handleStoreError(err)
-}
-
-func (d *mongoDriver) IsErrNoRows(err error) bool {
-	return errors.Is(err, mongo.ErrNoDocuments)
 }
 
 func (d *mongoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query dbm.DBM) error {
@@ -222,7 +219,7 @@ func (d *mongoDriver) HasTable(ctx context.Context, collection string) (bool, er
 	}
 
 	collections, err := d.client.Database(d.database).ListCollectionNames(ctx, bson.M{"name": collection})
-	fmt.Println("collections:", collections, "err:", err)
+
 	return len(collections) > 0, err
 }
 
@@ -290,6 +287,15 @@ func (d *mongoDriver) CreateIndex(ctx context.Context, row id.DBObject, index in
 }
 
 func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.Index, error) {
+	hasTable, err := d.HasTable(ctx, row.TableName())
+	if err != nil {
+		return nil, err
+	}
+
+	if !hasTable {
+		return nil, errors.New(model.ErrorCollectionNotFound)
+	}
+
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	var indexes []index.Index
@@ -364,4 +370,75 @@ func (d *mongoDriver) Migrate(ctx context.Context, rows []id.DBObject, opts ...d
 
 func (d *mongoDriver) DropDatabase(ctx context.Context) error {
 	return d.client.Database(d.database).Drop(ctx)
+}
+
+func (d *mongoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
+	var stats dbm.DBM
+	err := d.client.Database(d.database).RunCommand(ctx, bson.D{
+		{Key: "collStats", Value: row.TableName()},
+	}).Decode(&stats)
+
+	return stats, err
+}
+
+func (d *mongoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error) {
+	col := d.client.Database(d.database).Collection(row.TableName())
+
+	cursor, err := col.Aggregate(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	defer cursor.Close(ctx)
+
+	resultSlice := make([]dbm.DBM, 0)
+
+	for cursor.Next(ctx) {
+		var result dbm.DBM
+
+		err := cursor.Decode(&result)
+		if err != nil {
+			return nil, err
+		}
+
+		// Parsing _id from primitive.ObjectID to id.ObjectId
+		if objectId, ok := result["_id"].(primitive.ObjectID); ok {
+			result["_id"] = id.ObjectIdHex(objectId.Hex())
+		}
+
+		resultSlice = append(resultSlice, result)
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+
+	return resultSlice, nil
+}
+
+func (d *mongoDriver) CleanIndexes(ctx context.Context, row id.DBObject) error {
+	collection := d.client.Database(d.database).Collection(row.TableName())
+
+	_, err := collection.Indexes().DropAll(ctx)
+
+	return d.handleStoreError(err)
+}
+
+func (d *mongoDriver) Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM) error {
+	coll := d.client.Database(d.database).Collection(row.TableName())
+
+	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+	err := coll.FindOneAndUpdate(ctx, query, update, opts).Decode(row)
+
+	return d.handleStoreError(err)
+}
+
+func (d *mongoDriver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
+	var result utils.Info
+
+	database := d.client.Database("admin")
+	err := database.RunCommand(context.Background(), bson.D{primitive.E{Key: "buildInfo", Value: 1}}).Decode(&result)
+	result.Type = d.lifeCycle.DBType()
+
+	return result, err
 }
