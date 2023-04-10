@@ -27,6 +27,11 @@ type mgoDriver struct {
 	options         model.ClientOpts
 }
 
+func (d *mgoDriver) DropTable(ctx context.Context) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 // NewMgoDriver returns an instance of the driver connected to the database.
 func NewMgoDriver(opts *model.ClientOpts) (*mgoDriver, error) {
 	newDriver := &mgoDriver{}
@@ -523,6 +528,6 @@ func (d *mgoDriver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
 	return result, err
 }
 
-func (d *mgoDriver) GetCollections(ctx context.Context) ([]string, error) {
+func (d *mgoDriver) GetTables(ctx context.Context) ([]string, error) {
 	return d.db.CollectionNames()
 }

@@ -1,5 +1,5 @@
 //go:build mongo
-// +build mongo
+-// +build mongo
 
 package mongo
 
@@ -2122,20 +2122,21 @@ func TestGetDBType(t *testing.T) {
 	assert.Equal(t, utils.StandardMongo, info.Type)
 }
 
-func TestMongoDriver_GetCollections(t *testing.T) {
+func TestMongoDriver_GetTables(t *testing.T) {
 	ctx := context.Background()
 	driver, object := prepareEnvironment(t)
-
 	defer cleanDB(t)
 
-	err := driver.Insert(ctx, object)
+	_, err := driver.client.Database(driver.database).Collection(object.TableName()).InsertOne(ctx, bson.M{"name": "jane"})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("failed to insert test data into collection2: %s", err)
 	}
 
-	collections, err := driver.GetCollections(ctx)
+	collections, err := driver.GetTables(ctx)
+
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(collections))
-
-	assert.Equal(t, object.TableName(), collections[0])
+	if len(collections) > 0 {
+		assert.Equal(t, object.TableName(), collections[0])
+	}
 }

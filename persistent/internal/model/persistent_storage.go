@@ -63,6 +63,7 @@ type PersistentStorage interface {
 	Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM) error
 	// GetDatabaseInfo returns information of the database to which the driver is connecting to
 	GetDatabaseInfo(ctx context.Context) (utils.Info, error)
-	// GetCollections return the list of collections for a given database
-	GetCollections(ctx context.Context) ([]string, error)
+	// GetTables return the list of collections for a given database
+	GetTables(ctx context.Context) ([]string, error)
+	DropTable(ctx context.Context) error
 }

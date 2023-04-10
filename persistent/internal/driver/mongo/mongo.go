@@ -3,7 +3,6 @@ package mongo
 import (
 	"context"
 	"errors"
-
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -22,6 +21,11 @@ var _ model.PersistentStorage = &mongoDriver{}
 type mongoDriver struct {
 	*lifeCycle
 	options *model.ClientOpts
+}
+
+func (d *mongoDriver) DropTable(ctx context.Context) error {
+	//TODO implement me
+	panic("implement me")
 }
 
 // NewMongoDriver returns an instance of the driver official mongo connected to the database.
@@ -443,6 +447,6 @@ func (d *mongoDriver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
 	return result, err
 }
 
-func (d *mongoDriver) GetCollections(ctx context.Context) ([]string, error) {
-	return d.client.Database(d.database).ListCollectionNames(ctx, nil)
+func (d *mongoDriver) GetTables(ctx context.Context) ([]string, error) {
+	return d.client.Database(d.database).ListCollectionNames(ctx, bson.D{})
 }
