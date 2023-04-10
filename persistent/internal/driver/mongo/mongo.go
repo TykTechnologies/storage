@@ -4,16 +4,17 @@ import (
 	"context"
 	"errors"
 
-	"github.com/TykTechnologies/storage/persistent/dbm"
-
-	"github.com/TykTechnologies/storage/persistent/id"
-	"github.com/TykTechnologies/storage/persistent/index"
-	"github.com/TykTechnologies/storage/persistent/internal/helper"
-	"github.com/TykTechnologies/storage/persistent/internal/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
+	"github.com/TykTechnologies/storage/persistent/dbm"
+	"github.com/TykTechnologies/storage/persistent/id"
+	"github.com/TykTechnologies/storage/persistent/index"
+	"github.com/TykTechnologies/storage/persistent/internal/helper"
+	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
 var _ model.PersistentStorage = &mongoDriver{}
@@ -435,4 +436,14 @@ func (d *mongoDriver) Upsert(ctx context.Context, row id.DBObject, query, update
 	err := coll.FindOneAndUpdate(ctx, query, update, opts).Decode(row)
 
 	return d.handleStoreError(err)
+}
+
+func (d *mongoDriver) GetDatabaseInfo(ctx context.Context) (databaseinfo.Info, error) {
+	var result databaseinfo.Info
+
+	database := d.client.Database("admin")
+	err := database.RunCommand(context.Background(), bson.D{primitive.E{Key: "buildInfo", Value: 1}}).Decode(&result)
+	result.Type = d.lifeCycle.DBType()
+
+	return result, err
 }

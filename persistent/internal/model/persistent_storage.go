@@ -3,6 +3,8 @@ package model
 import (
 	"context"
 
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
+
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/index"
 
@@ -61,4 +63,6 @@ type PersistentStorage interface {
 	// update is the update to be applied to the document
 	// row is modified with the result of the operation
 	Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM) error
+	// GetDatabaseInfo returns information of the database to which the driver is connecting to
+	GetDatabaseInfo(ctx context.Context) (databaseinfo.Info, error)
 }

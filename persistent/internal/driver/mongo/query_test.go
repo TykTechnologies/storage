@@ -9,10 +9,11 @@ import (
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
 
-	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"github.com/TykTechnologies/storage/persistent/id"
 )
 
 func TestBuildQuery(t *testing.T) {

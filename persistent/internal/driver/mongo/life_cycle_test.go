@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
+
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -197,5 +199,5 @@ func TestDBType(t *testing.T) {
 	assert.Nil(t, err)
 
 	dbType := lc.DBType()
-	assert.Equal(t, model.StandardMongo, dbType)
+	assert.Equal(t, databaseinfo.StandardMongo, dbType)
 }

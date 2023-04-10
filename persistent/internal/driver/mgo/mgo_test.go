@@ -1,3 +1,6 @@
+//go:build mongo
+// +build mongo
+
 package mgo
 
 import (
@@ -8,14 +11,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/TykTechnologies/storage/persistent/databaseinfo"
+
+	"github.com/stretchr/testify/assert"
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
+
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/index"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
-	"github.com/stretchr/testify/assert"
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
 )
 
 type dummyDBObject struct {
@@ -1919,4 +1925,15 @@ func TestUpsert(t *testing.T) {
 
 	assert.Equal(t, "upsert_test_updated", object.Name)
 	assert.Equal(t, 10, object.Age)
+}
+
+func TestGetDBType(t *testing.T) {
+	driver, _ := prepareEnvironment(t)
+	info, err := driver.GetDatabaseInfo(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ToDo: update for those cases where it returns aws
+	assert.Equal(t, databaseinfo.StandardMongo, info.Type)
 }
