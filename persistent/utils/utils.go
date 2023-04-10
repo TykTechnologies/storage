@@ -30,5 +30,4 @@ func IsErrNoRows(err error) bool {
 	}
 
 	return false
-
 }
