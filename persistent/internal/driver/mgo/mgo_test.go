@@ -1416,7 +1416,7 @@ func TestMigrate(t *testing.T) {
 			"maxBytes": 1234,
 		}
 		opt2 := dbm.DBM{
-			"size": 1234,
+			"maxBytes": 1234,
 		}
 
 		err = driver.Migrate(context.Background(), objs, opt, opt2)

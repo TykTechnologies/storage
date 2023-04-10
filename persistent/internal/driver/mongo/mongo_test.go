@@ -1468,11 +1468,11 @@ func TestMigrate(t *testing.T) {
 
 		objs := []id.DBObject{obj}
 		opt := dbm.DBM{
-			"capped": true,
-			"size":   1234,
+			"capped":   true,
+			"maxBytes": 1234,
 		}
 		opt2 := dbm.DBM{
-			"size": 1234,
+			"maxBytes": 1234,
 		}
 
 		err = driver.Migrate(context.Background(), objs, opt, opt2)
