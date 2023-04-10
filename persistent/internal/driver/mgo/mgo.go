@@ -10,11 +10,13 @@ import (
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/index"
+	"github.com/TykTechnologies/storage/persistent/utils"
+
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
-	"gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
 )
 
 var _ model.PersistentStorage = &mgoDriver{}
@@ -264,10 +266,6 @@ func (d *mgoDriver) HasTable(ctx context.Context, collection string) (result boo
 	return false, nil
 }
 
-func (d *mgoDriver) IsErrNoRows(err error) bool {
-	return errors.Is(err, mgo.ErrNotFound)
-}
-
 func (d *mgoDriver) handleStoreError(err error) error {
 	if err == nil {
 		return nil
@@ -337,6 +335,15 @@ func (d *mgoDriver) CreateIndex(ctx context.Context, row id.DBObject, index inde
 }
 
 func (d *mgoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.Index, error) {
+	hasTable, err := d.HasTable(ctx, row.TableName())
+	if err != nil {
+		return nil, err
+	}
+
+	if !hasTable {
+		return nil, errors.New(model.ErrorCollectionNotFound)
+	}
+
 	var indexes []index.Index
 
 	sess := d.session.Copy()
@@ -422,4 +429,96 @@ func (d *mgoDriver) DropDatabase(ctx context.Context) error {
 	defer sess.Close()
 
 	return sess.DB("").DropDatabase()
+}
+
+func (d *mgoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
+	var stats dbm.DBM
+
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	err := sess.DB("").Run(dbm.DBM{"collStats": row.TableName()}, &stats)
+
+	return stats, err
+}
+
+func (d *mgoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error) {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	col := sess.DB("").C(row.TableName())
+	pipe := col.Pipe(query)
+	pipe.AllowDiskUse()
+	iter := pipe.Iter()
+
+	resultSlice := make([]dbm.DBM, 0)
+
+	for {
+		var result dbm.DBM
+		if !iter.Next(&result) {
+			break
+		}
+		// Parsing _id from bson.ObjectId to id.ObjectId
+		resultId, ok := result["_id"].(bson.ObjectId)
+		if ok {
+			result["_id"] = id.ObjectIdHex(resultId.Hex())
+		}
+
+		resultSlice = append(resultSlice, result)
+	}
+
+	if iter.Err() != nil {
+		return nil, iter.Err()
+	}
+
+	return resultSlice, nil
+}
+
+func (d *mgoDriver) CleanIndexes(ctx context.Context, row id.DBObject) error {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	col := sess.DB("").C(row.TableName())
+
+	indexes, err := col.Indexes()
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < len(indexes); i++ {
+		index := &indexes[i]      // using pointers to avoid copying and improve performance
+		if index.Name != "_id_" { // cannot drop _id index
+			err = col.DropIndexName(index.Name)
+			if err != nil {
+				return d.handleStoreError(err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (d *mgoDriver) Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM) error {
+	sess := d.session.Copy()
+	defer sess.Close()
+
+	col := sess.DB("").C(row.TableName())
+
+	_, err := col.Find(query).Apply(mgo.Change{
+		Update:    update,
+		Upsert:    true,
+		ReturnNew: true,
+	}, row)
+
+	return d.handleStoreError(err)
+}
+
+func (d *mgoDriver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
+	result := utils.Info{}
+
+	db := d.session.DB("admin")
+	err := db.Run(bson.D{{Name: "buildInfo", Value: 1}}, &result)
+	result.Type = d.lifeCycle.DBType()
+
+	return result, err
 }

@@ -1,28 +1,38 @@
+//go:build mongo
+// +build mongo
+
 package mongo
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"testing"
 
-	"go.mongodb.org/mongo-driver/bson"
+
+	"github.com/TykTechnologies/storage/persistent/utils"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/index"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type dummyDBObject struct {
-	Id      id.ObjectId       `bson:"_id,omitempty"`
-	Name    string            `bson:"testName"`
-	Email   string            `bson:"email"`
-	Country dummyCountryField `bson:"country"`
-	Age     int               `bson:"age"`
+	Id                id.ObjectId       `bson:"_id,omitempty"`
+	Name              string            `bson:"name"`
+	Email             string            `bson:"email"`
+	Country           dummyCountryField `bson:"country"`
+	Age               int               `bson:"age"`
+	invalidCollection bool
 }
 
 type dummyCountryField struct {
@@ -39,6 +49,9 @@ func (d *dummyDBObject) SetObjectID(id id.ObjectId) {
 }
 
 func (d dummyDBObject) TableName() string {
+	if d.invalidCollection {
+		return ""
+	}
 	return "dummy"
 }
 
@@ -185,7 +198,7 @@ func TestDelete(t *testing.T) {
 		// check if the object was deleted
 		err = driver.Query(ctx, object, &result, dbm.DBM{"_id": object.GetObjectID()})
 		assert.NotNil(t, err)
-		assert.True(t, driver.IsErrNoRows(err))
+		assert.True(t, utils.IsErrNoRows(err))
 	})
 
 	t.Run("deleting a non existent object", func(t *testing.T) {
@@ -193,7 +206,7 @@ func TestDelete(t *testing.T) {
 		object.SetObjectID(id.NewObjectID())
 		err := driver.Delete(ctx, object)
 		assert.NotNil(t, err)
-		assert.True(t, driver.IsErrNoRows(err))
+		assert.True(t, utils.IsErrNoRows(err))
 	})
 }
 
@@ -331,7 +344,7 @@ func TestCount(t *testing.T) {
 			name:        "count with multiple filters",
 			want:        0,
 			wantErr:     errors.New(model.ErrorMultipleDBM),
-			givenFilter: []dbm.DBM{{"country.country_name": "TestCountry"}, {"testName": "test"}},
+			givenFilter: []dbm.DBM{{"country.country_name": "TestCountry"}, {"name": "test"}},
 			prepareTc:   prepareEnvironment,
 		},
 	}
@@ -399,13 +412,13 @@ func TestQuery(t *testing.T) {
 			expectedResult: &[]dummyDBObject{dummyData[2], dummyData[3]},
 		},
 		{
-			name: "4 objects with limit 2 and offset 2 and sort by testName",
+			name: "4 objects with limit 2 and offset 2 and sort by name",
 			args: args{
 				result: &[]dummyDBObject{},
 				query: dbm.DBM{
 					"_limit":  2,
 					"_offset": 2,
-					"_sort":   "testName",
+					"_sort":   "name",
 				},
 			},
 			expectedResult: &[]dummyDBObject{dummyData[1], dummyData[0]},
@@ -423,24 +436,24 @@ func TestQuery(t *testing.T) {
 			expectedResult: &[]dummyDBObject{dummyData[1], dummyData[3]},
 		},
 		{
-			name: "filter by email ending with tyk.com and sort by testName",
+			name: "filter by email ending with tyk.com and sort by name",
 			args: args{
 				result: &[]dummyDBObject{},
 				query: dbm.DBM{
 					"email": dbm.DBM{
 						"$regex": "tyk.com$",
 					},
-					"_sort": "testName",
+					"_sort": "name",
 				},
 			},
 			expectedResult: &[]dummyDBObject{dummyData[3], dummyData[1]},
 		},
 		{
-			name: "filter by testName starting with A",
+			name: "filter by name starting with A",
 			args: args{
 				result: &dummyDBObject{},
 				query: dbm.DBM{
-					"testName": dbm.DBM{
+					"name": dbm.DBM{
 						"$regex": "^A",
 					},
 				},
@@ -448,20 +461,20 @@ func TestQuery(t *testing.T) {
 			expectedResult: &dummyData[3],
 		},
 		{
-			name: "filter by testName starting with J and sort by testName",
+			name: "filter by name starting with J and sort by name",
 			args: args{
 				result: &[]dummyDBObject{},
 				query: dbm.DBM{
-					"testName": dbm.DBM{
+					"name": dbm.DBM{
 						"$regex": "^J",
 					},
-					"_sort": "testName",
+					"_sort": "name",
 				},
 			},
 			expectedResult: &[]dummyDBObject{dummyData[1], dummyData[0]},
 		},
 		{
-			name: "filter by country testName",
+			name: "filter by country name",
 			args: args{
 				result: &[]dummyDBObject{},
 				query: dbm.DBM{
@@ -471,12 +484,12 @@ func TestQuery(t *testing.T) {
 			expectedResult: &[]dummyDBObject{dummyData[0], dummyData[3]},
 		},
 		{
-			name: "filter by country testName and sort by testName",
+			name: "filter by country name and sort by name",
 			args: args{
 				result: &[]dummyDBObject{},
 				query: dbm.DBM{
 					"country.country_name": "TestCountry",
-					"_sort":                "testName",
+					"_sort":                "name",
 				},
 			},
 			expectedResult: &[]dummyDBObject{dummyData[3], dummyData[0]},
@@ -562,7 +575,7 @@ func TestUpdate(t *testing.T) {
 
 		err := driver.Update(ctx, object)
 		assert.NotNil(t, err)
-		assert.True(t, driver.IsErrNoRows(err))
+		assert.True(t, utils.IsErrNoRows(err))
 	})
 
 	t.Run("Updating an object without _id", func(t *testing.T) {
@@ -572,7 +585,7 @@ func TestUpdate(t *testing.T) {
 
 		err := driver.Update(ctx, object)
 		assert.NotNil(t, err)
-		assert.False(t, driver.IsErrNoRows(err))
+		assert.False(t, utils.IsErrNoRows(err))
 	})
 }
 
@@ -588,24 +601,24 @@ func TestBulkUpdate(t *testing.T) {
 	}
 
 	tcs := []struct {
-		testName          string
+		name              string
 		query             []dbm.DBM
 		givenObjects      []id.DBObject
 		expectedNewValues []id.DBObject
 		errorExpected     error
 	}{
 		{
-			testName:          "update only one - without modifying values",
+			name:              "update only one - without modifying values",
 			givenObjects:      []id.DBObject{&dummyData[0]},
 			expectedNewValues: []id.DBObject{&dummyData[0]},
 		},
 		{
-			testName:          "update only one - modifying values",
+			name:              "update only one - modifying values",
 			givenObjects:      []id.DBObject{&dummyDBObject{Name: "Test", Email: "test@test.com", Id: dummyData[0].Id, Country: dummyData[0].Country, Age: dummyData[0].Age}},
 			expectedNewValues: []id.DBObject{&dummyDBObject{Name: "Test", Email: "test@test.com", Id: dummyData[0].Id, Country: dummyData[0].Country, Age: dummyData[0].Age}},
 		},
 		{
-			testName: "update two - without query",
+			name: "update two - without query",
 			givenObjects: []id.DBObject{
 				&dummyDBObject{
 					Name:    "Test",
@@ -640,7 +653,7 @@ func TestBulkUpdate(t *testing.T) {
 			},
 		},
 		{
-			testName: "update two - filter with query",
+			name: "update two - filter with query",
 			givenObjects: []id.DBObject{
 				&dummyDBObject{
 					Name:    "Test",
@@ -673,15 +686,15 @@ func TestBulkUpdate(t *testing.T) {
 					Age:     dummyData[1].Age,
 				},
 			},
-			query: []dbm.DBM{{"_id": dummyData[0].GetObjectID()}, {"testName": "Jane"}},
+			query: []dbm.DBM{{"_id": dummyData[0].GetObjectID()}, {"name": "Jane"}},
 		},
 		{
-			testName:      "update error - empty rows",
+			name:          "update error - empty rows",
 			givenObjects:  []id.DBObject{},
 			errorExpected: errors.New(model.ErrorEmptyRow),
 		},
 		{
-			testName: "update error - different params len",
+			name: "update error - different params len",
 			givenObjects: []id.DBObject{
 				&dummyDBObject{
 					Name:    "Test",
@@ -702,13 +715,13 @@ func TestBulkUpdate(t *testing.T) {
 				&dummyData[0],
 				&dummyData[1],
 			},
-			query:         []dbm.DBM{{"testName": "Jane"}},
+			query:         []dbm.DBM{{"name": "Jane"}},
 			errorExpected: errors.New(model.ErrorRowQueryDiffLenght),
 		},
 	}
 
 	for _, tc := range tcs {
-		t.Run(tc.testName, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			driver, object := prepareEnvironment(t)
 			ctx := context.Background()
 			defer driver.Drop(ctx, object)
@@ -771,7 +784,7 @@ func TestUpdateAll(t *testing.T) {
 	}
 
 	tcs := []struct {
-		testName          string
+		name              string
 		givenQuery        dbm.DBM
 		givenUpdate       dbm.DBM
 		givenObject       id.DBObject
@@ -779,7 +792,7 @@ func TestUpdateAll(t *testing.T) {
 		errorExpected     error
 	}{
 		{
-			testName:    "unset all age",
+			name:        "unset all age",
 			givenQuery:  dbm.DBM{},
 			givenObject: &dummyDBObject{},
 			givenUpdate: dbm.DBM{"$unset": dbm.DBM{"age": 0}},
@@ -797,7 +810,7 @@ func TestUpdateAll(t *testing.T) {
 			},
 		},
 		{
-			testName:    "set all age to 50",
+			name:        "set all age to 50",
 			givenQuery:  dbm.DBM{},
 			givenObject: &dummyDBObject{},
 			givenUpdate: dbm.DBM{"$set": dbm.DBM{"age": 50}},
@@ -815,7 +828,7 @@ func TestUpdateAll(t *testing.T) {
 			},
 		},
 		{
-			testName: "increment age by those with tyk.com email by 10",
+			name: "increment age by those with tyk.com email by 10",
 			givenQuery: dbm.DBM{
 				"email": dbm.DBM{
 					"$regex": "tyk.com$",
@@ -837,9 +850,9 @@ func TestUpdateAll(t *testing.T) {
 			},
 		},
 		{
-			testName: "set nested Country.CountryName value of John",
+			name: "set nested Country.CountryName value of John",
 			givenQuery: dbm.DBM{
-				"testName": "John",
+				"name": "John",
 			},
 			givenObject: &dummyDBObject{},
 			givenUpdate: dbm.DBM{"$set": dbm.DBM{"country.country_name": "test"}},
@@ -858,7 +871,7 @@ func TestUpdateAll(t *testing.T) {
 			},
 		},
 		{
-			testName: "no document query should return all the same",
+			name: "no document query should return all the same",
 			givenQuery: dbm.DBM{
 				"random": "query",
 			},
@@ -878,7 +891,7 @@ func TestUpdateAll(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		t.Run(tc.testName, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			driver, object := prepareEnvironment(t)
 			ctx := context.Background()
 			defer helper.ErrPrint(driver.Drop(ctx, object))
@@ -940,7 +953,7 @@ func TestDeleteWithQuery(t *testing.T) {
 			name: "delete by name starting with A",
 			query: []dbm.DBM{
 				{
-					"testName": dbm.DBM{
+					"name": dbm.DBM{
 						"$regex": "^A",
 					},
 				},
@@ -1142,19 +1155,20 @@ func TestIndexes(t *testing.T) {
 	defer cleanDB(t)
 
 	tcs := []struct {
-		testName          string
+		name              string
 		givenIndex        index.Index
 		expectedCreateErr error
 		expectedIndexes   []index.Index
 		expectedGetError  error
 	}{
 		{
-			testName:          "no index case",
+			name:              "no index case",
 			givenIndex:        index.Index{},
 			expectedCreateErr: errors.New(model.ErrorIndexEmpty),
+			expectedGetError:  errors.New(model.ErrorCollectionNotFound),
 		},
 		{
-			testName: "simple index case",
+			name: "simple index case",
 			givenIndex: index.Index{
 				Name: "test",
 				Keys: []dbm.DBM{{"apiid": 1}},
@@ -1171,7 +1185,7 @@ func TestIndexes(t *testing.T) {
 			},
 		},
 		{
-			testName: "simple index without name",
+			name: "simple index without name",
 			givenIndex: index.Index{
 				Name: "",
 				Keys: []dbm.DBM{{"apiid": 1}},
@@ -1188,7 +1202,7 @@ func TestIndexes(t *testing.T) {
 			},
 		},
 		{
-			testName: "composed index case",
+			name: "composed index case",
 			givenIndex: index.Index{
 				Name: "logBrowser",
 				Keys: []dbm.DBM{{"timestamp": -1}, {"apiid": 1}, {"orgid": 1}},
@@ -1205,7 +1219,7 @@ func TestIndexes(t *testing.T) {
 			},
 		},
 		{
-			testName: "simple index with TTL case",
+			name: "simple index with TTL case",
 			givenIndex: index.Index{
 				Name:       "test",
 				Keys:       []dbm.DBM{{"apiid": 1}},
@@ -1226,7 +1240,7 @@ func TestIndexes(t *testing.T) {
 			},
 		},
 		{
-			testName: "simple index with TTL 0 case",
+			name: "simple index with TTL 0 case",
 			givenIndex: index.Index{
 				Name:       "test",
 				Keys:       []dbm.DBM{{"apiid": 1}},
@@ -1247,7 +1261,7 @@ func TestIndexes(t *testing.T) {
 			},
 		},
 		{
-			testName: "compound index with TTL case",
+			name: "compound index with TTL case",
 			givenIndex: index.Index{
 				Name:       "test",
 				Keys:       []dbm.DBM{{"apiid": 1}, {"orgid": -1}},
@@ -1255,11 +1269,11 @@ func TestIndexes(t *testing.T) {
 				TTL:        1,
 			},
 			expectedCreateErr: errors.New(model.ErrorIndexComposedTTL),
-			expectedIndexes:   []index.Index{},
+			expectedGetError:  errors.New(model.ErrorCollectionNotFound),
 		},
 		{
 			// cover https://www.mongodb.com/docs/drivers/go/v1.8/fundamentals/indexes/#geospatial-indexes
-			testName: "compound case with string value",
+			name: "compound case with string value",
 			givenIndex: index.Index{
 				Name: "test",
 				Keys: []dbm.DBM{{"location.geo": "2dsphere"}},
@@ -1278,19 +1292,16 @@ func TestIndexes(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
-		t.Run(tc.testName, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			driver, obj := prepareEnvironment(t)
 			defer helper.ErrPrint(driver.Drop(ctx, obj))
 
 			err := driver.CreateIndex(context.Background(), obj, tc.givenIndex)
 			assert.Equal(t, tc.expectedCreateErr, err)
-			if err != nil {
-				return
-			}
 
 			actualIndexes, err := driver.GetIndexes(context.Background(), obj)
-			assert.Equal(t, tc.expectedCreateErr, err)
+			assert.Equal(t, tc.expectedGetError, err)
 
 			assert.Len(t, actualIndexes, len(tc.expectedIndexes))
 			assert.EqualValues(t, tc.expectedIndexes, actualIndexes)
@@ -1500,4 +1511,614 @@ func TestDropDatabase(t *testing.T) {
 	}
 
 	assert.Equal(t, initialDatabaseCount, len(databases))
+}
+
+func TestDBTableStats(t *testing.T) {
+	ctx := context.Background()
+	driver, object := prepareEnvironment(t)
+	tests := []struct {
+		name        string
+		want        dbm.DBM
+		row         func() id.DBObject
+		expectedErr error
+	}{
+		{
+			name: "DBTableStats ok",
+			want: dbm.DBM{
+				"count":          0,
+				"indexDetails":   dbm.DBM{},
+				"indexSizes":     dbm.DBM{},
+				"nindexes":       0,
+				"ns":             "test.dummy",
+				"ok":             float64(1),
+				"scaleFactor":    1,
+				"size":           0,
+				"storageSize":    0,
+				"totalIndexSize": 0,
+				"totalSize":      0,
+			},
+			row:         func() id.DBObject { return object },
+			expectedErr: nil,
+		},
+		{
+			name: "DBTableStats error",
+			want: dbm.DBM(nil), // official driver returns an empty object if there is an error
+			row: func() id.DBObject {
+				return &dummyDBObject{
+					Id:                id.NewObjectID(),
+					invalidCollection: true,
+				}
+			},
+			expectedErr: errors.New("(InvalidNamespace) Invalid namespace specified 'test.'"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer cleanDB(t)
+			row := tt.row()
+			got, err := driver.DBTableStats(ctx, row)
+			if (err != nil) != (tt.expectedErr != nil) {
+				t.Errorf("mgoDriver.DBTableStats() error = %v, expectedErr %v", err, tt.expectedErr)
+				return
+			}
+
+			if tt.expectedErr != nil {
+				assert.Equal(t, tt.expectedErr.Error(), err.Error())
+				assert.Equal(t, tt.want["code"], got["code"])
+				assert.Equal(t, tt.want["errmsg"], got["errmsg"])
+				assert.Equal(t, tt.want["ok"], got["ok"])
+				assert.Equal(t, tt.want["codeName"], got["codeName"])
+				return
+			}
+
+			assert.Equal(t, tt.want["count"], got["count"])
+			assert.Equal(t, tt.want["indexDetails"], got["indexDetails"])
+			assert.Equal(t, tt.want["indexSizes"], got["indexSizes"])
+			assert.Equal(t, tt.want["nindexes"], got["nindexes"])
+			assert.Equal(t, tt.want["ns"], got["ns"])
+			assert.Equal(t, tt.want["ok"], got["ok"])
+			assert.Equal(t, tt.want["scaleFactor"], got["scaleFactor"])
+			assert.Equal(t, tt.want["size"], got["size"])
+			assert.Equal(t, tt.want["storageSize"], got["storageSize"])
+			assert.Equal(t, tt.want["totalIndexSize"], got["totalIndexSize"])
+		})
+	}
+
+	t.Run("DBTableStats with 1 object", func(t *testing.T) {
+		defer cleanDB(t)
+		err := driver.Insert(ctx, object)
+		assert.Nil(t, err)
+
+		stats, err := driver.DBTableStats(ctx, object)
+		assert.Nil(t, err)
+
+		assert.Equal(t, 1, stats["count"])
+		assert.Equal(t, 1, stats["nindexes"]) // must be 1 because of _id index
+	})
+
+	t.Run("DBTableStats with 3 indexes", func(t *testing.T) {
+		defer cleanDB(t)
+		err := driver.Insert(ctx, object)
+		assert.Nil(t, err)
+		err = driver.CreateIndex(ctx, object, index.Index{
+			Keys: []dbm.DBM{{"index1": 1}},
+		})
+		assert.Nil(t, err)
+
+		err = driver.CreateIndex(ctx, object, index.Index{
+			Keys: []dbm.DBM{{"index2": 1}},
+		})
+		assert.Nil(t, err)
+
+		err = driver.CreateIndex(ctx, object, index.Index{
+			Keys: []dbm.DBM{{"index3": 1}},
+		})
+		assert.Nil(t, err)
+
+		stats, err := driver.DBTableStats(ctx, object)
+		assert.Nil(t, err)
+
+		assert.Equal(t, 1, stats["count"])
+		assert.Equal(t, 4, stats["nindexes"])
+	},
+	)
+
+	t.Run("DBTableStats with capped collection", func(t *testing.T) {
+		defer cleanDB(t)
+		opts := dbm.DBM{
+			"capped": true,
+			"size":   9000,
+		}
+
+		err := driver.Migrate(ctx, []id.DBObject{object}, opts)
+		assert.Nil(t, err)
+
+		stats, err := driver.DBTableStats(ctx, object)
+		assert.Nil(t, err)
+
+		assert.Equal(t, true, stats["capped"])
+	},
+	)
+}
+
+type SalesExample struct {
+	ID    id.ObjectId `bson:"_id,omitempty"`
+	Items []Items     `bson:"items"`
+}
+
+type Items struct {
+	Name     string        `bson:"name"`
+	Tags     []interface{} `bson:"tags"`
+	Price    float64       `bson:"price"`
+	Quantity int           `bson:"quantity"`
+}
+
+func (SalesExample) TableName() string {
+	return dummyDBObject{}.TableName()
+}
+
+func (s *SalesExample) SetObjectID(id id.ObjectId) {
+	s.ID = id
+}
+
+func (s SalesExample) GetObjectID() id.ObjectId {
+	return s.ID
+}
+
+func TestAggregate(t *testing.T) {
+	defer cleanDB(t)
+	driver, _ := prepareEnvironment(t)
+	// create a new dummy object
+	object := &dummyDBObject{
+		Name:    "test",
+		Email:   "test@test.com",
+		Country: dummyCountryField{CountryName: "test_country", Continent: "test_continent"},
+		Age:     10,
+	}
+	object.SetObjectID(id.NewObjectID())
+
+	// Insert the object into the database
+	ctx := context.Background()
+	err := driver.Insert(ctx, object)
+	assert.Nil(t, err)
+
+	// Insert the object2 into the database
+	object2 := &dummyDBObject{
+		Name:  "Peter",
+		Email: "peter@email.com",
+		Country: dummyCountryField{
+			Continent:   "Europe",
+			CountryName: "Germany",
+		},
+		Age: 15,
+	}
+	err = driver.Insert(ctx, object2)
+	assert.Nil(t, err)
+
+	// Define an array of test cases
+	tests := []struct {
+		name           string
+		pipeline       []dbm.DBM
+		expectedResult []dbm.DBM
+	}{
+		{
+			name: "aggregating one object",
+			pipeline: []dbm.DBM{
+				{
+					"$match": dbm.DBM{"_id": object.GetObjectID()},
+				},
+			},
+			expectedResult: []dbm.DBM{{
+				"_id":   object.GetObjectID(),
+				"name":  object.Name,
+				"email": object.Email,
+				"country": dbm.DBM{
+					"continent":    object.Country.Continent,
+					"country_name": object.Country.CountryName,
+				},
+				"age": object.Age,
+			}},
+		},
+		{
+			name: "aggregating objects with $project, $sort and $limit",
+			pipeline: []dbm.DBM{
+				{
+					"$project": dbm.DBM{
+						"_id":     1,
+						"name":    1,
+						"country": 1,
+						"age":     1,
+					},
+				},
+				{
+					"$sort": dbm.DBM{"name": 1},
+				},
+				{
+					"$limit": 1,
+				},
+			},
+			expectedResult: []dbm.DBM{
+				{
+					"_id":  object2.GetObjectID(),
+					"name": object2.Name,
+					"country": dbm.DBM{
+						"continent":    object2.Country.Continent,
+						"country_name": object2.Country.CountryName,
+					},
+					"age": object2.Age,
+				},
+			},
+		},
+		{
+			name: "aggregating objects with $group and sorting by age",
+			pipeline: []dbm.DBM{
+				{
+					"$group": dbm.DBM{
+						"_id": "$country.continent",
+					},
+				},
+				{
+					"$sort": dbm.DBM{"age": 1},
+				},
+			},
+			expectedResult: []dbm.DBM{
+				{
+					"_id": object.Country.Continent,
+				},
+				{
+					"_id": object2.Country.Continent,
+				},
+			},
+		},
+		{
+			name: "aggregating objects with $limit and $skip",
+			pipeline: []dbm.DBM{
+				{
+					"$sort": dbm.DBM{"age": 1},
+				},
+				{
+					"$skip": 1,
+				},
+				{
+					"$limit": 1,
+				},
+			},
+			expectedResult: []dbm.DBM{{
+				"_id":  object2.GetObjectID(),
+				"name": object2.Name,
+				"country": dbm.DBM{
+					"continent":    object2.Country.Continent,
+					"country_name": object2.Country.CountryName,
+				},
+				"age":   object2.Age,
+				"email": "peter@email.com",
+			}},
+		},
+		{
+			name: "aggregating objects with $unwind",
+			pipeline: []dbm.DBM{
+				{
+					"$unwind": "$country.country_name",
+				},
+			},
+			expectedResult: []dbm.DBM{
+				{
+					"_id":   object.GetObjectID(),
+					"name":  object.Name,
+					"email": object.Email,
+					"country": dbm.DBM{
+						"continent":    object.Country.Continent,
+						"country_name": object.Country.CountryName,
+					},
+					"age": object.Age,
+				},
+				{
+					"_id":   object2.GetObjectID(),
+					"name":  object2.Name,
+					"email": object2.Email,
+					"country": dbm.DBM{
+						"continent":    object2.Country.Continent,
+						"country_name": object2.Country.CountryName,
+					},
+					"age": object2.Age,
+				},
+			},
+		},
+		{
+			name: "aggregating objects with $match and $group operators",
+			pipeline: []dbm.DBM{
+				{
+					"$match": dbm.DBM{"country.continent": "Europe"},
+				},
+				{
+					"$group": dbm.DBM{
+						"_id":       "$country.country_name",
+						"total_age": dbm.DBM{"$sum": "$age"},
+					},
+				},
+			},
+			expectedResult: []dbm.DBM{{
+				"_id":       "Germany",
+				"total_age": object2.Age,
+			}},
+		},
+		{
+			name: "aggregating objects with $lookup operator",
+			pipeline: []dbm.DBM{
+				{
+					"$lookup": dbm.DBM{
+						"from":         "addresses",
+						"localField":   "_id",
+						"foreignField": "user_id",
+						"as":           "addresses",
+					},
+				},
+			},
+			expectedResult: []dbm.DBM{
+				{
+					"_id":   object.GetObjectID(),
+					"name":  object.Name,
+					"email": object.Email,
+					"country": dbm.DBM{
+						"continent":    object.Country.Continent,
+						"country_name": object.Country.CountryName,
+					},
+					"age":       object.Age,
+					"addresses": []interface{}{},
+				},
+				{
+					"_id":   object2.GetObjectID(),
+					"name":  object2.Name,
+					"email": object2.Email,
+					"country": dbm.DBM{
+						"continent":    object2.Country.Continent,
+						"country_name": object2.Country.CountryName,
+					},
+					"age":       object2.Age,
+					"addresses": []interface{}{},
+				},
+			},
+		},
+	}
+	// Run each test case
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Execute the aggregation pipeline
+			result, err := driver.Aggregate(ctx, object, tc.pipeline)
+			assert.Nil(t, err)
+
+			assert.Len(t, result, len(tc.expectedResult))
+
+			less := func(a, b interface{}) bool { return fmt.Sprint(a) < fmt.Sprint(b) }
+			if !cmp.Equal(tc.expectedResult, result, cmpopts.SortSlices(less)) {
+				t.Errorf("Aggregate mismatch (-want +got):\n%s", cmp.Diff(tc.expectedResult, result))
+			}
+		})
+	}
+
+	t.Run("2 $unwind and 1 $group - follow mongodb documentation example", func(t *testing.T) {
+		// This test case is based on the example from the mongodb documentation:
+		// https://www.mongodb.com/docs/manual/reference/operator/aggregation/unwind/#unwind-embedded-arrays
+		defer cleanDB(t)
+		// Let's create a 2 "sales" objects
+		sales1 := &SalesExample{
+			ID: id.NewObjectID(),
+			Items: []Items{
+				{
+					Name:     "abc",
+					Tags:     []interface{}{"red", "blank"},
+					Price:    12.99,
+					Quantity: 10,
+				},
+				{
+					Name:     "jkl",
+					Tags:     []interface{}{"green", "rough"},
+					Price:    14.99,
+					Quantity: 20,
+				},
+			},
+		}
+		sales2 := &SalesExample{
+			ID: id.NewObjectID(),
+			Items: []Items{
+				{
+					Name:     "xyz",
+					Tags:     []interface{}{"blue", "diamond"},
+					Price:    9.99,
+					Quantity: 5,
+				},
+				{
+					Name:     "ijk",
+					Tags:     []interface{}{"black", "glossy"},
+					Price:    7.99,
+					Quantity: 5,
+				},
+			},
+		}
+
+		// Insert the objects into the database
+		err := driver.Insert(ctx, sales1)
+		assert.Nil(t, err)
+		err = driver.Insert(ctx, sales2)
+		assert.Nil(t, err)
+
+		// Define the aggregation pipeline
+		pipeline := []dbm.DBM{
+			{
+				"$unwind": "$items",
+			},
+			{
+				"$unwind": "$items.tags",
+			},
+			{
+				"$group": dbm.DBM{
+					"_id": "$items.tags",
+					"totalSalesAmount": dbm.DBM{
+						"$sum": dbm.DBM{
+							"$multiply": []interface{}{"$items.price", "$items.quantity"},
+						},
+					},
+				},
+			},
+		}
+
+		// Execute the aggregation pipeline
+		result, err := driver.Aggregate(ctx, sales1, pipeline)
+		assert.Nil(t, err)
+
+		// Check if the result matches the expected result
+		expectedResult := []dbm.DBM{
+			{
+				"_id":              "diamond",
+				"totalSalesAmount": 49.95,
+			},
+			{
+				"_id":              "green",
+				"totalSalesAmount": 299.8,
+			},
+			{
+				"_id":              "glossy",
+				"totalSalesAmount": 39.95,
+			},
+			{
+				"_id":              "black",
+				"totalSalesAmount": 39.95,
+			},
+			{
+				"_id":              "blank",
+				"totalSalesAmount": 129.9,
+			},
+			{
+				"_id":              "rough",
+				"totalSalesAmount": 299.8,
+			},
+			{
+				"_id":              "red",
+				"totalSalesAmount": 129.9,
+			},
+			{
+				"_id":              "blue",
+				"totalSalesAmount": 49.95,
+			},
+		}
+
+		assert.ElementsMatch(t, result, expectedResult)
+	})
+}
+
+func TestCleanIndexes(t *testing.T) {
+	tests := []struct {
+		name          string
+		insertIndexes int
+		wantErr       bool
+	}{
+		{
+			name:          "clean 10 indexes",
+			insertIndexes: 10,
+			wantErr:       false,
+		},
+		{
+			name:          "clean 1 index",
+			insertIndexes: 1,
+			wantErr:       false,
+		},
+		{
+			name:          "clean 0 index",
+			insertIndexes: 0,
+			wantErr:       false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			driver, object := prepareEnvironment(t)
+
+			// Insert indexes
+			for i := 0; i < tt.insertIndexes; i++ {
+				err := driver.CreateIndex(ctx, object, index.Index{
+					Name: fmt.Sprintf("index_%d", i),
+					Keys: []dbm.DBM{{fmt.Sprintf("key_%d", i): 1}},
+				})
+				assert.Nil(t, err)
+			}
+
+			if err := driver.CleanIndexes(ctx, object); (err != nil) != tt.wantErr {
+				t.Errorf("mgoDriver.CleanIndexes() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			// Check if the indexes were removed
+			indexes, err := driver.GetIndexes(ctx, object)
+			assert.Nil(t, err)
+
+			assert.Equal(t, 1, len(indexes)) // The default _id index is always present
+		})
+	}
+}
+
+func TestUpsert(t *testing.T) {
+	ctx := context.Background()
+	driver, object := prepareEnvironment(t)
+
+	defer cleanDB(t)
+
+	// Insert the object using upsert
+
+	err := driver.Upsert(ctx, object, dbm.DBM{
+		"age": 10,
+	}, dbm.DBM{
+		"$set": dbm.DBM{
+			"name": "upsert_test",
+		},
+	})
+
+	assert.Nil(t, err)
+
+	assert.Equal(t, "upsert_test", object.Name)
+	assert.Equal(t, 10, object.Age)
+
+	// Check if the object was inserted
+	err = driver.Query(ctx, object, object, dbm.DBM{
+		"age":  10,
+		"name": "upsert_test",
+	})
+	assert.Nil(t, err)
+
+	assert.Equal(t, "upsert_test", object.Name)
+	assert.Equal(t, 10, object.Age)
+
+	// Update the object using upsert
+	err = driver.Upsert(ctx, object, dbm.DBM{
+		"age": 10,
+	}, dbm.DBM{
+		"$set": dbm.DBM{
+			"name": "upsert_test_updated",
+		},
+	})
+
+	assert.Nil(t, err)
+
+	assert.Equal(t, "upsert_test_updated", object.Name)
+	assert.Equal(t, 10, object.Age)
+
+	// Check if the object was updated
+	err = driver.Query(ctx, object, object, dbm.DBM{
+		"age":  10,
+		"name": "upsert_test_updated",
+	})
+	assert.Nil(t, err)
+
+	assert.Equal(t, "upsert_test_updated", object.Name)
+	assert.Equal(t, 10, object.Age)
+}
+
+func TestGetDBType(t *testing.T) {
+	driver, _ := prepareEnvironment(t)
+	info, err := driver.GetDatabaseInfo(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ToDo: update for those cases where it returns aws
+	assert.Equal(t, utils.StandardMongo, info.Type)
 }

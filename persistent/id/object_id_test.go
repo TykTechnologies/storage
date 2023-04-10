@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"testing"
+	"time"
 
 	"gopkg.in/mgo.v2/bson"
 
@@ -99,4 +100,54 @@ func TestIsObjectIdHex(t *testing.T) {
 
 	assert.Equal(t, true, IsObjectIdHex(id.Hex()))
 	assert.Equal(t, false, IsObjectIdHex("any-invalid-value"))
+}
+
+func TestValue(t *testing.T) {
+	id := NewObjectID()
+	val, err := id.Value()
+
+	assert.Equal(t, nil, err)
+	assert.Equal(t, id.Hex(), val)
+}
+
+func TestScan(t *testing.T) {
+	cases := []struct {
+		name      string
+		arg       interface{}
+		want      ObjectId
+		shouldErr bool
+	}{
+		{"valid byte slice", []byte("641b80edd4aefc2c1e104bd1"), ObjectIdHex("641b80edd4aefc2c1e104bd1"), false},
+		{"valid string", "641b80edd4aefc2c1e104bd1", ObjectIdHex("641b80edd4aefc2c1e104bd1"), false},
+		{"invalid type", 123, ObjectId(""), true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var objID ObjectId
+			err := objID.Scan(tc.arg)
+
+			if err != nil && !tc.shouldErr {
+				t.Errorf("Scan(%v) returned an error: %v", tc.arg, err)
+			}
+
+			if objID.Hex() != tc.want.Hex() {
+				t.Errorf("Scan(%v) = %v, want %v", tc.arg, objID, tc.want)
+			}
+		})
+	}
+}
+
+func TestNewObjectIdWithTime(t *testing.T) {
+	// Create a new time with a known Unix timestamp
+	testTime := time.Date(2022, 3, 24, 12, 0, 0, 0, time.UTC)
+	expectedHex := bson.NewObjectIdWithTime(testTime).Hex()
+
+	// Call the function with the test time
+	result := NewObjectIdWithTime(testTime)
+
+	// Check that the result matches the expected hex string
+	if result.Hex() != expectedHex {
+		t.Errorf("NewObjectIdWithTime(%v) = %v, expected %v", testTime, result.Hex(), expectedHex)
+	}
 }
