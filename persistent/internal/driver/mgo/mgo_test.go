@@ -1158,6 +1158,7 @@ func TestIndexes(t *testing.T) {
 			testName:          "no index case",
 			givenIndex:        index.Index{},
 			expectedCreateErr: errors.New(model.ErrorIndexEmpty),
+			expectedGetError:  errors.New(model.ErrorCollectionNotFound),
 		},
 		{
 			testName: "simple index case",
@@ -1240,7 +1241,7 @@ func TestIndexes(t *testing.T) {
 				TTL:        1,
 			},
 			expectedCreateErr: errors.New(model.ErrorIndexComposedTTL),
-			expectedIndexes:   []index.Index{},
+			expectedGetError:  errors.New(model.ErrorCollectionNotFound),
 		},
 		{
 			// cover https://www.mongodb.com/docs/drivers/go/v1.8/fundamentals/indexes/#geospatial-indexes
@@ -1270,12 +1271,9 @@ func TestIndexes(t *testing.T) {
 
 			err := driver.CreateIndex(context.Background(), obj, tc.givenIndex)
 			assert.Equal(t, tc.expectedCreateErr, err)
-			if err != nil {
-				return
-			}
 
 			actualIndexes, err := driver.GetIndexes(context.Background(), obj)
-			assert.Equal(t, tc.expectedCreateErr, err)
+			assert.Equal(t, tc.expectedGetError, err)
 
 			assert.Len(t, actualIndexes, len(tc.expectedIndexes))
 			assert.EqualValues(t, tc.expectedIndexes, actualIndexes)

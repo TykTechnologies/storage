@@ -337,6 +337,16 @@ func (d *mgoDriver) CreateIndex(ctx context.Context, row id.DBObject, index inde
 }
 
 func (d *mgoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.Index, error) {
+
+	hasTable, err := d.HasTable(ctx, row.TableName())
+	if err != nil {
+		return nil, err
+	}
+
+	if !hasTable {
+		return nil, errors.New(model.ErrorCollectionNotFound)
+	}
+
 	var indexes []index.Index
 
 	sess := d.session.Copy()
