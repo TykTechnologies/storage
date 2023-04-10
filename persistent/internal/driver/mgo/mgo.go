@@ -532,5 +532,6 @@ func (d *mgoDriver) DropTable(ctx context.Context, collectionName string) (int, 
 	if err != nil {
 		return 0, err
 	}
+
 	return info.Removed, d.db.C(collectionName).DropCollection()
 }
