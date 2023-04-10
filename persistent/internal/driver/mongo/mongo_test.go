@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"testing"
 
-
 	"github.com/TykTechnologies/storage/persistent/utils"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
@@ -1433,8 +1432,8 @@ func TestMigrate(t *testing.T) {
 
 		objs := []id.DBObject{obj}
 		opt := dbm.DBM{
-			"capped": true,
-			"size":   1234,
+			"capped":   true,
+			"maxBytes": 1234,
 		}
 
 		err = driver.Migrate(context.Background(), objs, opt)
