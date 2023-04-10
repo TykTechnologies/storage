@@ -23,11 +23,6 @@ type mongoDriver struct {
 	options *model.ClientOpts
 }
 
-func (d *mongoDriver) DropTable(ctx context.Context) error {
-	//TODO implement me
-	panic("implement me")
-}
-
 // NewMongoDriver returns an instance of the driver official mongo connected to the database.
 func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
 	if opts.ConnectionString == "" {
@@ -449,4 +444,8 @@ func (d *mongoDriver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
 
 func (d *mongoDriver) GetTables(ctx context.Context) ([]string, error) {
 	return d.client.Database(d.database).ListCollectionNames(ctx, bson.D{})
+}
+
+func (d *mongoDriver) DropTable(ctx context.Context, collectionName string) error {
+	return d.client.Database(d.database).Collection(collectionName).Drop(ctx)
 }

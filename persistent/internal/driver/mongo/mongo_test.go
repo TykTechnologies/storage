@@ -1,5 +1,5 @@
 //go:build mongo
--// +build mongo
+// +build mongo
 
 package mongo
 
@@ -2139,4 +2139,13 @@ func TestMongoDriver_GetTables(t *testing.T) {
 	if len(collections) > 0 {
 		assert.Equal(t, object.TableName(), collections[0])
 	}
+
+	// Now test that drop works
+	t.Run("Drop table", func(t *testing.T) {
+		err = driver.DropTable(ctx, object.TableName())
+		assert.Nil(t, err)
+		collections, err = driver.GetTables(ctx)
+		assert.Nil(t, err)
+		assert.Equal(t, 0, len(collections))
+	})
 }
