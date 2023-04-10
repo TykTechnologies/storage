@@ -529,5 +529,8 @@ func (d *mgoDriver) GetTables(ctx context.Context) ([]string, error) {
 
 func (d *mgoDriver) DropTable(ctx context.Context, collectionName string) (int, error) {
 	info, err := d.db.C(collectionName).RemoveAll(bson.M{})
-	return info.Removed, err
+	if err != nil {
+		return 0, err
+	}
+	return info.Removed, d.db.C(collectionName).DropCollection()
 }
