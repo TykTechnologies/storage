@@ -199,5 +199,5 @@ func TestDBType(t *testing.T) {
 	assert.Nil(t, err)
 
 	dbType := lc.DBType()
-	assert.Equal(t, databaseinfo.StandardMongo, dbType)
+	assert.Equal(t, utilsStandardMongo, dbType)
 }

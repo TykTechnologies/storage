@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
+	"github.com/TykTechnologies/storage/persistent/utils"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -66,9 +66,9 @@ func (lc *lifeCycle) Close() error {
 }
 
 // DBType returns the type of the registered storage driver.
-func (lc *lifeCycle) DBType() databaseinfo.DBType {
+func (lc *lifeCycle) DBType() utils.DBType {
 	if helper.IsCosmosDB(lc.connectionString) {
-		return databaseinfo.CosmosDB
+		return utils.CosmosDB
 	}
 
 	var result struct {
@@ -79,10 +79,10 @@ func (lc *lifeCycle) DBType() databaseinfo.DBType {
 	singleResult := lc.client.Database("admin").RunCommand(context.Background(), cmd)
 
 	if err := singleResult.Decode(&result); (singleResult.Err() != nil || err != nil) && result.Code == 303 {
-		return databaseinfo.AWSDocumentDB
+		return utils.AWSDocumentDB
 	}
 
-	return databaseinfo.StandardMongo
+	return utils.StandardMongo
 }
 
 // mongoOptsBuilder build Mongo options.ClientOptions from our own model.ClientOpts. Also sets default values.

@@ -7,11 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/databaseinfo"
-
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/index"
+	"github.com/TykTechnologies/storage/persistent/utils"
 
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
@@ -267,10 +266,6 @@ func (d *mgoDriver) HasTable(ctx context.Context, collection string) (result boo
 	return false, nil
 }
 
-func (d *mgoDriver) IsErrNoRows(err error) bool {
-	return errors.Is(err, mgo.ErrNotFound)
-}
-
 func (d *mgoDriver) handleStoreError(err error) error {
 	if err == nil {
 		return nil
@@ -509,8 +504,8 @@ func (d *mgoDriver) Upsert(ctx context.Context, row id.DBObject, query, update d
 	return d.handleStoreError(err)
 }
 
-func (d *mgoDriver) GetDatabaseInfo(ctx context.Context) (databaseinfo.Info, error) {
-	result := databaseinfo.Info{}
+func (d *mgoDriver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
+	result := utils.Info{}
 
 	db := d.session.DB("admin")
 	err := db.Run(bson.D{{Name: "buildInfo", Value: 1}}, &result)

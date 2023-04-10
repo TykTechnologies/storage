@@ -9,12 +9,12 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/TykTechnologies/storage/persistent/databaseinfo"
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/index"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"github.com/TykTechnologies/storage/persistent/utils"
 )
 
 var _ model.PersistentStorage = &mongoDriver{}
@@ -102,10 +102,6 @@ func (d *mongoDriver) Count(ctx context.Context, row id.DBObject, filters ...dbm
 	count, err := collection.CountDocuments(ctx, filter)
 
 	return int(count), d.handleStoreError(err)
-}
-
-func (d *mongoDriver) IsErrNoRows(err error) bool {
-	return errors.Is(err, mongo.ErrNoDocuments)
 }
 
 func (d *mongoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query dbm.DBM) error {
@@ -428,8 +424,8 @@ func (d *mongoDriver) Upsert(ctx context.Context, row id.DBObject, query, update
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) GetDatabaseInfo(ctx context.Context) (databaseinfo.Info, error) {
-	var result databaseinfo.Info
+func (d *mongoDriver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
+	var result utils.Info
 
 	database := d.client.Database("admin")
 	err := database.RunCommand(context.Background(), bson.D{primitive.E{Key: "buildInfo", Value: 1}}).Decode(&result)

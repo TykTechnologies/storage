@@ -3,7 +3,7 @@ package model
 import (
 	"context"
 
-	"github.com/TykTechnologies/storage/persistent/databaseinfo"
+	"github.com/TykTechnologies/storage/persistent/utils"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/index"
@@ -30,8 +30,6 @@ type PersistentStorage interface {
 	// UpdateAll executes the update query dbm.DBM over
 	// the elements filtered by query dbm.DBM in the row id.DBObject collection
 	UpdateAll(ctx context.Context, row id.DBObject, query, update dbm.DBM) error
-	// IsErrNoRows Checking if an error is a "no rows error"
-	IsErrNoRows(err error) bool
 	// Drop drops the collection given the TableName() of the id.DBObject
 	Drop(context.Context, id.DBObject) error
 	// CreateIndex creates an index.Index in row id.DBObject TableName()
@@ -64,5 +62,5 @@ type PersistentStorage interface {
 	// row is modified with the result of the operation
 	Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM) error
 	// GetDatabaseInfo returns information of the database to which the driver is connecting to
-	GetDatabaseInfo(ctx context.Context) (databaseinfo.Info, error)
+	GetDatabaseInfo(ctx context.Context) (utils.Info, error)
 }
