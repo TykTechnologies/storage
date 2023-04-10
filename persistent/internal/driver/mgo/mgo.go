@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"gopkg.in/mgo.v2"
 	"strings"
 	"time"
+
+	"gopkg.in/mgo.v2"
 
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
