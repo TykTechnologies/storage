@@ -287,6 +287,15 @@ func (d *mongoDriver) CreateIndex(ctx context.Context, row id.DBObject, index in
 }
 
 func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.Index, error) {
+	hasTable, err := d.HasTable(ctx, row.TableName())
+	if err != nil {
+		return nil, err
+	}
+
+	if !hasTable {
+		return nil, errors.New(model.ErrorCollectionNotFound)
+	}
+
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	var indexes []index.Index
