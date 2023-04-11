@@ -1927,3 +1927,32 @@ func TestGetDBType(t *testing.T) {
 	// ToDo: update for those cases where it returns aws
 	assert.Equal(t, utils.StandardMongo, info.Type)
 }
+
+func TestMongoDriver_GetTables(t *testing.T) {
+	ctx := context.Background()
+	driver, object := prepareEnvironment(t)
+	defer cleanDB(t)
+
+	err := driver.Insert(ctx, object)
+	if err != nil {
+		t.Fatalf("failed to insert test data into collection: %s", err)
+	}
+
+	collections, err := driver.GetTables(ctx)
+
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(collections))
+	if len(collections) > 0 {
+		assert.Equal(t, object.TableName(), collections[0])
+	}
+
+	// Now test that drop works
+	t.Run("Drop table", func(t *testing.T) {
+		removed, err := driver.DropTable(ctx, object.TableName())
+		assert.Nil(t, err)
+		assert.Equal(t, 1, removed)
+		collections, err = driver.GetTables(ctx)
+		assert.Nil(t, err)
+		assert.Equal(t, 0, len(collections))
+	})
+}

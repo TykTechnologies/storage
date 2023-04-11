@@ -7,12 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/mgo.v2"
+
 	"github.com/TykTechnologies/storage/persistent/dbm"
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/index"
 	"github.com/TykTechnologies/storage/persistent/utils"
 
-	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
@@ -521,4 +522,17 @@ func (d *mgoDriver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
 	result.Type = d.lifeCycle.DBType()
 
 	return result, d.handleStoreError(err)
+}
+
+func (d *mgoDriver) GetTables(ctx context.Context) ([]string, error) {
+	return d.db.CollectionNames()
+}
+
+func (d *mgoDriver) DropTable(ctx context.Context, collectionName string) (int, error) {
+	info, err := d.db.C(collectionName).RemoveAll(bson.M{})
+	if err != nil {
+		return 0, err
+	}
+
+	return info.Removed, d.db.C(collectionName).DropCollection()
 }

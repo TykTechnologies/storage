@@ -3,7 +3,6 @@ package mongo
 import (
 	"context"
 	"errors"
-
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -441,4 +440,17 @@ func (d *mongoDriver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
 	result.Type = d.lifeCycle.DBType()
 
 	return result, d.handleStoreError(err)
+}
+
+func (d *mongoDriver) GetTables(ctx context.Context) ([]string, error) {
+	return d.client.Database(d.database).ListCollectionNames(ctx, bson.D{})
+}
+
+func (d *mongoDriver) DropTable(ctx context.Context, collectionName string) (int, error) {
+	deleteResult, err := d.client.Database(d.database).Collection(collectionName).DeleteMany(ctx, bson.M{})
+	if err != nil {
+		return 0, err
+	}
+
+	return int(deleteResult.DeletedCount), d.client.Database(d.database).Collection(collectionName).Drop(ctx)
 }
