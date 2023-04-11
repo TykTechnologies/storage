@@ -254,7 +254,7 @@ func (d *mgoDriver) HasTable(ctx context.Context, collection string) (result boo
 
 	names, err := sess.DB("").CollectionNames()
 	if err != nil {
-		return false, err
+		return false, d.handleStoreError(err)
 	}
 
 	for _, name := range names {
@@ -331,13 +331,13 @@ func (d *mgoDriver) CreateIndex(ctx context.Context, row id.DBObject, index inde
 		newIndex.ExpireAfter = time.Duration(index.TTL) * time.Second
 	}
 
-	return col.EnsureIndex(newIndex)
+	return d.handleStoreError(col.EnsureIndex(newIndex))
 }
 
 func (d *mgoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.Index, error) {
 	hasTable, err := d.HasTable(ctx, row.TableName())
 	if err != nil {
-		return nil, err
+		return nil, d.handleStoreError(err)
 	}
 
 	if !hasTable {
@@ -353,7 +353,7 @@ func (d *mgoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.In
 
 	indexesSpec, err := col.Indexes()
 	if err != nil {
-		return indexes, err
+		return indexes, d.handleStoreError(err)
 	}
 
 	for i := range indexesSpec {
@@ -407,8 +407,8 @@ func (d *mgoDriver) Migrate(ctx context.Context, rows []id.DBObject, opts ...dbm
 
 			err := col.Create(opt)
 
-			if d.handleStoreError(err) != nil {
-				return err
+			if err != nil {
+				return d.handleStoreError(err)
 			}
 
 			continue
@@ -416,8 +416,8 @@ func (d *mgoDriver) Migrate(ctx context.Context, rows []id.DBObject, opts ...dbm
 
 		err := col.Create(&mgo.CollectionInfo{})
 
-		if d.handleStoreError(err) != nil {
-			return err
+		if err != nil {
+			return d.handleStoreError(err)
 		}
 	}
 
@@ -428,7 +428,7 @@ func (d *mgoDriver) DropDatabase(ctx context.Context) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
-	return sess.DB("").DropDatabase()
+	return d.handleStoreError(sess.DB("").DropDatabase())
 }
 
 func (d *mgoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
@@ -439,7 +439,7 @@ func (d *mgoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM,
 
 	err := sess.DB("").Run(dbm.DBM{"collStats": row.TableName()}, &stats)
 
-	return stats, err
+	return stats, d.handleStoreError(err)
 }
 
 func (d *mgoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error) {
@@ -468,7 +468,7 @@ func (d *mgoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.
 	}
 
 	if iter.Err() != nil {
-		return nil, iter.Err()
+		return nil, d.handleStoreError(iter.Err())
 	}
 
 	return resultSlice, nil
@@ -482,7 +482,7 @@ func (d *mgoDriver) CleanIndexes(ctx context.Context, row id.DBObject) error {
 
 	indexes, err := col.Indexes()
 	if err != nil {
-		return err
+		return d.handleStoreError(err)
 	}
 
 	for i := 0; i < len(indexes); i++ {
@@ -520,5 +520,5 @@ func (d *mgoDriver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
 	err := db.Run(bson.D{{Name: "buildInfo", Value: 1}}, &result)
 	result.Type = d.lifeCycle.DBType()
 
-	return result, err
+	return result, d.handleStoreError(err)
 }

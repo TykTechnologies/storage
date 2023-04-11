@@ -283,13 +283,13 @@ func (d *mongoDriver) CreateIndex(ctx context.Context, row id.DBObject, index in
 
 	_, err := collection.Indexes().CreateOne(ctx, indexModel)
 
-	return err
+	return d.handleStoreError(err)
 }
 
 func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.Index, error) {
 	hasTable, err := d.HasTable(ctx, row.TableName())
 	if err != nil {
-		return nil, err
+		return nil, d.handleStoreError(err)
 	}
 
 	if !hasTable {
@@ -302,7 +302,7 @@ func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.
 
 	indexesSpec, err := collection.Indexes().ListSpecifications(ctx)
 	if err != nil {
-		return indexes, err
+		return indexes, d.handleStoreError(err)
 	}
 
 	// parse from mongo IndexSpec to our index.Index again
@@ -378,7 +378,7 @@ func (d *mongoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DB
 		{Key: "collStats", Value: row.TableName()},
 	}).Decode(&stats)
 
-	return stats, err
+	return stats, d.handleStoreError(err)
 }
 
 func (d *mongoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error) {
@@ -386,7 +386,7 @@ func (d *mongoDriver) Aggregate(ctx context.Context, row id.DBObject, query []db
 
 	cursor, err := col.Aggregate(ctx, query)
 	if err != nil {
-		return nil, err
+		return nil, d.handleStoreError(err)
 	}
 
 	defer cursor.Close(ctx)
@@ -398,7 +398,7 @@ func (d *mongoDriver) Aggregate(ctx context.Context, row id.DBObject, query []db
 
 		err := cursor.Decode(&result)
 		if err != nil {
-			return nil, err
+			return nil, d.handleStoreError(err)
 		}
 
 		// Parsing _id from primitive.ObjectID to id.ObjectId
@@ -410,7 +410,7 @@ func (d *mongoDriver) Aggregate(ctx context.Context, row id.DBObject, query []db
 	}
 
 	if err := cursor.Err(); err != nil {
-		return nil, err
+		return nil, d.handleStoreError(err)
 	}
 
 	return resultSlice, nil
@@ -440,5 +440,5 @@ func (d *mongoDriver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
 	err := database.RunCommand(context.Background(), bson.D{primitive.E{Key: "buildInfo", Value: 1}}).Decode(&result)
 	result.Type = d.lifeCycle.DBType()
 
-	return result, err
+	return result, d.handleStoreError(err)
 }
