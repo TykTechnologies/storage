@@ -4,28 +4,27 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/TykTechnologies/storage/persistent/model"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/bson/bsonoptions"
 	"go.mongodb.org/mongo-driver/bson/bsonrw"
 	"go.mongodb.org/mongo-driver/bson/mgocompat"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-
-	"github.com/TykTechnologies/storage/persistent/id"
 )
 
-// tOID is the type of id.ObjectID
-var tOID = reflect.TypeOf(id.NewObjectID())
+// tOID is the type of model.ObjectID
+var tOID = reflect.TypeOf(model.NewObjectID())
 
 // toTime is the type of golang time.Time
 var toTime = reflect.TypeOf(time.Time{})
 
-// objectIDDecodeValue encode Hex value of id.ObjectId into primitive.ObjectID
+// objectIDDecodeValue encode Hex value of model.ObjectId into primitive.ObjectID
 func objectIDEncodeValue(ec bsoncodec.EncodeContext, vw bsonrw.ValueWriter, val reflect.Value) error {
 	if !val.IsValid() || val.Type() != tOID {
 		return bsoncodec.ValueEncoderError{Name: "ObjectIDEncodeValue", Types: []reflect.Type{tOID}, Received: val}
 	}
 
-	s := val.Interface().(id.ObjectId).Hex()
+	s := val.Interface().(model.ObjectId).Hex()
 
 	newOID, err := primitive.ObjectIDFromHex(s)
 	if err != nil {
@@ -35,14 +34,14 @@ func objectIDEncodeValue(ec bsoncodec.EncodeContext, vw bsonrw.ValueWriter, val 
 	return vw.WriteObjectID(newOID)
 }
 
-// objectIDDecodeValue decode Hex value of primitive.ObjectID into id.ObjectId
+// objectIDDecodeValue decode Hex value of primitive.ObjectID into model.ObjectId
 func objectIDDecodeValue(dc bsoncodec.DecodeContext, vr bsonrw.ValueReader, val reflect.Value) error {
 	objectID, err := vr.ReadObjectID()
 	if err != nil {
 		return err
 	}
 
-	newOID := id.ObjectIdHex(objectID.Hex())
+	newOID := model.ObjectIdHex(objectID.Hex())
 
 	if val.CanSet() {
 		val.Set(reflect.ValueOf(newOID))
@@ -52,12 +51,12 @@ func objectIDDecodeValue(dc bsoncodec.DecodeContext, vr bsonrw.ValueReader, val 
 }
 
 // createCustomRegistry creates a *bsoncodec.RegistryBuilder for our lifeCycle mongo's client using  objectIDDecodeValue
-// and objectIDEncodeValue as Type Encoder/Decoders for id.ObjectId and time.Time
+// and objectIDEncodeValue as Type Encoder/Decoders for model.ObjectId and time.Time
 func createCustomRegistry() *bsoncodec.RegistryBuilder {
 	// using mgocompat registry as base type registry
 	rb := mgocompat.NewRegistryBuilder()
 
-	// set the id.ObjectID encoders/decoders
+	// set the model.ObjectID encoders/decoders
 	rb.RegisterTypeEncoder(tOID, bsoncodec.ValueEncoderFunc(objectIDEncodeValue))
 	rb.RegisterTypeDecoder(tOID, bsoncodec.ValueDecoderFunc(objectIDDecodeValue))
 

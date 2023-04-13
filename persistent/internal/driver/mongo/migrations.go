@@ -1,19 +1,18 @@
 package mongo
 
 import (
+	"github.com/TykTechnologies/storage/persistent/model"
 	"go.mongodb.org/mongo-driver/mongo/options"
-
-	"github.com/TykTechnologies/storage/persistent/dbm"
 )
 
-func buildOpt(opt dbm.DBM) *options.CreateCollectionOptions {
+func buildOpt(opt model.DBM) *options.CreateCollectionOptions {
 	opts := options.CreateCollection()
 
 	if val, ok := opt["capped"].(bool); ok {
 		opts.SetCapped(val)
 	}
 
-	if val, ok := opt["collation"].(dbm.DBM); ok {
+	if val, ok := opt["collation"].(model.DBM); ok {
 		opts.SetCollation(buildCollation(val))
 	}
 
@@ -45,7 +44,7 @@ func buildOpt(opt dbm.DBM) *options.CreateCollectionOptions {
 		opts.SetExpireAfterSeconds(int64(val))
 	}
 
-	if val, ok := opt["timeSeries"].(dbm.DBM); ok {
+	if val, ok := opt["timeSeries"].(model.DBM); ok {
 		opts.SetTimeSeriesOptions(buildTimeSeriesOptions(val))
 	}
 
@@ -60,7 +59,7 @@ func buildOpt(opt dbm.DBM) *options.CreateCollectionOptions {
 	return opts
 }
 
-func buildCollation(collation dbm.DBM) *options.Collation {
+func buildCollation(collation model.DBM) *options.Collation {
 	opts := options.Collation{}
 
 	if val, ok := collation["locale"].(string); ok {
@@ -102,7 +101,7 @@ func buildCollation(collation dbm.DBM) *options.Collation {
 	return &opts
 }
 
-func buildTimeSeriesOptions(timeSeries dbm.DBM) *options.TimeSeriesOptions {
+func buildTimeSeriesOptions(timeSeries model.DBM) *options.TimeSeriesOptions {
 	opts := options.TimeSeriesOptions{}
 
 	if val, ok := timeSeries["timeField"].(string); ok {

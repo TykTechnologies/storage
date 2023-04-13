@@ -6,12 +6,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/TykTechnologies/storage/persistent/dbm"
-
+	"github.com/TykTechnologies/storage/persistent/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-
-	"github.com/TykTechnologies/storage/persistent/id"
 )
 
 func buildLimitQuery(fields ...string) bson.D {
@@ -60,9 +57,9 @@ func handleQueryValue(key string, value interface{}, search bson.M) {
 		strSlice, isStrSlice := value.([]string)
 
 		if isStrSlice && key == "_id" {
-			objectIDs := []id.ObjectId{}
+			objectIDs := []model.ObjectId{}
 			for _, str := range strSlice {
-				objectIDs = append(objectIDs, id.ObjectIdHex(str))
+				objectIDs = append(objectIDs, model.ObjectIdHex(str))
 			}
 
 			search[key] = bson.M{"$in": objectIDs}
@@ -76,16 +73,16 @@ func handleQueryValue(key string, value interface{}, search bson.M) {
 	}
 }
 
-// isNestedQuery returns true if the value is dbm.DBM
+// isNestedQuery returns true if the value is model.DBM
 func isNestedQuery(value interface{}) bool {
-	_, ok := value.(dbm.DBM)
+	_, ok := value.(model.DBM)
 	return ok
 }
 
 // handleNestedQuery replace children queries by it nested values.
-// For example, transforms a dbm.DBM{"testName": dbm.DBM{"$ne": "123"}} to {"testName":{"$ne":"123"}}
+// For example, transforms a model.DBM{"testName": model.DBM{"$ne": "123"}} to {"testName":{"$ne":"123"}}
 func handleNestedQuery(search bson.M, key string, value interface{}) {
-	nestedQuery, ok := value.(dbm.DBM)
+	nestedQuery, ok := value.(model.DBM)
 	if !ok {
 		return
 	}
@@ -107,9 +104,9 @@ func handleNestedQuery(search bson.M, key string, value interface{}) {
 	}
 }
 
-// buildQuery transforms dbm.DBM into bson.M (primitive.M) it does some special treatment to nestedQueries
+// buildQuery transforms model.DBM into bson.M (primitive.M) it does some special treatment to nestedQueries
 // using handleNestedQuery func.
-func buildQuery(query dbm.DBM) bson.M {
+func buildQuery(query model.DBM) bson.M {
 	search := bson.M{}
 
 	for key, value := range query {
@@ -117,7 +114,7 @@ func buildQuery(query dbm.DBM) bson.M {
 		case "_sort", "_collection", "_limit", "_offset", "_date_sharding":
 			continue
 		case "_id":
-			if id, ok := value.(id.ObjectId); ok {
+			if id, ok := value.(model.ObjectId); ok {
 				search[key] = id
 				continue
 			}

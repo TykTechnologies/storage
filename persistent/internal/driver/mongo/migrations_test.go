@@ -3,15 +3,14 @@ package mongo
 import (
 	"testing"
 
+	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/mongo/options"
-
-	"github.com/TykTechnologies/storage/persistent/dbm"
 )
 
 func Test_buildOpt(t *testing.T) {
 	type args struct {
-		opt dbm.DBM
+		opt model.DBM
 	}
 	tests := []struct {
 		name string
@@ -21,9 +20,9 @@ func Test_buildOpt(t *testing.T) {
 		{
 			name: "test buildOpt",
 			args: args{
-				opt: dbm.DBM{
+				opt: model.DBM{
 					"capped": true,
-					"collation": dbm.DBM{
+					"collation": model.DBM{
 						"locale":          "en_US",
 						"caseLevel":       true,
 						"caseFirst":       "caseFirst",
@@ -41,7 +40,7 @@ func Test_buildOpt(t *testing.T) {
 					"validationLevel":    "validationLevel",
 					"validator":          "validator",
 					"expireAfterSeconds": 100,
-					"timeSeries": dbm.DBM{
+					"timeSeries": model.DBM{
 						"timeField":   "timeField",
 						"metaField":   "metaField",
 						"granularity": "granularity",

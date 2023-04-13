@@ -6,14 +6,11 @@ import (
 	"reflect"
 	"regexp"
 
-	"github.com/TykTechnologies/storage/persistent/dbm"
-
+	"github.com/TykTechnologies/storage/persistent/model"
 	"gopkg.in/mgo.v2/bson"
-
-	"github.com/TykTechnologies/storage/persistent/id"
 )
 
-func buildQuery(query dbm.DBM) bson.M {
+func buildQuery(query model.DBM) bson.M {
 	search := bson.M{}
 
 	for key, value := range query {
@@ -21,7 +18,7 @@ func buildQuery(query dbm.DBM) bson.M {
 		case "_sort", "_collection", "_limit", "_offset", "_date_sharding":
 			continue
 		case "_id":
-			if id, ok := value.(id.ObjectId); ok {
+			if id, ok := value.(model.ObjectId); ok {
 				search[key] = id
 				continue
 			}
@@ -43,9 +40,9 @@ func handleQueryValue(key string, value interface{}, search bson.M) {
 		strSlice, isStr := value.([]string)
 
 		if isStr && key == "_id" {
-			objectIDs := []id.ObjectId{}
+			objectIDs := []model.ObjectId{}
 			for _, str := range strSlice {
-				objectIDs = append(objectIDs, id.ObjectIdHex(str))
+				objectIDs = append(objectIDs, model.ObjectIdHex(str))
 			}
 
 			search[key] = bson.M{"$in": objectIDs}
@@ -60,12 +57,12 @@ func handleQueryValue(key string, value interface{}, search bson.M) {
 }
 
 func isNestedQuery(value interface{}) bool {
-	_, ok := value.(dbm.DBM)
+	_, ok := value.(model.DBM)
 	return ok
 }
 
 func handleNestedQuery(search bson.M, key string, value interface{}) {
-	nestedQuery, ok := value.(dbm.DBM)
+	nestedQuery, ok := value.(model.DBM)
 	if !ok {
 		return
 	}
@@ -87,7 +84,7 @@ func handleNestedQuery(search bson.M, key string, value interface{}) {
 	}
 }
 
-func getColName(query dbm.DBM, row id.DBObject) (string, error) {
+func getColName(query model.DBM, row model.DBObject) (string, error) {
 	colName, ok := query["_collection"].(string)
 	if !ok {
 		if row == nil {

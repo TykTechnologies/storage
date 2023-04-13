@@ -1,4 +1,4 @@
-package id
+package model
 
 type DBObject interface {
 	GetObjectID() ObjectId
