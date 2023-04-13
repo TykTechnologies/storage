@@ -405,7 +405,6 @@ func (d *mgoDriver) Migrate(ctx context.Context, rows []model.DBObject, opts ...
 			opt := buildOpt(opts[i])
 
 			err := col.Create(opt)
-
 			if err != nil {
 				return d.handleStoreError(err)
 			}
@@ -414,7 +413,6 @@ func (d *mgoDriver) Migrate(ctx context.Context, rows []model.DBObject, opts ...
 		}
 
 		err := col.Create(&mgo.CollectionInfo{})
-
 		if err != nil {
 			return d.handleStoreError(err)
 		}
