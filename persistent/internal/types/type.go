@@ -23,8 +23,8 @@ type DBTable interface {
 	TableName() string
 }
 
-// ObjectId interface to be implemented by each db driver
-type ObjectId interface {
+// ObjectID interface to be implemented by each db driver
+type ObjectID interface {
 	Hex() string
 	String() string
 	Timestamp() time.Time
@@ -35,6 +35,6 @@ type ObjectId interface {
 }
 
 type DBObject interface {
-	DBID() ObjectId
-	SetDBID(id ObjectId)
+	DBID() ObjectID
+	SetDBID(id ObjectID)
 }

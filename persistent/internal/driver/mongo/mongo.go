@@ -51,8 +51,8 @@ func (d *mongoDriver) Insert(ctx context.Context, rows ...model.DBObject) error 
 	var bulkQuery []mongo.WriteModel
 
 	for _, row := range rows {
-		if row.GetObjectId() == "" {
-			row.SetObjectId(model.NewObjectId())
+		if row.GetObjectID() == "" {
+			row.SetObjectID(model.NewObjectID())
 		}
 
 		model := mongo.NewInsertOneModel().SetDocument(row)
@@ -71,7 +71,7 @@ func (d *mongoDriver) Delete(ctx context.Context, row model.DBObject, query ...m
 	}
 
 	if len(query) == 0 {
-		query = append(query, model.DBM{"_id": row.GetObjectId()})
+		query = append(query, model.DBM{"_id": row.GetObjectID()})
 	}
 
 	collection := d.client.Database(d.database).Collection(row.TableName())
@@ -155,7 +155,7 @@ func (d *mongoDriver) Update(ctx context.Context, row model.DBObject, query ...m
 	}
 
 	if len(query) == 0 {
-		query = append(query, model.DBM{"_id": row.GetObjectId()})
+		query = append(query, model.DBM{"_id": row.GetObjectID()})
 	}
 
 	collection := d.client.Database(d.database).Collection(row.TableName())
@@ -183,7 +183,7 @@ func (d *mongoDriver) BulkUpdate(ctx context.Context, rows []model.DBObject, que
 		update := mongo.NewUpdateOneModel().SetUpdate(bson.D{{Key: "$set", Value: rows[i]}})
 
 		if len(query) == 0 {
-			update.SetFilter(model.DBM{"_id": rows[i].GetObjectId()})
+			update.SetFilter(model.DBM{"_id": rows[i].GetObjectID()})
 		} else {
 			update.SetFilter(buildQuery(query[i]))
 		}
@@ -399,9 +399,9 @@ func (d *mongoDriver) Aggregate(ctx context.Context, row model.DBObject, query [
 			return nil, d.handleStoreError(err)
 		}
 
-		// Parsing _id from primitive.ObjectId to model.ObjectId
-		if ObjectId, ok := result["_id"].(primitive.ObjectID); ok {
-			result["_id"] = model.ObjectIdHex(ObjectId.Hex())
+		// Parsing _id from primitive.ObjectID to model.ObjectID
+		if ObjectID, ok := result["_id"].(primitive.ObjectID); ok {
+			result["_id"] = model.ObjectIDHex(ObjectID.Hex())
 		}
 
 		resultSlice = append(resultSlice, result)

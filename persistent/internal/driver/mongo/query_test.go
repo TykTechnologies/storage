@@ -51,10 +51,10 @@ func TestBuildQuery(t *testing.T) {
 		{
 			testName: "Test with _id",
 			input: model.DBM{
-				"_id": model.ObjectIdHex("61634c7b5f46cc8c296edc36"),
+				"_id": model.ObjectIDHex("61634c7b5f46cc8c296edc36"),
 			},
 			output: bson.M{
-				"_id": model.ObjectIdHex("61634c7b5f46cc8c296edc36"),
+				"_id": model.ObjectIDHex("61634c7b5f46cc8c296edc36"),
 			},
 		},
 		{
@@ -142,9 +142,9 @@ func TestBuildQuery(t *testing.T) {
 			},
 			output: bson.M{
 				"_id": bson.M{
-					"$in": []model.ObjectId{
-						model.ObjectIdHex("61634c7b5f46cc8c296edc36"),
-						model.ObjectIdHex("61634c7b5f46cc8c296edc37"),
+					"$in": []model.ObjectID{
+						model.ObjectIDHex("61634c7b5f46cc8c296edc36"),
+						model.ObjectIDHex("61634c7b5f46cc8c296edc37"),
 					},
 				},
 			},
