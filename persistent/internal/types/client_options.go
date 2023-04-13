@@ -65,6 +65,7 @@ func (opts *ClientOpts) GetTLSConfig() (*tls.Config, error) {
 			return tlsConfig, err
 		}
 	}
+
 	return tlsConfig, nil
 }
 
@@ -73,20 +74,24 @@ func (opts *ClientOpts) loadCACertificates(tlsConfig *tls.Config) error {
 	if err != nil {
 		return errors.New("can't load CA certificates:" + err.Error())
 	}
+
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCert)
 	tlsConfig.RootCAs = caCertPool
+
 	return nil
 }
 
 func (opts *ClientOpts) verifyPeerCertificate(tlsConfig *tls.Config) {
 	tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		certs := make([]*x509.Certificate, len(rawCerts))
+
 		for i, asn1Data := range rawCerts {
 			cert, err := x509.ParseCertificate(asn1Data)
 			if err != nil {
 				return err
 			}
+
 			certs[i] = cert
 		}
 
@@ -101,8 +106,10 @@ func (opts *ClientOpts) verifyPeerCertificate(tlsConfig *tls.Config) {
 			if i == 0 {
 				continue
 			}
+
 			opts.Intermediates.AddCert(cert)
 		}
+
 		_, err := certs[0].Verify(opts)
 
 		return err
@@ -114,6 +121,8 @@ func (opts *ClientOpts) loadClientCertificates(tlsConfig *tls.Config) error {
 	if err != nil {
 		return err
 	}
+
 	tlsConfig.Certificates = []tls.Certificate{*cert}
+
 	return nil
 }
