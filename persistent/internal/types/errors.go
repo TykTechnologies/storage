@@ -1,4 +1,4 @@
-package model
+package types
 
 const (
 	ErrorRowQueryDiffLenght        = "only one query per row is allowed"

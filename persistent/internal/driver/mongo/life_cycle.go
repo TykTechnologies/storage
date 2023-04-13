@@ -14,7 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
 
-	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"github.com/TykTechnologies/storage/persistent/internal/types"
 )
 
 type lifeCycle struct {
@@ -24,10 +24,10 @@ type lifeCycle struct {
 	database         string
 }
 
-var _ model.StorageLifecycle = &lifeCycle{}
+var _ types.StorageLifecycle = &lifeCycle{}
 
 // Connect connects to the mongo database given the ClientOpts.
-func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
+func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	var err error
 	var client *mongo.Client
 
@@ -85,10 +85,10 @@ func (lc *lifeCycle) DBType() utils.DBType {
 	return utils.StandardMongo
 }
 
-// mongoOptsBuilder build Mongo options.ClientOptions from our own model.ClientOpts. Also sets default values.
-// mongo URI parameters specified in the model.ClientOpts ConnectionString have precedence over the ones configured in
+// mongoOptsBuilder build Mongo options.ClientOptions from our own types.ClientOpts. Also sets default values.
+// mongo URI parameters specified in the types.ClientOpts ConnectionString have precedence over the ones configured in
 // other input.
-func mongoOptsBuilder(opts *model.ClientOpts) (*options.ClientOptions, error) {
+func mongoOptsBuilder(opts *types.ClientOpts) (*options.ClientOptions, error) {
 	connOpts := options.Client()
 
 	if opts.UseSSL {
@@ -100,7 +100,7 @@ func mongoOptsBuilder(opts *model.ClientOpts) (*options.ClientOptions, error) {
 		connOpts.SetTLSConfig(tlsConfig)
 	}
 
-	connOpts.SetTimeout(model.DEFAULT_CONN_TIMEOUT)
+	connOpts.SetTimeout(types.DEFAULT_CONN_TIMEOUT)
 
 	if opts.ConnectionTimeout != 0 {
 		connOpts.SetTimeout(time.Duration(opts.ConnectionTimeout) * time.Second)

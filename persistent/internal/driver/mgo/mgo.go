@@ -17,19 +17,19 @@ import (
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
-	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"github.com/TykTechnologies/storage/persistent/internal/types"
 )
 
-var _ model.PersistentStorage = &mgoDriver{}
+var _ types.PersistentStorage = &mgoDriver{}
 
 type mgoDriver struct {
 	*lifeCycle
 	lastConnAttempt time.Time
-	options         model.ClientOpts
+	options         types.ClientOpts
 }
 
 // NewMgoDriver returns an instance of the driver connected to the database.
-func NewMgoDriver(opts *model.ClientOpts) (*mgoDriver, error) {
+func NewMgoDriver(opts *types.ClientOpts) (*mgoDriver, error) {
 	newDriver := &mgoDriver{}
 
 	// create the db life cycle manager
@@ -47,7 +47,7 @@ func NewMgoDriver(opts *model.ClientOpts) (*mgoDriver, error) {
 
 func (d *mgoDriver) Insert(ctx context.Context, rows ...id.DBObject) error {
 	if len(rows) == 0 {
-		return errors.New(model.ErrorEmptyRow)
+		return errors.New(types.ErrorEmptyRow)
 	}
 
 	sess := d.session.Copy()
@@ -72,7 +72,7 @@ func (d *mgoDriver) Insert(ctx context.Context, rows ...id.DBObject) error {
 
 func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject, queries ...dbm.DBM) error {
 	if len(queries) > 1 {
-		return errors.New(model.ErrorMultipleQueryForSingleRow)
+		return errors.New(types.ErrorMultipleQueryForSingleRow)
 	}
 
 	if len(queries) == 0 {
@@ -95,7 +95,7 @@ func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject, queries ...dbm.
 
 func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...dbm.DBM) error {
 	if len(queries) > 1 {
-		return errors.New(model.ErrorMultipleQueryForSingleRow)
+		return errors.New(types.ErrorMultipleQueryForSingleRow)
 	}
 
 	if len(queries) == 0 {
@@ -112,11 +112,11 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...dbm.
 
 func (d *mgoDriver) BulkUpdate(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
 	if len(rows) == 0 {
-		return errors.New(model.ErrorEmptyRow)
+		return errors.New(types.ErrorEmptyRow)
 	}
 
 	if len(rows) != len(query) && len(query) != 0 {
-		return errors.New(model.ErrorRowQueryDiffLenght)
+		return errors.New(types.ErrorRowQueryDiffLenght)
 	}
 
 	sess := d.session.Copy()
@@ -160,7 +160,7 @@ func (d *mgoDriver) UpdateAll(ctx context.Context, row id.DBObject, query, updat
 
 func (d *mgoDriver) Count(ctx context.Context, row id.DBObject, filters ...dbm.DBM) (int, error) {
 	if len(filters) > 1 {
-		return 0, errors.New(model.ErrorMultipleDBM)
+		return 0, errors.New(types.ErrorMultipleDBM)
 	}
 
 	filter := bson.M{}
@@ -224,12 +224,12 @@ func (d *mgoDriver) Drop(ctx context.Context, row id.DBObject) error {
 
 func (d *mgoDriver) Ping(ctx context.Context) (result error) {
 	if d.session == nil {
-		return errors.New(model.ErrorSessionClosed)
+		return errors.New(types.ErrorSessionClosed)
 	}
 
 	defer func() {
 		if err := recover(); err != nil {
-			result = errors.New(model.ErrorSessionClosed + " from panic")
+			result = errors.New(types.ErrorSessionClosed + " from panic")
 		}
 	}()
 
@@ -241,12 +241,12 @@ func (d *mgoDriver) Ping(ctx context.Context) (result error) {
 
 func (d *mgoDriver) HasTable(ctx context.Context, collection string) (result bool, errResult error) {
 	if d.session == nil {
-		return false, errors.New(model.ErrorSessionClosed)
+		return false, errors.New(types.ErrorSessionClosed)
 	}
 
 	defer func() {
 		if err := recover(); err != nil {
-			errResult = errors.New(model.ErrorSessionClosed + " from panic")
+			errResult = errors.New(types.ErrorSessionClosed + " from panic")
 		}
 	}()
 
@@ -296,9 +296,9 @@ func (d *mgoDriver) handleStoreError(err error) error {
 
 func (d *mgoDriver) CreateIndex(ctx context.Context, row id.DBObject, index index.Index) error {
 	if len(index.Keys) == 0 {
-		return errors.New(model.ErrorIndexEmpty)
+		return errors.New(types.ErrorIndexEmpty)
 	} else if len(index.Keys) > 1 && index.IsTTLIndex {
-		return errors.New(model.ErrorIndexComposedTTL)
+		return errors.New(types.ErrorIndexComposedTTL)
 	}
 
 	var indexes []string
@@ -342,7 +342,7 @@ func (d *mgoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.In
 	}
 
 	if !hasTable {
-		return nil, errors.New(model.ErrorCollectionNotFound)
+		return nil, errors.New(types.ErrorCollectionNotFound)
 	}
 
 	var indexes []index.Index
@@ -397,7 +397,7 @@ func (d *mgoDriver) Migrate(ctx context.Context, rows []id.DBObject, opts ...dbm
 	defer sess.Close()
 
 	if len(opts) > 0 && len(opts) != len(rows) {
-		return errors.New(model.ErrorRowOptDiffLenght)
+		return errors.New(types.ErrorRowOptDiffLenght)
 	}
 
 	for i, row := range rows {

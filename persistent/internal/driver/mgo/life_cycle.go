@@ -11,10 +11,10 @@ import (
 
 	"gopkg.in/mgo.v2"
 
-	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"github.com/TykTechnologies/storage/persistent/internal/types"
 )
 
-var _ model.StorageLifecycle = &lifeCycle{}
+var _ types.StorageLifecycle = &lifeCycle{}
 
 type lifeCycle struct {
 	session          *mgo.Session
@@ -23,13 +23,13 @@ type lifeCycle struct {
 }
 
 // Connect connects to the mongo database given the ClientOpts.
-func (lc *lifeCycle) Connect(opts *model.ClientOpts) error {
+func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	dialInfo, err := mgo.ParseURL(opts.ConnectionString)
 	if err != nil {
 		return err
 	}
 
-	dialInfo.Timeout = model.DEFAULT_CONN_TIMEOUT
+	dialInfo.Timeout = types.DEFAULT_CONN_TIMEOUT
 	if opts.ConnectionTimeout != 0 {
 		dialInfo.Timeout = time.Second * time.Duration(opts.ConnectionTimeout)
 	}
@@ -93,7 +93,7 @@ func (lc *lifeCycle) DBType() utils.DBType {
 	return utils.StandardMongo
 }
 
-func (lc *lifeCycle) setSessionConsistency(opts *model.ClientOpts) {
+func (lc *lifeCycle) setSessionConsistency(opts *types.ClientOpts) {
 	switch opts.SessionConsistency {
 	case "eventual":
 		lc.session.SetMode(mgo.Eventual, true)

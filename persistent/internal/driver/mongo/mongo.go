@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"errors"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -12,19 +13,19 @@ import (
 	"github.com/TykTechnologies/storage/persistent/id"
 	"github.com/TykTechnologies/storage/persistent/index"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
-	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/utils"
 )
 
-var _ model.PersistentStorage = &mongoDriver{}
+var _ types.PersistentStorage = &mongoDriver{}
 
 type mongoDriver struct {
 	*lifeCycle
-	options *model.ClientOpts
+	options *types.ClientOpts
 }
 
 // NewMongoDriver returns an instance of the driver official mongo connected to the database.
-func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
+func NewMongoDriver(opts *types.ClientOpts) (*mongoDriver, error) {
 	if opts.ConnectionString == "" {
 		return nil, errors.New("can't connect without connection string")
 	}
@@ -46,7 +47,7 @@ func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
 
 func (d *mongoDriver) Insert(ctx context.Context, rows ...id.DBObject) error {
 	if len(rows) == 0 {
-		return errors.New(model.ErrorEmptyRow)
+		return errors.New(types.ErrorEmptyRow)
 	}
 
 	var bulkQuery []mongo.WriteModel
@@ -68,7 +69,7 @@ func (d *mongoDriver) Insert(ctx context.Context, rows ...id.DBObject) error {
 
 func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject, query ...dbm.DBM) error {
 	if len(query) > 1 {
-		return errors.New(model.ErrorMultipleQueryForSingleRow)
+		return errors.New(types.ErrorMultipleQueryForSingleRow)
 	}
 
 	if len(query) == 0 {
@@ -88,7 +89,7 @@ func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject, query ...dbm.
 
 func (d *mongoDriver) Count(ctx context.Context, row id.DBObject, filters ...dbm.DBM) (int, error) {
 	if len(filters) > 1 {
-		return 0, errors.New(model.ErrorMultipleDBM)
+		return 0, errors.New(types.ErrorMultipleDBM)
 	}
 
 	filter := bson.M{}
@@ -152,7 +153,7 @@ func (d *mongoDriver) Drop(ctx context.Context, row id.DBObject) error {
 
 func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...dbm.DBM) error {
 	if len(query) > 1 {
-		return errors.New(model.ErrorMultipleQueryForSingleRow)
+		return errors.New(types.ErrorMultipleQueryForSingleRow)
 	}
 
 	if len(query) == 0 {
@@ -171,11 +172,11 @@ func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...dbm.
 
 func (d *mongoDriver) BulkUpdate(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
 	if len(query) > 0 && len(query) != len(rows) {
-		return errors.New(model.ErrorRowQueryDiffLenght)
+		return errors.New(types.ErrorRowQueryDiffLenght)
 	}
 
 	if len(rows) == 0 {
-		return errors.New(model.ErrorEmptyRow)
+		return errors.New(types.ErrorEmptyRow)
 	}
 
 	var bulkQuery []mongo.WriteModel
@@ -214,7 +215,7 @@ func (d *mongoDriver) UpdateAll(ctx context.Context, row id.DBObject, query, upd
 
 func (d *mongoDriver) HasTable(ctx context.Context, collection string) (bool, error) {
 	if d.client == nil {
-		return false, errors.New(model.ErrorSessionClosed)
+		return false, errors.New(types.ErrorSessionClosed)
 	}
 
 	collections, err := d.client.Database(d.database).ListCollectionNames(ctx, bson.M{"name": collection})
@@ -237,7 +238,7 @@ func (d *mongoDriver) handleStoreError(err error) error {
 	if mongo.IsNetworkError(err) || errors.As(err, &serverErr) {
 		// Reconnect to the MongoDB instance
 		if connErr := d.Connect(d.options); connErr != nil {
-			return errors.New(model.ErrorReconnecting + ": " + connErr.Error() + " after error: " + err.Error())
+			return errors.New(types.ErrorReconnecting + ": " + connErr.Error() + " after error: " + err.Error())
 		}
 	}
 
@@ -246,9 +247,9 @@ func (d *mongoDriver) handleStoreError(err error) error {
 
 func (d *mongoDriver) CreateIndex(ctx context.Context, row id.DBObject, index index.Index) error {
 	if len(index.Keys) == 0 {
-		return errors.New(model.ErrorIndexEmpty)
+		return errors.New(types.ErrorIndexEmpty)
 	} else if len(index.Keys) > 1 && index.IsTTLIndex {
-		return errors.New(model.ErrorIndexComposedTTL)
+		return errors.New(types.ErrorIndexComposedTTL)
 	}
 
 	keys := bson.D{}
@@ -292,7 +293,7 @@ func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.
 	}
 
 	if !hasTable {
-		return nil, errors.New(model.ErrorCollectionNotFound)
+		return nil, errors.New(types.ErrorCollectionNotFound)
 	}
 
 	collection := d.client.Database(d.database).Collection(row.TableName())
@@ -339,7 +340,7 @@ func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.
 
 func (d *mongoDriver) Migrate(ctx context.Context, rows []id.DBObject, opts ...dbm.DBM) error {
 	if len(opts) > 0 && len(opts) != len(rows) {
-		return errors.New(model.ErrorRowOptDiffLenght)
+		return errors.New(types.ErrorRowOptDiffLenght)
 	}
 
 	for i, row := range rows {
