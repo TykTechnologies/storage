@@ -23,7 +23,7 @@ import (
 )
 
 type dummyDBObject struct {
-	Id                model.ObjectID    `bson:"_id,omitempty"`
+	ID                model.ObjectID    `bson:"_id,omitempty"`
 	Name              string            `bson:"name"`
 	Email             string            `bson:"email"`
 	Country           dummyCountryField `bson:"country"`
@@ -37,11 +37,11 @@ type dummyCountryField struct {
 }
 
 func (d *dummyDBObject) GetObjectID() model.ObjectID {
-	return d.Id
+	return d.ID
 }
 
 func (d *dummyDBObject) SetObjectID(id model.ObjectID) {
-	d.Id = id
+	d.ID = id
 }
 
 func (d *dummyDBObject) TableName() string {
@@ -121,7 +121,7 @@ func TestInsert(t *testing.T) {
 			objects = append(objects, &dummyDBObject{
 				Name:  "test" + strconv.Itoa(i),
 				Email: "email@email.com",
-				Id:    model.NewObjectID(),
+				ID:    model.NewObjectID(),
 			})
 		}
 
@@ -240,23 +240,23 @@ func TestBulkUpdate(t *testing.T) {
 
 	dummyData := []dummyDBObject{
 		{
-			Name: "John", Email: "john@example.com", Id: model.NewObjectID(),
+			Name: "John", Email: "john@example.com", ID: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10,
 		},
 		{
-			Name: "Jane", Email: "jane@tyk.com", Id: model.NewObjectID(),
+			Name: "Jane", Email: "jane@tyk.com", ID: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8,
 		},
 		{
-			Name: "Bob", Email: "bob@example.com", Id: model.NewObjectID(),
+			Name: "Bob", Email: "bob@example.com", ID: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25,
 		},
 		{
-			Name: "Alice", Email: "alice@tyk.com", Id: model.NewObjectID(),
+			Name: "Alice", Email: "alice@tyk.com", ID: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45,
 		},
 		{
-			Name: "Peter", Email: "peter@test.com", Id: model.NewObjectID(),
+			Name: "Peter", Email: "peter@test.com", ID: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12,
 		},
 	}
@@ -277,11 +277,11 @@ func TestBulkUpdate(t *testing.T) {
 		{
 			testName: "update only one - modifying values",
 			givenObjects: []model.DBObject{&dummyDBObject{
-				Name: "Test", Email: "test@test.com", Id: dummyData[0].Id,
+				Name: "Test", Email: "test@test.com", ID: dummyData[0].ID,
 				Country: dummyData[0].Country, Age: dummyData[0].Age,
 			}},
 			expectedNewValues: []model.DBObject{&dummyDBObject{
-				Name: "Test", Email: "test@test.com", Id: dummyData[0].Id,
+				Name: "Test", Email: "test@test.com", ID: dummyData[0].ID,
 				Country: dummyData[0].Country, Age: dummyData[0].Age,
 			}},
 		},
@@ -291,14 +291,14 @@ func TestBulkUpdate(t *testing.T) {
 				&dummyDBObject{
 					Name:    "Test",
 					Email:   "test@test.com",
-					Id:      dummyData[0].Id,
+					ID:      dummyData[0].ID,
 					Country: dummyData[0].Country,
 					Age:     dummyData[0].Age,
 				},
 				&dummyDBObject{
 					Name:    "Testina",
 					Email:   "test@test.com",
-					Id:      dummyData[1].Id,
+					ID:      dummyData[1].ID,
 					Country: dummyData[1].Country,
 					Age:     dummyData[1].Age,
 				},
@@ -307,14 +307,14 @@ func TestBulkUpdate(t *testing.T) {
 				&dummyDBObject{
 					Name:    "Test",
 					Email:   "test@test.com",
-					Id:      dummyData[0].Id,
+					ID:      dummyData[0].ID,
 					Country: dummyData[0].Country,
 					Age:     dummyData[0].Age,
 				},
 				&dummyDBObject{
 					Name:    "Testina",
 					Email:   "test@test.com",
-					Id:      dummyData[1].Id,
+					ID:      dummyData[1].ID,
 					Country: dummyData[1].Country,
 					Age:     dummyData[1].Age,
 				},
@@ -326,14 +326,14 @@ func TestBulkUpdate(t *testing.T) {
 				&dummyDBObject{
 					Name:    "Test",
 					Email:   "test@test.com",
-					Id:      dummyData[0].Id,
+					ID:      dummyData[0].ID,
 					Country: dummyData[0].Country,
 					Age:     dummyData[0].Age,
 				},
 				&dummyDBObject{
 					Name:    "Testina",
 					Email:   "test@test.com",
-					Id:      dummyData[1].Id,
+					ID:      dummyData[1].ID,
 					Country: dummyData[1].Country,
 					Age:     dummyData[1].Age,
 				},
@@ -342,14 +342,14 @@ func TestBulkUpdate(t *testing.T) {
 				&dummyDBObject{
 					Name:    "Test",
 					Email:   "test@test.com",
-					Id:      dummyData[0].Id,
+					ID:      dummyData[0].ID,
 					Country: dummyData[0].Country,
 					Age:     dummyData[0].Age,
 				},
 				&dummyDBObject{
 					Name:    "Testina",
 					Email:   "test@test.com",
-					Id:      dummyData[1].Id,
+					ID:      dummyData[1].ID,
 					Country: dummyData[1].Country,
 					Age:     dummyData[1].Age,
 				},
@@ -367,14 +367,14 @@ func TestBulkUpdate(t *testing.T) {
 				&dummyDBObject{
 					Name:    "Test",
 					Email:   "test@test.com",
-					Id:      dummyData[0].Id,
+					ID:      dummyData[0].ID,
 					Country: dummyData[0].Country,
 					Age:     dummyData[0].Age,
 				},
 				&dummyDBObject{
 					Name:    "Testina",
 					Email:   "test@test.com",
-					Id:      dummyData[1].Id,
+					ID:      dummyData[1].ID,
 					Country: dummyData[1].Country,
 					Age:     dummyData[1].Age,
 				},
@@ -419,33 +419,33 @@ func TestUpdateAll(t *testing.T) {
 	dummyData := []dummyDBObject{
 		{
 			Name: "John", Email: "john@example.com",
-			Id:      model.NewObjectID(),
+			ID:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
 			Age:     10,
 		},
 		{
 			Name:  "Jane",
-			Email: "jane@tyk.com", Id: model.NewObjectID(),
+			Email: "jane@tyk.com", ID: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"},
 			Age:     8,
 		},
 		{
 			Name:    "Bob",
 			Email:   "bob@example.com",
-			Id:      model.NewObjectID(),
+			ID:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"},
 			Age:     25,
 		},
 		{
 			Name: "Alice", Email: "alice@tyk.com",
-			Id:      model.NewObjectID(),
+			ID:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
 			Age:     45,
 		},
 		{
 			Name:    "Peter",
 			Email:   "peter@test.com",
-			Id:      model.NewObjectID(),
+			ID:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"},
 			Age:     12,
 		},
@@ -589,33 +589,33 @@ func TestCount(t *testing.T) {
 	dummyData := []dummyDBObject{
 		{
 			Name: "John", Email: "john@example.com",
-			Id:      model.NewObjectID(),
+			ID:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
 			Age:     10,
 		},
 		{
 			Name:  "Jane",
-			Email: "jane@tyk.com", Id: model.NewObjectID(),
+			Email: "jane@tyk.com", ID: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"},
 			Age:     8,
 		},
 		{
 			Name:    "Bob",
 			Email:   "bob@example.com",
-			Id:      model.NewObjectID(),
+			ID:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"},
 			Age:     25,
 		},
 		{
 			Name: "Alice", Email: "alice@tyk.com",
-			Id:      model.NewObjectID(),
+			ID:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
 			Age:     45,
 		},
 		{
 			Name:    "Peter",
 			Email:   "peter@test.com",
-			Id:      model.NewObjectID(),
+			ID:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"},
 			Age:     12,
 		},
@@ -729,23 +729,23 @@ func TestQuery(t *testing.T) {
 
 	dummyData := []dummyDBObject{
 		{
-			Name: "John", Email: "john@example.com", Id: model.ObjectID(bson.NewObjectID()),
+			Name: "John", Email: "john@example.com", ID: model.ObjectID(bson.NewObjectId()),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10,
 		},
 		{
-			Name: "Jane", Email: "jane@tyk.com", Id: model.ObjectID(bson.NewObjectID()),
+			Name: "Jane", Email: "jane@tyk.com", ID: model.ObjectID(bson.NewObjectId()),
 			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8,
 		},
 		{
-			Name: "Bob", Email: "bob@example.com", Id: model.ObjectID(bson.NewObjectID()),
+			Name: "Bob", Email: "bob@example.com", ID: model.ObjectID(bson.NewObjectId()),
 			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25,
 		},
 		{
-			Name: "Alice", Email: "alice@tyk.com", Id: model.ObjectID(bson.NewObjectID()),
+			Name: "Alice", Email: "alice@tyk.com", ID: model.ObjectID(bson.NewObjectId()),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45,
 		},
 		{
-			Name: "Peter", Email: "peter@test.com", Id: model.ObjectID(bson.NewObjectID()),
+			Name: "Peter", Email: "peter@test.com", ID: model.ObjectID(bson.NewObjectId()),
 			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12,
 		},
 	}
@@ -931,23 +931,23 @@ func TestDeleteWithQuery(t *testing.T) {
 
 	dummyData := []dummyDBObject{
 		{
-			Name: "John", Email: "john@example.com", Id: model.NewObjectID(),
+			Name: "John", Email: "john@example.com", ID: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10,
 		},
 		{
-			Name: "Jane", Email: "jane@tyk.com", Id: model.NewObjectID(),
+			Name: "Jane", Email: "jane@tyk.com", ID: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8,
 		},
 		{
-			Name: "Bob", Email: "bob@example.com", Id: model.NewObjectID(),
+			Name: "Bob", Email: "bob@example.com", ID: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25,
 		},
 		{
-			Name: "Alice", Email: "alice@tyk.com", Id: model.NewObjectID(),
+			Name: "Alice", Email: "alice@tyk.com", ID: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45,
 		},
 		{
-			Name: "Peter", Email: "peter@test.com", Id: model.NewObjectID(),
+			Name: "Peter", Email: "peter@test.com", ID: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12,
 		},
 	}
@@ -1519,7 +1519,7 @@ func TestDBTableStats(t *testing.T) {
 			},
 			row: func() model.DBObject {
 				return &dummyDBObject{
-					Id:                model.NewObjectID(),
+					ID:                model.NewObjectID(),
 					invalidCollection: true,
 				}
 			},
