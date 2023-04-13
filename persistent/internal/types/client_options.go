@@ -50,59 +50,70 @@ func (opts *ClientOpts) GetTLSConfig() (*tls.Config, error) {
 	}
 
 	if opts.SSLCAFile != "" {
-		caCert, err := os.ReadFile(opts.SSLCAFile)
-		if err != nil {
-			return tlsConfig, errors.New("can't load CA certificates:" + err.Error())
+		if err := opts.loadCACertificates(tlsConfig); err != nil {
+			return tlsConfig, err
 		}
-		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM(caCert)
-		tlsConfig.RootCAs = caCertPool
 	}
 
 	if opts.SSLAllowInvalidHostnames {
 		tlsConfig.InsecureSkipVerify = true
-		tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-			// Code copy/pasted and adapted from
-			// https://github.com/golang/go/blob/81555cb4f3521b53f9de4ce15f64b77cc9df61b9/src/crypto/tls/handshake_client.go#L327-L344, but adapted to skip the hostname verification.
-			// See https://github.com/golang/go/issues/21971#issuecomment-412836078.
-
-			// If this is the first handshake on a connection, process and
-			// (optionally) verify the server's certificates.
-			certs := make([]*x509.Certificate, len(rawCerts))
-			for i, asn1Data := range rawCerts {
-				cert, err := x509.ParseCertificate(asn1Data)
-				if err != nil {
-					return err
-				}
-				certs[i] = cert
-			}
-
-			opts := x509.VerifyOptions{
-				Roots:         tlsConfig.RootCAs,
-				CurrentTime:   time.Now(),
-				DNSName:       "", // <- skip hostname verification
-				Intermediates: x509.NewCertPool(),
-			}
-
-			for i, cert := range certs {
-				if i == 0 {
-					continue
-				}
-				opts.Intermediates.AddCert(cert)
-			}
-			_, err := certs[0].Verify(opts)
-
-			return err
-		}
+		opts.verifyPeerCertificate(tlsConfig)
 	}
 
 	if opts.SSLPEMKeyfile != "" {
-		cert, err := helper.LoadCertificateAndKeyFromFile(opts.SSLPEMKeyfile)
-		if err != nil {
+		if err := opts.loadClientCertificates(tlsConfig); err != nil {
 			return tlsConfig, err
 		}
-
-		tlsConfig.Certificates = []tls.Certificate{*cert}
 	}
 	return tlsConfig, nil
+}
+
+func (opts *ClientOpts) loadCACertificates(tlsConfig *tls.Config) error {
+	caCert, err := os.ReadFile(opts.SSLCAFile)
+	if err != nil {
+		return errors.New("can't load CA certificates:" + err.Error())
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+	tlsConfig.RootCAs = caCertPool
+	return nil
+}
+
+func (opts *ClientOpts) verifyPeerCertificate(tlsConfig *tls.Config) {
+	tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+		certs := make([]*x509.Certificate, len(rawCerts))
+		for i, asn1Data := range rawCerts {
+			cert, err := x509.ParseCertificate(asn1Data)
+			if err != nil {
+				return err
+			}
+			certs[i] = cert
+		}
+
+		opts := x509.VerifyOptions{
+			Roots:         tlsConfig.RootCAs,
+			CurrentTime:   time.Now(),
+			DNSName:       "",
+			Intermediates: x509.NewCertPool(),
+		}
+
+		for i, cert := range certs {
+			if i == 0 {
+				continue
+			}
+			opts.Intermediates.AddCert(cert)
+		}
+		_, err := certs[0].Verify(opts)
+
+		return err
+	}
+}
+
+func (opts *ClientOpts) loadClientCertificates(tlsConfig *tls.Config) error {
+	cert, err := helper.LoadCertificateAndKeyFromFile(opts.SSLPEMKeyfile)
+	if err != nil {
+		return err
+	}
+	tlsConfig.Certificates = []tls.Certificate{*cert}
+	return nil
 }
