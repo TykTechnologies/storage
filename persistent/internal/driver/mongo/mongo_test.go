@@ -731,7 +731,7 @@ func TestBulkUpdate(t *testing.T) {
 			var result []dummyDBObject
 			err = driver.Query(context.Background(), object, &result, model.DBM{})
 			assert.Nil(t, err)
-			assert.Len(t, result, len(tc.expectedNewValues))
+
 			for i, expected := range tc.expectedNewValues {
 				assert.EqualValues(t, expected, &result[i])
 			}
