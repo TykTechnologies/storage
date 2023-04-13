@@ -39,32 +39,32 @@ func TestValidObjectId(t *testing.T) {
 	}
 }
 
-func TestNewObjectID(t *testing.T) {
-	id := NewObjectID()
+func TestNewObjectId(t *testing.T) {
+	id := NewObjectId()
 	assert.Equal(t, 12, len(id))
 }
 
 func TestHex(t *testing.T) {
-	id := NewObjectID()
+	id := NewObjectId()
 	expected := hex.EncodeToString([]byte(id))
 	assert.Equal(t, expected, id.Hex())
 }
 
 func TestString(t *testing.T) {
-	id := NewObjectID()
+	id := NewObjectId()
 	bsonID := bson.ObjectId(id)
-	assert.Equal(t, fmt.Sprintf("ObjectID(%q)", bsonID.Hex()), id.String())
+	assert.Equal(t, fmt.Sprintf("ObjectId(%q)", bsonID.Hex()), id.String())
 }
 
 func TestTimestamp(t *testing.T) {
-	id := NewObjectID()
+	id := NewObjectId()
 	bsonID := bson.ObjectId(id)
 
 	assert.Equal(t, bsonID.Time(), id.Timestamp())
 }
 
 func TestMarshalJSON(t *testing.T) {
-	id := NewObjectID()
+	id := NewObjectId()
 	bsonID := bson.ObjectId(id)
 
 	bsonBytes, err1 := bsonID.MarshalJSON()
@@ -78,7 +78,7 @@ func TestMarshalJSON(t *testing.T) {
 }
 
 func TestUnmarshalJSON(t *testing.T) {
-	id := NewObjectID()
+	id := NewObjectId()
 
 	idBytes, err := id.MarshalJSON()
 	if err != nil {
@@ -96,14 +96,14 @@ func TestUnmarshalJSON(t *testing.T) {
 }
 
 func TestIsObjectIdHex(t *testing.T) {
-	id := NewObjectID()
+	id := NewObjectId()
 
 	assert.Equal(t, true, IsObjectIdHex(id.Hex()))
 	assert.Equal(t, false, IsObjectIdHex("any-invalid-value"))
 }
 
 func TestValue(t *testing.T) {
-	id := NewObjectID()
+	id := NewObjectId()
 	val, err := id.Value()
 
 	assert.Equal(t, nil, err)

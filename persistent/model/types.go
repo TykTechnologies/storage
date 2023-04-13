@@ -1,7 +1,7 @@
 package model
 
 type DBObject interface {
-	GetObjectID() ObjectId
-	SetObjectID(id ObjectId)
+	GetObjectId() ObjectId
+	SetObjectId(id ObjectId)
 	TableName() string
 }

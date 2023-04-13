@@ -13,7 +13,7 @@ import (
 )
 
 // tOID is the type of model.ObjectID
-var tOID = reflect.TypeOf(model.NewObjectID())
+var tOID = reflect.TypeOf(model.NewObjectId())
 
 // toTime is the type of golang time.Time
 var toTime = reflect.TypeOf(time.Time{})

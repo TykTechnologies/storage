@@ -1,29 +1,25 @@
-//go:build mongo
-// +build mongo
-
 package mgo
 
 import (
 	"errors"
 	"testing"
 
+	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/utils"
 
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/mgo.v2"
-
-	"github.com/TykTechnologies/storage/persistent/internal/model"
 )
 
 func TestConnect(t *testing.T) {
 	tests := []struct {
 		name string
-		opts *model.ClientOpts
+		opts *types.ClientOpts
 		want error
 	}{
 		{
 			name: "valid connection_string",
-			opts: &model.ClientOpts{
+			opts: &types.ClientOpts{
 				ConnectionString: "mongodb://localhost:27017/test",
 				UseSSL:           false,
 				Type:             "mongodb",
@@ -32,7 +28,7 @@ func TestConnect(t *testing.T) {
 		},
 		{
 			name: "invalid connection_string",
-			opts: &model.ClientOpts{
+			opts: &types.ClientOpts{
 				ConnectionString:  "invalid_conn_string",
 				UseSSL:            false,
 				Type:              "mongodb",
@@ -42,7 +38,7 @@ func TestConnect(t *testing.T) {
 		},
 		{
 			name: "unsupported connection URL opts",
-			opts: &model.ClientOpts{
+			opts: &types.ClientOpts{
 				ConnectionString: "mongodb://localhost:27017/test?foo=1",
 				UseSSL:           false,
 				Type:             "mongodb",
@@ -51,7 +47,7 @@ func TestConnect(t *testing.T) {
 		},
 		{
 			name: "valid connection_string and invalid tls config",
-			opts: &model.ClientOpts{
+			opts: &types.ClientOpts{
 				ConnectionString: "mongodb://localhost:27017/test",
 				UseSSL:           true,
 				Type:             "mongodb",
@@ -98,7 +94,7 @@ func TestSetSessionConsistency(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			lc := &lifeCycle{}
-			opts := &model.ClientOpts{
+			opts := &types.ClientOpts{
 				ConnectionString:   "mongodb://localhost:27017/test",
 				UseSSL:             false,
 				Type:               "mongodb",
@@ -120,7 +116,7 @@ func TestSetSessionConsistency(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	lc := &lifeCycle{}
-	opts := &model.ClientOpts{
+	opts := &types.ClientOpts{
 		ConnectionString: "mongodb://localhost:27017/test",
 	}
 
@@ -140,7 +136,7 @@ func TestClose(t *testing.T) {
 
 func TestDBType(t *testing.T) {
 	lc := &lifeCycle{}
-	opts := &model.ClientOpts{
+	opts := &types.ClientOpts{
 		ConnectionString: "mongodb://localhost:27017/test",
 	}
 

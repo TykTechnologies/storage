@@ -1,36 +1,30 @@
-//go:build mongo
-// +build mongo
-
 package mongo
 
 import (
 	"encoding/json"
 	"testing"
 
-	"github.com/TykTechnologies/storage/persistent/dbm"
-
+	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-
-	"github.com/TykTechnologies/storage/persistent/id"
 )
 
 func TestBuildQuery(t *testing.T) {
 	tcs := []struct {
 		testName string
-		input    dbm.DBM
+		input    model.DBM
 		output   bson.M
 	}{
 		{
 			testName: "Test empty input",
-			input:    dbm.DBM{},
+			input:    model.DBM{},
 			output:   bson.M{},
 		},
 		{
 			testName: "Test with nested query",
-			input: dbm.DBM{
-				"testName": dbm.DBM{
+			input: model.DBM{
+				"testName": model.DBM{
 					"$ne": "123",
 				},
 			},
@@ -42,7 +36,7 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			testName: "Test with $in query",
-			input: dbm.DBM{
+			input: model.DBM{
 				"age": []int{20, 30, 40},
 			},
 			output: bson.M{
@@ -53,16 +47,16 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			testName: "Test with _id",
-			input: dbm.DBM{
-				"_id": id.ObjectIdHex("61634c7b5f46cc8c296edc36"),
+			input: model.DBM{
+				"_id": model.ObjectIdHex("61634c7b5f46cc8c296edc36"),
 			},
 			output: bson.M{
-				"_id": id.ObjectIdHex("61634c7b5f46cc8c296edc36"),
+				"_id": model.ObjectIdHex("61634c7b5f46cc8c296edc36"),
 			},
 		},
 		{
 			testName: "Test with invalid _id",
-			input: dbm.DBM{
+			input: model.DBM{
 				"_id": "invalid_id",
 			},
 			output: bson.M{
@@ -71,8 +65,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			testName: "Test with $regex",
-			input: dbm.DBM{
-				"testName": dbm.DBM{
+			input: model.DBM{
+				"testName": model.DBM{
 					"$regex": "tyk.com$",
 				},
 			},
@@ -84,8 +78,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			testName: "Test with $in",
-			input: dbm.DBM{
-				"age": dbm.DBM{
+			input: model.DBM{
+				"age": model.DBM{
 					"$in": []int{25, 30, 35},
 				},
 			},
@@ -97,8 +91,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			testName: "Test with $i",
-			input: dbm.DBM{
-				"testName": dbm.DBM{
+			input: model.DBM{
+				"testName": model.DBM{
 					"$i": "tyk",
 				},
 			},
@@ -111,8 +105,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			testName: "Test with $text",
-			input: dbm.DBM{
-				"testName": dbm.DBM{
+			input: model.DBM{
+				"testName": model.DBM{
 					"$text": "tyk",
 				},
 			},
@@ -127,8 +121,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			testName: "Test with unsupported operator",
-			input: dbm.DBM{
-				"testName": dbm.DBM{
+			input: model.DBM{
+				"testName": model.DBM{
 					"$foo": "bar",
 				},
 			},
@@ -140,22 +134,22 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			testName: "Test with slice of strings and _id key",
-			input: dbm.DBM{
+			input: model.DBM{
 				"_id": []string{"61634c7b5f46cc8c296edc36", "61634c7b5f46cc8c296edc37"},
 			},
 			output: bson.M{
 				"_id": bson.M{
-					"$in": []id.ObjectId{
-						id.ObjectIdHex("61634c7b5f46cc8c296edc36"),
-						id.ObjectIdHex("61634c7b5f46cc8c296edc37"),
+					"$in": []model.ObjectId{
+						model.ObjectIdHex("61634c7b5f46cc8c296edc36"),
+						model.ObjectIdHex("61634c7b5f46cc8c296edc37"),
 					},
 				},
 			},
 		},
 		{
 			testName: "Test with $min",
-			input: dbm.DBM{
-				"age": dbm.DBM{
+			input: model.DBM{
+				"age": model.DBM{
 					"$min": 20,
 				},
 			},
@@ -167,8 +161,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			testName: "Test with $max",
-			input: dbm.DBM{
-				"age": dbm.DBM{
+			input: model.DBM{
+				"age": model.DBM{
 					"$max": 20,
 				},
 			},
@@ -180,8 +174,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			testName: "Test with $inc",
-			input: dbm.DBM{
-				"age": dbm.DBM{
+			input: model.DBM{
+				"age": model.DBM{
 					"$inc": 20,
 				},
 			},
@@ -193,8 +187,8 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			testName: "Test with $set",
-			input: dbm.DBM{
-				"age": dbm.DBM{
+			input: model.DBM{
+				"age": model.DBM{
 					"$set": 20,
 				},
 			},
@@ -206,7 +200,7 @@ func TestBuildQuery(t *testing.T) {
 		},
 		{
 			testName: "Default value",
-			input: dbm.DBM{
+			input: model.DBM{
 				"testName":  "John",
 				"age":       30,
 				"is_active": true,

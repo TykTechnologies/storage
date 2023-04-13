@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mongo
 
 import (
@@ -14,7 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 
-	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/utils"
 )
 
@@ -49,20 +46,20 @@ func TestMongoOptsBuilder(t *testing.T) {
 	validMongoURL := "mongodb://localhost:27017"
 
 	defaultClient := options.Client()
-	defaultClient.SetTimeout(model.DEFAULT_CONN_TIMEOUT)
+	defaultClient.SetTimeout(types.DEFAULT_CONN_TIMEOUT)
 	defaultClient.ApplyURI(validMongoURL)
 	defaultClient.SetReadPreference(readpref.Primary())
 
 	tcs := []struct {
 		name           string
-		opts           *model.ClientOpts
+		opts           *types.ClientOpts
 		expectedOpts   func() *options.ClientOptions
 		shouldErr      bool
 		expectedErrMsg string
 	}{
 		{
 			name: "default options",
-			opts: &model.ClientOpts{
+			opts: &types.ClientOpts{
 				ConnectionString: validMongoURL,
 			},
 			expectedOpts: func() *options.ClientOptions {
@@ -73,7 +70,7 @@ func TestMongoOptsBuilder(t *testing.T) {
 		},
 		{
 			name: "use SSL",
-			opts: &model.ClientOpts{
+			opts: &types.ClientOpts{
 				ConnectionString: validMongoURL,
 				UseSSL:           true,
 			},
@@ -86,7 +83,7 @@ func TestMongoOptsBuilder(t *testing.T) {
 		},
 		{
 			name: "connection timeout",
-			opts: &model.ClientOpts{
+			opts: &types.ClientOpts{
 				ConnectionString:  validMongoURL,
 				ConnectionTimeout: 20,
 			},
@@ -99,7 +96,7 @@ func TestMongoOptsBuilder(t *testing.T) {
 		},
 		{
 			name: "invalid URI",
-			opts: &model.ClientOpts{
+			opts: &types.ClientOpts{
 				ConnectionString: "invalid-uri",
 			},
 			expectedOpts: func() *options.ClientOptions {
@@ -125,12 +122,12 @@ func TestMongoOptsBuilder(t *testing.T) {
 func TestConnect(t *testing.T) {
 	tests := []struct {
 		name string
-		opts *model.ClientOpts
+		opts *types.ClientOpts
 		want error
 	}{
 		{
 			name: "valid connection_string",
-			opts: &model.ClientOpts{
+			opts: &types.ClientOpts{
 				ConnectionString: "mongodb://localhost:27017/test",
 				UseSSL:           false,
 				Type:             "mongodb",
@@ -139,7 +136,7 @@ func TestConnect(t *testing.T) {
 		},
 		{
 			name: "invalid connection_string",
-			opts: &model.ClientOpts{
+			opts: &types.ClientOpts{
 				ConnectionString: "invalid_conn_string",
 				UseSSL:           false,
 				Type:             "mongodb",
@@ -148,7 +145,7 @@ func TestConnect(t *testing.T) {
 		},
 		{
 			name: "valid connection_string and invalid tls config",
-			opts: &model.ClientOpts{
+			opts: &types.ClientOpts{
 				ConnectionString: "mongodb://localhost:27017/test",
 				UseSSL:           true,
 				Type:             "mongodb",
@@ -171,7 +168,7 @@ func TestConnect(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	lc := &lifeCycle{}
-	opts := &model.ClientOpts{
+	opts := &types.ClientOpts{
 		ConnectionString: "mongodb://localhost:27017/test",
 	}
 
@@ -190,7 +187,7 @@ func TestClose(t *testing.T) {
 
 func TestDBType(t *testing.T) {
 	lc := &lifeCycle{}
-	opts := &model.ClientOpts{
+	opts := &types.ClientOpts{
 		ConnectionString: "mongodb://localhost:27017/test",
 	}
 
