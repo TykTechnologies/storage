@@ -57,12 +57,12 @@ func handleQueryValue(key string, value interface{}, search bson.M) {
 		strSlice, isStrSlice := value.([]string)
 
 		if isStrSlice && key == "_id" {
-			objectIDs := []model.ObjectId{}
+			ObjectIDs := []model.ObjectID{}
 			for _, str := range strSlice {
-				objectIDs = append(objectIDs, model.ObjectIdHex(str))
+				ObjectIDs = append(ObjectIDs, model.ObjectIDHex(str))
 			}
 
-			search[key] = bson.M{"$in": objectIDs}
+			search[key] = bson.M{"$in": ObjectIDs}
 
 			return
 		}
@@ -114,7 +114,7 @@ func buildQuery(query model.DBM) bson.M {
 		case "_sort", "_collection", "_limit", "_offset", "_date_sharding":
 			continue
 		case "_id":
-			if id, ok := value.(model.ObjectId); ok {
+			if id, ok := value.(model.ObjectID); ok {
 				search[key] = id
 				continue
 			}

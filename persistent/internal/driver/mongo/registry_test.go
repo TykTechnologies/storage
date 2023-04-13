@@ -19,17 +19,17 @@ func TestCreateCustomRegistry(t *testing.T) {
 
 	build := customRegistry.Build()
 
-	encoder, err := build.LookupEncoder(reflect.TypeOf(model.NewObjectId()))
+	encoder, err := build.LookupEncoder(reflect.TypeOf(model.NewObjectID()))
 	assert.Nil(t, err)
 	assert.NotNil(t, encoder)
 
-	decoder, err := build.LookupDecoder(reflect.TypeOf(model.NewObjectId()))
+	decoder, err := build.LookupDecoder(reflect.TypeOf(model.NewObjectID()))
 	assert.Nil(t, err)
 	assert.NotNil(t, decoder)
 }
 
 type testStruct struct {
-	Id                model.ObjectId
+	Id                model.ObjectID
 	MapVal            map[string]interface{}
 	InterfaceSliceVal []interface{}
 	StringSliceVal    []string
@@ -37,11 +37,11 @@ type testStruct struct {
 	Timestamp         time.Time
 }
 
-func (d *testStruct) GetObjectId() model.ObjectId {
+func (d *testStruct) GetObjectID() model.ObjectID {
 	return d.Id
 }
 
-func (d *testStruct) SetObjectId(id model.ObjectId) {
+func (d *testStruct) SetObjectID(id model.ObjectID) {
 	d.Id = id
 }
 
@@ -55,7 +55,7 @@ func TestStructValues(t *testing.T) {
 
 	currentTime := time.Date(2023, 0o4, 0o4, 10, 0, 0, 0, time.Local)
 	testObj := testStruct{
-		Id:        model.NewObjectId(),
+		Id:        model.NewObjectID(),
 		DBMMap:    []model.DBM{{"test": "a"}},
 		Timestamp: currentTime,
 	}

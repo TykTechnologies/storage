@@ -56,8 +56,8 @@ func (d *mgoDriver) Insert(ctx context.Context, rows ...model.DBObject) error {
 	bulk := col.Bulk()
 
 	for _, row := range rows {
-		if row.GetObjectId() == "" {
-			row.SetObjectId(model.NewObjectId())
+		if row.GetObjectID() == "" {
+			row.SetObjectID(model.NewObjectID())
 		}
 
 		bulk.Insert(row)
@@ -74,7 +74,7 @@ func (d *mgoDriver) Delete(ctx context.Context, row model.DBObject, queries ...m
 	}
 
 	if len(queries) == 0 {
-		queries = append(queries, model.DBM{"_id": row.GetObjectId()})
+		queries = append(queries, model.DBM{"_id": row.GetObjectID()})
 	}
 
 	sess := d.session.Copy()
@@ -97,7 +97,7 @@ func (d *mgoDriver) Update(ctx context.Context, row model.DBObject, queries ...m
 	}
 
 	if len(queries) == 0 {
-		queries = append(queries, model.DBM{"_id": row.GetObjectId()})
+		queries = append(queries, model.DBM{"_id": row.GetObjectID()})
 	}
 
 	sess := d.session.Copy()
@@ -126,7 +126,7 @@ func (d *mgoDriver) BulkUpdate(ctx context.Context, rows []model.DBObject, query
 
 	for i := range rows {
 		if len(query) == 0 {
-			bulk.Update(bson.M{"_id": rows[i].GetObjectId()}, bson.M{"$set": rows[i]})
+			bulk.Update(bson.M{"_id": rows[i].GetObjectID()}, bson.M{"$set": rows[i]})
 
 			continue
 		}
@@ -455,10 +455,10 @@ func (d *mgoDriver) Aggregate(ctx context.Context, row model.DBObject, query []m
 		if !iter.Next(&result) {
 			break
 		}
-		// Parsing _id from bson.ObjectId to model.ObjectId
+		// Parsing _id from bson.ObjectID to model.ObjectID
 		resultId, ok := result["_id"].(bson.ObjectId)
 		if ok {
-			result["_id"] = model.ObjectIdHex(resultId.Hex())
+			result["_id"] = model.ObjectIDHex(resultId.Hex())
 		}
 
 		resultSlice = append(resultSlice, result)

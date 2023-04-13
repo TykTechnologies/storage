@@ -24,7 +24,7 @@ import (
 )
 
 type dummyDBObject struct {
-	Id                model.ObjectId    `bson:"_id,omitempty"`
+	Id                model.ObjectID    `bson:"_id,omitempty"`
 	Name              string            `bson:"name"`
 	Email             string            `bson:"email"`
 	Country           dummyCountryField `bson:"country"`
@@ -37,11 +37,11 @@ type dummyCountryField struct {
 	Continent   string `bson:"continent"`
 }
 
-func (d *dummyDBObject) GetObjectId() model.ObjectId {
+func (d *dummyDBObject) GetObjectID() model.ObjectID {
 	return d.Id
 }
 
-func (d *dummyDBObject) SetObjectId(id model.ObjectId) {
+func (d *dummyDBObject) SetObjectID(id model.ObjectID) {
 	d.Id = id
 }
 
@@ -126,12 +126,12 @@ func TestInsert(t *testing.T) {
 
 		// check if the object was inserted
 		var result dummyDBObject
-		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectId()})
+		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
 		assert.Nil(t, err)
 
 		assert.Equal(t, object.Name, result.Name)
 		assert.Equal(t, object.Email, result.Email)
-		assert.Equal(t, object.GetObjectId(), result.GetObjectId())
+		assert.Equal(t, object.GetObjectID(), result.GetObjectID())
 	})
 	t.Run("inserting multiple objects", func(t *testing.T) {
 		objects := []model.DBObject{}
@@ -140,7 +140,7 @@ func TestInsert(t *testing.T) {
 			objects = append(objects, &dummyDBObject{
 				Name:  "test" + strconv.Itoa(i),
 				Email: "email@email.com",
-				Id:    model.NewObjectId(),
+				Id:    model.NewObjectID(),
 			})
 		}
 
@@ -156,7 +156,7 @@ func TestInsert(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Len(t, result, len(objects))
 		for i, obj := range objects {
-			assert.Equal(t, obj.GetObjectId(), result[i].GetObjectId())
+			assert.Equal(t, obj.GetObjectID(), result[i].GetObjectID())
 		}
 	})
 
@@ -182,25 +182,25 @@ func TestDelete(t *testing.T) {
 
 		// validates that the object was inserted
 		var result dummyDBObject
-		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectId()})
+		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
 		assert.Nil(t, err)
 		assert.Equal(t, object.Name, result.Name)
 		assert.Equal(t, object.Email, result.Email)
-		assert.Equal(t, object.GetObjectId(), result.GetObjectId())
+		assert.Equal(t, object.GetObjectID(), result.GetObjectID())
 
 		// delete the object from the database
 		err = driver.Delete(ctx, object)
 		assert.Nil(t, err)
 
 		// check if the object was deleted
-		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectId()})
+		err = driver.Query(ctx, object, &result, model.DBM{"_id": object.GetObjectID()})
 		assert.NotNil(t, err)
 		assert.True(t, utils.IsErrNoRows(err))
 	})
 
 	t.Run("deleting a non existent object", func(t *testing.T) {
 		// delete the object from the database
-		object.SetObjectId(model.NewObjectId())
+		object.SetObjectID(model.NewObjectID())
 		err := driver.Delete(ctx, object)
 		assert.NotNil(t, err)
 		assert.True(t, utils.IsErrNoRows(err))
@@ -213,33 +213,33 @@ func TestCount(t *testing.T) {
 	dummyData := []dummyDBObject{
 		{
 			Name: "John", Email: "john@example.com",
-			Id:      model.NewObjectId(),
+			Id:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
 			Age:     10,
 		},
 		{
 			Name:  "Jane",
-			Email: "jane@tyk.com", Id: model.NewObjectId(),
+			Email: "jane@tyk.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"},
 			Age:     8,
 		},
 		{
 			Name:    "Bob",
 			Email:   "bob@example.com",
-			Id:      model.NewObjectId(),
+			Id:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"},
 			Age:     25,
 		},
 		{
 			Name: "Alice", Email: "alice@tyk.com",
-			Id:      model.NewObjectId(),
+			Id:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
 			Age:     45,
 		},
 		{
 			Name:    "Peter",
 			Email:   "peter@test.com",
-			Id:      model.NewObjectId(),
+			Id:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"},
 			Age:     12,
 		},
@@ -367,23 +367,23 @@ func TestQuery(t *testing.T) {
 
 	dummyData := []dummyDBObject{
 		{
-			Name: "John", Email: "john@example.com", Id: model.NewObjectId(),
+			Name: "John", Email: "john@example.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10,
 		},
 		{
-			Name: "Jane", Email: "jane@tyk.com", Id: model.NewObjectId(),
+			Name: "Jane", Email: "jane@tyk.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8,
 		},
 		{
-			Name: "Bob", Email: "bob@example.com", Id: model.NewObjectId(),
+			Name: "Bob", Email: "bob@example.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25,
 		},
 		{
-			Name: "Alice", Email: "alice@tyk.com", Id: model.NewObjectId(),
+			Name: "Alice", Email: "alice@tyk.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45,
 		},
 		{
-			Name: "Peter", Email: "peter@test.com", Id: model.NewObjectId(),
+			Name: "Peter", Email: "peter@test.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12,
 		},
 	}
@@ -512,7 +512,7 @@ func TestQuery(t *testing.T) {
 			args: args{
 				result: &[]dummyDBObject{},
 				query: model.DBM{
-					"_id": dummyData[0].GetObjectId(),
+					"_id": dummyData[0].GetObjectID(),
 				},
 			},
 			expectedResult: &[]dummyDBObject{dummyData[0]},
@@ -523,7 +523,7 @@ func TestQuery(t *testing.T) {
 				result: &[]dummyDBObject{},
 				query: model.DBM{
 					"_id": model.DBM{
-						"$in": []model.ObjectId{dummyData[0].GetObjectId(), dummyData[1].GetObjectId()},
+						"$in": []model.ObjectID{dummyData[0].GetObjectID(), dummyData[1].GetObjectID()},
 					},
 				},
 			},
@@ -568,13 +568,13 @@ func TestUpdate(t *testing.T) {
 
 		// check if the object was updated
 		result := &dummyDBObject{}
-		result.SetObjectId(object.GetObjectId())
-		err = driver.Query(ctx, object, result, model.DBM{"_id": result.GetObjectId()})
+		result.SetObjectID(object.GetObjectID())
+		err = driver.Query(ctx, object, result, model.DBM{"_id": result.GetObjectID()})
 		assert.Nil(t, err)
 
 		assert.Equal(t, object.Name, result.Name)
 		assert.Equal(t, object.Email, result.Email)
-		assert.Equal(t, object.GetObjectId(), result.GetObjectId())
+		assert.Equal(t, object.GetObjectID(), result.GetObjectID())
 	})
 
 	t.Run("Updating a non existing obj", func(t *testing.T) {
@@ -583,7 +583,7 @@ func TestUpdate(t *testing.T) {
 
 		defer driver.Drop(ctx, object)
 
-		object.SetObjectId(model.NewObjectId())
+		object.SetObjectID(model.NewObjectID())
 
 		err := driver.Update(ctx, object)
 		assert.NotNil(t, err)
@@ -606,23 +606,23 @@ func TestBulkUpdate(t *testing.T) {
 
 	dummyData := []dummyDBObject{
 		{
-			Name: "John", Email: "john@example.com", Id: model.NewObjectId(),
+			Name: "John", Email: "john@example.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10,
 		},
 		{
-			Name: "Jane", Email: "jane@tyk.com", Id: model.NewObjectId(),
+			Name: "Jane", Email: "jane@tyk.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8,
 		},
 		{
-			Name: "Bob", Email: "bob@example.com", Id: model.NewObjectId(),
+			Name: "Bob", Email: "bob@example.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25,
 		},
 		{
-			Name: "Alice", Email: "alice@tyk.com", Id: model.NewObjectId(),
+			Name: "Alice", Email: "alice@tyk.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45,
 		},
 		{
-			Name: "Peter", Email: "peter@test.com", Id: model.NewObjectId(),
+			Name: "Peter", Email: "peter@test.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12,
 		},
 	}
@@ -719,7 +719,7 @@ func TestBulkUpdate(t *testing.T) {
 					Age:     dummyData[1].Age,
 				},
 			},
-			query: []model.DBM{{"_id": dummyData[0].GetObjectId()}, {"name": "Jane"}},
+			query: []model.DBM{{"_id": dummyData[0].GetObjectID()}, {"name": "Jane"}},
 		},
 		{
 			name:          "update error - empty rows",
@@ -784,33 +784,33 @@ func TestUpdateAll(t *testing.T) {
 	dummyData := []dummyDBObject{
 		{
 			Name: "John", Email: "john@example.com",
-			Id:      model.NewObjectId(),
+			Id:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
 			Age:     10,
 		},
 		{
 			Name:  "Jane",
-			Email: "jane@tyk.com", Id: model.NewObjectId(),
+			Email: "jane@tyk.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"},
 			Age:     8,
 		},
 		{
 			Name:    "Bob",
 			Email:   "bob@example.com",
-			Id:      model.NewObjectId(),
+			Id:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"},
 			Age:     25,
 		},
 		{
 			Name: "Alice", Email: "alice@tyk.com",
-			Id:      model.NewObjectId(),
+			Id:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"},
 			Age:     45,
 		},
 		{
 			Name:    "Peter",
 			Email:   "peter@test.com",
-			Id:      model.NewObjectId(),
+			Id:      model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"},
 			Age:     12,
 		},
@@ -953,23 +953,23 @@ func TestDeleteWithQuery(t *testing.T) {
 
 	dummyData := []dummyDBObject{
 		{
-			Name: "John", Email: "john@example.com", Id: model.NewObjectId(),
+			Name: "John", Email: "john@example.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 10,
 		},
 		{
-			Name: "Jane", Email: "jane@tyk.com", Id: model.NewObjectId(),
+			Name: "Jane", Email: "jane@tyk.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry2", Continent: "TestContinent2"}, Age: 8,
 		},
 		{
-			Name: "Bob", Email: "bob@example.com", Id: model.NewObjectId(),
+			Name: "Bob", Email: "bob@example.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry3", Continent: "TestContinent3"}, Age: 25,
 		},
 		{
-			Name: "Alice", Email: "alice@tyk.com", Id: model.NewObjectId(),
+			Name: "Alice", Email: "alice@tyk.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry", Continent: "TestContinent"}, Age: 45,
 		},
 		{
-			Name: "Peter", Email: "peter@test.com", Id: model.NewObjectId(),
+			Name: "Peter", Email: "peter@test.com", Id: model.NewObjectID(),
 			Country: dummyCountryField{CountryName: "TestCountry4", Continent: "TestContinent4"}, Age: 12,
 		},
 	}
@@ -1018,7 +1018,7 @@ func TestDeleteWithQuery(t *testing.T) {
 		{
 			name: "delete by id",
 			query: []model.DBM{{
-				"_id": dummyData[0].GetObjectId(),
+				"_id": dummyData[0].GetObjectID(),
 			}},
 			expectedNewValues: []dummyDBObject{dummyData[1], dummyData[2], dummyData[3], dummyData[4]},
 		},
@@ -1097,7 +1097,7 @@ func TestDeleteWithQuery(t *testing.T) {
 				assert.Nil(t, err)
 			}
 
-			object.SetObjectId(model.NewObjectId())
+			object.SetObjectID(model.NewObjectID())
 			err := driver.Delete(ctx, object, tt.query...)
 			if tt.errorExpected == nil {
 				assert.Nil(t, err)
@@ -1593,7 +1593,7 @@ func TestDBTableStats(t *testing.T) {
 			want: model.DBM(nil), // official driver returns an empty object if there is an error
 			row: func() model.DBObject {
 				return &dummyDBObject{
-					Id:                model.NewObjectId(),
+					Id:                model.NewObjectID(),
 					invalidCollection: true,
 				}
 			},
@@ -1691,7 +1691,7 @@ func TestDBTableStats(t *testing.T) {
 }
 
 type SalesExample struct {
-	ID    model.ObjectId `bson:"_id,omitempty"`
+	ID    model.ObjectID `bson:"_id,omitempty"`
 	Items []Items        `bson:"items"`
 }
 
@@ -1707,11 +1707,11 @@ func (SalesExample) TableName() string {
 	return d.TableName()
 }
 
-func (s *SalesExample) SetObjectId(id model.ObjectId) {
+func (s *SalesExample) SetObjectID(id model.ObjectID) {
 	s.ID = id
 }
 
-func (s SalesExample) GetObjectId() model.ObjectId {
+func (s SalesExample) GetObjectID() model.ObjectID {
 	return s.ID
 }
 
@@ -1725,7 +1725,7 @@ func TestAggregate(t *testing.T) {
 		Country: dummyCountryField{CountryName: "test_country", Continent: "test_continent"},
 		Age:     10,
 	}
-	object.SetObjectId(model.NewObjectId())
+	object.SetObjectID(model.NewObjectID())
 
 	// Insert the object into the database
 	ctx := context.Background()
@@ -1755,11 +1755,11 @@ func TestAggregate(t *testing.T) {
 			name: "aggregating one object",
 			pipeline: []model.DBM{
 				{
-					"$match": model.DBM{"_id": object.GetObjectId()},
+					"$match": model.DBM{"_id": object.GetObjectID()},
 				},
 			},
 			expectedResult: []model.DBM{{
-				"_id":   object.GetObjectId(),
+				"_id":   object.GetObjectID(),
 				"name":  object.Name,
 				"email": object.Email,
 				"country": model.DBM{
@@ -1789,7 +1789,7 @@ func TestAggregate(t *testing.T) {
 			},
 			expectedResult: []model.DBM{
 				{
-					"_id":  object2.GetObjectId(),
+					"_id":  object2.GetObjectID(),
 					"name": object2.Name,
 					"country": model.DBM{
 						"continent":    object2.Country.Continent,
@@ -1834,7 +1834,7 @@ func TestAggregate(t *testing.T) {
 				},
 			},
 			expectedResult: []model.DBM{{
-				"_id":  object2.GetObjectId(),
+				"_id":  object2.GetObjectID(),
 				"name": object2.Name,
 				"country": model.DBM{
 					"continent":    object2.Country.Continent,
@@ -1853,7 +1853,7 @@ func TestAggregate(t *testing.T) {
 			},
 			expectedResult: []model.DBM{
 				{
-					"_id":   object.GetObjectId(),
+					"_id":   object.GetObjectID(),
 					"name":  object.Name,
 					"email": object.Email,
 					"country": model.DBM{
@@ -1863,7 +1863,7 @@ func TestAggregate(t *testing.T) {
 					"age": object.Age,
 				},
 				{
-					"_id":   object2.GetObjectId(),
+					"_id":   object2.GetObjectID(),
 					"name":  object2.Name,
 					"email": object2.Email,
 					"country": model.DBM{
@@ -1906,7 +1906,7 @@ func TestAggregate(t *testing.T) {
 			},
 			expectedResult: []model.DBM{
 				{
-					"_id":   object.GetObjectId(),
+					"_id":   object.GetObjectID(),
 					"name":  object.Name,
 					"email": object.Email,
 					"country": model.DBM{
@@ -1917,7 +1917,7 @@ func TestAggregate(t *testing.T) {
 					"addresses": []interface{}{},
 				},
 				{
-					"_id":   object2.GetObjectId(),
+					"_id":   object2.GetObjectID(),
 					"name":  object2.Name,
 					"email": object2.Email,
 					"country": model.DBM{
@@ -1952,7 +1952,7 @@ func TestAggregate(t *testing.T) {
 		defer cleanDB(t)
 		// Let's create a 2 "sales" objects
 		sales1 := &SalesExample{
-			ID: model.NewObjectId(),
+			ID: model.NewObjectID(),
 			Items: []Items{
 				{
 					Name:     "abc",
@@ -1969,7 +1969,7 @@ func TestAggregate(t *testing.T) {
 			},
 		}
 		sales2 := &SalesExample{
-			ID: model.NewObjectId(),
+			ID: model.NewObjectID(),
 			Items: []Items{
 				{
 					Name:     "xyz",

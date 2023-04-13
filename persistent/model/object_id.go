@@ -11,55 +11,55 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-type ObjectId string
+type ObjectID string
 
-func NewObjectId() ObjectId {
-	return ObjectId(bson.NewObjectId())
+func NewObjectID() ObjectID {
+	return ObjectID(bson.NewObjectId())
 }
 
-func NewObjectIdWithTime(t time.Time) ObjectId {
-	return ObjectId(bson.NewObjectIdWithTime(t))
+func NewObjectIDWithTime(t time.Time) ObjectID {
+	return ObjectID(bson.NewObjectIdWithTime(t))
 }
 
 // Valid returns true if id is valid. A valid id must contain exactly 12 bytes.
-func (id ObjectId) Valid() bool {
+func (id ObjectID) Valid() bool {
 	return len(id) == 12
 }
 
-func (id ObjectId) Hex() string {
+func (id ObjectID) Hex() string {
 	return hex.EncodeToString([]byte(id))
 }
 
-func (id ObjectId) String() string {
-	return fmt.Sprintf("ObjectId(%q)", id.Hex())
+func (id ObjectID) String() string {
+	return fmt.Sprintf("ObjectID(%q)", id.Hex())
 }
 
-func (id ObjectId) Timestamp() time.Time {
+func (id ObjectID) Timestamp() time.Time {
 	bytes := []byte(string(id)[0:4])
 	secs := int64(binary.BigEndian.Uint32(bytes))
 
 	return time.Unix(secs, 0)
 }
 
-func (id ObjectId) MarshalJSON() ([]byte, error) {
+func (id ObjectID) MarshalJSON() ([]byte, error) {
 	return json.Marshal(id.Hex())
 }
 
-func (id *ObjectId) UnmarshalJSON(buf []byte) error {
+func (id *ObjectID) UnmarshalJSON(buf []byte) error {
 	var b bson.ObjectId
 	err := b.UnmarshalJSON(buf)
 
-	*id = ObjectId(string(b))
+	*id = ObjectID(string(b))
 
 	return err
 }
 
-// ObjectIdHex useful to create an object ID from the string
-func ObjectIdHex(id string) ObjectId {
-	return ObjectId(bson.ObjectIdHex(id))
+// ObjectIDHex useful to create an object ID from the string
+func ObjectIDHex(id string) ObjectID {
+	return ObjectID(bson.ObjectIdHex(id))
 }
 
-func IsObjectIdHex(s string) bool {
+func IsObjectIDHex(s string) bool {
 	if len(s) != 24 {
 		return false
 	}
@@ -70,16 +70,16 @@ func IsObjectIdHex(s string) bool {
 }
 
 // GetBSON only used by mgo
-func (id ObjectId) GetBSON() (interface{}, error) {
+func (id ObjectID) GetBSON() (interface{}, error) {
 	return bson.ObjectId(id), nil
 }
 
 // Value is being used by SQL drivers
-func (j ObjectId) Value() (driver.Value, error) {
+func (j ObjectID) Value() (driver.Value, error) {
 	return bson.ObjectId(j).Hex(), nil
 }
 
-func (j *ObjectId) Scan(value interface{}) error {
+func (j *ObjectID) Scan(value interface{}) error {
 	var bytes []byte
 	switch v := value.(type) {
 	case []byte:
@@ -92,7 +92,7 @@ func (j *ObjectId) Scan(value interface{}) error {
 
 	// reflect magic to update existing string without creating new one
 	if len(bytes) > 0 {
-		bs := ObjectId(bson.ObjectIdHex(string(bytes)))
+		bs := ObjectID(bson.ObjectIdHex(string(bytes)))
 		*j = bs
 	}
 
