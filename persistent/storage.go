@@ -7,7 +7,7 @@ import (
 
 	"github.com/TykTechnologies/storage/persistent/internal/driver/mgo"
 
-	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"github.com/TykTechnologies/storage/persistent/internal/types"
 )
 
 const (
@@ -16,13 +16,13 @@ const (
 )
 
 type (
-	ClientOpts        model.ClientOpts
-	PersistentStorage model.PersistentStorage
+	ClientOpts        types.ClientOpts
+	PersistentStorage types.PersistentStorage
 )
 
 // NewPersistentStorage returns a persistent storage object that uses the given driver
-func NewPersistentStorage(opts *ClientOpts) (model.PersistentStorage, error) {
-	clientOpts := model.ClientOpts(*opts)
+func NewPersistentStorage(opts *ClientOpts) (types.PersistentStorage, error) {
+	clientOpts := types.ClientOpts(*opts)
 	switch opts.Type {
 	case OfficialMongo:
 		return mongo.NewMongoDriver(&clientOpts)

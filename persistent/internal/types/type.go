@@ -1,4 +1,4 @@
-package model
+package types
 
 import (
 	"time"
@@ -23,8 +23,8 @@ type DBTable interface {
 	TableName() string
 }
 
-// ObjectID interface to be implemented by each db driver
-type ObjectID interface {
+// ObjectId interface to be implemented by each db driver
+type ObjectId interface {
 	Hex() string
 	String() string
 	Timestamp() time.Time
@@ -35,6 +35,6 @@ type ObjectID interface {
 }
 
 type DBObject interface {
-	DBID() ObjectID
-	SetDBID(id ObjectID)
+	DBID() ObjectId
+	SetDBID(id ObjectId)
 }

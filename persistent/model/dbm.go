@@ -1,3 +1,3 @@
-package dbm
+package model
 
 type DBM map[string]interface{}

@@ -10,8 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/dbm"
-	"github.com/TykTechnologies/storage/persistent/id"
+	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,29 +19,29 @@ func TestCreateCustomRegistry(t *testing.T) {
 
 	build := customRegistry.Build()
 
-	encoder, err := build.LookupEncoder(reflect.TypeOf(id.NewObjectID()))
+	encoder, err := build.LookupEncoder(reflect.TypeOf(model.NewObjectId()))
 	assert.Nil(t, err)
 	assert.NotNil(t, encoder)
 
-	decoder, err := build.LookupDecoder(reflect.TypeOf(id.NewObjectID()))
+	decoder, err := build.LookupDecoder(reflect.TypeOf(model.NewObjectId()))
 	assert.Nil(t, err)
 	assert.NotNil(t, decoder)
 }
 
 type testStruct struct {
-	Id                id.ObjectId
+	Id                model.ObjectId
 	MapVal            map[string]interface{}
 	InterfaceSliceVal []interface{}
 	StringSliceVal    []string
-	DBMMap            []dbm.DBM
+	DBMMap            []model.DBM
 	Timestamp         time.Time
 }
 
-func (d *testStruct) GetObjectID() id.ObjectId {
+func (d *testStruct) GetObjectId() model.ObjectId {
 	return d.Id
 }
 
-func (d *testStruct) SetObjectID(id id.ObjectId) {
+func (d *testStruct) SetObjectId(id model.ObjectId) {
 	d.Id = id
 }
 
@@ -56,8 +55,8 @@ func TestStructValues(t *testing.T) {
 
 	currentTime := time.Date(2023, 0o4, 0o4, 10, 0, 0, 0, time.Local)
 	testObj := testStruct{
-		Id:        id.NewObjectID(),
-		DBMMap:    []dbm.DBM{{"test": "a"}},
+		Id:        model.NewObjectId(),
+		DBMMap:    []model.DBM{{"test": "a"}},
 		Timestamp: currentTime,
 	}
 
@@ -66,7 +65,7 @@ func TestStructValues(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	newObj := testStruct{}
-	err = driver.Query(ctx, &newObj, &newObj, dbm.DBM{})
+	err = driver.Query(ctx, &newObj, &newObj, model.DBM{})
 	assert.Nil(t, err)
 
 	byt, err := json.Marshal(&newObj)

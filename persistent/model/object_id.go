@@ -1,4 +1,4 @@
-package id
+package model
 
 import (
 	"database/sql/driver"
@@ -13,7 +13,7 @@ import (
 
 type ObjectId string
 
-func NewObjectID() ObjectId {
+func NewObjectId() ObjectId {
 	return ObjectId(bson.NewObjectId())
 }
 
@@ -31,7 +31,7 @@ func (id ObjectId) Hex() string {
 }
 
 func (id ObjectId) String() string {
-	return fmt.Sprintf("ObjectID(%q)", id.Hex())
+	return fmt.Sprintf("ObjectId(%q)", id.Hex())
 }
 
 func (id ObjectId) Timestamp() time.Time {

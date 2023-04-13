@@ -9,27 +9,25 @@ import (
 
 	"gopkg.in/mgo.v2"
 
-	"github.com/TykTechnologies/storage/persistent/dbm"
-	"github.com/TykTechnologies/storage/persistent/id"
-	"github.com/TykTechnologies/storage/persistent/index"
+	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/TykTechnologies/storage/persistent/utils"
 
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
-	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"github.com/TykTechnologies/storage/persistent/internal/types"
 )
 
-var _ model.PersistentStorage = &mgoDriver{}
+var _ types.PersistentStorage = &mgoDriver{}
 
 type mgoDriver struct {
 	*lifeCycle
 	lastConnAttempt time.Time
-	options         model.ClientOpts
+	options         types.ClientOpts
 }
 
 // NewMgoDriver returns an instance of the driver connected to the database.
-func NewMgoDriver(opts *model.ClientOpts) (*mgoDriver, error) {
+func NewMgoDriver(opts *types.ClientOpts) (*mgoDriver, error) {
 	newDriver := &mgoDriver{}
 
 	// create the db life cycle manager
@@ -45,9 +43,9 @@ func NewMgoDriver(opts *model.ClientOpts) (*mgoDriver, error) {
 	return newDriver, nil
 }
 
-func (d *mgoDriver) Insert(ctx context.Context, rows ...id.DBObject) error {
+func (d *mgoDriver) Insert(ctx context.Context, rows ...model.DBObject) error {
 	if len(rows) == 0 {
-		return errors.New(model.ErrorEmptyRow)
+		return errors.New(types.ErrorEmptyRow)
 	}
 
 	sess := d.session.Copy()
@@ -58,8 +56,8 @@ func (d *mgoDriver) Insert(ctx context.Context, rows ...id.DBObject) error {
 	bulk := col.Bulk()
 
 	for _, row := range rows {
-		if row.GetObjectID() == "" {
-			row.SetObjectID(id.NewObjectID())
+		if row.GetObjectId() == "" {
+			row.SetObjectId(model.NewObjectId())
 		}
 
 		bulk.Insert(row)
@@ -70,13 +68,13 @@ func (d *mgoDriver) Insert(ctx context.Context, rows ...id.DBObject) error {
 	return d.handleStoreError(err)
 }
 
-func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject, queries ...dbm.DBM) error {
+func (d *mgoDriver) Delete(ctx context.Context, row model.DBObject, queries ...model.DBM) error {
 	if len(queries) > 1 {
-		return errors.New(model.ErrorMultipleQueryForSingleRow)
+		return errors.New(types.ErrorMultipleQueryForSingleRow)
 	}
 
 	if len(queries) == 0 {
-		queries = append(queries, dbm.DBM{"_id": row.GetObjectID()})
+		queries = append(queries, model.DBM{"_id": row.GetObjectId()})
 	}
 
 	sess := d.session.Copy()
@@ -93,13 +91,13 @@ func (d *mgoDriver) Delete(ctx context.Context, row id.DBObject, queries ...dbm.
 	return d.handleStoreError(err)
 }
 
-func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...dbm.DBM) error {
+func (d *mgoDriver) Update(ctx context.Context, row model.DBObject, queries ...model.DBM) error {
 	if len(queries) > 1 {
-		return errors.New(model.ErrorMultipleQueryForSingleRow)
+		return errors.New(types.ErrorMultipleQueryForSingleRow)
 	}
 
 	if len(queries) == 0 {
-		queries = append(queries, dbm.DBM{"_id": row.GetObjectID()})
+		queries = append(queries, model.DBM{"_id": row.GetObjectId()})
 	}
 
 	sess := d.session.Copy()
@@ -110,13 +108,13 @@ func (d *mgoDriver) Update(ctx context.Context, row id.DBObject, queries ...dbm.
 	return d.handleStoreError(col.Update(buildQuery(queries[0]), bson.M{"$set": row}))
 }
 
-func (d *mgoDriver) BulkUpdate(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
+func (d *mgoDriver) BulkUpdate(ctx context.Context, rows []model.DBObject, query ...model.DBM) error {
 	if len(rows) == 0 {
-		return errors.New(model.ErrorEmptyRow)
+		return errors.New(types.ErrorEmptyRow)
 	}
 
 	if len(rows) != len(query) && len(query) != 0 {
-		return errors.New(model.ErrorRowQueryDiffLenght)
+		return errors.New(types.ErrorRowQueryDiffLenght)
 	}
 
 	sess := d.session.Copy()
@@ -128,7 +126,7 @@ func (d *mgoDriver) BulkUpdate(ctx context.Context, rows []id.DBObject, query ..
 
 	for i := range rows {
 		if len(query) == 0 {
-			bulk.Update(bson.M{"_id": rows[i].GetObjectID()}, bson.M{"$set": rows[i]})
+			bulk.Update(bson.M{"_id": rows[i].GetObjectId()}, bson.M{"$set": rows[i]})
 
 			continue
 		}
@@ -144,7 +142,7 @@ func (d *mgoDriver) BulkUpdate(ctx context.Context, rows []id.DBObject, query ..
 	return d.handleStoreError(err)
 }
 
-func (d *mgoDriver) UpdateAll(ctx context.Context, row id.DBObject, query, update dbm.DBM) error {
+func (d *mgoDriver) UpdateAll(ctx context.Context, row model.DBObject, query, update model.DBM) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
@@ -158,9 +156,9 @@ func (d *mgoDriver) UpdateAll(ctx context.Context, row id.DBObject, query, updat
 	return d.handleStoreError(err)
 }
 
-func (d *mgoDriver) Count(ctx context.Context, row id.DBObject, filters ...dbm.DBM) (int, error) {
+func (d *mgoDriver) Count(ctx context.Context, row model.DBObject, filters ...model.DBM) (int, error) {
 	if len(filters) > 1 {
-		return 0, errors.New(model.ErrorMultipleDBM)
+		return 0, errors.New(types.ErrorMultipleDBM)
 	}
 
 	filter := bson.M{}
@@ -178,7 +176,7 @@ func (d *mgoDriver) Count(ctx context.Context, row id.DBObject, filters ...dbm.D
 	return n, d.handleStoreError(err)
 }
 
-func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query dbm.DBM) error {
+func (d *mgoDriver) Query(ctx context.Context, row model.DBObject, result interface{}, query model.DBM) error {
 	session := d.session.Copy()
 	defer session.Close()
 
@@ -215,7 +213,7 @@ func (d *mgoDriver) Query(ctx context.Context, row id.DBObject, result interface
 	return d.handleStoreError(err)
 }
 
-func (d *mgoDriver) Drop(ctx context.Context, row id.DBObject) error {
+func (d *mgoDriver) Drop(ctx context.Context, row model.DBObject) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
@@ -224,12 +222,12 @@ func (d *mgoDriver) Drop(ctx context.Context, row id.DBObject) error {
 
 func (d *mgoDriver) Ping(ctx context.Context) (result error) {
 	if d.session == nil {
-		return errors.New(model.ErrorSessionClosed)
+		return errors.New(types.ErrorSessionClosed)
 	}
 
 	defer func() {
 		if err := recover(); err != nil {
-			result = errors.New(model.ErrorSessionClosed + " from panic")
+			result = errors.New(types.ErrorSessionClosed + " from panic")
 		}
 	}()
 
@@ -241,12 +239,12 @@ func (d *mgoDriver) Ping(ctx context.Context) (result error) {
 
 func (d *mgoDriver) HasTable(ctx context.Context, collection string) (result bool, errResult error) {
 	if d.session == nil {
-		return false, errors.New(model.ErrorSessionClosed)
+		return false, errors.New(types.ErrorSessionClosed)
 	}
 
 	defer func() {
 		if err := recover(); err != nil {
-			errResult = errors.New(model.ErrorSessionClosed + " from panic")
+			errResult = errors.New(types.ErrorSessionClosed + " from panic")
 		}
 	}()
 
@@ -294,11 +292,11 @@ func (d *mgoDriver) handleStoreError(err error) error {
 	return err
 }
 
-func (d *mgoDriver) CreateIndex(ctx context.Context, row id.DBObject, index index.Index) error {
+func (d *mgoDriver) CreateIndex(ctx context.Context, row model.DBObject, index model.Index) error {
 	if len(index.Keys) == 0 {
-		return errors.New(model.ErrorIndexEmpty)
+		return errors.New(types.ErrorIndexEmpty)
 	} else if len(index.Keys) > 1 && index.IsTTLIndex {
-		return errors.New(model.ErrorIndexComposedTTL)
+		return errors.New(types.ErrorIndexComposedTTL)
 	}
 
 	var indexes []string
@@ -335,17 +333,17 @@ func (d *mgoDriver) CreateIndex(ctx context.Context, row id.DBObject, index inde
 	return d.handleStoreError(col.EnsureIndex(newIndex))
 }
 
-func (d *mgoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.Index, error) {
+func (d *mgoDriver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.Index, error) {
 	hasTable, err := d.HasTable(ctx, row.TableName())
 	if err != nil {
 		return nil, d.handleStoreError(err)
 	}
 
 	if !hasTable {
-		return nil, errors.New(model.ErrorCollectionNotFound)
+		return nil, errors.New(types.ErrorCollectionNotFound)
 	}
 
-	var indexes []index.Index
+	var indexes []model.Index
 
 	sess := d.session.Copy()
 	defer sess.Close()
@@ -358,10 +356,10 @@ func (d *mgoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.In
 	}
 
 	for i := range indexesSpec {
-		var newKeys []dbm.DBM
+		var newKeys []model.DBM
 
 		for _, strKey := range indexesSpec[i].Key {
-			newKey := dbm.DBM{}
+			newKey := model.DBM{}
 
 			switch {
 			case strings.HasPrefix(strKey, "-"):
@@ -376,7 +374,7 @@ func (d *mgoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.In
 			newKeys = append(newKeys, newKey)
 		}
 
-		newIndex := index.Index{
+		newIndex := model.Index{
 			Name: indexesSpec[i].Name,
 			Keys: newKeys,
 		}
@@ -392,12 +390,12 @@ func (d *mgoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.In
 	return indexes, nil
 }
 
-func (d *mgoDriver) Migrate(ctx context.Context, rows []id.DBObject, opts ...dbm.DBM) error {
+func (d *mgoDriver) Migrate(ctx context.Context, rows []model.DBObject, opts ...model.DBM) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
 	if len(opts) > 0 && len(opts) != len(rows) {
-		return errors.New(model.ErrorRowOptDiffLenght)
+		return errors.New(types.ErrorRowOptDiffLenght)
 	}
 
 	for i, row := range rows {
@@ -407,7 +405,6 @@ func (d *mgoDriver) Migrate(ctx context.Context, rows []id.DBObject, opts ...dbm
 			opt := buildOpt(opts[i])
 
 			err := col.Create(opt)
-
 			if err != nil {
 				return d.handleStoreError(err)
 			}
@@ -416,7 +413,6 @@ func (d *mgoDriver) Migrate(ctx context.Context, rows []id.DBObject, opts ...dbm
 		}
 
 		err := col.Create(&mgo.CollectionInfo{})
-
 		if err != nil {
 			return d.handleStoreError(err)
 		}
@@ -432,18 +428,18 @@ func (d *mgoDriver) DropDatabase(ctx context.Context) error {
 	return d.handleStoreError(sess.DB("").DropDatabase())
 }
 
-func (d *mgoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
-	var stats dbm.DBM
+func (d *mgoDriver) DBTableStats(ctx context.Context, row model.DBObject) (model.DBM, error) {
+	var stats model.DBM
 
 	sess := d.session.Copy()
 	defer sess.Close()
 
-	err := sess.DB("").Run(dbm.DBM{"collStats": row.TableName()}, &stats)
+	err := sess.DB("").Run(model.DBM{"collStats": row.TableName()}, &stats)
 
 	return stats, d.handleStoreError(err)
 }
 
-func (d *mgoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error) {
+func (d *mgoDriver) Aggregate(ctx context.Context, row model.DBObject, query []model.DBM) ([]model.DBM, error) {
 	sess := d.session.Copy()
 	defer sess.Close()
 
@@ -452,17 +448,17 @@ func (d *mgoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.
 	pipe.AllowDiskUse()
 	iter := pipe.Iter()
 
-	resultSlice := make([]dbm.DBM, 0)
+	resultSlice := make([]model.DBM, 0)
 
 	for {
-		var result dbm.DBM
+		var result model.DBM
 		if !iter.Next(&result) {
 			break
 		}
-		// Parsing _id from bson.ObjectId to id.ObjectId
+		// Parsing _id from bson.ObjectId to model.ObjectId
 		resultId, ok := result["_id"].(bson.ObjectId)
 		if ok {
-			result["_id"] = id.ObjectIdHex(resultId.Hex())
+			result["_id"] = model.ObjectIdHex(resultId.Hex())
 		}
 
 		resultSlice = append(resultSlice, result)
@@ -475,7 +471,7 @@ func (d *mgoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.
 	return resultSlice, nil
 }
 
-func (d *mgoDriver) CleanIndexes(ctx context.Context, row id.DBObject) error {
+func (d *mgoDriver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
@@ -499,7 +495,7 @@ func (d *mgoDriver) CleanIndexes(ctx context.Context, row id.DBObject) error {
 	return nil
 }
 
-func (d *mgoDriver) Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM) error {
+func (d *mgoDriver) Upsert(ctx context.Context, row model.DBObject, query, update model.DBM) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 

@@ -3,28 +3,27 @@ package mongo
 import (
 	"context"
 	"errors"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/TykTechnologies/storage/persistent/dbm"
-	"github.com/TykTechnologies/storage/persistent/id"
-	"github.com/TykTechnologies/storage/persistent/index"
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
-	"github.com/TykTechnologies/storage/persistent/internal/model"
+	"github.com/TykTechnologies/storage/persistent/internal/types"
+	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/TykTechnologies/storage/persistent/utils"
 )
 
-var _ model.PersistentStorage = &mongoDriver{}
+var _ types.PersistentStorage = &mongoDriver{}
 
 type mongoDriver struct {
 	*lifeCycle
-	options *model.ClientOpts
+	options *types.ClientOpts
 }
 
 // NewMongoDriver returns an instance of the driver official mongo connected to the database.
-func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
+func NewMongoDriver(opts *types.ClientOpts) (*mongoDriver, error) {
 	if opts.ConnectionString == "" {
 		return nil, errors.New("can't connect without connection string")
 	}
@@ -44,16 +43,16 @@ func NewMongoDriver(opts *model.ClientOpts) (*mongoDriver, error) {
 	return newDriver, nil
 }
 
-func (d *mongoDriver) Insert(ctx context.Context, rows ...id.DBObject) error {
+func (d *mongoDriver) Insert(ctx context.Context, rows ...model.DBObject) error {
 	if len(rows) == 0 {
-		return errors.New(model.ErrorEmptyRow)
+		return errors.New(types.ErrorEmptyRow)
 	}
 
 	var bulkQuery []mongo.WriteModel
 
 	for _, row := range rows {
-		if row.GetObjectID() == "" {
-			row.SetObjectID(id.NewObjectID())
+		if row.GetObjectId() == "" {
+			row.SetObjectId(model.NewObjectId())
 		}
 
 		model := mongo.NewInsertOneModel().SetDocument(row)
@@ -66,13 +65,13 @@ func (d *mongoDriver) Insert(ctx context.Context, rows ...id.DBObject) error {
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject, query ...dbm.DBM) error {
+func (d *mongoDriver) Delete(ctx context.Context, row model.DBObject, query ...model.DBM) error {
 	if len(query) > 1 {
-		return errors.New(model.ErrorMultipleQueryForSingleRow)
+		return errors.New(types.ErrorMultipleQueryForSingleRow)
 	}
 
 	if len(query) == 0 {
-		query = append(query, dbm.DBM{"_id": row.GetObjectID()})
+		query = append(query, model.DBM{"_id": row.GetObjectId()})
 	}
 
 	collection := d.client.Database(d.database).Collection(row.TableName())
@@ -86,9 +85,9 @@ func (d *mongoDriver) Delete(ctx context.Context, row id.DBObject, query ...dbm.
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) Count(ctx context.Context, row id.DBObject, filters ...dbm.DBM) (int, error) {
+func (d *mongoDriver) Count(ctx context.Context, row model.DBObject, filters ...model.DBM) (int, error) {
 	if len(filters) > 1 {
-		return 0, errors.New(model.ErrorMultipleDBM)
+		return 0, errors.New(types.ErrorMultipleDBM)
 	}
 
 	filter := bson.M{}
@@ -103,7 +102,7 @@ func (d *mongoDriver) Count(ctx context.Context, row id.DBObject, filters ...dbm
 	return int(count), d.handleStoreError(err)
 }
 
-func (d *mongoDriver) Query(ctx context.Context, row id.DBObject, result interface{}, query dbm.DBM) error {
+func (d *mongoDriver) Query(ctx context.Context, row model.DBObject, result interface{}, query model.DBM) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	search := buildQuery(query)
@@ -144,19 +143,19 @@ func (d *mongoDriver) Query(ctx context.Context, row id.DBObject, result interfa
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) Drop(ctx context.Context, row id.DBObject) error {
+func (d *mongoDriver) Drop(ctx context.Context, row model.DBObject) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	return d.handleStoreError(collection.Drop(ctx))
 }
 
-func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...dbm.DBM) error {
+func (d *mongoDriver) Update(ctx context.Context, row model.DBObject, query ...model.DBM) error {
 	if len(query) > 1 {
-		return errors.New(model.ErrorMultipleQueryForSingleRow)
+		return errors.New(types.ErrorMultipleQueryForSingleRow)
 	}
 
 	if len(query) == 0 {
-		query = append(query, dbm.DBM{"_id": row.GetObjectID()})
+		query = append(query, model.DBM{"_id": row.GetObjectId()})
 	}
 
 	collection := d.client.Database(d.database).Collection(row.TableName())
@@ -169,13 +168,13 @@ func (d *mongoDriver) Update(ctx context.Context, row id.DBObject, query ...dbm.
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) BulkUpdate(ctx context.Context, rows []id.DBObject, query ...dbm.DBM) error {
+func (d *mongoDriver) BulkUpdate(ctx context.Context, rows []model.DBObject, query ...model.DBM) error {
 	if len(query) > 0 && len(query) != len(rows) {
-		return errors.New(model.ErrorRowQueryDiffLenght)
+		return errors.New(types.ErrorRowQueryDiffLenght)
 	}
 
 	if len(rows) == 0 {
-		return errors.New(model.ErrorEmptyRow)
+		return errors.New(types.ErrorEmptyRow)
 	}
 
 	var bulkQuery []mongo.WriteModel
@@ -184,7 +183,7 @@ func (d *mongoDriver) BulkUpdate(ctx context.Context, rows []id.DBObject, query 
 		update := mongo.NewUpdateOneModel().SetUpdate(bson.D{{Key: "$set", Value: rows[i]}})
 
 		if len(query) == 0 {
-			update.SetFilter(dbm.DBM{"_id": rows[i].GetObjectID()})
+			update.SetFilter(model.DBM{"_id": rows[i].GetObjectId()})
 		} else {
 			update.SetFilter(buildQuery(query[i]))
 		}
@@ -201,7 +200,7 @@ func (d *mongoDriver) BulkUpdate(ctx context.Context, rows []id.DBObject, query 
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) UpdateAll(ctx context.Context, row id.DBObject, query, update dbm.DBM) error {
+func (d *mongoDriver) UpdateAll(ctx context.Context, row model.DBObject, query, update model.DBM) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	result, err := collection.UpdateMany(ctx, buildQuery(query), buildQuery(update))
@@ -214,7 +213,7 @@ func (d *mongoDriver) UpdateAll(ctx context.Context, row id.DBObject, query, upd
 
 func (d *mongoDriver) HasTable(ctx context.Context, collection string) (bool, error) {
 	if d.client == nil {
-		return false, errors.New(model.ErrorSessionClosed)
+		return false, errors.New(types.ErrorSessionClosed)
 	}
 
 	collections, err := d.client.Database(d.database).ListCollectionNames(ctx, bson.M{"name": collection})
@@ -237,18 +236,18 @@ func (d *mongoDriver) handleStoreError(err error) error {
 	if mongo.IsNetworkError(err) || errors.As(err, &serverErr) {
 		// Reconnect to the MongoDB instance
 		if connErr := d.Connect(d.options); connErr != nil {
-			return errors.New(model.ErrorReconnecting + ": " + connErr.Error() + " after error: " + err.Error())
+			return errors.New(types.ErrorReconnecting + ": " + connErr.Error() + " after error: " + err.Error())
 		}
 	}
 
 	return err
 }
 
-func (d *mongoDriver) CreateIndex(ctx context.Context, row id.DBObject, index index.Index) error {
+func (d *mongoDriver) CreateIndex(ctx context.Context, row model.DBObject, index model.Index) error {
 	if len(index.Keys) == 0 {
-		return errors.New(model.ErrorIndexEmpty)
+		return errors.New(types.ErrorIndexEmpty)
 	} else if len(index.Keys) > 1 && index.IsTTLIndex {
-		return errors.New(model.ErrorIndexComposedTTL)
+		return errors.New(types.ErrorIndexComposedTTL)
 	}
 
 	keys := bson.D{}
@@ -285,26 +284,26 @@ func (d *mongoDriver) CreateIndex(ctx context.Context, row id.DBObject, index in
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.Index, error) {
+func (d *mongoDriver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.Index, error) {
 	hasTable, err := d.HasTable(ctx, row.TableName())
 	if err != nil {
 		return nil, d.handleStoreError(err)
 	}
 
 	if !hasTable {
-		return nil, errors.New(model.ErrorCollectionNotFound)
+		return nil, errors.New(types.ErrorCollectionNotFound)
 	}
 
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
-	var indexes []index.Index
+	var indexes []model.Index
 
 	indexesSpec, err := collection.Indexes().ListSpecifications(ctx)
 	if err != nil {
 		return indexes, d.handleStoreError(err)
 	}
 
-	// parse from mongo IndexSpec to our index.Index again
+	// parse from mongo IndexSpec to our model.Index again
 	for _, thisIndex := range indexesSpec {
 		bsonKeys := bson.D{}
 
@@ -312,16 +311,16 @@ func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.
 			return indexes, errUnmarshal
 		}
 
-		var newKeys []dbm.DBM
+		var newKeys []model.DBM
 
 		for _, v := range bsonKeys {
-			newKey := dbm.DBM{}
+			newKey := model.DBM{}
 			newKey[v.Key] = v.Value
 
 			newKeys = append(newKeys, newKey)
 		}
 
-		newIndex := index.Index{
+		newIndex := model.Index{
 			Name: thisIndex.Name,
 			Keys: newKeys,
 		}
@@ -337,9 +336,9 @@ func (d *mongoDriver) GetIndexes(ctx context.Context, row id.DBObject) ([]index.
 	return indexes, nil
 }
 
-func (d *mongoDriver) Migrate(ctx context.Context, rows []id.DBObject, opts ...dbm.DBM) error {
+func (d *mongoDriver) Migrate(ctx context.Context, rows []model.DBObject, opts ...model.DBM) error {
 	if len(opts) > 0 && len(opts) != len(rows) {
-		return errors.New(model.ErrorRowOptDiffLenght)
+		return errors.New(types.ErrorRowOptDiffLenght)
 	}
 
 	for i, row := range rows {
@@ -371,8 +370,8 @@ func (d *mongoDriver) DropDatabase(ctx context.Context) error {
 	return d.client.Database(d.database).Drop(ctx)
 }
 
-func (d *mongoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DBM, error) {
-	var stats dbm.DBM
+func (d *mongoDriver) DBTableStats(ctx context.Context, row model.DBObject) (model.DBM, error) {
+	var stats model.DBM
 	err := d.client.Database(d.database).RunCommand(ctx, bson.D{
 		{Key: "collStats", Value: row.TableName()},
 	}).Decode(&stats)
@@ -380,7 +379,7 @@ func (d *mongoDriver) DBTableStats(ctx context.Context, row id.DBObject) (dbm.DB
 	return stats, d.handleStoreError(err)
 }
 
-func (d *mongoDriver) Aggregate(ctx context.Context, row id.DBObject, query []dbm.DBM) ([]dbm.DBM, error) {
+func (d *mongoDriver) Aggregate(ctx context.Context, row model.DBObject, query []model.DBM) ([]model.DBM, error) {
 	col := d.client.Database(d.database).Collection(row.TableName())
 
 	cursor, err := col.Aggregate(ctx, query)
@@ -390,19 +389,19 @@ func (d *mongoDriver) Aggregate(ctx context.Context, row id.DBObject, query []db
 
 	defer cursor.Close(ctx)
 
-	resultSlice := make([]dbm.DBM, 0)
+	resultSlice := make([]model.DBM, 0)
 
 	for cursor.Next(ctx) {
-		var result dbm.DBM
+		var result model.DBM
 
 		err := cursor.Decode(&result)
 		if err != nil {
 			return nil, d.handleStoreError(err)
 		}
 
-		// Parsing _id from primitive.ObjectID to id.ObjectId
-		if objectId, ok := result["_id"].(primitive.ObjectID); ok {
-			result["_id"] = id.ObjectIdHex(objectId.Hex())
+		// Parsing _id from primitive.ObjectId to model.ObjectId
+		if ObjectId, ok := result["_id"].(primitive.ObjectID); ok {
+			result["_id"] = model.ObjectIdHex(ObjectId.Hex())
 		}
 
 		resultSlice = append(resultSlice, result)
@@ -415,7 +414,7 @@ func (d *mongoDriver) Aggregate(ctx context.Context, row id.DBObject, query []db
 	return resultSlice, nil
 }
 
-func (d *mongoDriver) CleanIndexes(ctx context.Context, row id.DBObject) error {
+func (d *mongoDriver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	_, err := collection.Indexes().DropAll(ctx)
@@ -423,7 +422,7 @@ func (d *mongoDriver) CleanIndexes(ctx context.Context, row id.DBObject) error {
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM) error {
+func (d *mongoDriver) Upsert(ctx context.Context, row model.DBObject, query, update model.DBM) error {
 	coll := d.client.Database(d.database).Collection(row.TableName())
 
 	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
