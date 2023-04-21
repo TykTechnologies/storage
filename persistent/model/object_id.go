@@ -79,11 +79,11 @@ func (id ObjectID) GetBSON() (interface{}, error) {
 }
 
 // Value is being used by SQL drivers
-func (j ObjectID) Value() (driver.Value, error) {
-	return bson.ObjectId(j).Hex(), nil
+func (id ObjectID) Value() (driver.Value, error) {
+	return bson.ObjectId(id).Hex(), nil
 }
 
-func (j *ObjectID) Scan(value interface{}) error {
+func (id *ObjectID) Scan(value interface{}) error {
 	var bytes []byte
 	switch v := value.(type) {
 	case []byte:
@@ -97,7 +97,7 @@ func (j *ObjectID) Scan(value interface{}) error {
 	// reflect magic to update existing string without creating new one
 	if len(bytes) > 0 {
 		bs := ObjectID(bson.ObjectIdHex(string(bytes)))
-		*j = bs
+		*id = bs
 	}
 
 	return nil
