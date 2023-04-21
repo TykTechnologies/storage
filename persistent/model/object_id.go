@@ -31,11 +31,17 @@ func (id ObjectID) Hex() string {
 }
 
 func (id ObjectID) String() string {
-	//return fmt.Sprintf("ObjectID(%q)", id.Hex())
 	return id.Hex()
 }
 
 func (id ObjectID) Timestamp() time.Time {
+	bytes := []byte(string(id)[0:4])
+	secs := int64(binary.BigEndian.Uint32(bytes))
+
+	return time.Unix(secs, 0)
+}
+
+func (id ObjectID) Time() time.Time {
 	bytes := []byte(string(id)[0:4])
 	secs := int64(binary.BigEndian.Uint32(bytes))
 
