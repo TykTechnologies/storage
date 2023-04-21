@@ -31,7 +31,8 @@ func (id ObjectID) Hex() string {
 }
 
 func (id ObjectID) String() string {
-	return fmt.Sprintf("ObjectID(%q)", id.Hex())
+	//return fmt.Sprintf("ObjectID(%q)", id.Hex())
+	return id.Hex()
 }
 
 func (id ObjectID) Timestamp() time.Time {
