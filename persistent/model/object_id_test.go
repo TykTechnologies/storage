@@ -2,7 +2,6 @@ package model
 
 import (
 	"encoding/hex"
-	"fmt"
 	"testing"
 	"time"
 
@@ -52,7 +51,7 @@ func TestHex(t *testing.T) {
 func TestString(t *testing.T) {
 	id := NewObjectID()
 	bsonID := bson.ObjectId(id)
-	assert.Equal(t, fmt.Sprintf("ObjectID(%q)", bsonID.Hex()), id.String())
+	assert.Equal(t, bsonID.Hex(), id.String())
 }
 
 func TestTimestamp(t *testing.T) {
@@ -60,6 +59,13 @@ func TestTimestamp(t *testing.T) {
 	bsonID := bson.ObjectId(id)
 
 	assert.Equal(t, bsonID.Time(), id.Timestamp())
+}
+
+func TestTime(t *testing.T) {
+	id := NewObjectID()
+	bsonID := bson.ObjectId(id)
+
+	assert.Equal(t, bsonID.Time(), id.Time())
 }
 
 func TestMarshalJSON(t *testing.T) {

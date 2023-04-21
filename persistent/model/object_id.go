@@ -31,7 +31,7 @@ func (id ObjectID) Hex() string {
 }
 
 func (id ObjectID) String() string {
-	return fmt.Sprintf("ObjectID(%q)", id.Hex())
+	return id.Hex()
 }
 
 func (id ObjectID) Timestamp() time.Time {
@@ -39,6 +39,10 @@ func (id ObjectID) Timestamp() time.Time {
 	secs := int64(binary.BigEndian.Uint32(bytes))
 
 	return time.Unix(secs, 0)
+}
+
+func (id ObjectID) Time() time.Time {
+	return id.Timestamp()
 }
 
 func (id ObjectID) MarshalJSON() ([]byte, error) {
@@ -75,11 +79,11 @@ func (id ObjectID) GetBSON() (interface{}, error) {
 }
 
 // Value is being used by SQL drivers
-func (j ObjectID) Value() (driver.Value, error) {
-	return bson.ObjectId(j).Hex(), nil
+func (id ObjectID) Value() (driver.Value, error) {
+	return bson.ObjectId(id).Hex(), nil
 }
 
-func (j *ObjectID) Scan(value interface{}) error {
+func (id *ObjectID) Scan(value interface{}) error {
 	var bytes []byte
 	switch v := value.(type) {
 	case []byte:
@@ -93,7 +97,7 @@ func (j *ObjectID) Scan(value interface{}) error {
 	// reflect magic to update existing string without creating new one
 	if len(bytes) > 0 {
 		bs := ObjectID(bson.ObjectIdHex(string(bytes)))
-		*j = bs
+		*id = bs
 	}
 
 	return nil
