@@ -42,10 +42,7 @@ func (id ObjectID) Timestamp() time.Time {
 }
 
 func (id ObjectID) Time() time.Time {
-	bytes := []byte(string(id)[0:4])
-	secs := int64(binary.BigEndian.Uint32(bytes))
-
-	return time.Unix(secs, 0)
+	return id.Timestamp()
 }
 
 func (id ObjectID) MarshalJSON() ([]byte, error) {
