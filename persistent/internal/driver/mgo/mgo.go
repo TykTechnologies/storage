@@ -495,7 +495,7 @@ func (d *mgoDriver) CleanIndexes(ctx context.Context, row model.DBObject) error 
 	return nil
 }
 
-func (d *mgoDriver) Upsert(ctx context.Context, row model.DBObject, query, update model.DBM) error {
+func (d *mgoDriver) Upsert(ctx context.Context, row model.DBObject, query, update model.DBM, upsert bool) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
@@ -503,7 +503,7 @@ func (d *mgoDriver) Upsert(ctx context.Context, row model.DBObject, query, updat
 
 	_, err := col.Find(query).Apply(mgo.Change{
 		Update:    update,
-		Upsert:    true,
+		Upsert:    upsert,
 		ReturnNew: true,
 	}, row)
 
