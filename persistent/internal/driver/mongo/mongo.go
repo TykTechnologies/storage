@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"errors"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -423,7 +424,7 @@ func (d *mongoDriver) CleanIndexes(ctx context.Context, row id.DBObject) error {
 	return d.handleStoreError(err)
 }
 
-func (d *mongoDriver) Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM) error {
+func (d *mongoDriver) Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM, upsert bool) error {
 	coll := d.client.Database(d.database).Collection(row.TableName())
 
 	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)

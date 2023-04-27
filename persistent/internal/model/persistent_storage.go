@@ -60,7 +60,7 @@ type PersistentStorage interface {
 	// query is the filter to be used to find the document to update
 	// update is the update to be applied to the document
 	// row is modified with the result of the operation
-	Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM) error
+	Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM, upsert bool) error
 	// GetDatabaseInfo returns information of the database to which the driver is connecting to
 	GetDatabaseInfo(ctx context.Context) (utils.Info, error)
 	// GetTables return the list of collections for a given database

@@ -499,7 +499,7 @@ func (d *mgoDriver) CleanIndexes(ctx context.Context, row id.DBObject) error {
 	return nil
 }
 
-func (d *mgoDriver) Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM) error {
+func (d *mgoDriver) Upsert(ctx context.Context, row id.DBObject, query, update dbm.DBM, upsert bool) error {
 	sess := d.session.Copy()
 	defer sess.Close()
 
