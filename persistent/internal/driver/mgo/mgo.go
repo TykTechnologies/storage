@@ -507,7 +507,7 @@ func (d *mgoDriver) Upsert(ctx context.Context, row id.DBObject, query, update d
 
 	_, err := col.Find(query).Apply(mgo.Change{
 		Update:    update,
-		Upsert:    true,
+		Upsert:    upsert,
 		ReturnNew: true,
 	}, row)
 
