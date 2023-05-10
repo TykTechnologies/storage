@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mongo
 
 import (
@@ -52,6 +49,7 @@ func TestMongoOptsBuilder(t *testing.T) {
 	defaultClient.SetTimeout(types.DEFAULT_CONN_TIMEOUT)
 	defaultClient.ApplyURI(validMongoURL)
 	defaultClient.SetReadPreference(readpref.Primary())
+	defaultClient.SetDirect(false)
 
 	tcs := []struct {
 		name           string
@@ -107,6 +105,21 @@ func TestMongoOptsBuilder(t *testing.T) {
 			},
 			shouldErr:      true,
 			expectedErrMsg: "error parsing uri: scheme must be \"mongodb\" or \"mongodb+srv\"",
+		},
+		{
+			name: "direct connection",
+			opts: &types.ClientOpts{
+				ConnectionString: validMongoURL,
+				UseSSL:           true,
+				DirectConnection: true,
+			},
+			expectedOpts: func() *options.ClientOptions {
+				cl := *defaultClient
+				cl.SetTLSConfig(&tls.Config{})
+				cl.SetDirect(true)
+				return &cl
+			},
+			shouldErr: false,
 		},
 	}
 

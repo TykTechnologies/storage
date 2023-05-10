@@ -33,6 +33,12 @@ type ClientOpts struct {
 	SessionConsistency string
 	// Sets the connection timeout to the database. Defaults to 10s.
 	ConnectionTimeout int
+	// DirectConnection informs whether to establish connections only with the specified seed servers,
+	// or to obtain information for the whole cluster and establish connections with further servers too.
+	// If true, the client will only connect to the host provided in the ConnectionString
+	// and won't attempt to discover other hosts in the cluster. Useful when network restrictions
+	// prevent discovery, such as with SSH tunneling. Default is false.
+	DirectConnection bool
 	// type of database/driver
 	Type string
 }
