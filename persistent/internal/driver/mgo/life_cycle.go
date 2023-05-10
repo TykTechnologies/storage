@@ -34,6 +34,8 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 		dialInfo.Timeout = time.Second * time.Duration(opts.ConnectionTimeout)
 	}
 
+	dialInfo.Direct = opts.DirectConnection
+
 	if opts.UseSSL {
 		tlsConfig, err := opts.GetTLSConfig()
 		if err != nil {

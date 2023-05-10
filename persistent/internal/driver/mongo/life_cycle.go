@@ -111,6 +111,8 @@ func mongoOptsBuilder(opts *types.ClientOpts) (*options.ClientOptions, error) {
 	// we apply URI here so if we specify a different configuration in the URI it can be overridden
 	connOpts.ApplyURI(opts.ConnectionString)
 
+	connOpts.SetDirect(opts.DirectConnection)
+
 	err := connOpts.Validate()
 	if err != nil {
 		return nil, err
