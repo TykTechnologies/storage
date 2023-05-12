@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -113,6 +114,7 @@ func (d *mongoDriver) Query(ctx context.Context, row model.DBObject, result inte
 	sort, sortFound := query["_sort"].(string)
 	if sortFound && sort != "" {
 		sortQuery := buildLimitQuery(sort)
+		fmt.Println("sortQuery", sortQuery)
 		findOpts.SetSort(sortQuery)
 		findOneOpts.SetSort(sortQuery)
 	}
@@ -137,6 +139,8 @@ func (d *mongoDriver) Query(ctx context.Context, row model.DBObject, result inte
 		}
 		defer cursor.Close(ctx)
 	} else {
+		fmt.Println("search", search)
+		fmt.Println("findOneOpts", findOneOpts)
 		err = collection.FindOne(ctx, search, findOneOpts).Decode(result)
 	}
 
