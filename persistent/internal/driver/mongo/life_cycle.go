@@ -61,7 +61,8 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	return lc.client.Ping(context.Background(), nil)
 }
 
-// parsePassword parses the password from the connection string and URL encodes it. Useful when the password contains special characters.
+// parsePassword parses the password from the connection string and URL encodes it.
+// It's useful when the password contains special characters.
 // Example: mongodb://user:p@ssword@localhost:27017/db -> mongodb://user:p%40word@40localhost:27017/db
 func parsePassword(connectionString string) string {
 	// Find the last '@' (the delimiter between credentials and host)
@@ -69,6 +70,7 @@ func parsePassword(connectionString string) string {
 	if at == -1 {
 		return connectionString
 	}
+
 	credentialsAndScheme := connectionString[:at]
 	hostAndDB := connectionString[at+1:]
 
@@ -77,6 +79,7 @@ func parsePassword(connectionString string) string {
 	if len(credentialsAndSchemeParts) != 2 {
 		return connectionString
 	}
+
 	credentials := credentialsAndSchemeParts[1]
 
 	// Split the username and password
@@ -84,6 +87,7 @@ func parsePassword(connectionString string) string {
 	if len(credentialsParts) != 2 {
 		return connectionString
 	}
+
 	username := credentialsParts[0]
 	password := credentialsParts[1]
 
