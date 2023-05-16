@@ -64,12 +64,11 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 		}
 
 		username := u.User.Username()
-		password, _ := u.User.Password()
 
-		connectionString = fmt.Sprintf("mongodb://%s:%s@%s", username, password, u.Host)
+		connectionString = fmt.Sprintf("mongodb://%s:%s@%s", username, dialInfo.Password, u.Host)
 	}
 
-	lc.connectionString = opts.ConnectionString
+	lc.connectionString = connectionString
 	lc.database = cs.Database
 	lc.client = client
 
