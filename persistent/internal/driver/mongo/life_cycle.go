@@ -33,11 +33,16 @@ var _ types.StorageLifecycle = &lifeCycle{}
 func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	var err error
 	var client *mongo.Client
-	opts.ConnectionString = parsePassword(opts.ConnectionString)
+
 	// we check if the connection string is valid before building the connOpts.
 	cs, err := connstring.ParseAndValidate(opts.ConnectionString)
 	if err != nil {
 		return errors.New("invalid connection string")
+	}
+
+	// parse the password if it's set and contains special characters.
+	if cs.PasswordSet {
+		opts.ConnectionString = parsePassword(opts.ConnectionString)
 	}
 
 	connOpts, err := mongoOptsBuilder(opts)
@@ -59,18 +64,28 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	return lc.client.Ping(context.Background(), nil)
 }
 
+// parsePassword parses the password from the connection string and URL encodes it. Useful when the password contains special characters.
 func parsePassword(connectionString string) string {
 	// Find the last '@' (the delimiter between credentials and host)
 	at := strings.LastIndex(connectionString, "@")
+	if at == -1 {
+		return connectionString
+	}
 	credentialsAndScheme := connectionString[:at]
 	hostAndDB := connectionString[at+1:]
 
 	// Split the credentials and scheme
 	credentialsAndSchemeParts := strings.SplitN(credentialsAndScheme, "://", 2)
+	if len(credentialsAndSchemeParts) != 2 {
+		return connectionString
+	}
 	credentials := credentialsAndSchemeParts[1]
 
 	// Split the username and password
 	credentialsParts := strings.SplitN(credentials, ":", 2)
+	if len(credentialsParts) != 2 {
+		return connectionString
+	}
 	username := credentialsParts[0]
 	password := credentialsParts[1]
 
