@@ -3,6 +3,8 @@ package mongo
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/url"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -27,6 +29,21 @@ func NewMongoDriver(opts *types.ClientOpts) (*mongoDriver, error) {
 	if opts.ConnectionString == "" {
 		return nil, errors.New("can't connect without connection string")
 	}
+
+	u, err := url.Parse(opts.ConnectionString)
+	if err != nil {
+		return nil, fmt.Errorf("can't parse connection string: %w", err)
+	}
+
+	username := u.User.Username()
+	password, _ := u.User.Password()
+
+	// URL encode the password
+	encodedPassword := url.QueryEscape(password)
+
+	// Reconstruct the URL with the encoded password
+	newConnectionString := fmt.Sprintf("mongodb://%s:%s@%s", username, encodedPassword, u.Host)
+	opts.ConnectionString = newConnectionString
 
 	newDriver := &mongoDriver{}
 	newDriver.options = opts
