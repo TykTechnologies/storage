@@ -35,6 +35,7 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	var client *mongo.Client
 
 	opts.ConnectionString = parsePassword(opts.ConnectionString)
+	fmt.Println("new connection string: ", opts.ConnectionString)
 
 	// we check if the connection string is valid before building the connOpts.
 	cs, err := connstring.ParseAndValidate(opts.ConnectionString)
