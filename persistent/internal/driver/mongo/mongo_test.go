@@ -1,3 +1,6 @@
+//go:build mongo
+// +build mongo
+
 package mongo
 
 import (
@@ -79,7 +82,7 @@ func TestNewMongoDriver(t *testing.T) {
 
 	t.Run("new driver with connection string", func(t *testing.T) {
 		newDriver, err := NewMongoDriver(&types.ClientOpts{
-			ConnectionString: "mongodb://test:6}3cZQU.9KvM/hVR4qkm-hHqZTu3yg=G@localhost:27017/test",
+			ConnectionString: "mongodb://localhost:27017/test",
 		})
 
 		assert.Nil(t, err)

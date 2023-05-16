@@ -34,15 +34,12 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	var err error
 	var client *mongo.Client
 
+	opts.ConnectionString = parsePassword(opts.ConnectionString)
+
 	// we check if the connection string is valid before building the connOpts.
 	cs, err := connstring.ParseAndValidate(opts.ConnectionString)
 	if err != nil {
-		return errors.New("invalid connection string")
-	}
-
-	// parse the password if it's set and contains special characters.
-	if cs.PasswordSet {
-		opts.ConnectionString = parsePassword(opts.ConnectionString)
+		return errors.New("invalid connection string " + err.Error())
 	}
 
 	connOpts, err := mongoOptsBuilder(opts)
