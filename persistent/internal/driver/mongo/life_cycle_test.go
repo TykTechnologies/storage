@@ -216,3 +216,59 @@ func TestDBType(t *testing.T) {
 	dbType := lc.DBType()
 	assert.Equal(t, utils.StandardMongo, dbType)
 }
+
+func TestParsePassword(t *testing.T) {
+	tests := []struct {
+		name               string
+		originalConnString string
+		expectedConnString string
+	}{
+		{
+			name:               "valid connection string",
+			originalConnString: "mongodb://user:password@localhost:27017/test",
+			expectedConnString: "mongodb://user:password@localhost:27017/test",
+		},
+		{
+			name:               "valid connection string with @",
+			originalConnString: "mongodb://user:p@ssword@localhost:27017",
+			expectedConnString: "mongodb://user:p%40ssword@localhost:27017",
+		},
+		{
+			name:               "valid connection string with @ and /",
+			originalConnString: "mongodb://user:p@sswor/d@localhost:27017/test",
+			expectedConnString: "mongodb://user:p%40sswor%2Fd@localhost:27017/test",
+		},
+		{
+			name:               "valid connection string with @ and / and '?' outside of the credentials part",
+			originalConnString: "mongodb://user:p@sswor/d@localhost:27017/test?authSource=admin",
+			expectedConnString: "mongodb://user:p%40sswor%2Fd@localhost:27017/test?authSource=admin",
+		},
+		{
+			name:               "special characters and multiple hosts",
+			originalConnString: "mongodb://user:p@sswor/d@localhost:27017,localhost:27018/test?authSource=admin",
+			expectedConnString: "mongodb://user:p%40sswor%2Fd@localhost:27017,localhost:27018/test?authSource=admin",
+		},
+		{
+			name:               "url without credentials",
+			originalConnString: "mongodb://localhost:27017/test?authSource=admin",
+			expectedConnString: "mongodb://localhost:27017/test?authSource=admin",
+		},
+		{
+			name:               "invalid connection string",
+			originalConnString: "test",
+			expectedConnString: "test",
+		},
+		{
+			name:               "connection string full of special characters",
+			originalConnString: "mongodb://user:p@ss:/?#[]wor/d@localhost:27017,localhost:27018/test?authSource=admin",
+			expectedConnString: "mongodb://user:p%40ss%3A%2F%3F%23%5B%5Dwor%2Fd@localhost:27017,localhost:27018/test?authSource=admin",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			connString := parsePassword(test.originalConnString)
+			assert.Equal(t, test.expectedConnString, connString)
+		})
+	}
+}

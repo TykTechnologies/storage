@@ -35,12 +35,11 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	var client *mongo.Client
 
 	opts.ConnectionString = parsePassword(opts.ConnectionString)
-	fmt.Println("new connection string: ", opts.ConnectionString)
 
 	// we check if the connection string is valid before building the connOpts.
 	cs, err := connstring.ParseAndValidate(opts.ConnectionString)
 	if err != nil {
-		return errors.New("invalid connection string " + err.Error())
+		return errors.New("invalid connection string")
 	}
 
 	connOpts, err := mongoOptsBuilder(opts)
@@ -63,6 +62,7 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 }
 
 // parsePassword parses the password from the connection string and URL encodes it. Useful when the password contains special characters.
+// Example: mongodb://user:p@ssword@localhost:27017/db -> mongodb://user:p%40word@40localhost:27017/db
 func parsePassword(connectionString string) string {
 	// Find the last '@' (the delimiter between credentials and host)
 	at := strings.LastIndex(connectionString, "@")
