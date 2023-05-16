@@ -24,6 +24,8 @@ type lifeCycle struct {
 
 // Connect connects to the mongo database given the ClientOpts.
 func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
+	opts.ConnectionString = helper.ParsePassword(opts.ConnectionString)
+
 	dialInfo, err := mgo.ParseURL(opts.ConnectionString)
 	if err != nil {
 		return err

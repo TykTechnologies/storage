@@ -3,9 +3,6 @@ package mongo
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
@@ -34,7 +31,7 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	var err error
 	var client *mongo.Client
 
-	opts.ConnectionString = parsePassword(opts.ConnectionString)
+	opts.ConnectionString = helper.ParsePassword(opts.ConnectionString)
 
 	// we check if the connection string is valid before building the connOpts.
 	cs, err := connstring.ParseAndValidate(opts.ConnectionString)
@@ -59,45 +56,6 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	lc.client = client
 
 	return lc.client.Ping(context.Background(), nil)
-}
-
-// parsePassword parses the password from the connection string and URL encodes it.
-// It's useful when the password contains special characters.
-// Example: mongodb://user:p@ssword@localhost:27017/db -> mongodb://user:p%40word@40localhost:27017/db
-func parsePassword(connectionString string) string {
-	// Find the last '@' (the delimiter between credentials and host)
-	at := strings.LastIndex(connectionString, "@")
-	if at == -1 {
-		return connectionString
-	}
-
-	credentialsAndScheme := connectionString[:at]
-	hostAndDB := connectionString[at+1:]
-
-	// Split the credentials and scheme
-	credentialsAndSchemeParts := strings.SplitN(credentialsAndScheme, "://", 2)
-	if len(credentialsAndSchemeParts) != 2 {
-		return connectionString
-	}
-
-	credentials := credentialsAndSchemeParts[1]
-
-	// Split the username and password
-	credentialsParts := strings.SplitN(credentials, ":", 2)
-	if len(credentialsParts) != 2 {
-		return connectionString
-	}
-
-	username := credentialsParts[0]
-	password := credentialsParts[1]
-
-	// URL encode the password
-	encodedPassword := url.QueryEscape(password)
-
-	// Construct the new connection string
-	newConnectionString := fmt.Sprintf("mongodb://%s:%s@%s", username, encodedPassword, hostAndDB)
-
-	return newConnectionString
 }
 
 // Close finish the session.
