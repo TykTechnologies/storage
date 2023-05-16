@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/utils"
-	"gopkg.in/mgo.v2"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -33,12 +33,7 @@ var _ types.StorageLifecycle = &lifeCycle{}
 func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	var err error
 	var client *mongo.Client
-
-	dialInfo, err := mgo.ParseURL(opts.ConnectionString)
-	if err != nil {
-		return err
-	}
-
+	opts.ConnectionString = parsePassword(opts.ConnectionString)
 	// we check if the connection string is valid before building the connOpts.
 	cs, err := connstring.ParseAndValidate(opts.ConnectionString)
 	if err != nil {
@@ -56,23 +51,36 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	if client, err = mongo.Connect(context.Background(), connOpts); err != nil {
 		return err
 	}
-	connectionString := opts.ConnectionString
-	if cs.PasswordSet {
-		u, err := url.Parse(connectionString)
-		if err != nil {
-			return err
-		}
 
-		username := u.User.Username()
-
-		connectionString = fmt.Sprintf("mongodb://%s:%s@%s", username, dialInfo.Password, u.Host)
-	}
-
-	lc.connectionString = connectionString
+	lc.connectionString = opts.ConnectionString
 	lc.database = cs.Database
 	lc.client = client
 
 	return lc.client.Ping(context.Background(), nil)
+}
+
+func parsePassword(connectionString string) string {
+	// Find the last '@' (the delimiter between credentials and host)
+	at := strings.LastIndex(connectionString, "@")
+	credentialsAndScheme := connectionString[:at]
+	hostAndDB := connectionString[at+1:]
+
+	// Split the credentials and scheme
+	credentialsAndSchemeParts := strings.SplitN(credentialsAndScheme, "://", 2)
+	credentials := credentialsAndSchemeParts[1]
+
+	// Split the username and password
+	credentialsParts := strings.SplitN(credentials, ":", 2)
+	username := credentialsParts[0]
+	password := credentialsParts[1]
+
+	// URL encode the password
+	encodedPassword := url.QueryEscape(password)
+
+	// Construct the new connection string
+	newConnectionString := fmt.Sprintf("mongodb://%s:%s@%s", username, encodedPassword, hostAndDB)
+
+	return newConnectionString
 }
 
 // Close finish the session.
