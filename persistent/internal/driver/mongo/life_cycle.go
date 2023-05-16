@@ -3,10 +3,13 @@ package mongo
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/utils"
+	"gopkg.in/mgo.v2"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -31,6 +34,11 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	var err error
 	var client *mongo.Client
 
+	dialInfo, err := mgo.ParseURL(opts.ConnectionString)
+	if err != nil {
+		return err
+	}
+
 	// we check if the connection string is valid before building the connOpts.
 	cs, err := connstring.ParseAndValidate(opts.ConnectionString)
 	if err != nil {
@@ -47,6 +55,18 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 
 	if client, err = mongo.Connect(context.Background(), connOpts); err != nil {
 		return err
+	}
+	connectionString := opts.ConnectionString
+	if cs.PasswordSet {
+		u, err := url.Parse(connectionString)
+		if err != nil {
+			return err
+		}
+
+		username := u.User.Username()
+		password, _ := u.User.Password()
+
+		connectionString = fmt.Sprintf("mongodb://%s:%s@%s", username, password, u.Host)
 	}
 
 	lc.connectionString = opts.ConnectionString
