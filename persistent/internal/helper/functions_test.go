@@ -110,13 +110,13 @@ func TestParsePassword(t *testing.T) {
 		},
 		{
 			name:               "srv connection string",
-			originalConnString: "mongodb+srv://tyk:tyk@cluster0.zlgvyel.mongodb.net/tyl_analytics?retryWrites=true&w=majority",
-			expectedConnString: "mongodb+srv://tyk:tyk@cluster0.zlgvyel.mongodb.net/tyl_analytics?retryWrites=true&w=majority",
+			originalConnString: "mongodb+srv://tyk:tyk@clur0.zlgl.mongodb.net/tyk?w=majority",
+			expectedConnString: "mongodb+srv://tyk:tyk@clur0.zlgl.mongodb.net/tyk?w=majority",
 		},
 		{
 			name:               "srv connection string with special characters",
-			originalConnString: "mongodb+srv://tyk:p@ssword@cluster0.zlgvyel.mongodb.net/tyl_analytics?retryWrites=true&w=majority",
-			expectedConnString: "mongodb+srv://tyk:p%40ssword@cluster0.zlgvyel.mongodb.net/tyl_analytics?retryWrites=true&w=majority",
+			originalConnString: "mongodb+srv://tyk:p@ssword@clur0.zlgl.mongodb.net/tyk?w=majority",
+			expectedConnString: "mongodb+srv://tyk:p%40ssword@clur0.zlgl.mongodb.net/tyk?w=majority",
 		},
 		{
 			name:               "connection string without username",
