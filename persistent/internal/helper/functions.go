@@ -30,6 +30,7 @@ func IsCosmosDB(connectionString string) bool {
 // ParsePassword parses the password from the connection string and URL encodes it.
 // It's useful when the password contains special characters.
 // Example: mongodb://user:p@ssword@localhost:27017/db -> mongodb://user:p%40word@40localhost:27017/db
+// If there's any conflict, the function returns the original connection string.
 func ParsePassword(connectionString string) string {
 	// Find the last '@' (the delimiter between credentials and host)
 	at := strings.LastIndex(connectionString, "@")
@@ -46,22 +47,23 @@ func ParsePassword(connectionString string) string {
 		return connectionString
 	}
 
+	scheme := credentialsAndSchemeParts[0] // here we extract the scheme
 	credentials := credentialsAndSchemeParts[1]
 
 	// Split the username and password
-	credentialsParts := strings.SplitN(credentials, ":", 2)
-	if len(credentialsParts) != 2 {
+	credentialsParts := strings.Split(credentials, ":")
+	if len(credentialsParts) < 2 {
 		return connectionString
 	}
 
 	username := credentialsParts[0]
-	password := credentialsParts[1]
+	password := strings.Join(credentialsParts[1:], ":")
 
 	// URL encode the password
 	encodedPassword := url.QueryEscape(password)
 
 	// Construct the new connection string
-	newConnectionString := fmt.Sprintf("mongodb://%s:%s@%s", username, encodedPassword, hostAndDB)
+	newConnectionString := fmt.Sprintf("%s://%s:%s@%s", scheme, username, encodedPassword, hostAndDB)
 
 	return newConnectionString
 }

@@ -108,6 +108,36 @@ func TestParsePassword(t *testing.T) {
 			originalConnString: "mongodb://user:p@ss:/?#[]wor/d@localhost:27017,localhost:27018",
 			expectedConnString: "mongodb://user:p%40ss%3A%2F%3F%23%5B%5Dwor%2Fd@localhost:27017,localhost:27018",
 		},
+		{
+			name:               "srv connection string",
+			originalConnString: "mongodb+srv://tyk:tyk@cluster0.zlgvyel.mongodb.net/tyl_analytics?retryWrites=true&w=majority",
+			expectedConnString: "mongodb+srv://tyk:tyk@cluster0.zlgvyel.mongodb.net/tyl_analytics?retryWrites=true&w=majority",
+		},
+		{
+			name:               "srv connection string with special characters",
+			originalConnString: "mongodb+srv://tyk:p@ssword@cluster0.zlgvyel.mongodb.net/tyl_analytics?retryWrites=true&w=majority",
+			expectedConnString: "mongodb+srv://tyk:p%40ssword@cluster0.zlgvyel.mongodb.net/tyl_analytics?retryWrites=true&w=majority",
+		},
+		{
+			name:               "connection string without username",
+			originalConnString: "mongodb://:password@localhost:27017/test",
+			expectedConnString: "mongodb://:password@localhost:27017/test",
+		},
+		{
+			name:               "connection string without password",
+			originalConnString: "mongodb://user:@localhost:27017/test",
+			expectedConnString: "mongodb://user:@localhost:27017/test",
+		},
+		{
+			name:               "connection string without host",
+			originalConnString: "mongodb://user:password@/test",
+			expectedConnString: "mongodb://user:password@/test",
+		},
+		{
+			name:               "connection string without database",
+			originalConnString: "mongodb://user:password@localhost:27017",
+			expectedConnString: "mongodb://user:password@localhost:27017",
+		},
 	}
 
 	for _, test := range tests {
