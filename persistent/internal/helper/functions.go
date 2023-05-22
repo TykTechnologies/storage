@@ -32,10 +32,16 @@ func IsCosmosDB(connectionString string) bool {
 // Example: mongodb://user:p@ssword@localhost:27017/db -> mongodb://user:p%40word@40localhost:27017/db
 // If there's any conflict, the function returns the original connection string.
 func ParsePassword(connectionString string) string {
-	// Find the last '@' (the delimiter between credentials and host)
-	at := strings.LastIndex(connectionString, "@")
+	// Find the last '@' before the last ':' (the delimiter between credentials and host)
+	// we use ':' since the URL can contain '@' characters after the port number
+	at := findLastAtBeforeLastColon(connectionString)
 	if at == -1 {
-		return connectionString
+		// If there's no ':' in the connection string, we use the last '@' as delimiter
+		at = findLastAt(connectionString)
+		// If there's no '@' in the connection string, we return the original connection string
+		if at == -1 {
+			return connectionString
+		}
 	}
 
 	credentialsAndScheme := connectionString[:at]
@@ -62,8 +68,27 @@ func ParsePassword(connectionString string) string {
 	// URL encode the password
 	encodedPassword := url.QueryEscape(password)
 
+	encodedUsername := url.QueryEscape(username)
+
 	// Construct the new connection string
-	newConnectionString := fmt.Sprintf("%s://%s:%s@%s", scheme, username, encodedPassword, hostAndDB)
+	newConnectionString := fmt.Sprintf("%s://%s:%s@%s", scheme, encodedUsername, encodedPassword, hostAndDB)
 
 	return newConnectionString
+}
+
+func findLastAtBeforeLastColon(str string) int {
+	lastColon := strings.LastIndex(str, ":")
+	if lastColon == -1 {
+		return -1
+	}
+
+	subStr := str[:lastColon]
+
+	lastAt := strings.LastIndex(subStr, "@")
+
+	return lastAt
+}
+
+func findLastAt(str string) int {
+	return strings.LastIndex(str, "@")
 }

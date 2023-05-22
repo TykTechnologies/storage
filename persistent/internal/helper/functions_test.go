@@ -80,8 +80,8 @@ func TestParsePassword(t *testing.T) {
 		},
 		{
 			name:               "valid connection string with @ and /",
-			originalConnString: "mongodb://user:p@sswor/d@localhost:27017/test",
-			expectedConnString: "mongodb://user:p%40sswor%2Fd@localhost:27017/test",
+			originalConnString: "mongodb://u=s@r:p@sswor/d@localhost:27017/test",
+			expectedConnString: "mongodb://u%3Ds%40r:p%40sswor%2Fd@localhost:27017/test",
 		},
 		{
 			name:               "valid connection string with @ and / and '?' outside of the credentials part",
@@ -137,6 +137,11 @@ func TestParsePassword(t *testing.T) {
 			name:               "connection string without database",
 			originalConnString: "mongodb://user:password@localhost:27017",
 			expectedConnString: "mongodb://user:password@localhost:27017",
+		},
+		{
+			name:               "cosmosdb url",
+			originalConnString: "mongodb://4-0-qa:zFAQ==@4-0-qa.azure:10/a1?maxIdleTimeMS=120000&appName=@4-testing@",
+			expectedConnString: "mongodb://4-0-qa:zFAQ%3D%3D@4-0-qa.azure:10/a1?maxIdleTimeMS=120000&appName=@4-testing@",
 		},
 	}
 
