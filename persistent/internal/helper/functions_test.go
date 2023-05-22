@@ -62,7 +62,7 @@ func TestIsCosmosDB(t *testing.T) {
 	}
 }
 
-func TestParsePassword(t *testing.T) {
+func TestEncodeConnectionString(t *testing.T) {
 	tests := []struct {
 		name               string
 		originalConnString string
@@ -147,7 +147,7 @@ func TestParsePassword(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			connString := ParsePassword(test.originalConnString)
+			connString := EncodeConnectionString(test.originalConnString)
 			assert.Equal(t, test.expectedConnString, connString)
 		})
 	}

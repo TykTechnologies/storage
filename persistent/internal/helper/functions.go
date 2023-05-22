@@ -27,11 +27,11 @@ func IsCosmosDB(connectionString string) bool {
 		strings.Contains(connectionString, "AccountKey=")
 }
 
-// ParsePassword parses the password from the connection string and URL encodes it.
-// It's useful when the password contains special characters.
+// EncodeConnectionString URL encodes the password and the username from the connection string.
+// It's useful when they contains special characters.
 // Example: mongodb://user:p@ssword@localhost:27017/db -> mongodb://user:p%40word@40localhost:27017/db
 // If there's any conflict, the function returns the original connection string.
-func ParsePassword(connectionString string) string {
+func EncodeConnectionString(connectionString string) string {
 	// Find the last '@' before the last ':' (the delimiter between credentials and host)
 	// we use ':' since the URL can contain '@' characters after the port number
 	at := findLastAtBeforeLastColon(connectionString)
