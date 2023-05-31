@@ -1,8 +1,6 @@
 package persistent
 
 import (
-	"errors"
-
 	"github.com/TykTechnologies/storage/persistent/internal/driver/mongo"
 
 	"github.com/TykTechnologies/storage/persistent/internal/driver/mgo"
@@ -26,9 +24,8 @@ func NewPersistentStorage(opts *ClientOpts) (types.PersistentStorage, error) {
 	switch opts.Type {
 	case OfficialMongo:
 		return mongo.NewMongoDriver(&clientOpts)
-	case Mgo:
-		return mgo.NewMgoDriver(&clientOpts)
 	default:
-		return nil, errors.New("invalid driver")
+		//case MGO, or any unvalid
+		return mgo.NewMgoDriver(&clientOpts)
 	}
 }

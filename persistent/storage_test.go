@@ -17,11 +17,7 @@ func TestNewPersistentStorage(t *testing.T) {
 				Type:             tc,
 			})
 
-			if tc == "unvalid" {
-				assert.Error(t, err)
-			} else {
-				assert.Nil(t, err)
-			}
+			assert.Nil(t, err)
 		})
 	}
 }
