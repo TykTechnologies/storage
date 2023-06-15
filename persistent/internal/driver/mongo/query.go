@@ -59,7 +59,9 @@ func handleQueryValue(key string, value interface{}, search bson.M) {
 		if isStrSlice && key == "_id" {
 			ObjectIDs := []model.ObjectID{}
 			for _, str := range strSlice {
-				ObjectIDs = append(ObjectIDs, model.ObjectIDHex(str))
+				if primitive.IsValidObjectID(str) {
+					ObjectIDs = append(ObjectIDs, model.ObjectIDHex(str))
+				}
 			}
 
 			search[key] = bson.M{"$in": ObjectIDs}
