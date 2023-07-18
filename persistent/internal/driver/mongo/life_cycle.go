@@ -34,7 +34,7 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	// we check if the connection string is valid before building the connOpts.
 	cs, err := connstring.ParseAndValidate(opts.ConnectionString)
 	if err != nil {
-		return errors.New("invalid connection string")
+		return errors.New("invalid connection string: " + err.Error())
 	}
 
 	connOpts, err := mongoOptsBuilder(opts)
