@@ -26,7 +26,7 @@ type lifeCycle struct {
 func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	dialInfo, err := mgo.ParseURL(opts.ConnectionString)
 	if err != nil {
-		return err
+		return errors.New("invalid connection string")
 	}
 
 	dialInfo.Timeout = types.DEFAULT_CONN_TIMEOUT
