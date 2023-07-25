@@ -31,8 +31,6 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	var err error
 	var client *mongo.Client
 
-	opts.ConnectionString = helper.EncodeConnectionString(opts.ConnectionString)
-
 	// we check if the connection string is valid before building the connOpts.
 	cs, err := connstring.ParseAndValidate(opts.ConnectionString)
 	if err != nil {
