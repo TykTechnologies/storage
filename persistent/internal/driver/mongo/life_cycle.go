@@ -3,6 +3,9 @@ package mongo
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
@@ -12,7 +15,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
-	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
 
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 )
@@ -31,11 +33,12 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	var err error
 	var client *mongo.Client
 
-	// we check if the connection string is valid before building the connOpts.
-	cs, err := connstring.ParseAndValidate(opts.ConnectionString)
+	url, cs, err := parseURL(opts.ConnectionString)
 	if err != nil {
-		return errors.New("invalid connection string")
+		return err
 	}
+
+	opts.ConnectionString = url
 
 	connOpts, err := mongoOptsBuilder(opts)
 	if err != nil {
@@ -50,10 +53,107 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	}
 
 	lc.connectionString = opts.ConnectionString
-	lc.database = cs.Database
+	lc.database = cs.db
 	lc.client = client
 
 	return lc.client.Ping(context.Background(), nil)
+}
+
+type urlInfo struct {
+	addrs   []string
+	user    string
+	pass    string
+	db      string
+	options map[string]string
+}
+
+func isOptSep(c rune) bool {
+	return c == ';' || c == '&'
+}
+
+func parseURL(s string) (string, *urlInfo, error) {
+	var info *urlInfo
+	prefix := ""
+	if strings.HasPrefix(s, "mongodb://") {
+		prefix = "mongodb://"
+		s = strings.TrimPrefix(s, "mongodb://")
+	} else if strings.HasPrefix(s, "mongodb+srv://") {
+		prefix = "mongodb+srv://"
+		s = strings.TrimPrefix(s, "mongodb+srv://")
+	} else {
+		return "", info, errors.New("invalid connection string, no prefix found")
+	}
+
+	info, err := extractURL(s)
+	if err != nil {
+		return "", info, err
+	}
+
+	var connString string
+	connString += prefix
+
+	if info.user != "" {
+		info.user = url.QueryEscape(info.user)
+		connString += info.user
+		if info.pass != "" {
+			info.pass = url.QueryEscape(info.pass)
+			connString += ":" + info.pass
+		}
+		connString += "@"
+	}
+
+	connString += strings.Join(info.addrs, ",")
+	if info.db != "" {
+		connString += "/" + info.db
+	}
+
+	if len(info.options) > 0 {
+		connString += "?"
+		for k, v := range info.options {
+			connString += k + "=" + v + "&"
+		}
+		connString = connString[:len(connString)-1]
+	}
+
+	return connString, info, nil
+}
+
+func extractURL(s string) (*urlInfo, error) {
+	info := &urlInfo{options: make(map[string]string)}
+	if c := strings.Index(s, "?"); c != -1 {
+		for _, pair := range strings.FieldsFunc(s[c+1:], isOptSep) {
+			l := strings.SplitN(pair, "=", 2)
+			if len(l) != 2 || l[0] == "" || l[1] == "" {
+				return nil, errors.New("connection option must be key=value: " + pair)
+			}
+			info.options[l[0]] = l[1]
+		}
+		s = s[:c]
+	}
+	if c := strings.Index(s, "@"); c != -1 {
+		pair := strings.SplitN(s[:c], ":", 2)
+		if len(pair) > 2 || pair[0] == "" {
+			return nil, errors.New("credentials must be provided as user:pass@host")
+		}
+		var err error
+		info.user, err = url.QueryUnescape(pair[0])
+		if err != nil {
+			return nil, fmt.Errorf("cannot unescape username in URL: %q", pair[0])
+		}
+		if len(pair) > 1 {
+			info.pass, err = url.QueryUnescape(pair[1])
+			if err != nil {
+				return nil, fmt.Errorf("cannot unescape password in URL")
+			}
+		}
+		s = s[c+1:]
+	}
+	if c := strings.Index(s, "/"); c != -1 {
+		info.db = s[c+1:]
+		s = s[:c]
+	}
+	info.addrs = strings.Split(s, ",")
+	return info, nil
 }
 
 // Close finish the session.
