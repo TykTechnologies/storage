@@ -274,7 +274,7 @@ func TestParseURL(t *testing.T) {
 			name: "cosmosdb url",
 			url:  "mongodb+srv://4-0-qa:zFAQ==@4-0-qa.azure:10/a1?appName=@4-testing@&maxIdleTimeMS=120000",
 			want: "mongodb+srv://4-0-qa:zFAQ%3D%3D@4-0-qa.azure:10/a1?appName=@4-testing@&maxIdleTimeMS=120000",
-		}
+		},
 	}
 
 	for _, test := range tests {
