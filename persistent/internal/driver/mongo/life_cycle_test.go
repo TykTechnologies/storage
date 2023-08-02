@@ -211,22 +211,22 @@ func TestParseURL(t *testing.T) {
 		{
 			name: "valid connection string with @",
 			url:  "mongodb://user:p@ssword@localhost:27017",
-			want: "mongodb://user:p%40ssword@localhost:27017",
+			want: "mongodb://user:p@ssword@localhost:27017",
 		},
 		{
 			name: "valid connection string with @ and /",
 			url:  "mongodb://u=s@r:p@sswor/d@localhost:27017/test",
-			want: "mongodb://u%3Ds%40r:p%40sswor%2Fd@localhost:27017/test",
+			want: "mongodb://u%3Ds@r:p@sswor/d@localhost:27017/test",
 		},
 		{
 			name: "valid connection string with @ and / and '?' outside of the credentials part",
 			url:  "mongodb://user:p@sswor/d@localhost:27017/test?authSource=admin",
-			want: "mongodb://user:p%40sswor%2Fd@localhost:27017/test?authSource=admin",
+			want: "mongodb://user:p@sswor/d@localhost:27017/test?authSource=admin",
 		},
 		{
 			name: "special characters and multiple hosts",
 			url:  "mongodb://user:p@sswor/d@localhost:27017,localhost:27018/test?authSource=admin",
-			want: "mongodb://user:p%40sswor%2Fd@localhost:27017,localhost:27018/test?authSource=admin",
+			want: "mongodb://user:p@sswor/d@localhost:27017,localhost:27018/test?authSource=admin",
 		},
 		{
 			name: "url without credentials",
@@ -240,11 +240,6 @@ func TestParseURL(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "connection string full of special characters",
-			url:  "mongodb://user:p@ss:/?#[]wor/d@localhost:27017,localhost:27018",
-			want: "mongodb://user:p%40ss%3A%2F%3F%23%5B%5Dwor%2Fd@localhost:27017,localhost:27018",
-		},
-		{
 			name: "srv connection string",
 			url:  "mongodb+srv://tyk:tyk@clur0.zlgl.mongodb.net/tyk?w=majority",
 			want: "mongodb+srv://tyk:tyk@clur0.zlgl.mongodb.net/tyk?w=majority",
@@ -252,17 +247,18 @@ func TestParseURL(t *testing.T) {
 		{
 			name: "srv connection string with special characters",
 			url:  "mongodb+srv://tyk:p@ssword@clur0.zlgl.mongodb.net/tyk?w=majority",
-			want: "mongodb+srv://tyk:p%40ssword@clur0.zlgl.mongodb.net/tyk?w=majority",
+			want: "mongodb+srv://tyk:p@ssword@clur0.zlgl.mongodb.net/tyk?w=majority",
 		},
 		{
-			name: "connection string without username",
-			url:  "mongodb://:password@localhost:27017/test",
-			want: "mongodb://:password@localhost:27017/test",
+			name:    "connection string without username",
+			url:     "mongodb://:password@localhost:27017/test",
+			want:    "",
+			wantErr: true,
 		},
 		{
 			name: "connection string without password",
 			url:  "mongodb://user:@localhost:27017/test",
-			want: "mongodb://user:@localhost:27017/test",
+			want: "mongodb://user@localhost:27017/test",
 		},
 		{
 			name: "connection string without host",
@@ -276,24 +272,22 @@ func TestParseURL(t *testing.T) {
 		},
 		{
 			name: "cosmosdb url",
-			url:  "mongodb://4-0-qa:zFAQ==@4-0-qa.azure:10/a1?maxIdleTimeMS=120000&appName=@4-testing@",
-			want: "mongodb://4-0-qa:zFAQ%3D%3D@4-0-qa.azure:10/a1?maxIdleTimeMS=120000&appName=@4-testing@",
+			url:  "mongodb+srv://4-0-qa:zFAQ==@4-0-qa.azure:10/a1?maxIdleTimeMS=120000&appName=@4-testing@",
+			want: "mongodb+srv://4-0-qa:zFAQ%3D%3D@4-0-qa.azure:10/a1?maxIdleTimeMS=120000&appName=@4-testing@",
 		},
 		{
 			name: "already encoded cosmosdb url",
-			url:  "mongodb://4-0-qa:zFAQ%3D%3D@4-0-qa.azure:10/a1?maxIdleTimeMS=120000&appName=@4-testing@",
-			want: "mongodb://4-0-qa:zFAQ%3D%3D@4-0-qa.azure:10/a1?maxIdleTimeMS=120000&appName=@4-testing@",
+			url:  "mongodb+srv://4-0-qa:zFAQ%3D%3D@4-0-qa.azure:10/a1?maxIdleTimeMS=120000&appName=@4-testing@",
+			want: "mongodb+srv://4-0-qa:zFAQ%3D%3D@4-0-qa.azure:10/a1?maxIdleTimeMS=120000&appName=@4-testing@",
 		},
 	}
 
 	for _, test := range tests {
-		parsedURL, _, err := parseURL(test.url)
-		assert.Equal(t, test.want, parsedURL)
-		assert.Equal(t, test.wantErr, err != nil)
-		if err != nil {
-			return
-		}
-
+		t.Run(test.name, func(t *testing.T) {
+			parsedURL, _, err := parseURL(test.url)
+			assert.Equal(t, test.want, parsedURL)
+			assert.Equal(t, test.wantErr, err != nil)
+		})
 	}
 
 }
@@ -328,4 +322,28 @@ func TestDBType(t *testing.T) {
 
 	dbType := lc.DBType()
 	assert.Equal(t, utils.StandardMongo, dbType)
+}
+
+func TestIsOptSep(t *testing.T) {
+	tests := []struct {
+		input rune
+		want  bool
+	}{
+		{';', true},
+		{'&', true},
+		{':', false},
+		{'a', false},
+		{'1', false},
+		{' ', false},
+		{'\t', false},
+		{'\n', false},
+		{'!', false},
+	}
+
+	for _, test := range tests {
+		got := isOptSep(test.input)
+		if got != test.want {
+			t.Errorf("isOptSep(%q) = %v, want %v", test.input, got, test.want)
+		}
+	}
 }

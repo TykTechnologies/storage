@@ -74,13 +74,19 @@ func isOptSep(c rune) bool {
 func parseURL(s string) (string, *urlInfo, error) {
 	var info *urlInfo
 	prefix := ""
+
 	if strings.HasPrefix(s, "mongodb://") {
 		prefix = "mongodb://"
-		s = strings.TrimPrefix(s, "mongodb://")
 	} else if strings.HasPrefix(s, "mongodb+srv://") {
 		prefix = "mongodb+srv://"
+	}
+
+	switch prefix {
+	case "mongodb://":
+		s = strings.TrimPrefix(s, "mongodb://")
+	case "mongodb+srv://":
 		s = strings.TrimPrefix(s, "mongodb+srv://")
-	} else {
+	default:
 		return "", info, errors.New("invalid connection string, no prefix found")
 	}
 
@@ -95,14 +101,17 @@ func parseURL(s string) (string, *urlInfo, error) {
 	if info.user != "" {
 		info.user = url.QueryEscape(info.user)
 		connString += info.user
+
 		if info.pass != "" {
 			info.pass = url.QueryEscape(info.pass)
 			connString += ":" + info.pass
 		}
+
 		connString += "@"
 	}
 
 	connString += strings.Join(info.addrs, ",")
+
 	if info.db != "" {
 		connString += "/" + info.db
 	}
@@ -112,6 +121,7 @@ func parseURL(s string) (string, *urlInfo, error) {
 		for k, v := range info.options {
 			connString += k + "=" + v + "&"
 		}
+
 		connString = connString[:len(connString)-1]
 	}
 
@@ -120,39 +130,50 @@ func parseURL(s string) (string, *urlInfo, error) {
 
 func extractURL(s string) (*urlInfo, error) {
 	info := &urlInfo{options: make(map[string]string)}
+
 	if c := strings.Index(s, "?"); c != -1 {
 		for _, pair := range strings.FieldsFunc(s[c+1:], isOptSep) {
 			l := strings.SplitN(pair, "=", 2)
 			if len(l) != 2 || l[0] == "" || l[1] == "" {
 				return nil, errors.New("connection option must be key=value: " + pair)
 			}
+
 			info.options[l[0]] = l[1]
 		}
+
 		s = s[:c]
 	}
+
 	if c := strings.Index(s, "@"); c != -1 {
 		pair := strings.SplitN(s[:c], ":", 2)
 		if len(pair) > 2 || pair[0] == "" {
 			return nil, errors.New("credentials must be provided as user:pass@host")
 		}
+
 		var err error
+
 		info.user, err = url.QueryUnescape(pair[0])
 		if err != nil {
 			return nil, fmt.Errorf("cannot unescape username in URL: %q", pair[0])
 		}
+
 		if len(pair) > 1 {
 			info.pass, err = url.QueryUnescape(pair[1])
 			if err != nil {
 				return nil, fmt.Errorf("cannot unescape password in URL")
 			}
 		}
+
 		s = s[c+1:]
 	}
+
 	if c := strings.Index(s, "/"); c != -1 {
 		info.db = s[c+1:]
 		s = s[:c]
 	}
+
 	info.addrs = strings.Split(s, ",")
+
 	return info, nil
 }
 
