@@ -67,6 +67,8 @@ type urlInfo struct {
 	options []urlOptions
 }
 
+// urlOptions is a key/value pair representing a single option in a URL.
+// we need to use this struct instead of a map to avoid flaky tests due to the order of the options
 type urlOptions struct {
 	key string
 	val string
