@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mongo
 
 import (
@@ -147,7 +144,7 @@ func TestConnect(t *testing.T) {
 		{
 			name: "valid connection_string",
 			opts: &types.ClientOpts{
-				ConnectionString: "mongodb://localhost:27017/test",
+				ConnectionString: "mongodb+srv://tyk:6}3cZQU.9KvM/hVR4qkm-hHqZTu3yg=G@cluster0.zlgvyel.mongodb.net/?retryWrites=true&w=majority",
 				UseSSL:           false,
 				Type:             "mongodb",
 			},
@@ -211,7 +208,7 @@ func TestParseURL(t *testing.T) {
 		{
 			name: "valid connection string with @",
 			url:  "mongodb://user:p@ssword@localhost:27017",
-			want: "mongodb://user:p@ssword@localhost:27017",
+			want: "mongodb://user:p@ssword@localhost:27017/",
 		},
 		{
 			name: "valid connection string with @ and /",
@@ -268,12 +265,17 @@ func TestParseURL(t *testing.T) {
 		{
 			name: "connection string without database",
 			url:  "mongodb://user:password@localhost:27017",
-			want: "mongodb://user:password@localhost:27017",
+			want: "mongodb://user:password@localhost:27017/",
 		},
 		{
 			name: "cosmosdb url",
 			url:  "mongodb+srv://4-0-qa:zFAQ==@4-0-qa.azure:10/a1?appName=@4-testing@&maxIdleTimeMS=120000",
 			want: "mongodb+srv://4-0-qa:zFAQ%3D%3D@4-0-qa.azure:10/a1?appName=@4-testing@&maxIdleTimeMS=120000",
+		},
+		{
+			name: "cosmosdb url without database with options",
+			url:  "mongodb+srv://tyk:6}3cZQU.9KvM/hVR4qkm-hHqZTu3yg=G@cluster0.zlgvyel.mongodb.net/?retryWrites=true&w=majority",
+			want: "mongodb+srv://tyk:6%7D3cZQU.9KvM%2FhVR4qkm-hHqZTu3yg%3DG@cluster0.zlgvyel.mongodb.net/?retryWrites=true&w=majority",
 		},
 	}
 

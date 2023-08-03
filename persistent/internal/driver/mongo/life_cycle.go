@@ -64,7 +64,12 @@ type urlInfo struct {
 	user    string
 	pass    string
 	db      string
-	options map[string]string
+	options []urlOptions
+}
+
+type urlOptions struct {
+	key string
+	val string
 }
 
 func isOptSep(c rune) bool {
@@ -112,14 +117,12 @@ func parseURL(s string) (string, *urlInfo, error) {
 
 	connString += strings.Join(info.addrs, ",")
 
-	if info.db != "" {
-		connString += "/" + info.db
-	}
+	connString += "/" + info.db
 
 	if len(info.options) > 0 {
 		connString += "?"
-		for k, v := range info.options {
-			connString += k + "=" + v + "&"
+		for _, v := range info.options {
+			connString += v.key + "=" + v.val + "&"
 		}
 
 		connString = connString[:len(connString)-1]
@@ -129,7 +132,7 @@ func parseURL(s string) (string, *urlInfo, error) {
 }
 
 func extractURL(s string) (*urlInfo, error) {
-	info := &urlInfo{options: make(map[string]string)}
+	info := &urlInfo{options: make([]urlOptions, 0)}
 
 	if c := strings.Index(s, "?"); c != -1 {
 		for _, pair := range strings.FieldsFunc(s[c+1:], isOptSep) {
@@ -138,7 +141,7 @@ func extractURL(s string) (*urlInfo, error) {
 				return nil, errors.New("connection option must be key=value: " + pair)
 			}
 
-			info.options[l[0]] = l[1]
+			info.options = append(info.options, urlOptions{key: l[0], val: l[1]})
 		}
 
 		s = s[:c]
