@@ -144,7 +144,7 @@ func TestConnect(t *testing.T) {
 		{
 			name: "valid connection_string",
 			opts: &types.ClientOpts{
-				ConnectionString: "mongodb+srv://tyk:6}3cZQU.9KvM/hVR4qkm-hHqZTu3yg=G@cluster0.zlgvyel.mongodb.net/?retryWrites=true&w=majority",
+				ConnectionString: "mongodb://localhost:27017/test",
 				UseSSL:           false,
 				Type:             "mongodb",
 			},
