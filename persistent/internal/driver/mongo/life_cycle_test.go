@@ -274,8 +274,8 @@ func TestParseURL(t *testing.T) {
 		},
 		{
 			name: "cosmosdb url without database with options",
-			url:  "mongodb+srv://tyk:6}3cZQU.9KvM/hVR4qkm-hHqZTu3yg=G@cluster0.zlgvyel.mongodb.net/?retryWrites=true&w=majority",
-			want: "mongodb+srv://tyk:6%7D3cZQU.9KvM%2FhVR4qkm-hHqZTu3yg%3DG@cluster0.zlgvyel.mongodb.net/?retryWrites=true&w=majority",
+			url:  "mongodb+srv://tyk:6}3c.9KvM/hVR4qkm-hu3yg=G@clu0.zl.mongodb.net/?retryWrites=true&w=majority",
+			want: "mongodb+srv://tyk:6%7D3c.9KvM%2FhVR4qkm-hu3yg%3DG@clu0.zl.mongodb.net/?retryWrites=true&w=majority",
 		},
 	}
 
@@ -286,7 +286,6 @@ func TestParseURL(t *testing.T) {
 			assert.Equal(t, test.wantErr, err != nil)
 		})
 	}
-
 }
 
 func TestClose(t *testing.T) {
