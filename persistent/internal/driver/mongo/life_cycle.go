@@ -28,6 +28,11 @@ type lifeCycle struct {
 
 var _ types.StorageLifecycle = &lifeCycle{}
 
+const (
+	MongoPrefix    = "mongodb://"
+	MongoSRVPrefix = "mongodb+srv://"
+)
+
 // Connect connects to the mongo database given the ClientOpts.
 func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	var err error
@@ -82,17 +87,17 @@ func parseURL(s string) (string, *urlInfo, error) {
 	var info *urlInfo
 	prefix := ""
 
-	if strings.HasPrefix(s, "mongodb://") {
-		prefix = "mongodb://"
-	} else if strings.HasPrefix(s, "mongodb+srv://") {
-		prefix = "mongodb+srv://"
+	if strings.HasPrefix(s, MongoPrefix) {
+		prefix = MongoPrefix
+	} else if strings.HasPrefix(s, MongoSRVPrefix) {
+		prefix = MongoSRVPrefix
 	}
 
 	switch prefix {
-	case "mongodb://":
-		s = strings.TrimPrefix(s, "mongodb://")
-	case "mongodb+srv://":
-		s = strings.TrimPrefix(s, "mongodb+srv://")
+	case MongoPrefix:
+		s = strings.TrimPrefix(s, MongoPrefix)
+	case MongoSRVPrefix:
+		s = strings.TrimPrefix(s, MongoSRVPrefix)
 	default:
 		return "", info, errors.New("invalid connection string, no prefix found")
 	}
@@ -135,12 +140,31 @@ func parseURL(s string) (string, *urlInfo, error) {
 
 func extractURL(s string) (*urlInfo, error) {
 	info := &urlInfo{options: make([]urlOptions, 0)}
+	var err error
 
+	if s, err = extractOptions(s, info); err != nil {
+		return nil, err
+	}
+
+	if s, err = extractCredentials(s, info); err != nil {
+		return nil, err
+	}
+
+	if s, err = extractDatabase(s, info); err != nil {
+		return nil, err
+	}
+
+	info.addrs = strings.Split(s, ",")
+
+	return info, nil
+}
+
+func extractOptions(s string, info *urlInfo) (string, error) {
 	if c := strings.Index(s, "?"); c != -1 {
 		for _, pair := range strings.FieldsFunc(s[c+1:], isOptSep) {
 			l := strings.SplitN(pair, "=", 2)
 			if len(l) != 2 || l[0] == "" || l[1] == "" {
-				return nil, errors.New("connection option must be key=value: " + pair)
+				return s, errors.New("connection option must be key=value: " + pair)
 			}
 
 			info.options = append(info.options, urlOptions{key: l[0], val: l[1]})
@@ -149,37 +173,43 @@ func extractURL(s string) (*urlInfo, error) {
 		s = s[:c]
 	}
 
+	return s, nil
+}
+
+func extractCredentials(s string, info *urlInfo) (string, error) {
 	if c := strings.Index(s, "@"); c != -1 {
 		pair := strings.SplitN(s[:c], ":", 2)
 		if len(pair) > 2 || pair[0] == "" {
-			return nil, errors.New("credentials must be provided as user:pass@host")
+			return s, errors.New("credentials must be provided as user:pass@host")
 		}
 
 		var err error
 
 		info.user, err = url.QueryUnescape(pair[0])
 		if err != nil {
-			return nil, fmt.Errorf("cannot unescape username in URL: %q", pair[0])
+			return s, fmt.Errorf("cannot unescape username in URL: %q", pair[0])
 		}
 
 		if len(pair) > 1 {
 			info.pass, err = url.QueryUnescape(pair[1])
 			if err != nil {
-				return nil, fmt.Errorf("cannot unescape password in URL")
+				return s, fmt.Errorf("cannot unescape password in URL")
 			}
 		}
 
 		s = s[c+1:]
 	}
 
+	return s, nil
+}
+
+func extractDatabase(s string, info *urlInfo) (string, error) {
 	if c := strings.Index(s, "/"); c != -1 {
 		info.db = s[c+1:]
 		s = s[:c]
 	}
 
-	info.addrs = strings.Split(s, ",")
-
-	return info, nil
+	return s, nil
 }
 
 // Close finish the session.
