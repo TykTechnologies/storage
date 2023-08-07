@@ -98,7 +98,7 @@ func TestNewMongoDriver(t *testing.T) {
 		})
 
 		assert.NotNil(t, err)
-		assert.Equal(t, "invalid connection string", err.Error())
+		assert.Equal(t, "invalid connection string, no prefix found", err.Error())
 		assert.Nil(t, newDriver)
 	})
 	t.Run("new driver without connection string", func(t *testing.T) {

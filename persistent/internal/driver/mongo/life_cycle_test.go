@@ -1,6 +1,3 @@
-//go:build mongo
-// +build mongo
-
 package mongo
 
 import (
@@ -160,7 +157,7 @@ func TestConnect(t *testing.T) {
 				UseSSL:           false,
 				Type:             "mongodb",
 			},
-			want: errors.New("invalid connection string"),
+			want: errors.New("invalid connection string, no prefix found"),
 		},
 		{
 			name: "valid connection_string and invalid tls config",
@@ -181,6 +178,112 @@ func TestConnect(t *testing.T) {
 			assert.Equal(t, gotErr, test.want)
 
 			defer lc.Close()
+		})
+	}
+}
+
+func TestParseURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "valid connection_string with special characters",
+			url:  "mongodb://lt_tyk:6}3cZQU.9KvM/hVR4qkm-hHqZTu3yg=G@localhost:27017/tyk_analytics",
+			want: "mongodb://lt_tyk:6%7D3cZQU.9KvM%2FhVR4qkm-hHqZTu3yg%3DG@localhost:27017/tyk_analytics",
+		},
+		{
+			name: "already encoded valid url",
+			url:  "mongodb://lt_tyk:6%7D3cZQU.9KvM%2FhVR4qkm-hHqZTu3yg%3DG@localhost:27017/tyk_analytics",
+			want: "mongodb://lt_tyk:6%7D3cZQU.9KvM%2FhVR4qkm-hHqZTu3yg%3DG@localhost:27017/tyk_analytics",
+		},
+		{
+			name:    "invalid connection_string",
+			url:     "invalid_conn_string",
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name: "valid connection string with @",
+			url:  "mongodb://user:p@ssword@localhost:27017",
+			want: "mongodb://user:p@ssword@localhost:27017/",
+		},
+		{
+			name: "valid connection string with @ and /",
+			url:  "mongodb://u=s@r:p@sswor/d@localhost:27017/test",
+			want: "mongodb://u%3Ds@r:p@sswor/d@localhost:27017/test",
+		},
+		{
+			name: "valid connection string with @ and / and '?' outside of the credentials part",
+			url:  "mongodb://user:p@sswor/d@localhost:27017/test?authSource=admin",
+			want: "mongodb://user:p@sswor/d@localhost:27017/test?authSource=admin",
+		},
+		{
+			name: "special characters and multiple hosts",
+			url:  "mongodb://user:p@sswor/d@localhost:27017,localhost:27018/test?authSource=admin",
+			want: "mongodb://user:p@sswor/d@localhost:27017,localhost:27018/test?authSource=admin",
+		},
+		{
+			name: "url without credentials",
+			url:  "mongodb://localhost:27017/test?authSource=admin",
+			want: "mongodb://localhost:27017/test?authSource=admin",
+		},
+		{
+			name:    "invalid connection string",
+			url:     "test",
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name: "srv connection string",
+			url:  "mongodb+srv://tyk:tyk@clur0.zlgl.mongodb.net/tyk?w=majority",
+			want: "mongodb+srv://tyk:tyk@clur0.zlgl.mongodb.net/tyk?w=majority",
+		},
+		{
+			name: "srv connection string with special characters",
+			url:  "mongodb+srv://tyk:p@ssword@clur0.zlgl.mongodb.net/tyk?w=majority",
+			want: "mongodb+srv://tyk:p@ssword@clur0.zlgl.mongodb.net/tyk?w=majority",
+		},
+		{
+			name:    "connection string without username",
+			url:     "mongodb://:password@localhost:27017/test",
+			want:    "",
+			wantErr: true,
+		},
+		{
+			name: "connection string without password",
+			url:  "mongodb://user:@localhost:27017/test",
+			want: "mongodb://user@localhost:27017/test",
+		},
+		{
+			name: "connection string without host",
+			url:  "mongodb://user:password@/test",
+			want: "mongodb://user:password@/test",
+		},
+		{
+			name: "connection string without database",
+			url:  "mongodb://user:password@localhost:27017",
+			want: "mongodb://user:password@localhost:27017/",
+		},
+		{
+			name: "cosmosdb url",
+			url:  "mongodb+srv://4-0-qa:zFAQ==@4-0-qa.azure:10/a1?appName=@4-testing@&maxIdleTimeMS=120000",
+			want: "mongodb+srv://4-0-qa:zFAQ%3D%3D@4-0-qa.azure:10/a1?appName=@4-testing@&maxIdleTimeMS=120000",
+		},
+		{
+			name: "cosmosdb url without database with options",
+			url:  "mongodb+srv://tyk:6}3c.9KvM/hVR4qkm-hu3yg=G@clu0.zl.mongodb.net/?retryWrites=true&w=majority",
+			want: "mongodb+srv://tyk:6%7D3c.9KvM%2FhVR4qkm-hu3yg%3DG@clu0.zl.mongodb.net/?retryWrites=true&w=majority",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			parsedURL, _, err := parseURL(test.url)
+			assert.Equal(t, test.want, parsedURL)
+			assert.Equal(t, test.wantErr, err != nil)
 		})
 	}
 }
@@ -215,4 +318,28 @@ func TestDBType(t *testing.T) {
 
 	dbType := lc.DBType()
 	assert.Equal(t, utils.StandardMongo, dbType)
+}
+
+func TestIsOptSep(t *testing.T) {
+	tests := []struct {
+		input rune
+		want  bool
+	}{
+		{';', true},
+		{'&', true},
+		{':', false},
+		{'a', false},
+		{'1', false},
+		{' ', false},
+		{'\t', false},
+		{'\n', false},
+		{'!', false},
+	}
+
+	for _, test := range tests {
+		got := isOptSep(test.input)
+		if got != test.want {
+			t.Errorf("isOptSep(%q) = %v, want %v", test.input, got, test.want)
+		}
+	}
 }
