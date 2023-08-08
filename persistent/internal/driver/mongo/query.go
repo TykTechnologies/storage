@@ -101,7 +101,14 @@ func handleNestedQuery(search bson.M, key string, value interface{}) {
 				search[key] = bson.M{"$regex": primitive.Regex{Pattern: regexp.QuoteMeta(stringValue), Options: "i"}}
 			}
 		default:
-			search[key] = bson.M{nestedKey: nestedValue}
+			if v, ok := search[key]; !ok {
+				search[key] = bson.M{nestedKey: nestedValue}
+			} else {
+				if nestedQ, ok := v.(bson.M); ok {
+					nestedQ[nestedKey] = nestedValue
+					search[key] = nestedQ
+				}
+			}
 		}
 	}
 }
