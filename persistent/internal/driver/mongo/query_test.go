@@ -38,6 +38,21 @@ func TestBuildQuery(t *testing.T) {
 			},
 		},
 		{
+			testName: "Test nested query with more than 1 key",
+			input: model.DBM{
+				"value": model.DBM{
+					"$gte": 0,
+					"$lte": 10,
+				},
+			},
+			output: bson.M{
+				"value": bson.M{
+					"$gte": 0,
+					"$lte": 10,
+				},
+			},
+		},
+		{
 			testName: "Test with $in query",
 			input: model.DBM{
 				"age": []int{20, 30, 40},
