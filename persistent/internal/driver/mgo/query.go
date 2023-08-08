@@ -84,10 +84,10 @@ func handleNestedQuery(search bson.M, key string, value interface{}) {
 			if v, ok := search[key]; !ok {
 				search[key] = bson.M{nestedKey: nestedValue}
 			} else {
-				// omitting assertion as value is confirmed to be bson.M above.
-				nestedQ, _ := v.(bson.M)
-				nestedQ[nestedKey] = nestedValue
-				search[key] = nestedQ
+				if nestedQ, ok := v.(bson.M); ok {
+					nestedQ[nestedKey] = nestedValue
+					search[key] = nestedQ
+				}
 			}
 		}
 	}
