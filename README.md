@@ -7,21 +7,15 @@ This repository provides a common interface for Tyk components to connect to dif
 The aim of this library is to offer Tyk components an effortless and versatile solution for connecting to persistent storage systems. With this library, Tyk components can effortlessly switch between different storage systems without disrupting their application's inner workings. It includes typical database operations and healthcheck functionalities to verify a stable connection to the storage system.
 
 ## Roadmap
-### Q1 2023
+### Q2 2023
 - [ ] Persistent storage: common interfaces.
 - [ ] Persistent storage: Mongo `mgo` driver.
 - [ ] Persistent storage: Mongo `official` driver.
 
-### Q2 2023
+### To be planned
 - [ ] Persistent storage: SQL `gorm` driver.
 - [ ] Temporal storage: Redis 6 driver.
 - [ ] Temporal storage: Redis 7 driver.
-
-### Q3 2023
-- [ ] TBD
-
-### Q4 2023
-- [ ] TBD
 
 Note: This roadmap is a sample and is subject to change based on development progress and priorities.
 
