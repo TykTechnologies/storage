@@ -1,4 +1,4 @@
-name: CI tests
+name: Temporal Storage Tests
 
 on:
   pull_request:
@@ -11,17 +11,15 @@ env:
 
 jobs:
   test:
-    name: Tests ${{ matrix.storagetype }} temporal storage - DB ${{ matrix.database }} ${{ matrix.version }}
+    name: DB ${{ matrix.database }} ${{ matrix.version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - storagetype: in-memory
-            database: redis
+          - database: redis
             version: 6
-          - storagetype: in-memory
-            database: redis
+          - database: redis
             version: 7
     steps:
       - name: Checkout repository
@@ -48,7 +46,7 @@ jobs:
 
       - name: Run Redis tests
         run: |
-          ./bin/redis-tests.sh ${{ matrix.storagetype }} ${{ matrix.database }}
+          ./bin/redis-tests.sh ${{ matrix.database }} ${{ matrix.version }}
 
       - uses: actions/upload-artifact@v2
         with:
