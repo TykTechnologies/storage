@@ -11,51 +11,48 @@ env:
 
 jobs:
   test:
-    name: Go ${{ matrix.go-version }} Redis ${{ matrix.redis-version }}
+    name: Tests ${{ matrix.storagetype }} temporal storage - DB ${{ matrix.database }} ${{ matrix.version }}
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
-        redis-version: [6, 7]
-        go-version: [1.19.x]
-
+        include:
+          - storagetype: in-memory
+            database: redis
+            version: 6
+          - storagetype: in-memory
+            database: redis
+            version: 7
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
 
       - name: Setup Golang
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version: ${{ env.GO_VERSION }}
 
-      - name: Install Dependencies and basic hygiene test
-        run: |
-          # Adapt this block to fit your project's needs
-          make lint
+      - name: Verify dependencies
+        run: go mod verify
 
-      - name: Start Redis
+      - name: Build
+        run: go build -v ./...
+
+      - if: ${{ matrix.database == 'redis' }}
+        name: Start Redis '${{ matrix.version }}'
         uses: supercharge/redis-github-action@1.2.0
         with:
-          redis-version: ${{ matrix.redis-version }}
+          redis-version: "${{ matrix.version }}"
 
-      - name: Cache Go Modules
-        uses: actions/cache@v2
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-
-      - name: Install Go Dependencies
-        run: go get github.com/go-redis/redis/v8
-
-      - name: Run Tests
+      - name: Run Redis tests
         run: |
-          go test ./temporal/
+          ./bin/redis-tests.sh ${{ matrix.storagetype }} ${{ matrix.database }}
 
-      - name: Notify status
-        if: ${{ failure() }}
-        uses: peter-evans/create-or-update-comment@v1
+      - uses: actions/upload-artifact@v2
         with:
-          issue-number: ${{ github.event.pull_request.number }}
-          body: |
-            # CI tests failed
-            Please check the CI logs for more details.
+          name: coverage
+          retention-days: 1
+          path: |
+            *.cov

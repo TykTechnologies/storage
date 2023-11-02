@@ -1,4 +1,4 @@
-package tests
+package temporal
 
 import (
 	"testing"
