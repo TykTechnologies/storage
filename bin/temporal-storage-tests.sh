@@ -8,7 +8,6 @@ cd $(dirname $(dirname $(readlink -f $0)))
 database=${1}
 version=${2}
 
-# Set up connection or other environment variables specific to the Redis test
 if [[ $database = "redis" ]]; then
     export REDIS_CONNECTION_STRING="localhost:6379"
 else
@@ -19,7 +18,7 @@ fi
 echo "Running tests with using $database version: $version :"
 echo
 
-# Since you mentioned your Redis tests are in the "temporal" folder
+
 listPackages() {
     go list ./temporal/...
 }
