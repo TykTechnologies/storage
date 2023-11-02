@@ -46,7 +46,7 @@ jobs:
 
       - name: Run Redis tests
         run: |
-          ./bin/redis-tests.sh ${{ matrix.database }} ${{ matrix.version }}
+          ./bin/temporal-storage-tests.sh ${{ matrix.database }} ${{ matrix.version }}
 
       - uses: actions/upload-artifact@v2
         with:
