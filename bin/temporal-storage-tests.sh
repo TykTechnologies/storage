@@ -4,6 +4,9 @@ set -e
 # change path into root directory
 cd $(dirname $(dirname $(readlink -f $0)))
 
+# import common functions
+. ./bin/_common.sh
+
 # load params
 database=${1}
 version=${2}
@@ -15,18 +18,13 @@ else
     exit 1
 fi
 
-echo "Running tests with using $database version: $version :"
+echo "Running tests using $database version: $version :"
 echo
 
-
-listPackages() {
-    go list ./temporal/...
-}
-
-listPackages | xargs -n1 echo "-"
+listPackages temporal | xargs -n1 echo "-"
 echo
 
-for pkg in $(listPackages);
+for pkg in $(listPackages temporal);
 do
     coveragefile=`echo "$pkg-$database" | awk -F/ '{print $NF}'`
 

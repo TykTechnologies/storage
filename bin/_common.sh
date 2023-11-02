@@ -1,4 +1,6 @@
-# listPackages lists local go packages under the "persistent" directory.
+# listPackages lists local go packages. In case a subpackage contains
+# it's own go.mod file, it will not be listed as part of the output.
 function listPackages {
-    go list ./persistent/...
+    pkg=$1
+    go list ./${pkg}/...
 }

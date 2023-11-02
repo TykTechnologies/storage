@@ -18,12 +18,12 @@ else
     exit 1
 fi
 
-echo "Running $dbtype  with $db database, testing:"
+echo "Running $dbtype with $db database, testing:"
 echo
-listPackages $dbtype | xargs -n1 echo "-"
+listPackages persistent | xargs -n1 echo "-"
 echo
 
-for pkg in $(listPackages);
+for pkg in $(listPackages persistent);
 do
     coveragefile=`echo "$pkg-$db" | awk -F/ '{print $NF}'`
 

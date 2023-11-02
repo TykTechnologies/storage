@@ -7,8 +7,7 @@ cd $(dirname $(dirname $(readlink -f $0)))
 # import common functions
 . ./bin/_common.sh
 
-for pkg in $(listPackages);
-do
+for pkg in $(listPackages persistent); do
     coveragefile=`echo "$pkg.cov" | awk -F/ '{print $NF}'`
     mongo_cov=`echo "$pkg-mongo.cov" | awk -F/ '{print $NF}'`
     set -x
