@@ -1,10 +1,10 @@
 package temporal
 
 import (
+	"context"
 	"testing"
 
 	"github.com/go-redis/redis/v8"
-	"golang.org/x/net/context"
 )
 
 func TestRedisPing(t *testing.T) {
