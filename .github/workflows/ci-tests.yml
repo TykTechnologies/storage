@@ -6,13 +6,17 @@ on:
     branches:
       - main
 
+env:
+  REDIS_HOST: localhost
+  GO_VERSION: "1.16.x"
+
 jobs:
   golangci-lint:
     runs-on: ubuntu-latest
     steps:
       - name: use gh token
         env:
-            TOKEN: '${{ secrets.ORG_GH_TOKEN }}'
+          TOKEN: "${{ secrets.ORG_GH_TOKEN }}"
         run: >
           git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
       - name: Checkout Storage
@@ -25,7 +29,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v3
         with:
-          go-version: 1.16
+          go-version: ${{ env.GO_VERSION }}
       - name: Download golangci-lint
         run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
       - name: golangci-lint
@@ -52,6 +56,12 @@ jobs:
           - storagetype: persistent
             database: mongo
             version: 4.2
+          - storagetype: temporal
+            database: redis
+            version: 6
+          - storagetype: temporal
+            database: redis
+            version: 7
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -61,7 +71,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v3
         with:
-          go-version: 1.16
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Verify dependencies
         run: go mod verify
@@ -73,10 +83,18 @@ jobs:
         name: Start MongoDB '${{ matrix.version }}'
         uses: supercharge/mongodb-github-action@1.8.0
         with:
-          mongodb-version: '${{ matrix.version }}'
+          mongodb-version: "${{ matrix.version }}"
+
+      - if: ${{ matrix.database == 'redis' }}
+        name: Start Redis '${{ matrix.version }}'
+        uses: supercharge/redis-github-action@1.2.0
+        with:
+          redis-version: "${{ matrix.version }}"
+
       - name: Run tests
         run: |
           ./bin/ci-tests.sh ${{ matrix.storagetype }} ${{ matrix.database }}
+
       - uses: actions/upload-artifact@v2
         with:
           name: coverage
@@ -95,7 +113,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v3
         with:
-          go-version: 1.16
+          go-version: ${{ env.GO_VERSION }}
       - name: Download coverage artifacts
         uses: actions/download-artifact@v2
         with:
@@ -108,10 +126,10 @@ jobs:
         id: check_files
         uses: andstor/file-existence-action@v1
         with:
-          files: '*.cov, golanglint.xml'
+          files: "*.cov, golanglint.xml"
       - name: Install Dependencies
         env:
-          TOKEN: '${{ secrets.ORG_GH_TOKEN }}'
+          TOKEN: "${{ secrets.ORG_GH_TOKEN }}"
         run: >
           git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
 
