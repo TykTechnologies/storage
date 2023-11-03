@@ -17,6 +17,7 @@ func TestRedisPing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Couldn't connect to Redis: %v", err)
 	}
+
 	if pong != "PONG" {
 		t.Fatalf("Redis didn't respond with PONG when Pinged. Got: %v", pong)
 	}
