@@ -7,7 +7,6 @@ on:
       - main
 
 env:
-  REDIS_HOST: localhost
   GO_VERSION: "1.16.x"
 
 jobs:
@@ -91,9 +90,16 @@ jobs:
         with:
           redis-version: "${{ matrix.version }}"
 
-      - name: Run tests
+      - name: Install Task runner
         run: |
-          ./bin/ci-tests.sh ${{ matrix.storagetype }} ${{ matrix.database }}
+          curl -sL https://taskfile.dev/install.sh | sh
+          echo "./bin" >> $GITHUB_PATH
+
+      - name: Run tests
+        env:
+          DB: ${{ matrix.database }}
+          STORAGE_TYPE: ${{ matrix.storagetype }}
+        run: task test-${{ matrix.storagetype }}
 
       - uses: actions/upload-artifact@v2
         with:
