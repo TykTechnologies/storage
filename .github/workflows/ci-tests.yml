@@ -140,9 +140,12 @@ jobs:
           git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
 
           go install github.com/wadey/gocovmerge@latest
-      - name: merge reports
+      - name: Install Task runner
         run: |
-          ./bin/merge-cov.sh
+          curl -sL https://taskfile.dev/install.sh | sh
+          echo "./bin" >> $GITHUB_PATH
+      - name: merge reports
+        run: task merge-cov
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@master
         with:

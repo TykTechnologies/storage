@@ -8,12 +8,12 @@ env:
 
 tasks:
   build:
-    desc: Build the project
+    desc: "Build the project"
     cmds:
       - go build -v ./...
 
   list-packages:
-    desc: List Go packages
+    desc: "List Go packages for a given PKG"
     cmds:
       - go list ./{{.PKG}}/...
     vars:
@@ -21,7 +21,7 @@ tasks:
         sh: echo $PKG
 
   set-db-env:
-    desc: Set database specific environment variables
+    desc: "Set database-specific environment variables based on DB type"
     cmds:
       - |
         case "{{.DB}}" in
@@ -38,7 +38,7 @@ tasks:
         esac
 
   run-tests:
-    desc: Run Go tests for specified storage and database
+    desc: "Run Go tests for specified storage and database"
     cmds:
       - |
         for pkg in $(go list ./{{.STORAGE_TYPE}}/...);
@@ -47,42 +47,41 @@ tasks:
           go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -v ${pkg}
         done
 
-  test-persistent:
-    desc: Run tests for persistent storage with specified database
+  test-storage:
+    desc: "Run tests for a specified storage type with specified database"
     cmds:
-      - task: set-db-env DB={{.DB}}
-      - task: run-tests STORAGE_TYPE=persistent DB={{.DB}}
-    vars:
-      DB:
-        sh: echo $DB
+      - task: set-db-env
+        vars:
+          DB: "{{.DB}}"
+      - task: run-tests
+        vars:
+          STORAGE_TYPE: "{{.STORAGE_TYPE}}"
+          DB: "{{.DB}}"
 
-  test-temporal:
-    desc: Run tests for temporal storage with specified database
-    cmds:
-      - task: set-db-env DB={{.DB}}
-      - task: run-tests STORAGE_TYPE=temporal DB={{.DB}}
-    vars:
-      DB:
-        sh: echo $DB
-
-  merge-cov:
-    desc: Merge coverage files for both persistent and temporal storages
+  merge-coverage:
+    desc: "Merge coverage files for a given storage type"
     cmds:
       - |
-        # Persistent storage
-        for pkg in $(go list ./persistent/...);
+        for pkg in $(go list ./{{.STORAGE_TYPE}}/...);
         do
           coveragefile=`echo "$pkg.cov" | awk -F/ '{print $NF}'`
-          mongo_cov=`echo "$pkg-mongo.cov" | awk -F/ '{print $NF}'`
-          gocovmerge $mongo_cov  > $coveragefile
-          rm $mongo_cov
+          specific_cov=`echo "$pkg-{{.DB}}.cov" | awk -F/ '{print $NF}'`
+          gocovmerge $specific_cov  > $coveragefile
+          rm $specific_cov
         done
 
-        # Temporal storage
-        for pkg in $(go list ./temporal/...);
-        do
-          coveragefile=`echo "$pkg.cov" | awk -F/ '{print $NF}'`
-          redis_cov=`echo "$pkg-redis.cov" | awk -F/ '{print $NF}'`
-          gocovmerge $redis_cov  > $coveragefile
-          rm $redis_cov
-        done
+  test-persistent:
+    desc: "Run tests for persistent storage with specified database"
+    cmds:
+      - task: test-storage
+        vars:
+          STORAGE_TYPE: persistent
+          DB: "{{.DB}}"
+
+  test-temporal:
+    desc: "Run tests for temporal storage with specified database"
+    cmds:
+      - task: test-storage
+        vars:
+          STORAGE_TYPE: temporal
+          DB: "{{.DB}}"
