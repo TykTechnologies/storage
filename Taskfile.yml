@@ -70,12 +70,11 @@ tasks:
     desc: "Merge coverage files for a given storage type"
     cmds:
       - |
-        for pkg in $(go list ./{{.STORAGE_TYPE}}/...);
-        do
-          coveragefile=$(basename "$pkg").cov
-          specific_cov=$(basename "$pkg")-{{.DB}}.cov
-          gocovmerge $specific_cov > $coveragefile
-          rm $specific_cov
+        for covfile in coverage/*.cov; do
+          if [ -f "$covfile" ]; then
+            basefile=$(basename "$covfile" .cov)
+            gocovmerge coverage/${basefile}-*.cov > "${basefile}.cov"
+          fi
         done
 
   test-persistent:
