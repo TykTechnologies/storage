@@ -162,7 +162,7 @@ jobs:
             -Dsonar.exclusions=**/mocks/*.go
             -Dsonar.test.inclusions=**/*_test.go
             -Dsonar.tests=.
-            -Dsonar.go.coverage.reportPaths=persistent/*.cov,temporal/*.cov
+            -Dsonar.go.coverage.reportPaths=merged-coverage.cov
             -Dsonar.go.golangci-lint.reportPaths=golanglint.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

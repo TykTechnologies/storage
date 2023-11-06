@@ -70,12 +70,7 @@ tasks:
     desc: "Merge coverage files for a given storage type"
     cmds:
       - |
-        for covfile in coverage/*.cov; do
-          if [ -f "$covfile" ]; then
-            basefile=$(basename "$covfile" .cov)
-            gocovmerge coverage/${basefile}-*.cov > "${basefile}.cov"
-          fi
-        done
+        gocovmerge $(find . -name '*.cov') > merged-coverage.cov
 
   test-persistent:
     desc: "Run tests for persistent storage with specified database"
