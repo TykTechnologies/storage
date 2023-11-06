@@ -26,28 +26,30 @@ tasks:
       - |
         case "{{.DB}}" in
           mongo)
-            export TEST_STORAGE_CONNECTION_STRING="mongodb://localhost:27017/test"
+            echo 'export TEST_STORAGE_CONNECTION_STRING="mongodb://localhost:27017/test"' > .env
             ;;
           redis)
-            export REDIS_CONNECTION_STRING="localhost:6379"
+            echo 'export REDIS_CONNECTION_STRING="localhost:6379"' > .env
             ;;
           *)
             echo "unsupported database: {{.DB}}" >&2
             exit 1
             ;;
         esac
+      - source .env
 
   run-tests:
     desc: "Run Go tests for specified storage and database"
     cmds:
+      - source .env
       - |
         for pkg in $(go list ./{{.STORAGE_TYPE}}/...);
         do
-          coveragefile=`echo "$pkg.cov" | awk -F/ '{print $NF}'`
+          coveragefile=$(basename "$pkg").cov
           tags=$([[ ${pkg} == *"driver"* ]] && echo "-tags {{.DB}}" || echo "")
           go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -coverprofile=${coveragefile} -v ${pkg}
           if [ -f "${coveragefile}" ]; then
-            mv ${coveragefile} coverage-${pkg}.out
+            mv ${coveragefile} "coverage-${pkg}.out"
           fi
         done
 
@@ -68,9 +70,9 @@ tasks:
       - |
         for pkg in $(go list ./{{.STORAGE_TYPE}}/...);
         do
-          coveragefile=`echo "$pkg.cov" | awk -F/ '{print $NF}'`
-          specific_cov=`echo "$pkg-{{.DB}}.cov" | awk -F/ '{print $NF}'`
-          gocovmerge $specific_cov  > $coveragefile
+          coveragefile=$(basename "$pkg").cov
+          specific_cov=$(basename "$pkg")-{{.DB}}.cov
+          gocovmerge $specific_cov > $coveragefile
           rm $specific_cov
         done
 
