@@ -45,11 +45,13 @@ tasks:
       - |
         for pkg in $(go list ./{{.STORAGE_TYPE}}/...);
         do
-          coveragefile=$(basename "$pkg").cov
+          pkg_base=$(basename $pkg)
+          coveragefile="${pkg_base}.cov"
           tags=$([[ ${pkg} == *"driver"* ]] && echo "-tags {{.DB}}" || echo "")
           go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -coverprofile=${coveragefile} -v ${pkg}
           if [ -f "${coveragefile}" ]; then
-            mv ${coveragefile} "coverage-${pkg}.out"
+            mkdir -p "coverage/$(dirname ${pkg})"
+            mv ${coveragefile} "coverage/${pkg}.out"
           fi
         done
 
