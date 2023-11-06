@@ -127,9 +127,12 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: golangcilint
-      - name: List coverage files
-        run: |
-          ls -la coverage/
+      - name: Print Working Directory
+        run: pwd
+      - name: List files in the root
+        run: ls -la
+      - name: List files in all subdirectories
+        run: find . -type f
       - name: Check reports existence
         id: check_files
         uses: andstor/file-existence-action@v1
