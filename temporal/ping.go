@@ -9,7 +9,6 @@ import (
 )
 
 func Ping() error {
-
 	redisAddr := os.Getenv("REDIS_ADDR")
 	if redisAddr == "" {
 		return fmt.Errorf("REDIS_ADDR environment variable not set")

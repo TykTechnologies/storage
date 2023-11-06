@@ -3,38 +3,13 @@ version: "3"
 env:
   TEST_TIMEOUT:
     sh: echo ${TEST_TIMEOUT:-"5m"}
+  REDIS_ADDR: "localhost:6379"
 
 tasks:
   build:
     desc: "Build the project"
     cmds:
       - go build -v ./...
-
-  list-packages:
-    desc: "List Go packages for a given PKG"
-    cmds:
-      - go list ./{{.PKG}}/...
-    vars:
-      PKG:
-        sh: echo $PKG
-
-  set-db-env:
-    desc: "Set database-specific environment variables based on DB type"
-    cmds:
-      - |
-        case "{{.DB}}" in
-          mongo)
-            echo 'export TEST_STORAGE_CONNECTION_STRING="mongodb://localhost:27017/test"' > .env
-            ;;
-          redis)
-            echo 'export REDIS_CONNECTION_STRING="localhost:6379"' > .env
-            ;;
-          *)
-            echo "unsupported database: {{.DB}}" >&2
-            exit 1
-            ;;
-        esac
-      - export $(cat .env | xargs)
 
   run-tests:
     desc: "Run Go tests for specified storage and database"
@@ -54,13 +29,9 @@ tasks:
             mv ${coveragefile} "coverage/${pkg}.cov"
           fi
         done
-
   test-storage:
     desc: "Run tests for a specified storage type with specified database"
     cmds:
-      - task: set-db-env
-        vars:
-          DB: "{{.DB}}"
       - task: run-tests
         vars:
           STORAGE_TYPE: "{{.STORAGE_TYPE}}"
@@ -83,7 +54,6 @@ tasks:
   test-temporal:
     desc: "Run tests for temporal storage with specified database"
     cmds:
-      - export REDIS_ADDR=localhost:6379
       - task: test-storage
         vars:
           STORAGE_TYPE: temporal
