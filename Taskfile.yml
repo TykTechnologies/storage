@@ -1,5 +1,9 @@
 version: "3"
 
+includes:
+  db:
+    taskfile: bin/Taskfile-db.yml
+
 env:
   TEST_TIMEOUT:
     sh: echo ${TEST_TIMEOUT:-"5m"}

@@ -1,0 +1,12 @@
+version: "3"
+
+tasks:
+  start-mongo:
+    cmds:
+      - echo "Starting MongoDB..."
+      - docker run --name mongo -d -p 27017:27017 mongo:{{.MONGO_VERSION}}
+
+  start-redis:
+    cmds:
+      - echo "Starting Redis..."
+      - docker run --name redis -d -p 6379:6379 redis:{{.REDIS_VERSION}}

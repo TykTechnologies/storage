@@ -80,20 +80,16 @@ jobs:
 
       - if: ${{ matrix.database == 'mongo' }}
         name: Start MongoDB '${{ matrix.version }}'
-        uses: supercharge/mongodb-github-action@1.8.0
-        with:
-          mongodb-version: "${{ matrix.version }}"
+        run: task -t Taskfile-db.yml start-mongo MONGO_VERSION=${{ matrix.version }}
 
       - if: ${{ matrix.database == 'redis' }}
         name: Start Redis '${{ matrix.version }}'
-        uses: supercharge/redis-github-action@1.2.0
-        with:
-          redis-version: "${{ matrix.version }}"
+        run: task -t Taskfile-db.yml start-redis REDIS_VERSION=${{ matrix.version }}
 
-      - name: Install Task runner
-        run: |
-          curl -sL https://taskfile.dev/install.sh | sh
-          echo "./bin" >> $GITHUB_PATH
+      - name: Install Task
+        uses: arduino/setup-task@v1
+        with:
+          version: 3
 
       - name: Run tests
         env:
@@ -138,10 +134,10 @@ jobs:
           git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
 
           go install github.com/wadey/gocovmerge@latest
-      - name: Install Task runner
-        run: |
-          curl -sL https://taskfile.dev/install.sh | sh
-          echo "./bin" >> $GITHUB_PATH
+      - name: Install Task
+        uses: arduino/setup-task@v1
+        with:
+          version: 3
       - name: merge reports
         run: task merge-coverage
       - name: SonarCloud Scan
