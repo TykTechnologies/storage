@@ -43,8 +43,12 @@ tasks:
       - |
         for pkg in $(go list ./{{.STORAGE_TYPE}}/...);
         do
+          coveragefile=`echo "$pkg.cov" | awk -F/ '{print $NF}'`
           tags=$([[ ${pkg} == *"driver"* ]] && echo "-tags {{.DB}}" || echo "")
-          go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -v ${pkg}
+          go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -coverprofile=${coveragefile} -v ${pkg}
+          if [ -f "${coveragefile}" ]; then
+            mv ${coveragefile} coverage-${pkg}.out
+          fi
         done
 
   test-storage:
