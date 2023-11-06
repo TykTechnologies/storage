@@ -12,6 +12,7 @@ func TestPing(t *testing.T) {
 	}
 
 	os.Unsetenv("REDIS_ADDR")
+
 	err = Ping()
 	if err == nil {
 		t.Fatalf("Ping function should have returned an error when REDIS_ADDR is not set")
