@@ -3,13 +3,20 @@ package temporal
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/go-redis/redis/v8"
 )
 
 func Ping() error {
+
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		return fmt.Errorf("REDIS_ADDR environment variable not set")
+	}
+
 	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
+		Addr: redisAddr,
 		DB:   0, // default db
 	})
 
