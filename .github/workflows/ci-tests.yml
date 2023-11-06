@@ -145,7 +145,7 @@ jobs:
           curl -sL https://taskfile.dev/install.sh | sh
           echo "./bin" >> $GITHUB_PATH
       - name: merge reports
-        run: task merge-cov
+        run: task merge-coverage
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@master
         with:
