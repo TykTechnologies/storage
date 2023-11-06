@@ -98,7 +98,6 @@ jobs:
       - name: Run tests
         env:
           DB: ${{ matrix.database }}
-          STORAGE_TYPE: ${{ matrix.storagetype }}
         run: task test-${{ matrix.storagetype }}
 
       - uses: actions/upload-artifact@v2
