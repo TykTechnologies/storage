@@ -129,7 +129,7 @@ jobs:
           name: golangcilint
       - name: Print Working Directory
         run: pwd
-      - name: List files in the root
+      - name: List files in the root directory
         run: ls -la
       - name: List files in all subdirectories
         run: find . -type f
