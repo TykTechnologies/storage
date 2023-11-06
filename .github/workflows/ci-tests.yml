@@ -85,11 +85,11 @@ jobs:
 
       - if: ${{ matrix.database == 'mongo' }}
         name: Start MongoDB '${{ matrix.version }}'
-        run: task -t Taskfile-db.yml start-mongo MONGO_VERSION=${{ matrix.version }}
+        run: task -t bin/Taskfile-db.yml start-mongo MONGO_VERSION=${{ matrix.version }}
 
       - if: ${{ matrix.database == 'redis' }}
         name: Start Redis '${{ matrix.version }}'
-        run: task -t Taskfile-db.yml start-redis REDIS_VERSION=${{ matrix.version }}
+        run: task -t bin/Taskfile-db.yml start-redis REDIS_VERSION=${{ matrix.version }}
 
       - name: Run tests
         env:
