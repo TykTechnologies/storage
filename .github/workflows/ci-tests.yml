@@ -106,7 +106,7 @@ jobs:
           name: coverage
           retention-days: 1
           path: |
-            *.cov
+            coverage/**/*.out
 
   sonar-cloud-analysis:
     runs-on: ubuntu-latest
@@ -123,7 +123,7 @@ jobs:
       - name: Download coverage artifacts
         uses: actions/download-artifact@v2
         with:
-          name: coverage/*.out
+          name: coverage
       - name: Download golangcilint artifacts
         uses: actions/download-artifact@v2
         with:
