@@ -105,8 +105,7 @@ jobs:
         with:
           name: coverage
           retention-days: 1
-          path: |
-            coverage/**/*.out
+          path: coverage/**/*.out
 
   sonar-cloud-analysis:
     runs-on: ubuntu-latest
@@ -128,11 +127,14 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: golangcilint
+      - name: List coverage files
+        run: |
+          ls -la coverage/
       - name: Check reports existence
         id: check_files
         uses: andstor/file-existence-action@v1
         with:
-          files: "coverage/*.cov, golanglint.xml"
+          files: "coverage/*.out, golanglint.xml"
       - name: Install Dependencies
         env:
           TOKEN: "${{ secrets.ORG_GH_TOKEN }}"
@@ -157,7 +159,7 @@ jobs:
             -Dsonar.exclusions=**/mocks/*.go
             -Dsonar.test.inclusions=**/*_test.go
             -Dsonar.tests=.
-            -Dsonar.go.coverage.reportPaths=*.cov
+            -Dsonar.go.coverage.reportPaths=coverage/*.out
             -Dsonar.go.golangci-lint.reportPaths=golanglint.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
