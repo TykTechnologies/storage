@@ -105,7 +105,7 @@ jobs:
         with:
           name: coverage
           retention-days: 1
-          path: coverage/**/*.out
+          path: coverage/**/*.cov
 
   sonar-cloud-analysis:
     runs-on: ubuntu-latest
@@ -137,7 +137,7 @@ jobs:
         id: check_files
         uses: andstor/file-existence-action@v1
         with:
-          files: "coverage/*.out, golanglint.xml"
+          files: "coverage/*.cov, golanglint.xml"
       - name: Install Dependencies
         env:
           TOKEN: "${{ secrets.ORG_GH_TOKEN }}"
@@ -162,7 +162,7 @@ jobs:
             -Dsonar.exclusions=**/mocks/*.go
             -Dsonar.test.inclusions=**/*_test.go
             -Dsonar.tests=.
-            -Dsonar.go.coverage.reportPaths=coverage/*.out
+            -Dsonar.go.coverage.reportPaths=persistent/*.cov,temporal/*.cov
             -Dsonar.go.golangci-lint.reportPaths=golanglint.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

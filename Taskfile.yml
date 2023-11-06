@@ -51,7 +51,7 @@ tasks:
           go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -coverprofile=${coveragefile} -v ${pkg}
           if [ -f "${coveragefile}" ]; then
             mkdir -p "coverage/$(dirname ${pkg})"
-            mv ${coveragefile} "coverage/${pkg}.out"
+            mv ${coveragefile} "coverage/${pkg}.cov"
           fi
         done
 
