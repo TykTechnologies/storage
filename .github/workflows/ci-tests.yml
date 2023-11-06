@@ -78,6 +78,11 @@ jobs:
       - name: Build
         run: go build -v ./...
 
+      - name: Install Task
+        uses: arduino/setup-task@v1
+        with:
+          version: 3
+
       - if: ${{ matrix.database == 'mongo' }}
         name: Start MongoDB '${{ matrix.version }}'
         run: task -t Taskfile-db.yml start-mongo MONGO_VERSION=${{ matrix.version }}
@@ -85,11 +90,6 @@ jobs:
       - if: ${{ matrix.database == 'redis' }}
         name: Start Redis '${{ matrix.version }}'
         run: task -t Taskfile-db.yml start-redis REDIS_VERSION=${{ matrix.version }}
-
-      - name: Install Task
-        uses: arduino/setup-task@v1
-        with:
-          version: 3
 
       - name: Run tests
         env:
