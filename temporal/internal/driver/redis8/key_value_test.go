@@ -87,7 +87,7 @@ func TestGet(t *testing.T) {
 		{
 			name: "Get existing key",
 			setup: func(rdb *Redis8) {
-				err := rdb.Set(context.Background(), "key1", "value1", 0)
+				err := rdb.Set(context.Background(), "key2", "value2", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
 				}
