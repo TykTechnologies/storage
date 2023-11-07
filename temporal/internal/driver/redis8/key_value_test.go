@@ -10,6 +10,8 @@ import (
 
 // newTestRedis returns a Redis8 instance connected to a miniredis server.
 func newTestRedis(t *testing.T) (*Redis8, func()) {
+	t.Helper()
+
 	mr, err := miniredis.Run()
 	if err != nil {
 		t.Fatalf("an error '%s' occurred when starting miniredis", err)
@@ -77,18 +79,21 @@ func TestGet(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "Get existing key",
-			setup: func(rdb *Redis8) {
-				rdb.Set(context.Background(), "key1", "value1", 0)
-			},
+			name:    "Get non-existing key",
 			key:     "key1",
-			want:    "value1",
+			want:    "",
 			wantErr: false,
 		},
 		{
-			name:    "Get non-existing key",
+			name: "Get existing key",
+			setup: func(rdb *Redis8) {
+				err := rdb.Set(context.Background(), "key1", "value1", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
 			key:     "key2",
-			want:    "",
+			want:    "value2",
 			wantErr: false,
 		},
 		{
@@ -134,7 +139,10 @@ func TestDelete(t *testing.T) {
 		{
 			name: "Delete existing key",
 			setup: func(rdb *Redis8) {
-				rdb.Set(context.Background(), "key1", "value1", 0)
+				err := rdb.Set(context.Background(), "key1", "value1", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
 			},
 			key:     "key1",
 			wantErr: false,
@@ -184,7 +192,10 @@ func TestIncrement(t *testing.T) {
 		{
 			name: "Increment existing key",
 			setup: func(rdb *Redis8) {
-				rdb.Set(context.Background(), "counter", "5", 0)
+				err := rdb.Set(context.Background(), "counter", "5", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
 			},
 			key:     "counter",
 			want:    6,
@@ -240,7 +251,10 @@ func TestDecrement(t *testing.T) {
 		{
 			name: "Decrement existing key",
 			setup: func(rdb *Redis8) {
-				rdb.Set(context.Background(), "counter", "5", 0)
+				err := rdb.Set(context.Background(), "counter", "5", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
 			},
 			key:     "counter",
 			want:    4,
@@ -296,7 +310,10 @@ func TestExists(t *testing.T) {
 		{
 			name: "Check existing key",
 			setup: func(rdb *Redis8) {
-				rdb.Set(context.Background(), "key1", "value1", 0)
+				err := rdb.Set(context.Background(), "key1", "value1", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
 			},
 			key:     "key1",
 			want:    true,

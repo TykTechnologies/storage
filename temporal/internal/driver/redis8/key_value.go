@@ -12,9 +12,10 @@ import (
 func (r *Redis8) Get(ctx context.Context, key string) (string, error) {
 	result, err := r.Client.Get(ctx, key).Result()
 	if err != nil {
-		if err == redis.Nil {
+		if errors.Is(err, redis.Nil) {
 			return "", nil // or fmt.Errorf("key not found")?
 		}
+
 		return "", err
 	}
 
@@ -22,11 +23,12 @@ func (r *Redis8) Get(ctx context.Context, key string) (string, error) {
 }
 
 // Set sets the string value of a key.
-func (r *Redis8) Set(ctx context.Context, key string, value string, expiration time.Duration) error {
+func (r *Redis8) Set(ctx context.Context, key, value string, expiration time.Duration) error {
 	// TBD: should we return an error if the key is empty?
 	if key == "" {
 		return errors.New("key cannot be empty")
 	}
+
 	return r.Client.Set(ctx, key, value, expiration).Err()
 }
 

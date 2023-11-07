@@ -26,7 +26,7 @@ type KeyValue interface {
 	DeleteScanMatch(context.Context, string) (int64, error)
 
 	Keys(context.Context, string) ([]string, error)
-	//MGet
+	// MGet
 	GetMulti(context.Context, []string) ([]interface{}, error)
 	// this is a combination of Keys()+MGet() - I'm wondering if there's a more idiomatic solution
 	// TODO naming
