@@ -1,0 +1,53 @@
+version: "3"
+
+env:
+  TEST_TIMEOUT:
+    sh: echo ${TEST_TIMEOUT:-"5m"}
+  REDIS_ADDR: "localhost:6379"
+
+tasks:
+  build:
+    desc: "Build the project"
+    cmds:
+      - go build -v ./...
+
+  run-tests:
+    desc: "Run Go tests for specified storage and database"
+    cmds:
+      - |
+        if [ -z "{{.STORAGE_TYPE}}" ] || [ -z "{{.DB}}" ]; then
+          echo "STORAGE_TYPE and DB must be set."
+          exit 1
+        fi
+        for pkg in $(go list ./{{.STORAGE_TYPE}}/...); do
+          pkg_base=$(basename $pkg)
+          coveragefile="${pkg_base}.cov"
+          tags=$([[ ${pkg} == *"driver"* ]] && echo "-tags {{.DB}}" || echo "")
+          go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -coverprofile=${coveragefile} -v ${pkg}
+          if [ -f "${coveragefile}" ]; then
+            mkdir -p "coverage/$(dirname ${pkg})"
+            mv ${coveragefile} "coverage/${pkg}.cov"
+          fi
+        done
+
+  merge-coverage:
+    desc: "Merge coverage files into a single file"
+    cmds:
+      - |
+        gocovmerge $(find . -name '*.cov') > merged-coverage.cov
+
+  test-persistent:
+    desc: "Run tests for persistent storage with specified database"
+    cmds:
+      - task: run-tests
+        vars:
+          STORAGE_TYPE: persistent
+          DB: "{{.DB}}"
+
+  test-temporal:
+    desc: "Run tests for temporal storage with specified database"
+    cmds:
+      - task: run-tests
+        vars:
+          STORAGE_TYPE: temporal
+          DB: "{{.DB}}"

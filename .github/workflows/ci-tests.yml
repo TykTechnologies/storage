@@ -6,13 +6,16 @@ on:
     branches:
       - main
 
+env:
+  GO_VERSION: "1.16.x"
+
 jobs:
   golangci-lint:
     runs-on: ubuntu-latest
     steps:
       - name: use gh token
         env:
-            TOKEN: '${{ secrets.ORG_GH_TOKEN }}'
+          TOKEN: "${{ secrets.ORG_GH_TOKEN }}"
         run: >
           git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
       - name: Checkout Storage
@@ -25,7 +28,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v3
         with:
-          go-version: 1.16
+          go-version: ${{ env.GO_VERSION }}
       - name: Download golangci-lint
         run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
       - name: golangci-lint
@@ -52,6 +55,12 @@ jobs:
           - storagetype: persistent
             database: mongo
             version: 4.2
+          - storagetype: temporal
+            database: redis
+            version: 6
+          - storagetype: temporal
+            database: redis
+            version: 7
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -61,7 +70,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v3
         with:
-          go-version: 1.16
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Verify dependencies
         run: go mod verify
@@ -69,20 +78,29 @@ jobs:
       - name: Build
         run: go build -v ./...
 
+      - name: Install Task
+        uses: arduino/setup-task@v1
+        with:
+          version: 3
+
       - if: ${{ matrix.database == 'mongo' }}
         name: Start MongoDB '${{ matrix.version }}'
-        uses: supercharge/mongodb-github-action@1.8.0
-        with:
-          mongodb-version: '${{ matrix.version }}'
+        run: task -t bin/Taskfile-db.yml start-mongo MONGO_VERSION=${{ matrix.version }}
+
+      - if: ${{ matrix.database == 'redis' }}
+        name: Start Redis '${{ matrix.version }}'
+        run: task -t bin/Taskfile-db.yml start-redis REDIS_VERSION=${{ matrix.version }}
+
       - name: Run tests
-        run: |
-          ./bin/ci-tests.sh ${{ matrix.storagetype }} ${{ matrix.database }}
+        env:
+          DB: ${{ matrix.database }}
+        run: task test-${{ matrix.storagetype }}
+
       - uses: actions/upload-artifact@v2
         with:
           name: coverage
           retention-days: 1
-          path: |
-            *.cov
+          path: coverage/**/*.cov
 
   sonar-cloud-analysis:
     runs-on: ubuntu-latest
@@ -95,7 +113,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v3
         with:
-          go-version: 1.16
+          go-version: ${{ env.GO_VERSION }}
       - name: Download coverage artifacts
         uses: actions/download-artifact@v2
         with:
@@ -108,17 +126,20 @@ jobs:
         id: check_files
         uses: andstor/file-existence-action@v1
         with:
-          files: '*.cov, golanglint.xml'
+          files: "coverage/*.cov, golanglint.xml"
       - name: Install Dependencies
         env:
-          TOKEN: '${{ secrets.ORG_GH_TOKEN }}'
+          TOKEN: "${{ secrets.ORG_GH_TOKEN }}"
         run: >
           git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
 
           go install github.com/wadey/gocovmerge@latest
+      - name: Install Task
+        uses: arduino/setup-task@v1
+        with:
+          version: 3
       - name: merge reports
-        run: |
-          ./bin/merge-cov.sh
+        run: task merge-coverage
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@master
         with:
@@ -130,7 +151,7 @@ jobs:
             -Dsonar.exclusions=**/mocks/*.go
             -Dsonar.test.inclusions=**/*_test.go
             -Dsonar.tests=.
-            -Dsonar.go.coverage.reportPaths=*.cov
+            -Dsonar.go.coverage.reportPaths=merged-coverage.cov
             -Dsonar.go.golangci-lint.reportPaths=golanglint.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
