@@ -6,6 +6,10 @@ type BaseStorageOptions struct {
 	Username string `json:"username"`
 	// Connection password
 	Password string `json:"password"`
+	// Connection host. For example: "localhost"
+	Host string `json:"host"`
+	// Connection port. For example: 6379
+	Port int `json:"port"`
 	// Set a custom timeout for Redis network operations. Default value 5 seconds.
 	Timeout int `json:"timeout"`
 	// Enable SSL/TLS connection between your Tyk Gateway & Redis.
@@ -17,10 +21,7 @@ type BaseStorageOptions struct {
 // RedisOptions contains options specific to Redis storage.
 type RedisOptions struct {
 	BaseStorageOptions
-	// Redis host. For example: "localhost"
-	Host string `json:"host"`
-	// The Redis instance port.
-	Port  int               `json:"port"`
+
 	Hosts map[string]string `json:"hosts"` // Deprecated: Addrs instead.
 	// If you have multi-node setup, you should use this field instead. For example: ["host1:port1", "host2:port2"].
 	Addrs []string `json:"addrs"`
