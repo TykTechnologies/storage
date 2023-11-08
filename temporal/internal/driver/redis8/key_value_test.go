@@ -4,29 +4,44 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/TykTechnologies/storage/temporal/internal/types"
 )
 
 func newTestRedis(t *testing.T) (*Redis8, func()) {
 	t.Helper()
 
-	addr := "localhost:6379"
-	password := ""
-	db := 0
+	opts := &types.ClientOpts{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
+	}
 
-	r8 := NewRedis8(addr, password, db)
+	r8, err := NewRedis8(opts)
+	if err != nil {
+		t.Fatalf("NewRedis8() error = %v", err)
+	}
 
 	ctx := context.Background()
 
-	_, err := r8.Client.Ping(ctx).Result()
+	_, err = r8.client.Ping(ctx).Result()
 	if err != nil {
 		t.Fatalf("an error '%v' occurred when connecting to Redis server", err)
 	}
 
 	return r8, func() {
-		r8.Client.FlushDB(ctx).Result()
-		r8.Client.Close()
+		_, err = r8.client.FlushDB(ctx).Result()
+		if err != nil {
+			t.Fatalf("an error '%v' occurred when flushing the database", err)
+		}
+
+		err = r8.client.Close()
+		if err != nil {
+			t.Fatalf("an error '%v' occurred when closing the connection", err)
+		}
 	}
 }
+
 func TestRedis8_Set(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -53,7 +68,7 @@ func TestRedis8_Set(t *testing.T) {
 			}
 
 			if !tt.wantErr {
-				gotValue, err := client.Client.Get(ctx, tt.key).Result()
+				gotValue, err := client.client.Get(ctx, tt.key).Result()
 				if err != nil {
 					t.Errorf("Get() error = %v", err)
 				}
@@ -62,7 +77,7 @@ func TestRedis8_Set(t *testing.T) {
 				}
 
 				if tt.expiration > 0 {
-					ttl, err := client.Client.TTL(ctx, tt.key).Result()
+					ttl, err := client.client.TTL(ctx, tt.key).Result()
 					if err != nil {
 						t.Errorf("TTL() error = %v", err)
 					}
@@ -75,7 +90,7 @@ func TestRedis8_Set(t *testing.T) {
 	}
 }
 
-func TestGet(t *testing.T) {
+func TestRedis8_Get(t *testing.T) {
 	tests := []struct {
 		name    string
 		setup   func(rdb *Redis8)
@@ -134,7 +149,7 @@ func TestGet(t *testing.T) {
 	}
 }
 
-func TestDelete(t *testing.T) {
+func TestRedis8_Delete(t *testing.T) {
 	tests := []struct {
 		name    string
 		setup   func(rdb *Redis8)
@@ -186,7 +201,7 @@ func TestDelete(t *testing.T) {
 	}
 }
 
-func TestIncrement(t *testing.T) {
+func TestRedis8_Increment(t *testing.T) {
 	tests := []struct {
 		name    string
 		setup   func(rdb *Redis8)
@@ -245,7 +260,7 @@ func TestIncrement(t *testing.T) {
 	}
 }
 
-func TestDecrement(t *testing.T) {
+func TestRedis8_Decrement(t *testing.T) {
 	tests := []struct {
 		name    string
 		setup   func(rdb *Redis8)
@@ -304,7 +319,7 @@ func TestDecrement(t *testing.T) {
 	}
 }
 
-func TestExists(t *testing.T) {
+func TestRedis8_Exists(t *testing.T) {
 	tests := []struct {
 		name    string
 		setup   func(rdb *Redis8)
@@ -358,6 +373,555 @@ func TestExists(t *testing.T) {
 			}
 			if exists != tt.want {
 				t.Errorf("Exists() got = %v, want %v", exists, tt.want)
+			}
+		})
+	}
+}
+
+func TestRedis8_Expire(t *testing.T) {
+	tests := []struct {
+		name       string
+		setup      func(rdb *Redis8)
+		key        string
+		expiration time.Duration
+		wantErr    bool
+	}{
+		{
+			name: "Expire existing key",
+			setup: func(rdb *Redis8) {
+				err := rdb.Set(context.Background(), "key1", "value1", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
+			key:        "key1",
+			expiration: 10 * time.Second,
+			wantErr:    false,
+		},
+		{
+			name:       "Expire non-existing key",
+			key:        "key2",
+			expiration: 10 * time.Second,
+			wantErr:    false,
+		},
+		{
+			name:       "Expire key when server is closed",
+			key:        "key3",
+			expiration: 10 * time.Second,
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, cleanup := newTestRedis(t)
+
+			if tt.wantErr {
+				cleanup()
+			} else {
+				defer cleanup()
+			}
+
+			if tt.setup != nil {
+				tt.setup(client)
+			}
+
+			err := client.Expire(context.Background(), tt.key, tt.expiration)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Expire() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if !tt.wantErr && tt.setup != nil {
+				ttl, err := client.client.TTL(context.Background(), tt.key).Result()
+				if err != nil {
+					t.Errorf("TTL() error = %v", err)
+				}
+				if ttl > tt.expiration || ttl <= 0 {
+					t.Errorf("TTL() = %v, want less than or equal to %v", ttl, tt.expiration)
+				}
+			}
+		})
+	}
+}
+
+func TestRedis8_TTL(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(rdb *Redis8)
+		key     string
+		want    int64
+		wantErr bool
+	}{
+		{
+			name: "TTL existing key",
+			setup: func(rdb *Redis8) {
+				err := rdb.Set(context.Background(), "key1", "value1", 10*time.Second)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
+			key:     "key1",
+			want:    10,
+			wantErr: false,
+		},
+		{
+			name:    "TTL non-existing key",
+			key:     "key2",
+			want:    0,
+			wantErr: false,
+		},
+		{
+			name:    "TTL key when server is closed",
+			key:     "key3",
+			want:    0,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, cleanup := newTestRedis(t)
+
+			if tt.wantErr {
+				cleanup()
+			} else {
+				defer cleanup()
+			}
+
+			if tt.setup != nil {
+				tt.setup(client)
+			}
+
+			got, err := client.TTL(context.Background(), tt.key)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TTL() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("TTL() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRedis8_DeleteKeys(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(rdb *Redis8)
+		keys    []string
+		want    int64
+		wantErr bool
+	}{
+		{
+			name: "DeleteKeys existing keys",
+			setup: func(rdb *Redis8) {
+				err := rdb.Set(context.Background(), "key1", "value1", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+				err = rdb.Set(context.Background(), "key2", "value2", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
+			keys:    []string{"key1", "key2"},
+			want:    2,
+			wantErr: false,
+		},
+		{
+			name:    "DeleteKeys non-existing keys",
+			keys:    []string{"key3", "key4"},
+			want:    0,
+			wantErr: false,
+		},
+		{
+			name:    "DeleteKeys keys when server is closed",
+			keys:    []string{"key5", "key6"},
+			want:    0,
+			wantErr: true,
+		},
+		{
+			name: "DeleteKeys existing and non-existing keys",
+			setup: func(rdb *Redis8) {
+				err := rdb.Set(context.Background(), "key7", "value7", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
+			keys:    []string{"key7", "key8"},
+			want:    1,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, cleanup := newTestRedis(t)
+
+			if tt.wantErr {
+				cleanup()
+			} else {
+				defer cleanup()
+			}
+
+			if tt.setup != nil {
+				tt.setup(client)
+			}
+
+			got, err := client.DeleteKeys(context.Background(), tt.keys)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DeleteKeys() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("DeleteKeys() got = %v, want %v", got, tt.want)
+			}
+
+			if !tt.wantErr {
+				for _, key := range tt.keys {
+					exists, err := client.Exists(context.Background(), key)
+					if err != nil {
+						t.Errorf("Exists() error = %v", err)
+					}
+					if exists {
+						t.Errorf("Exists() = %v, want %v", exists, false)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestRedis8_DeleteScanMatch(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(rdb *Redis8)
+		pattern string
+		want    int64
+		wantErr bool
+	}{
+		{
+			name: "DeleteScanMatch existing keys",
+			setup: func(rdb *Redis8) {
+				err := rdb.Set(context.Background(), "key1", "value1", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+				err = rdb.Set(context.Background(), "key2", "value2", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
+			pattern: "key*",
+			want:    2,
+			wantErr: false,
+		},
+		{
+			name:    "DeleteScanMatch non-existing keys",
+			pattern: "key*",
+			want:    0,
+			wantErr: false,
+		},
+		{
+			name:    "DeleteScanMatch keys when server is closed",
+			pattern: "key*",
+			want:    0,
+			wantErr: true,
+		},
+		{
+			name: "DeleteScanMatch existing and non-existing keys",
+			setup: func(rdb *Redis8) {
+				err := rdb.Set(context.Background(), "key3", "value3", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
+			pattern: "key*",
+			want:    1,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, cleanup := newTestRedis(t)
+
+			if tt.wantErr {
+				cleanup()
+			} else {
+				defer cleanup()
+			}
+
+			if tt.setup != nil {
+				tt.setup(client)
+			}
+
+			got, err := client.DeleteScanMatch(context.Background(), tt.pattern)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DeleteScanMatch() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("DeleteScanMatch() got = %v, want %v", got, tt.want)
+			}
+
+			if !tt.wantErr {
+				keys, err := client.Keys(context.Background(), tt.pattern)
+				if err != nil {
+					t.Errorf("Keys() error = %v", err)
+				}
+				if len(keys) > 0 {
+					t.Errorf("Keys() = %v, want %v", keys, []string{})
+				}
+			}
+		})
+	}
+}
+
+func TestRedis8_Keys(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(rdb *Redis8)
+		pattern string
+		want    []string
+		wantErr bool
+	}{
+		{
+			name: "Keys existing keys",
+			setup: func(rdb *Redis8) {
+				err := rdb.Set(context.Background(), "key1", "value1", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+				err = rdb.Set(context.Background(), "key2", "value2", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
+			pattern: "key*",
+			want:    []string{"key2", "key1"},
+			wantErr: false,
+		},
+		{
+			name:    "Keys non-existing keys",
+			pattern: "key*",
+			want:    []string{},
+			wantErr: false,
+		},
+		{
+			name:    "Keys keys when server is closed",
+			pattern: "key*",
+			want:    []string{},
+			wantErr: true,
+		},
+		{
+			name: "Keys existing and non-existing keys",
+			setup: func(rdb *Redis8) {
+				err := rdb.Set(context.Background(), "key3", "value3", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
+			pattern: "key*",
+			want:    []string{"key3"},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, cleanup := newTestRedis(t)
+
+			if tt.wantErr {
+				cleanup()
+			} else {
+				defer cleanup()
+			}
+
+			if tt.setup != nil {
+				tt.setup(client)
+			}
+
+			got, err := client.Keys(context.Background(), tt.pattern)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Keys() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if len(got) != len(tt.want) {
+				t.Errorf("Keys() got = %v, want %v", got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("Keys() got = %v, want %v", got, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestRedis8_GetMulti(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(rdb *Redis8)
+		keys    []string
+		want    []interface{}
+		wantErr bool
+	}{
+		{
+			name: "GetMulti existing keys",
+			setup: func(rdb *Redis8) {
+				err := rdb.Set(context.Background(), "key1", "value1", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+				err = rdb.Set(context.Background(), "key2", "value2", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
+			keys:    []string{"key1", "key2"},
+			want:    []interface{}{"value1", "value2"},
+			wantErr: false,
+		},
+		{
+			name:    "GetMulti non-existing keys",
+			keys:    []string{"key3", "key4"},
+			want:    []interface{}{nil, nil},
+			wantErr: false,
+		},
+		{
+			name:    "GetMulti keys when server is closed",
+			keys:    []string{"key5", "key6"},
+			want:    []interface{}{},
+			wantErr: true,
+		},
+		{
+			name: "GetMulti existing and non-existing keys",
+			setup: func(rdb *Redis8) {
+				err := rdb.Set(context.Background(), "key7", "value7", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
+			keys:    []string{"key7", "key8"},
+			want:    []interface{}{"value7", nil},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, cleanup := newTestRedis(t)
+			if tt.wantErr {
+				cleanup()
+			} else {
+				defer cleanup()
+			}
+
+			if tt.setup != nil {
+				tt.setup(client)
+			}
+
+			got, err := client.GetMulti(context.Background(), tt.keys)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetMulti() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if len(got) != len(tt.want) {
+				t.Errorf("GetMulti() got = %v, want %v", got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("GetMulti() got = %v, want %v", got, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestRedis8_GetKeysAndValuesWithFilter(t *testing.T) {
+	tests := []struct {
+		name           string
+		setup          func(rdb *Redis8)
+		pattern        string
+		want           map[string]interface{}
+		wantErr        bool
+		shutdownServer bool
+	}{
+		{
+			name: "GetKeysAndValuesWithFilter existing keys",
+			setup: func(rdb *Redis8) {
+				err := rdb.Set(context.Background(), "key1", "value1", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+				err = rdb.Set(context.Background(), "key2", "value2", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
+			pattern: "key*",
+			want:    map[string]interface{}{"key1": "value1", "key2": "value2"},
+			wantErr: false,
+		},
+		{
+			name:    "GetKeysAndValuesWithFilter non-existing keys",
+			pattern: "key*",
+			want:    map[string]interface{}{},
+			wantErr: true, // MGET fails when no keys are provided
+		},
+		{
+			name: "GetKeysAndValuesWithFilter existing and non-existing keys",
+			setup: func(rdb *Redis8) {
+				err := rdb.Set(context.Background(), "key3", "value3", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
+			pattern: "key*",
+			want:    map[string]interface{}{"key3": "value3"},
+			wantErr: false,
+		},
+		{
+			name: "GetKeysAndValuesWithFilter existing and non-existing keys with empty pattern",
+			setup: func(rdb *Redis8) {
+				err := rdb.Set(context.Background(), "key4", "value4", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
+			pattern: "",
+			want:    map[string]interface{}{},
+			wantErr: true, // MGET fails when pattern is empty
+		},
+		{
+			name:           "Keys function returns error",
+			pattern:        "key*",
+			want:           map[string]interface{}{},
+			wantErr:        true,
+			shutdownServer: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, cleanup := newTestRedis(t)
+			if tt.shutdownServer {
+				cleanup()
+			} else {
+				defer cleanup()
+			}
+
+			if tt.setup != nil {
+				tt.setup(client)
+			}
+
+			got, err := client.GetKeysAndValuesWithFilter(context.Background(), tt.pattern)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetKeysAndValuesWithFilter() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if len(got) != len(tt.want) {
+				t.Errorf("GetKeysAndValuesWithFilter() got = %v, want %v", got, tt.want)
+			}
+			for k := range got {
+				if got[k] != tt.want[k] {
+					t.Errorf("GetKeysAndValuesWithFilter() got = %v, want %v", got, tt.want)
+				}
 			}
 		})
 	}
