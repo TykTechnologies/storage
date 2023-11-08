@@ -13,9 +13,9 @@ func newTestRedis(t *testing.T) (*Redis8, func()) {
 	t.Helper()
 
 	opts := &types.ClientOpts{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
+		Redis: &types.RedisOptions{
+			Addrs: []string{"localhost:6379"},
+		},
 	}
 
 	r8, err := NewRedis8(opts)
