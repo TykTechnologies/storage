@@ -4,24 +4,29 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"github.com/alicebob/miniredis/v2"
 )
 
-// newTestRedis returns a Redis8 instance connected to a miniredis server.
 func newTestRedis(t *testing.T) (*Redis8, func()) {
 	t.Helper()
 
-	mr, err := miniredis.Run()
+	addr := "localhost:6379"
+	password := ""
+	db := 0
+
+	r8 := NewRedis8(addr, password, db)
+
+	ctx := context.Background()
+
+	_, err := r8.Client.Ping(ctx).Result()
 	if err != nil {
-		t.Fatalf("an error '%s' occurred when starting miniredis", err)
+		t.Fatalf("an error '%v' occurred when connecting to Redis server", err)
 	}
 
-	return NewRedis8(mr.Addr(), "", 0), func() {
-		mr.Close()
+	return r8, func() {
+		r8.Client.FlushDB(ctx).Result()
+		r8.Client.Close()
 	}
 }
-
 func TestRedis8_Set(t *testing.T) {
 	tests := []struct {
 		name       string
