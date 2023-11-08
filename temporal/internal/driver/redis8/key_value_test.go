@@ -2,6 +2,7 @@ package redis8
 
 import (
 	"context"
+	"sort"
 	"testing"
 	"time"
 
@@ -40,6 +41,26 @@ func newTestRedis(t *testing.T) (*Redis8, func()) {
 			t.Fatalf("an error '%v' occurred when closing the connection", err)
 		}
 	}
+}
+
+// Helper function to compare two slices regardless of the order of elements.
+func compareUnorderedSlices(t *testing.T, a, b []string) bool {
+	t.Helper()
+
+	if len(a) != len(b) {
+		return false
+	}
+
+	sort.Strings(a)
+	sort.Strings(b)
+
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 func TestRedis8_Set(t *testing.T) {
@@ -746,10 +767,10 @@ func TestRedis8_Keys(t *testing.T) {
 			if len(got) != len(tt.want) {
 				t.Errorf("Keys() got = %v, want %v", got, tt.want)
 			}
-			for i := range got {
-				if got[i] != tt.want[i] {
-					t.Errorf("Keys() got = %v, want %v", got, tt.want)
-				}
+
+			equal := compareUnorderedSlices(t, got, tt.want)
+			if !equal {
+				t.Errorf("Keys() got = %v, want %v", got, tt.want)
 			}
 		})
 	}
