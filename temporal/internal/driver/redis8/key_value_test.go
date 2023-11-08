@@ -18,14 +18,11 @@ func newTestRedis(t *testing.T) (*Redis8, func()) {
 		},
 	}
 
-	r8, err := NewRedis8(opts)
-	if err != nil {
-		t.Fatalf("NewRedis8() error = %v", err)
-	}
+	r8 := NewRedis8(opts)
 
 	ctx := context.Background()
 
-	_, err = r8.client.Ping(ctx).Result()
+	_, err := r8.client.Ping(ctx).Result()
 	if err != nil {
 		t.Fatalf("an error '%v' occurred when connecting to Redis server", err)
 	}

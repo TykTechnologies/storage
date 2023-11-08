@@ -17,7 +17,8 @@ func NewKeyValue(opts *types.ClientOpts) (types.KeyValue, error) {
 		if opts.Redis == nil {
 			return nil, errors.New("redis client options not provided for redis-8 driver")
 		}
-		return redis8.NewRedis8(opts)
+
+		return redis8.NewRedis8(opts), nil
 	default:
 		return nil, errors.New("invalid driver")
 	}

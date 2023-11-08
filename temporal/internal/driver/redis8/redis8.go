@@ -13,8 +13,7 @@ type Redis8 struct {
 	client redis.UniversalClient
 }
 
-func NewRedis8(opts *types.ClientOpts) (*Redis8, error) {
-
+func NewRedis8(opts *types.ClientOpts) *Redis8 {
 	// poolSize applies per cluster node and not for the whole cluster.
 	poolSize := 500
 	if opts.Redis.MaxActive > 0 {
@@ -49,14 +48,16 @@ func NewRedis8(opts *types.ClientOpts) (*Redis8, error) {
 		TLSConfig:        tlsConfig,
 	}
 
-	if opts.Redis.MasterName != "" {
+	switch {
+	case opts.Redis.MasterName != "":
 		client = redis.NewFailoverClient(universalOpts.Failover())
-	} else if opts.Redis.EnableCluster {
+	case opts.Redis.EnableCluster:
 		client = redis.NewClusterClient(universalOpts.Cluster())
-	} else {
+	default:
 		client = redis.NewClient(universalOpts.Simple())
 	}
-	return &Redis8{client: client}, nil
+
+	return &Redis8{client: client}
 }
 
 func getRedisAddrs(opts *types.RedisOptions) (addrs []string) {
