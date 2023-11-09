@@ -15,7 +15,7 @@ func TestNewKeyValue(t *testing.T) {
 		{
 			name: "Redis8",
 			opts: &types.ClientOpts{
-				Type: Redis8,
+				Type: RedisV8,
 				Redis: &types.RedisOptions{
 					Addrs: []string{"localhost:6379"},
 				},
@@ -25,7 +25,7 @@ func TestNewKeyValue(t *testing.T) {
 		{
 			name: "Redis8 without Redis config",
 			opts: &types.ClientOpts{
-				Type: Redis8,
+				Type: RedisV9,
 			},
 			wantErr: true,
 		},
@@ -33,6 +33,23 @@ func TestNewKeyValue(t *testing.T) {
 			name: "Invalid",
 			opts: &types.ClientOpts{
 				Type: "Invalid",
+			},
+			wantErr: true,
+		},
+		{
+			name: "RedisV9 with correct Redis config",
+			opts: &types.ClientOpts{
+				Type: RedisV9,
+				Redis: &types.RedisOptions{
+					Addrs: []string{"localhost:6379"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "RedisV9 without Redis config",
+			opts: &types.ClientOpts{
+				Type: RedisV9,
 			},
 			wantErr: true,
 		},

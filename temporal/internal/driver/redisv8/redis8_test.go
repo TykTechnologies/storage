@@ -1,4 +1,4 @@
-package redis8
+package redisv8
 
 import (
 	"context"
@@ -6,9 +6,10 @@ import (
 	"time"
 
 	"github.com/TykTechnologies/storage/temporal/internal/types"
+	"github.com/TykTechnologies/storage/temporal/utils"
 )
 
-func TestNewRedis8(t *testing.T) {
+func TestNewRedisV8(t *testing.T) {
 	// Assure a local Redis server is available at this address for this test
 	const localRedisAddress = "localhost:6379"
 
@@ -66,7 +67,7 @@ func TestNewRedis8(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r8 := NewRedis8(tt.opts)
+			r8 := NewRedisV8(tt.opts)
 
 			if tt.expectConnection {
 				if r8.client == nil {
@@ -187,8 +188,8 @@ func TestGetRedisAddrs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := getRedisAddrs(&tt.opts)
-			equals := compareUnorderedSlices(t, got, tt.want)
+			got := utils.GetRedisAddrs(&tt.opts)
+			equals := utils.CompareUnorderedSlices(got, tt.want)
 			if !equals {
 				t.Errorf("getRedisAddrs() = %v, want %v", got, tt.want)
 			}

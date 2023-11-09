@@ -1,19 +1,19 @@
-package redis8
+package redisv8
 
 import (
 	"crypto/tls"
-	"strconv"
 	"time"
 
 	"github.com/TykTechnologies/storage/temporal/internal/types"
+	"github.com/TykTechnologies/storage/temporal/utils"
 	"github.com/go-redis/redis/v8"
 )
 
-type Redis8 struct {
+type RedisV8 struct {
 	client redis.UniversalClient
 }
 
-func NewRedis8(opts *types.ClientOpts) *Redis8 {
+func NewRedisV8(opts *types.ClientOpts) *RedisV8 {
 	// poolSize applies per cluster node and not for the whole cluster.
 	poolSize := 500
 	if opts.Redis.MaxActive > 0 {
@@ -34,7 +34,7 @@ func NewRedis8(opts *types.ClientOpts) *Redis8 {
 	var client redis.UniversalClient
 
 	universalOpts := &redis.UniversalOptions{
-		Addrs:            getRedisAddrs(opts.Redis),
+		Addrs:            utils.GetRedisAddrs(opts.Redis),
 		MasterName:       opts.Redis.MasterName,
 		SentinelPassword: opts.Redis.SentinelPassword,
 		Username:         opts.Redis.Username,
@@ -57,23 +57,5 @@ func NewRedis8(opts *types.ClientOpts) *Redis8 {
 		client = redis.NewClient(universalOpts.Simple())
 	}
 
-	return &Redis8{client: client}
-}
-
-func getRedisAddrs(opts *types.RedisOptions) (addrs []string) {
-	if len(opts.Addrs) != 0 {
-		addrs = opts.Addrs
-	} else {
-		for h, p := range opts.Hosts {
-			addr := h + ":" + p
-			addrs = append(addrs, addr)
-		}
-	}
-
-	if len(addrs) == 0 && opts.Port != 0 {
-		addr := opts.Host + ":" + strconv.Itoa(opts.Port)
-		addrs = append(addrs, addr)
-	}
-
-	return addrs
+	return &RedisV8{client: client}
 }
