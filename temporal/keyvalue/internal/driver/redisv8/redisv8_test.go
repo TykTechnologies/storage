@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TykTechnologies/storage/temporal/internal/types"
-	"github.com/TykTechnologies/storage/temporal/utils"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/types"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/utils"
 )
 
 func TestNewRedisV8(t *testing.T) {

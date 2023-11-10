@@ -3,7 +3,7 @@ package temporal
 import (
 	"testing"
 
-	"github.com/TykTechnologies/storage/temporal/internal/types"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/types"
 )
 
 func TestNewKeyValue(t *testing.T) {

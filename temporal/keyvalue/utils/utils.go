@@ -3,7 +3,7 @@ package utils
 import (
 	"strconv"
 
-	"github.com/TykTechnologies/storage/temporal/internal/types"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/types"
 )
 
 func GetRedisAddrs(opts *types.RedisOptions) (addrs []string) {

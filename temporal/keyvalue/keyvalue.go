@@ -3,10 +3,9 @@ package temporal
 import (
 	"errors"
 
-	"github.com/TykTechnologies/storage/temporal/internal/driver/redisv8"
-	"github.com/TykTechnologies/storage/temporal/internal/driver/redisv9"
-
-	"github.com/TykTechnologies/storage/temporal/internal/types"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/driver/redisv8"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/driver/redisv9"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/types"
 )
 
 const (

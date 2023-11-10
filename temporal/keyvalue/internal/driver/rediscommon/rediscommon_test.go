@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TykTechnologies/storage/temporal/internal/types"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/types"
 	"github.com/stretchr/testify/assert"
 )
 

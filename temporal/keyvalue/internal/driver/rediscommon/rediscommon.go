@@ -4,8 +4,8 @@ import (
 	"crypto/tls"
 	"time"
 
-	"github.com/TykTechnologies/storage/temporal/internal/types"
-	"github.com/TykTechnologies/storage/temporal/utils"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/types"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/utils"
 )
 
 type CommonRedisConfig struct {

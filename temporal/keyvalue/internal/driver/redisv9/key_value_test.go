@@ -1,15 +1,15 @@
-package redisv8
+package redisv9
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"github.com/TykTechnologies/storage/temporal/internal/types"
-	"github.com/TykTechnologies/storage/temporal/utils"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/types"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/utils"
 )
 
-func newTestRedis(t *testing.T) (*RedisV8, func()) {
+func newTestRedis(t *testing.T) (*RedisV9, func()) {
 	t.Helper()
 
 	opts := &types.ClientOpts{
@@ -18,7 +18,7 @@ func newTestRedis(t *testing.T) (*RedisV8, func()) {
 		},
 	}
 
-	r8 := NewRedisV8(opts)
+	r8 := NewRedisV9(opts)
 
 	ctx := context.Background()
 
@@ -40,7 +40,7 @@ func newTestRedis(t *testing.T) (*RedisV8, func()) {
 	}
 }
 
-func TestRedisV8_Set(t *testing.T) {
+func TestRedisV9_Set(t *testing.T) {
 	tests := []struct {
 		name       string
 		key        string
@@ -88,10 +88,10 @@ func TestRedisV8_Set(t *testing.T) {
 	}
 }
 
-func TestRedisV8_Get(t *testing.T) {
+func TestRedisV9_Get(t *testing.T) {
 	tests := []struct {
 		name    string
-		setup   func(rdb *RedisV8)
+		setup   func(rdb *RedisV9)
 		key     string
 		want    string
 		wantErr bool
@@ -104,7 +104,7 @@ func TestRedisV8_Get(t *testing.T) {
 		},
 		{
 			name: "Get existing key",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key2", "value2", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -147,16 +147,16 @@ func TestRedisV8_Get(t *testing.T) {
 	}
 }
 
-func TestRedisV8_Delete(t *testing.T) {
+func TestRedisV9_Delete(t *testing.T) {
 	tests := []struct {
 		name    string
-		setup   func(rdb *RedisV8)
+		setup   func(rdb *RedisV9)
 		key     string
 		wantErr bool
 	}{
 		{
 			name: "Delete existing key",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key1", "value1", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -199,17 +199,17 @@ func TestRedisV8_Delete(t *testing.T) {
 	}
 }
 
-func TestRedisV8_Increment(t *testing.T) {
+func TestRedisV9_Increment(t *testing.T) {
 	tests := []struct {
 		name    string
-		setup   func(rdb *RedisV8)
+		setup   func(rdb *RedisV9)
 		key     string
 		want    int64
 		wantErr bool
 	}{
 		{
 			name: "Increment existing key",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "counter", "5", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -258,17 +258,17 @@ func TestRedisV8_Increment(t *testing.T) {
 	}
 }
 
-func TestRedisV8_Decrement(t *testing.T) {
+func TestRedisV9_Decrement(t *testing.T) {
 	tests := []struct {
 		name    string
-		setup   func(rdb *RedisV8)
+		setup   func(rdb *RedisV9)
 		key     string
 		want    int64
 		wantErr bool
 	}{
 		{
 			name: "Decrement existing key",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "counter", "5", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -317,17 +317,17 @@ func TestRedisV8_Decrement(t *testing.T) {
 	}
 }
 
-func TestRedisV8_Exists(t *testing.T) {
+func TestRedisV9_Exists(t *testing.T) {
 	tests := []struct {
 		name    string
-		setup   func(rdb *RedisV8)
+		setup   func(rdb *RedisV9)
 		key     string
 		want    bool
 		wantErr bool
 	}{
 		{
 			name: "Check existing key",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key1", "value1", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -376,17 +376,17 @@ func TestRedisV8_Exists(t *testing.T) {
 	}
 }
 
-func TestRedisV8_Expire(t *testing.T) {
+func TestRedisV9_Expire(t *testing.T) {
 	tests := []struct {
 		name       string
-		setup      func(rdb *RedisV8)
+		setup      func(rdb *RedisV9)
 		key        string
 		expiration time.Duration
 		wantErr    bool
 	}{
 		{
 			name: "Expire existing key",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key1", "value1", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -442,17 +442,17 @@ func TestRedisV8_Expire(t *testing.T) {
 	}
 }
 
-func TestRedisV8_TTL(t *testing.T) {
+func TestRedisV9_TTL(t *testing.T) {
 	tests := []struct {
 		name    string
-		setup   func(rdb *RedisV8)
+		setup   func(rdb *RedisV9)
 		key     string
 		want    int64
 		wantErr bool
 	}{
 		{
 			name: "TTL existing key",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key1", "value1", 10*time.Second)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -501,17 +501,17 @@ func TestRedisV8_TTL(t *testing.T) {
 	}
 }
 
-func TestRedisV8_DeleteKeys(t *testing.T) {
+func TestRedisV9_DeleteKeys(t *testing.T) {
 	tests := []struct {
 		name    string
-		setup   func(rdb *RedisV8)
+		setup   func(rdb *RedisV9)
 		keys    []string
 		want    int64
 		wantErr bool
 	}{
 		{
 			name: "DeleteKeys existing keys",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key1", "value1", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -539,7 +539,7 @@ func TestRedisV8_DeleteKeys(t *testing.T) {
 		},
 		{
 			name: "DeleteKeys existing and non-existing keys",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key7", "value7", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -588,17 +588,17 @@ func TestRedisV8_DeleteKeys(t *testing.T) {
 	}
 }
 
-func TestRedisV8_DeleteScanMatch(t *testing.T) {
+func TestRedisV9_DeleteScanMatch(t *testing.T) {
 	tests := []struct {
 		name    string
-		setup   func(rdb *RedisV8)
+		setup   func(rdb *RedisV9)
 		pattern string
 		want    int64
 		wantErr bool
 	}{
 		{
 			name: "DeleteScanMatch existing keys",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key1", "value1", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -626,7 +626,7 @@ func TestRedisV8_DeleteScanMatch(t *testing.T) {
 		},
 		{
 			name: "DeleteScanMatch existing and non-existing keys",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key3", "value3", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -673,17 +673,17 @@ func TestRedisV8_DeleteScanMatch(t *testing.T) {
 	}
 }
 
-func TestRedisV8_Keys(t *testing.T) {
+func TestRedisV9_Keys(t *testing.T) {
 	tests := []struct {
 		name    string
-		setup   func(rdb *RedisV8)
+		setup   func(rdb *RedisV9)
 		pattern string
 		want    []string
 		wantErr bool
 	}{
 		{
 			name: "Keys existing keys",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key1", "value1", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -711,7 +711,7 @@ func TestRedisV8_Keys(t *testing.T) {
 		},
 		{
 			name: "Keys existing and non-existing keys",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key3", "value3", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -753,17 +753,17 @@ func TestRedisV8_Keys(t *testing.T) {
 	}
 }
 
-func TestRedisV8_GetMulti(t *testing.T) {
+func TestRedisV9_GetMulti(t *testing.T) {
 	tests := []struct {
 		name    string
-		setup   func(rdb *RedisV8)
+		setup   func(rdb *RedisV9)
 		keys    []string
 		want    []interface{}
 		wantErr bool
 	}{
 		{
 			name: "GetMulti existing keys",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key1", "value1", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -791,7 +791,7 @@ func TestRedisV8_GetMulti(t *testing.T) {
 		},
 		{
 			name: "GetMulti existing and non-existing keys",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key7", "value7", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -832,10 +832,10 @@ func TestRedisV8_GetMulti(t *testing.T) {
 	}
 }
 
-func TestRedisV8_GetKeysAndValuesWithFilter(t *testing.T) {
+func TestRedisV9_GetKeysAndValuesWithFilter(t *testing.T) {
 	tests := []struct {
 		name           string
-		setup          func(rdb *RedisV8)
+		setup          func(rdb *RedisV9)
 		pattern        string
 		want           map[string]interface{}
 		wantErr        bool
@@ -843,7 +843,7 @@ func TestRedisV8_GetKeysAndValuesWithFilter(t *testing.T) {
 	}{
 		{
 			name: "GetKeysAndValuesWithFilter existing keys",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key1", "value1", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -865,7 +865,7 @@ func TestRedisV8_GetKeysAndValuesWithFilter(t *testing.T) {
 		},
 		{
 			name: "GetKeysAndValuesWithFilter existing and non-existing keys",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key3", "value3", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
@@ -877,7 +877,7 @@ func TestRedisV8_GetKeysAndValuesWithFilter(t *testing.T) {
 		},
 		{
 			name: "GetKeysAndValuesWithFilter existing and non-existing keys with empty pattern",
-			setup: func(rdb *RedisV8) {
+			setup: func(rdb *RedisV9) {
 				err := rdb.Set(context.Background(), "key4", "value4", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)

@@ -3,7 +3,7 @@ package utils
 import (
 	"testing"
 
-	"github.com/TykTechnologies/storage/temporal/internal/types"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/types"
 )
 
 func TestGetRedisAddrs(t *testing.T) {

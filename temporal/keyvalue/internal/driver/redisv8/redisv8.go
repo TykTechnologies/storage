@@ -1,8 +1,8 @@
 package redisv8
 
 import (
-	"github.com/TykTechnologies/storage/temporal/internal/driver/rediscommon"
-	"github.com/TykTechnologies/storage/temporal/internal/types"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/driver/rediscommon"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/types"
 	"github.com/go-redis/redis/v8"
 )
 
