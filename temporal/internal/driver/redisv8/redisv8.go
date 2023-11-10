@@ -1,16 +1,16 @@
-package redisv9
+package redisv8
 
 import (
 	"github.com/TykTechnologies/storage/temporal/internal/driver/rediscommon"
 	"github.com/TykTechnologies/storage/temporal/internal/types"
-	"github.com/redis/go-redis/v9"
+	"github.com/go-redis/redis/v8"
 )
 
-type RedisV9 struct {
+type RedisV8 struct {
 	client redis.UniversalClient
 }
 
-func NewRedisV9(opts *types.ClientOpts) *RedisV9 {
+func NewRedisV8(opts *types.ClientOpts) *RedisV8 {
 	commonConfig := rediscommon.NewCommonRedisConfig(opts)
 
 	universalOpts := &redis.UniversalOptions{
@@ -23,7 +23,7 @@ func NewRedisV9(opts *types.ClientOpts) *RedisV9 {
 		DialTimeout:      commonConfig.DialTimeout,
 		ReadTimeout:      commonConfig.ReadTimeout,
 		WriteTimeout:     commonConfig.WriteTimeout,
-		ConnMaxIdleTime:  commonConfig.IdleTimeout,
+		IdleTimeout:      commonConfig.IdleTimeout,
 		PoolSize:         commonConfig.PoolSize,
 		TLSConfig:        commonConfig.TLSConfig,
 	}
@@ -39,5 +39,5 @@ func NewRedisV9(opts *types.ClientOpts) *RedisV9 {
 		client = redis.NewClient(universalOpts.Simple())
 	}
 
-	return &RedisV9{client: client}
+	return &RedisV8{client: client}
 }
