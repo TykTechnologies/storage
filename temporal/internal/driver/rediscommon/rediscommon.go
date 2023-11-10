@@ -28,11 +28,13 @@ func NewCommonRedisConfig(opts *types.ClientOpts) *CommonRedisConfig {
 	if opts.Redis.MaxActive > 0 {
 		poolSize = opts.Redis.MaxActive
 	}
+
 	timeout := 5 * time.Second
 	if opts.Redis.Timeout != 0 {
 		timeout = time.Duration(opts.Redis.Timeout) * time.Second
 	}
 	var tlsConfig *tls.Config
+
 	if opts.Redis.UseSSL {
 		tlsConfig = &tls.Config{
 			InsecureSkipVerify: opts.Redis.SSLInsecureSkipVerify,
