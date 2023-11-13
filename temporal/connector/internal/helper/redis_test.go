@@ -3,8 +3,9 @@ package helper
 import (
 	"testing"
 
-	"github.com/TykTechnologies/storage/temporal/connector/types"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/TykTechnologies/storage/temporal/connector/types"
 )
 
 func TestGetRedisAddrs(t *testing.T) {

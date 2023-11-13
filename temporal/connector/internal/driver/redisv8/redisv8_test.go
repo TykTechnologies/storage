@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/TykTechnologies/storage/temporal/connector/types"
 	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/TykTechnologies/storage/temporal/connector/types"
 )
 
 func TestNewConnector(t *testing.T) {

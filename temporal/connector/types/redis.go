@@ -29,7 +29,7 @@ func WithRedisConfig(config *RedisOptions) Option {
 	}
 }
 
-// WithNoopConfig is a helper function to avoid creating a connection - usefull for testing.
+// WithNoopConfig is a helper function to avoid creating a connection - useful for testing.
 func WithNoopConfig() Option {
 	return &opts{
 		fn: func(bcfg *BaseConfig) {

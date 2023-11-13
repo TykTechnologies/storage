@@ -3,8 +3,9 @@ package connector
 import (
 	"testing"
 
-	"github.com/TykTechnologies/storage/temporal/connector/types"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/TykTechnologies/storage/temporal/connector/types"
 )
 
 func TestNewConnector(t *testing.T) {
