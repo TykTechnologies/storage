@@ -74,7 +74,6 @@ func NewConnector(options ...types.Option) (*Connector, error) {
 }
 
 func (h *Connector) IsConnected() {
-
 }
 
 func (h *Connector) Disconnect(ctx context.Context) error {

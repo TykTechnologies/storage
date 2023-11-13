@@ -31,7 +31,6 @@ func TestGetRedisAddrs(t *testing.T) {
 		{
 			name: "With Host and Port",
 			opts: types.RedisOptions{
-
 				Host: "127.0.0.1",
 				Port: 6379,
 			},
