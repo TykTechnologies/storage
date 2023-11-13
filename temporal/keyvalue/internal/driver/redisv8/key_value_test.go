@@ -100,7 +100,7 @@ func TestRedisV8_Get(t *testing.T) {
 			name:    "Get non-existing key",
 			key:     "key1",
 			want:    "",
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "Get existing key",
