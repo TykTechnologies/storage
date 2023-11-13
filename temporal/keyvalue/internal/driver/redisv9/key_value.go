@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/TykTechnologies/storage/temporal/keyvalue/utils"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -13,7 +14,7 @@ func (r *RedisV9) Get(ctx context.Context, key string) (string, error) {
 	result, err := r.client.Get(ctx, key).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return "", nil // or fmt.Errorf("key not found")?
+			return "", utils.ErrKeyNotFound
 		}
 
 		return "", err
@@ -24,9 +25,8 @@ func (r *RedisV9) Get(ctx context.Context, key string) (string, error) {
 
 // Set sets the string value of a key
 func (r *RedisV9) Set(ctx context.Context, key, value string, expiration time.Duration) error {
-	// TBD: should we return an error if the key is empty?
 	if key == "" {
-		return errors.New("key cannot be empty")
+		return utils.ErrKeyNotEmpty
 	}
 
 	return r.client.Set(ctx, key, value, expiration).Err()

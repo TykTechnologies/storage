@@ -1,9 +1,15 @@
 package utils
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/types"
+)
+
+var (
+	ErrKeyNotFound = errors.New("key not found")
+	ErrKeyNotEmpty = errors.New("key cannot be empty")
 )
 
 func GetRedisAddrs(opts *types.RedisOptions) (addrs []string) {
