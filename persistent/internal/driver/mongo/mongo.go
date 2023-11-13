@@ -134,8 +134,8 @@ func (d *mongoDriver) Query(ctx context.Context, row model.DBObject, result inte
 		cursor, err = collection.Find(ctx, search, findOpts)
 		if err == nil {
 			err = cursor.All(ctx, result)
+			defer cursor.Close(ctx)
 		}
-		defer cursor.Close(ctx)
 	} else {
 		err = collection.FindOne(ctx, search, findOneOpts).Decode(result)
 	}
