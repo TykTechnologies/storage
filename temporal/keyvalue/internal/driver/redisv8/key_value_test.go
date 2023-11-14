@@ -166,7 +166,7 @@ func TestRedisV8_Get(t *testing.T) {
 			}
 
 			got, err := client.Get(context.Background(), tt.key)
-			if err != tt.wantedErr {
+			if !errors.Is(err, tt.wantedErr) {
 				t.Errorf("Get() error = %v, wantedErr %v", err, tt.wantedErr)
 			}
 			if got != tt.want {
