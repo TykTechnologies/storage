@@ -87,6 +87,7 @@ func (h *Connector) Type() string {
 
 // As converts i to driver-specific types.
 // redisv8 connector supports only *redis.UniversalClient.
+// Same concept as https://gocloud.dev/concepts/as/ but for connectors.
 func (h *Connector) As(i interface{}) bool {
 	if x, ok := i.(*redis.UniversalClient); ok {
 		*x = h.client

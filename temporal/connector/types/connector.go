@@ -13,5 +13,6 @@ type Connector interface {
 	Type() string
 
 	// As converts i to driver-specific types.
+	// Same concept as https://gocloud.dev/concepts/as/ but for connectors.
 	As(i interface{}) bool
 }
