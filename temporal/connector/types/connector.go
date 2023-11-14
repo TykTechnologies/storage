@@ -13,5 +13,5 @@ type Connector interface {
 	Type() string
 
 	// As converts i to driver-specific types.
-	As(interface{}) bool
+	As(i interface{}) bool
 }
