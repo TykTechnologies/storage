@@ -34,6 +34,7 @@ func WithRedisConfig(config *RedisOptions) Option {
 func WithNoopConfig() Option {
 	return &opts{
 		fn: func(bcfg *BaseConfig) {
+			// Empty function that does nothing.
 		},
 	}
 }
