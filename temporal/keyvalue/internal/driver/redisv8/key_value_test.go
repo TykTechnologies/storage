@@ -2,27 +2,56 @@ package redisv8
 
 import (
 	"context"
+	"errors"
+	"sort"
 	"testing"
 	"time"
 
-	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/types"
-	"github.com/TykTechnologies/storage/temporal/keyvalue/utils"
+	"github.com/TykTechnologies/storage/temporal/connector"
+	"github.com/TykTechnologies/storage/temporal/types"
+	"github.com/go-redis/redis/v8"
 )
+
+// Helper function to compare two slices regardless of the order of elements.
+func compareUnorderedSlices(t *testing.T, a, b []string) bool {
+	t.Helper()
+
+	if len(a) != len(b) {
+		return false
+	}
+
+	sort.Strings(a)
+	sort.Strings(b)
+
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+
+	return true
+}
 
 func newTestRedis(t *testing.T) (*RedisV8, func()) {
 	t.Helper()
 
-	opts := &types.ClientOpts{
-		Redis: &types.RedisOptions{
-			Addrs: []string{"localhost:6379"},
-		},
+	opts := &types.RedisOptions{
+		Addrs: []string{"localhost:6379"},
 	}
 
-	r8 := NewRedisV8(opts)
+	conn, err := connector.NewConnector(types.RedisV8Type, types.WithRedisConfig(opts))
+	if err != nil {
+		t.Fatalf("NewConnector() error = %v", err)
+	}
+
+	r8, err := NewRedisV8(conn)
+	if err != nil {
+		t.Fatalf("NewRedisV8() error = %v", err)
+	}
 
 	ctx := context.Background()
 
-	_, err := r8.client.Ping(ctx).Result()
+	_, err = r8.client.Ping(ctx).Result()
 	if err != nil {
 		t.Fatalf("an error '%v' occurred when connecting to Redis server", err)
 	}
@@ -90,17 +119,17 @@ func TestRedisV8_Set(t *testing.T) {
 
 func TestRedisV8_Get(t *testing.T) {
 	tests := []struct {
-		name    string
-		setup   func(rdb *RedisV8)
-		key     string
-		want    string
-		wantErr bool
+		name      string
+		setup     func(rdb *RedisV8)
+		key       string
+		want      string
+		wantedErr error
 	}{
 		{
-			name:    "Get non-existing key",
-			key:     "key1",
-			want:    "",
-			wantErr: true,
+			name:      "Get non-existing key",
+			key:       "key1",
+			want:      "",
+			wantedErr: types.ErrKeyNotFound,
 		},
 		{
 			name: "Get existing key",
@@ -110,15 +139,15 @@ func TestRedisV8_Get(t *testing.T) {
 					t.Fatalf("Set() error = %v", err)
 				}
 			},
-			key:     "key2",
-			want:    "value2",
-			wantErr: false,
+			key:       "key2",
+			want:      "value2",
+			wantedErr: nil,
 		},
 		{
-			name:    "Get key when server is closed",
-			key:     "key3",
-			want:    "",
-			wantErr: true,
+			name:      "Get key when client is closed",
+			key:       "key3",
+			want:      "",
+			wantedErr: redis.ErrClosed,
 		},
 	}
 
@@ -126,7 +155,7 @@ func TestRedisV8_Get(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client, cleanup := newTestRedis(t)
 
-			if tt.wantErr {
+			if errors.Is(tt.wantedErr, redis.ErrClosed) {
 				cleanup()
 			} else {
 				defer cleanup()
@@ -137,8 +166,8 @@ func TestRedisV8_Get(t *testing.T) {
 			}
 
 			got, err := client.Get(context.Background(), tt.key)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Get() error = %v, wantErr %v", err, tt.wantErr)
+			if err != tt.wantedErr {
+				t.Errorf("Get() error = %v, wantedErr %v", err, tt.wantedErr)
 			}
 			if got != tt.want {
 				t.Errorf("Get() got = %v, want %v", got, tt.want)
@@ -745,7 +774,7 @@ func TestRedisV8_Keys(t *testing.T) {
 				t.Errorf("Keys() got = %v, want %v", got, tt.want)
 			}
 
-			equal := utils.CompareUnorderedSlices(got, tt.want)
+			equal := compareUnorderedSlices(t, got, tt.want)
 			if !equal {
 				t.Errorf("Keys() got = %v, want %v", got, tt.want)
 			}

@@ -3,7 +3,7 @@ package helper
 import (
 	"strconv"
 
-	"github.com/TykTechnologies/storage/temporal/connector/types"
+	"github.com/TykTechnologies/storage/temporal/types"
 )
 
 // GetRedisAddrs returns a list of redis addresses from the types.RedisOptions.

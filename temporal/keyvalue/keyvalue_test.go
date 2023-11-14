@@ -3,53 +3,30 @@ package temporal
 import (
 	"testing"
 
-	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/types"
+	"github.com/TykTechnologies/storage/temporal/connector"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/utils"
+	"github.com/TykTechnologies/storage/temporal/types"
 )
 
 func TestNewKeyValue(t *testing.T) {
 	tests := []struct {
-		name    string
-		opts    *types.ClientOpts
-		wantErr bool
+		name      string
+		setupConn func() (types.Connector, error)
+		wantErr   bool
 	}{
 		{
 			name: "Redis8",
-			opts: &types.ClientOpts{
-				Type: RedisV8,
-				Redis: &types.RedisOptions{
+			setupConn: func() (types.Connector, error) {
+				return connector.NewConnector(types.RedisV8Type, types.WithRedisConfig(&types.RedisOptions{
 					Addrs: []string{"localhost:6379"},
-				},
+				}))
 			},
 			wantErr: false,
 		},
 		{
-			name: "Redis8 without Redis config",
-			opts: &types.ClientOpts{
-				Type: RedisV9,
-			},
-			wantErr: true,
-		},
-		{
-			name: "Invalid",
-			opts: &types.ClientOpts{
-				Type: "Invalid",
-			},
-			wantErr: true,
-		},
-		{
-			name: "RedisV9 with correct Redis config",
-			opts: &types.ClientOpts{
-				Type: RedisV9,
-				Redis: &types.RedisOptions{
-					Addrs: []string{"localhost:6379"},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "RedisV9 without Redis config",
-			opts: &types.ClientOpts{
-				Type: RedisV9,
+			name: "Invalid connector",
+			setupConn: func() (types.Connector, error) {
+				return utils.MockConnector{}, nil
 			},
 			wantErr: true,
 		},
@@ -57,7 +34,12 @@ func TestNewKeyValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewKeyValue(tt.opts)
+			conn, err := tt.setupConn()
+			if err != nil {
+				t.Errorf("setupConn() error = %v", err)
+				return
+			}
+			_, err = NewKeyValue(conn)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewKeyValue() error = %v, wantErr %v", err, tt.wantErr)
 				return

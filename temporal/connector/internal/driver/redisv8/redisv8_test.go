@@ -7,7 +7,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/TykTechnologies/storage/temporal/connector/types"
+	"github.com/TykTechnologies/storage/temporal/types"
 )
 
 func TestNewConnector(t *testing.T) {

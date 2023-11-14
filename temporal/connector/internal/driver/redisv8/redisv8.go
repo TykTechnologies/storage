@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/TykTechnologies/storage/temporal/connector/internal/helper"
-	"github.com/TykTechnologies/storage/temporal/connector/types"
+	"github.com/TykTechnologies/storage/temporal/types"
 
 	"github.com/go-redis/redis/v8"
 )

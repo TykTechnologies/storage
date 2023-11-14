@@ -6,9 +6,8 @@ import (
 )
 
 type KeyValue interface {
-	// connection handling
-	//   Handler
-
+	// Connector adds all the methods from the Connector interface
+	Connector
 	// Get retrieves the value for a given key
 	Get(ctx context.Context, key string) (value string, err error)
 	// Set sets the string value of a key
