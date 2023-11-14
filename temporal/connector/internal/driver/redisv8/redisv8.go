@@ -73,9 +73,6 @@ func NewConnector(options ...types.Option) (*Connector, error) {
 	return &Connector{client: client, cfg: opts}, nil
 }
 
-func (h *Connector) IsConnected() {
-}
-
 func (h *Connector) Disconnect(ctx context.Context) error {
 	return h.client.Close()
 }
@@ -90,8 +87,8 @@ func (h *Connector) Type() string {
 
 // As converts i to driver-specific types.
 // redisv8 connector supports only *redis.UniversalClient.
-func (h *Connector) As(con interface{}) bool {
-	if x, ok := con.(*redis.UniversalClient); ok {
+func (h *Connector) As(i interface{}) bool {
+	if x, ok := i.(*redis.UniversalClient); ok {
 		*x = h.client
 		return true
 	}
