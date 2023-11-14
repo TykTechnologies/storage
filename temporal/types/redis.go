@@ -18,7 +18,6 @@ func (o *opts) Apply(bcfg *BaseConfig) {
 
 const (
 	RedisV8Type = "redisv8"
-	RedisV9Type = "redisv9"
 )
 
 // WithRedisConfig is a helper function to create a ConnectionOption for Redis.
