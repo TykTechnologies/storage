@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/TykTechnologies/storage/temporal/keyvalue/types"
+	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/go-redis/redis/v8"
 )
 
@@ -14,7 +14,7 @@ func (r *RedisV8) Get(ctx context.Context, key string) (string, error) {
 	result, err := r.client.Get(ctx, key).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return "", types.ErrKeyNotFound
+			return "", model.ErrKeyNotFound
 		}
 
 		return "", err
@@ -26,7 +26,7 @@ func (r *RedisV8) Get(ctx context.Context, key string) (string, error) {
 // Set sets the string value of a key
 func (r *RedisV8) Set(ctx context.Context, key, value string, expiration time.Duration) error {
 	if key == "" {
-		return types.ErrKeyNotEmpty
+		return model.ErrKeyNotEmpty
 	}
 
 	return r.client.Set(ctx, key, value, expiration).Err()
