@@ -43,7 +43,7 @@ func TestNewRedisV8(t *testing.T) {
 				t.Errorf("NewRedisV8() error = %v", err)
 				return
 			}
-			r8, err := NewRedisV8(conn)
+			r8, err := NewKeyValueRedisV8(conn)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewRedisV8() error = %v, wantErr %v", err, tt.wantErr)
 				return

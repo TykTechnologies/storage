@@ -10,7 +10,7 @@ import (
 )
 
 // Get retrieves the value for a given key from Redis
-func (r *RedisV8) Get(ctx context.Context, key string) (string, error) {
+func (r *KeyValueRedisV8) Get(ctx context.Context, key string) (string, error) {
 	result, err := r.client.Get(ctx, key).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
@@ -24,7 +24,7 @@ func (r *RedisV8) Get(ctx context.Context, key string) (string, error) {
 }
 
 // Set sets the string value of a key
-func (r *RedisV8) Set(ctx context.Context, key, value string, expiration time.Duration) error {
+func (r *KeyValueRedisV8) Set(ctx context.Context, key, value string, expiration time.Duration) error {
 	if key == "" {
 		return types.ErrKeyNotEmpty
 	}
@@ -33,34 +33,34 @@ func (r *RedisV8) Set(ctx context.Context, key, value string, expiration time.Du
 }
 
 // Delete removes the specified keys
-func (r *RedisV8) Delete(ctx context.Context, key string) error {
+func (r *KeyValueRedisV8) Delete(ctx context.Context, key string) error {
 	_, err := r.client.Del(ctx, key).Result()
 	return err
 }
 
 // Increment atomically increments the integer value of a key by one
-func (r *RedisV8) Increment(ctx context.Context, key string) (int64, error) {
+func (r *KeyValueRedisV8) Increment(ctx context.Context, key string) (int64, error) {
 	return r.client.Incr(ctx, key).Result()
 }
 
 // Decrement atomically decrements the integer value of a key by one
-func (r *RedisV8) Decrement(ctx context.Context, key string) (int64, error) {
+func (r *KeyValueRedisV8) Decrement(ctx context.Context, key string) (int64, error) {
 	return r.client.Decr(ctx, key).Result()
 }
 
 // Exists checks if a key exists
-func (r *RedisV8) Exists(ctx context.Context, key string) (bool, error) {
+func (r *KeyValueRedisV8) Exists(ctx context.Context, key string) (bool, error) {
 	result, err := r.client.Exists(ctx, key).Result()
 	return result > 0, err
 }
 
 // Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted
-func (r *RedisV8) Expire(ctx context.Context, key string, expiration time.Duration) error {
+func (r *KeyValueRedisV8) Expire(ctx context.Context, key string, expiration time.Duration) error {
 	return r.client.Expire(ctx, key, expiration).Err()
 }
 
 // TTL returns the remaining time to live of a key that has a timeout
-func (r *RedisV8) TTL(ctx context.Context, key string) (int64, error) {
+func (r *KeyValueRedisV8) TTL(ctx context.Context, key string) (int64, error) {
 	duration, err := r.client.TTL(ctx, key).Result()
 	if err != nil {
 		return 0, err
@@ -70,12 +70,12 @@ func (r *RedisV8) TTL(ctx context.Context, key string) (int64, error) {
 }
 
 // DeleteKeys removes the specified keys. A key is ignored if it does not exist
-func (r *RedisV8) DeleteKeys(ctx context.Context, keys []string) (int64, error) {
+func (r *KeyValueRedisV8) DeleteKeys(ctx context.Context, keys []string) (int64, error) {
 	return r.client.Del(ctx, keys...).Result()
 }
 
 // DeleteScanMatch uses the SCAN command to find all keys matching the given pattern and deletes them
-func (r *RedisV8) DeleteScanMatch(ctx context.Context, pattern string) (int64, error) {
+func (r *KeyValueRedisV8) DeleteScanMatch(ctx context.Context, pattern string) (int64, error) {
 	var deleted int64
 	var cursor uint64
 	var err error
@@ -108,12 +108,12 @@ func (r *RedisV8) DeleteScanMatch(ctx context.Context, pattern string) (int64, e
 }
 
 // Keys returns all keys matching the given pattern
-func (r *RedisV8) Keys(ctx context.Context, pattern string) ([]string, error) {
+func (r *KeyValueRedisV8) Keys(ctx context.Context, pattern string) ([]string, error) {
 	return r.client.Keys(ctx, pattern).Result()
 }
 
 // GetMulti returns the values of all specified keys
-func (r *RedisV8) GetMulti(ctx context.Context, keys []string) ([]interface{}, error) {
+func (r *KeyValueRedisV8) GetMulti(ctx context.Context, keys []string) ([]interface{}, error) {
 	cmd := r.client.MGet(ctx, keys...)
 	if cmd.Err() != nil {
 		return nil, cmd.Err()
@@ -123,7 +123,9 @@ func (r *RedisV8) GetMulti(ctx context.Context, keys []string) ([]interface{}, e
 }
 
 // GetKeysAndValuesWithFilter returns all keys and their values for a given pattern
-func (r *RedisV8) GetKeysAndValuesWithFilter(ctx context.Context, pattern string) (map[string]interface{}, error) {
+func (r *KeyValueRedisV8) GetKeysAndValuesWithFilter(ctx context.Context,
+	pattern string,
+) (map[string]interface{}, error) {
 	keys, err := r.Keys(ctx, pattern)
 	if err != nil {
 		return nil, err

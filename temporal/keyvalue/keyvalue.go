@@ -11,7 +11,7 @@ import (
 func NewKeyValue(conn connectorTypes.Connector) (keyValueTypes.KeyValue, error) {
 	switch conn.Type() {
 	case connectorTypes.RedisV8Type:
-		return redisv8.NewRedisV8(conn)
+		return redisv8.NewKeyValueRedisV8(conn)
 	default:
 		return nil, errors.New("invalid driver")
 	}
