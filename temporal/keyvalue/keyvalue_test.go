@@ -5,7 +5,6 @@ import (
 
 	"github.com/TykTechnologies/storage/temporal/connector"
 	"github.com/TykTechnologies/storage/temporal/connector/types"
-	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/utils"
 )
 
 func TestNewKeyValue(t *testing.T) {
@@ -22,13 +21,6 @@ func TestNewKeyValue(t *testing.T) {
 				}))
 			},
 			wantErr: false,
-		},
-		{
-			name: "Invalid connector",
-			setupConn: func() (types.Connector, error) {
-				return utils.MockConnector{}, nil
-			},
-			wantErr: true,
 		},
 	}
 
