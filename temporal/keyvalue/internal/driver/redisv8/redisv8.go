@@ -7,16 +7,16 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-type KeyValueRedisV8 struct {
+type RedisV8 struct {
 	client redis.UniversalClient
 	connectorTypes.Connector
 }
 
-func NewKeyValueRedisV8(conn connectorTypes.Connector) (*KeyValueRedisV8, error) {
+func NewKeyValueRedisV8(conn connectorTypes.Connector) (*RedisV8, error) {
 	var client redis.UniversalClient
 	if ok := conn.As(&client); !ok {
 		return nil, keyValueTypes.ErrInvalidConnector
 	}
 
-	return &KeyValueRedisV8{client, conn}, nil
+	return &RedisV8{client, conn}, nil
 }
