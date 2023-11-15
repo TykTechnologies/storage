@@ -2,6 +2,4 @@ package types
 
 import "errors"
 
-var (
-	ErrInvalidConnector = errors.New("invalid connector")
-)
+var ErrInvalidConnector = errors.New("invalid connector")

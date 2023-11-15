@@ -16,7 +16,7 @@ type RedisV8List struct {
 // NewList returns a new redisv8List instance.
 func NewList(conn connectorType.Connector) (*RedisV8List, error) {
 	var client redis.UniversalClient
-	if conn == nil || conn.As(&client) == false {
+	if conn == nil || !conn.As(&client) {
 		return nil, types.ErrInvalidConnector
 	}
 

@@ -12,9 +12,9 @@ var _ types.List = (*redisv8.RedisV8List)(nil)
 
 func NewList(connector connectorType.Connector) (List, error) {
 	switch connector.Type() {
-	case "redisv8":
+	case connectorType.RedisV8Type:
 		return redisv8.NewList(connector)
+	default:
+		return nil, connectorType.ErrInvalidHandlerType
 	}
-
-	return nil, nil
 }
