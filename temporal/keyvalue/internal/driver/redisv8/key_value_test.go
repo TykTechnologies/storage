@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/TykTechnologies/storage/temporal/connector"
-	"github.com/TykTechnologies/storage/temporal/types"
+	connectorTypes "github.com/TykTechnologies/storage/temporal/connector/types"
+	keyValueTypes "github.com/TykTechnologies/storage/temporal/keyvalue/types"
 	"github.com/go-redis/redis/v8"
 )
 
@@ -35,11 +36,11 @@ func compareUnorderedSlices(t *testing.T, a, b []string) bool {
 func newTestRedis(t *testing.T) (*RedisV8, func()) {
 	t.Helper()
 
-	opts := &types.RedisOptions{
+	opts := &connectorTypes.RedisOptions{
 		Addrs: []string{"localhost:6379"},
 	}
 
-	conn, err := connector.NewConnector(types.RedisV8Type, types.WithRedisConfig(opts))
+	conn, err := connector.NewConnector(connectorTypes.RedisV8Type, connectorTypes.WithRedisConfig(opts))
 	if err != nil {
 		t.Fatalf("NewConnector() error = %v", err)
 	}
@@ -129,7 +130,7 @@ func TestRedisV8_Get(t *testing.T) {
 			name:      "Get non-existing key",
 			key:       "key1",
 			want:      "",
-			wantedErr: types.ErrKeyNotFound,
+			wantedErr: keyValueTypes.ErrKeyNotFound,
 		},
 		{
 			name: "Get existing key",

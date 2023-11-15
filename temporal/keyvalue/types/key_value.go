@@ -3,11 +3,13 @@ package types
 import (
 	"context"
 	"time"
+
+	connectorTypes "github.com/TykTechnologies/storage/temporal/connector/types"
 )
 
 type KeyValue interface {
 	// Connector adds all the methods from the Connector interface
-	Connector
+	connectorTypes.Connector
 	// Get retrieves the value for a given key
 	Get(ctx context.Context, key string) (value string, err error)
 	// Set sets the string value of a key

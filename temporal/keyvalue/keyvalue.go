@@ -3,13 +3,14 @@ package temporal
 import (
 	"errors"
 
+	connectorTypes "github.com/TykTechnologies/storage/temporal/connector/types"
 	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/driver/redisv8"
-	"github.com/TykTechnologies/storage/temporal/types"
+	keyValueTypes "github.com/TykTechnologies/storage/temporal/keyvalue/types"
 )
 
-func NewKeyValue(conn types.Connector) (types.KeyValue, error) {
+func NewKeyValue(conn connectorTypes.Connector) (keyValueTypes.KeyValue, error) {
 	switch conn.Type() {
-	case types.RedisV8Type:
+	case connectorTypes.RedisV8Type:
 		return redisv8.NewRedisV8(conn)
 	default:
 		return nil, errors.New("invalid driver")

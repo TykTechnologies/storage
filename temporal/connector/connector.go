@@ -2,7 +2,7 @@ package connector
 
 import (
 	"github.com/TykTechnologies/storage/temporal/connector/internal/driver/redisv8"
-	"github.com/TykTechnologies/storage/temporal/types"
+	"github.com/TykTechnologies/storage/temporal/connector/types"
 )
 
 var WithRedisConfig = types.WithRedisConfig

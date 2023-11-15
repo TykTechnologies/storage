@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/TykTechnologies/storage/temporal/connector"
+	"github.com/TykTechnologies/storage/temporal/connector/types"
 	"github.com/TykTechnologies/storage/temporal/keyvalue/internal/utils"
-	"github.com/TykTechnologies/storage/temporal/types"
 )
 
 func TestNewKeyValue(t *testing.T) {

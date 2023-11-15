@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/TykTechnologies/storage/temporal/types"
+	"github.com/TykTechnologies/storage/temporal/keyvalue/types"
 	"github.com/go-redis/redis/v8"
 )
 

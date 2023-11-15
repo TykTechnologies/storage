@@ -1,20 +1,21 @@
 package redisv8
 
 import (
-	"github.com/TykTechnologies/storage/temporal/types"
+	connectorTypes "github.com/TykTechnologies/storage/temporal/connector/types"
+	keyValueTypes "github.com/TykTechnologies/storage/temporal/keyvalue/types"
 
 	"github.com/go-redis/redis/v8"
 )
 
 type RedisV8 struct {
 	client redis.UniversalClient
-	types.Connector
+	connectorTypes.Connector
 }
 
-func NewRedisV8(conn types.Connector) (*RedisV8, error) {
+func NewRedisV8(conn connectorTypes.Connector) (*RedisV8, error) {
 	var client redis.UniversalClient
 	if ok := conn.As(&client); !ok {
-		return nil, types.ErrInvalidConnector
+		return nil, keyValueTypes.ErrInvalidConnector
 	}
 
 	return &RedisV8{client, conn}, nil
