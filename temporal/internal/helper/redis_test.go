@@ -5,32 +5,32 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/TykTechnologies/storage/temporal/connector/types"
+	"github.com/TykTechnologies/storage/temporal/model"
 )
 
 func TestGetRedisAddrs(t *testing.T) {
 	tests := []struct {
 		name string
-		opts types.RedisOptions
+		opts model.RedisOptions
 		want []string
 	}{
 		{
 			name: "With Addrs",
-			opts: types.RedisOptions{
+			opts: model.RedisOptions{
 				Addrs: []string{"127.0.0.1:6379", "127.0.0.2:6379"},
 			},
 			want: []string{"127.0.0.1:6379", "127.0.0.2:6379"},
 		},
 		{
 			name: "With Hosts map",
-			opts: types.RedisOptions{
+			opts: model.RedisOptions{
 				Hosts: map[string]string{"127.0.0.1": "6379", "127.0.0.2": "6380"},
 			},
 			want: []string{"127.0.0.1:6379", "127.0.0.2:6380"},
 		},
 		{
 			name: "With Host and Port",
-			opts: types.RedisOptions{
+			opts: model.RedisOptions{
 				Host: "127.0.0.1",
 				Port: 6379,
 			},
@@ -38,12 +38,12 @@ func TestGetRedisAddrs(t *testing.T) {
 		},
 		{
 			name: "With empty options",
-			opts: types.RedisOptions{},
+			opts: model.RedisOptions{},
 			want: []string{},
 		},
 		{
 			name: "With Addrs and Hosts map",
-			opts: types.RedisOptions{
+			opts: model.RedisOptions{
 				Addrs: []string{"127.0.0.1:6379"},
 				Hosts: map[string]string{"127.0.0.2": "6380"},
 			},
@@ -51,7 +51,7 @@ func TestGetRedisAddrs(t *testing.T) {
 		},
 		{
 			name: "With Addrs and Host/Port",
-			opts: types.RedisOptions{
+			opts: model.RedisOptions{
 				Addrs: []string{"127.0.0.1:6379"},
 				Host:  "127.0.0.2",
 				Port:  6380,
@@ -60,7 +60,7 @@ func TestGetRedisAddrs(t *testing.T) {
 		},
 		{
 			name: "With Hosts map and Host/Port",
-			opts: types.RedisOptions{
+			opts: model.RedisOptions{
 				Hosts: map[string]string{"127.0.0.1": "6379"},
 				Host:  "127.0.0.2",
 				Port:  6380,
@@ -69,7 +69,7 @@ func TestGetRedisAddrs(t *testing.T) {
 		},
 		{
 			name: "With all empty values",
-			opts: types.RedisOptions{
+			opts: model.RedisOptions{
 				Hosts: map[string]string{},
 				Host:  "",
 				Port:  0,
@@ -78,7 +78,7 @@ func TestGetRedisAddrs(t *testing.T) {
 		},
 		{
 			name: "With Port only",
-			opts: types.RedisOptions{
+			opts: model.RedisOptions{
 				Port: 6379,
 			},
 			want: []string{":6379"},

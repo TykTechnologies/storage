@@ -1,20 +1,19 @@
 package list
 
 import (
-	connectorType "github.com/TykTechnologies/storage/temporal/connector/types"
-	"github.com/TykTechnologies/storage/temporal/list/internal/driver/redisv8"
-	"github.com/TykTechnologies/storage/temporal/list/internal/types"
+	"github.com/TykTechnologies/storage/temporal/internal/driver/redisv8"
+	"github.com/TykTechnologies/storage/temporal/model"
 )
 
-type List types.List
+type List = model.List
 
-var _ types.List = (*redisv8.RedisV8List)(nil)
+var _ List = (*redisv8.RedisV8)(nil)
 
-func NewList(connector connectorType.Connector) (List, error) {
-	switch connector.Type() {
-	case connectorType.RedisV8Type:
-		return redisv8.NewList(connector)
+func NewList(conn model.Connector) (List, error) {
+	switch conn.Type() {
+	case model.RedisV8Type:
+		return redisv8.NewRedisV8WithConnection(conn)
 	default:
-		return nil, connectorType.ErrInvalidHandlerType
+		return nil, model.ErrInvalidHandlerType
 	}
 }

@@ -1,30 +1,32 @@
 package redisv8
 
 import (
-	"context"
 	"crypto/tls"
 	"time"
 
-	"github.com/TykTechnologies/storage/temporal/connector/internal/helper"
-	"github.com/TykTechnologies/storage/temporal/connector/types"
+	"github.com/TykTechnologies/storage/temporal/internal/helper"
 
+	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/go-redis/redis/v8"
 )
 
-type Connector struct {
-	client redis.UniversalClient
-	cfg    *types.RedisOptions
+type RedisV8 struct {
+	connector model.Connector
+	client    redis.UniversalClient
+
+	cfg *model.RedisOptions
 }
 
-func NewConnector(options ...types.Option) (*Connector, error) {
-	baseConfig := &types.BaseConfig{}
+// NewList returns a new redisv8List instance.
+func NewRedisV8WithOpts(options ...model.Option) (*RedisV8, error) {
+	baseConfig := &model.BaseConfig{}
 	for _, opt := range options {
 		opt.Apply(baseConfig)
 	}
 
 	opts := baseConfig.RedisConfig
 	if opts == nil {
-		return nil, types.ErrInvalidOptionsType
+		return nil, model.ErrInvalidOptionsType
 	}
 
 	// poolSize applies per cluster node and not for the whole cluster.
@@ -70,29 +72,15 @@ func NewConnector(options ...types.Option) (*Connector, error) {
 		client = redis.NewClient(universalOpts.Simple())
 	}
 
-	return &Connector{client: client, cfg: opts}, nil
+	return &RedisV8{client: client, cfg: opts}, nil
 }
 
-func (h *Connector) Disconnect(ctx context.Context) error {
-	return h.client.Close()
-}
-
-func (h *Connector) Ping(ctx context.Context) error {
-	return h.client.Ping(ctx).Err()
-}
-
-func (h *Connector) Type() string {
-	return types.RedisV8Type
-}
-
-// As converts i to driver-specific types.
-// redisv8 connector supports only *redis.UniversalClient.
-// Same concept as https://gocloud.dev/concepts/as/ but for connectors.
-func (h *Connector) As(i interface{}) bool {
-	if x, ok := i.(*redis.UniversalClient); ok {
-		*x = h.client
-		return true
+// NewRedisV8WithConnection returns a new redisv8List instance with a custom redis connection.
+func NewRedisV8WithConnection(conn model.Connector) (*RedisV8, error) {
+	var client redis.UniversalClient
+	if conn == nil || !conn.As(&client) {
+		return nil, model.ErrInvalidConnector
 	}
 
-	return false
+	return &RedisV8{connector: conn, client: client}, nil
 }

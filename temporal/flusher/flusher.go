@@ -1,4 +1,4 @@
-package temporal
+package flusher
 
 import (
 	"errors"
@@ -7,12 +7,9 @@ import (
 	"github.com/TykTechnologies/storage/temporal/model"
 )
 
-type KeyValue = model.KeyValue
+type Flusher = model.Flusher
 
-var _ KeyValue = (*redisv8.RedisV8)(nil)
-
-// NewKeyValue returns a new model.KeyValue storage based on the type of the connector.
-func NewKeyValue(conn model.Connector) (KeyValue, error) {
+func NewFlusher(conn model.Connector) (Flusher, error) {
 	switch conn.Type() {
 	case model.RedisV8Type:
 		return redisv8.NewRedisV8WithConnection(conn)
