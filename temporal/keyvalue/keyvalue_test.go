@@ -86,7 +86,7 @@ func TestKeyValue_Set(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer flusher.FlushAll(ctx)
+				defer assert.Nil(t, flusher.FlushAll(ctx))
 
 				err = kv.Set(ctx, tc.key, tc.value, tc.expiration)
 				assert.Equal(t, tc.expectedErr, err)

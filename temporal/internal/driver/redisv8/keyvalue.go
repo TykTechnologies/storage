@@ -178,7 +178,7 @@ func (r *RedisV8) GetKeysAndValuesWithFilter(ctx context.Context,
 
 	result := make(map[string]interface{})
 
-	if keys == nil || len(keys) == 0 {
+	if len(keys) == 0 {
 		return result, nil
 	}
 
