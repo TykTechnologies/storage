@@ -1,6 +1,8 @@
 version: "3"
 includes:
- temporal: "temporal/Taskfile.yml"
+ temporal: 
+  taskfile: "temporal/Taskfile.yml"
+  dir: "./temporal"
 
 env:
   TEST_TIMEOUT:
