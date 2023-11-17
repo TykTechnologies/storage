@@ -1,0 +1,12 @@
+version: "3"
+
+tasks:
+  build:
+    desc: "Build the project"
+    cmds:
+      - go build -v ./...
+
+  run-tests:
+    desc: "Run Go tests for temporal storage"
+    cmds:
+      go test -v -race -coverprofile=temporal.cov -cover -coverpkg=./... ./...

@@ -1,4 +1,6 @@
 version: "3"
+includes:
+ temporal: "temporal/Taskfile.yml"
 
 env:
   TEST_TIMEOUT:
@@ -47,7 +49,7 @@ tasks:
   test-temporal:
     desc: "Run tests for temporal storage with specified database"
     cmds:
-      - task: run-tests
+      - task: temporal:run-tests
         vars:
           STORAGE_TYPE: temporal
           DB: "{{.DB}}"
