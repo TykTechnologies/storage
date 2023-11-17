@@ -88,7 +88,7 @@ func TestList_Range(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer flusher.FlushAll(ctx)
+				defer assert.Nil(t, flusher.FlushAll(ctx))
 
 				err = list.Append(ctx, true, tc.givenKey, tc.givenPreloadedValues...)
 				assert.Nil(t, err)
@@ -193,7 +193,7 @@ func TestList_AddingElements(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer flusher.FlushAll(ctx)
+				defer assert.Nil(t, flusher.FlushAll(ctx))
 
 				if tc.prepend {
 					err = list.Prepend(context.Background(), tc.pipelined, tc.key, tc.values...)
@@ -279,7 +279,7 @@ func TestList_Remove(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer flusher.FlushAll(ctx)
+				defer assert.Nil(t, flusher.FlushAll(ctx))
 
 				err = list.Append(context.Background(), false, tc.key, tc.givenValues...)
 				assert.Nil(t, err)
@@ -344,7 +344,7 @@ func TestList_Len(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer flusher.FlushAll(ctx)
+				defer assert.Nil(t, flusher.FlushAll(ctx))
 
 				err = list.Append(context.Background(), false, tc.key, tc.givenValues...)
 				assert.Equal(t, tc.expectedErr, err)
@@ -400,7 +400,7 @@ func TestList_Pop(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer flusher.FlushAll(ctx)
+				defer assert.Nil(t, flusher.FlushAll(ctx))
 
 				err = list.Append(context.Background(), false, tc.key, tc.givenValues...)
 				assert.Nil(t, err)
