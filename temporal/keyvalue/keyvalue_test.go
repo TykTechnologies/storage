@@ -738,15 +738,11 @@ func TestKeyValue_Keys(t *testing.T) {
 		{
 			name: "empty_pattern",
 			setup: func(db KeyValue) {
-				err := db.Set(context.Background(), "key1", "value1", 0)
+				err := db.Set(context.Background(), "test2", "value1", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
 				}
-				err = db.Set(context.Background(), "key2", "value2", 0)
-				if err != nil {
-					t.Fatalf("Set() error = %v", err)
-				}
-				err = db.Set(context.Background(), "test", "value2", 0)
+				err = db.Set(context.Background(), "test3", "value2", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
 				}
