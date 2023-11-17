@@ -3,6 +3,7 @@ package redisv8
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/TykTechnologies/storage/temporal/model"
@@ -11,6 +12,10 @@ import (
 
 // Get retrieves the value for a given key from Redis
 func (r *RedisV8) Get(ctx context.Context, key string) (string, error) {
+	if key == "" {
+		return "", model.ErrKeyEmpty
+	}
+
 	result, err := r.client.Get(ctx, key).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
@@ -26,7 +31,7 @@ func (r *RedisV8) Get(ctx context.Context, key string) (string, error) {
 // Set sets the string value of a key
 func (r *RedisV8) Set(ctx context.Context, key, value string, expiration time.Duration) error {
 	if key == "" {
-		return model.ErrKeyNotEmpty
+		return model.ErrKeyEmpty
 	}
 
 	return r.client.Set(ctx, key, value, expiration).Err()
@@ -34,33 +39,69 @@ func (r *RedisV8) Set(ctx context.Context, key, value string, expiration time.Du
 
 // Delete removes the specified keys
 func (r *RedisV8) Delete(ctx context.Context, key string) error {
+	if key == "" {
+		return model.ErrKeyEmpty
+	}
+
 	_, err := r.client.Del(ctx, key).Result()
+
 	return err
 }
 
 // Increment atomically increments the integer value of a key by one
 func (r *RedisV8) Increment(ctx context.Context, key string) (int64, error) {
-	return r.client.Incr(ctx, key).Result()
+	if key == "" {
+		return 0, model.ErrKeyEmpty
+	}
+
+	res, err := r.client.Incr(ctx, key).Result()
+	if err != nil && strings.EqualFold(err.Error(), "ERR value is not an integer or out of range") {
+		return 0, model.ErrKeyMisstype
+	}
+
+	return res, err
 }
 
 // Decrement atomically decrements the integer value of a key by one
 func (r *RedisV8) Decrement(ctx context.Context, key string) (int64, error) {
-	return r.client.Decr(ctx, key).Result()
+	if key == "" {
+		return 0, model.ErrKeyEmpty
+	}
+
+	res, err := r.client.Decr(ctx, key).Result()
+	if err != nil && strings.EqualFold(err.Error(), "ERR value is not an integer or out of range") {
+		return 0, model.ErrKeyMisstype
+	}
+
+	return res, err
 }
 
 // Exists checks if a key exists
 func (r *RedisV8) Exists(ctx context.Context, key string) (bool, error) {
+	if key == "" {
+		return false, model.ErrKeyEmpty
+	}
+
 	result, err := r.client.Exists(ctx, key).Result()
+
 	return result > 0, err
 }
 
 // Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted
 func (r *RedisV8) Expire(ctx context.Context, key string, expiration time.Duration) error {
+	if key == "" {
+		return model.ErrKeyEmpty
+	}
+
 	return r.client.Expire(ctx, key, expiration).Err()
 }
 
 // TTL returns the remaining time to live of a key that has a timeout
 func (r *RedisV8) TTL(ctx context.Context, key string) (int64, error) {
+	if key == "" {
+		return 0, model.ErrKeyEmpty
+	}
+
 	duration, err := r.client.TTL(ctx, key).Result()
 	if err != nil {
 		return 0, err
@@ -71,6 +112,10 @@ func (r *RedisV8) TTL(ctx context.Context, key string) (int64, error) {
 
 // DeleteKeys removes the specified keys. A key is ignored if it does not exist
 func (r *RedisV8) DeleteKeys(ctx context.Context, keys []string) (int64, error) {
+	if len(keys) == 0 {
+		return 0, model.ErrKeyEmpty
+	}
+
 	return r.client.Del(ctx, keys...).Result()
 }
 
@@ -131,12 +176,17 @@ func (r *RedisV8) GetKeysAndValuesWithFilter(ctx context.Context,
 		return nil, err
 	}
 
+	result := make(map[string]interface{})
+
+	if keys == nil || len(keys) == 0 {
+		return result, nil
+	}
+
 	values, err := r.GetMulti(ctx, keys)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make(map[string]interface{})
 	for i, key := range keys {
 		result[key] = values[i]
 	}

@@ -3,11 +3,11 @@ package helper
 import (
 	"strconv"
 
-	"github.com/TykTechnologies/storage/temporal/connector/types"
+	"github.com/TykTechnologies/storage/temporal/model"
 )
 
 // GetRedisAddrs returns a list of redis addresses from the types.RedisOptions.
-func GetRedisAddrs(opts *types.RedisOptions) (addrs []string) {
+func GetRedisAddrs(opts *model.RedisOptions) (addrs []string) {
 	if len(opts.Addrs) != 0 {
 		addrs = opts.Addrs
 	} else {

@@ -1,20 +1,20 @@
 package connector
 
 import (
-	"github.com/TykTechnologies/storage/temporal/connector/internal/driver/redisv8"
-	"github.com/TykTechnologies/storage/temporal/connector/types"
+	"github.com/TykTechnologies/storage/temporal/internal/driver/redisv8"
+	"github.com/TykTechnologies/storage/temporal/model"
 )
 
-var WithRedisConfig = types.WithRedisConfig
+var WithRedisConfig = model.WithRedisConfig
 
-var _ types.Connector = (*redisv8.Connector)(nil)
+var _ model.Connector = (*redisv8.RedisV8)(nil)
 
 // NewConnector returns a new connector based on the type. You have to specify the connector Configuration as an Option.
-func NewConnector(connType string, options ...types.Option) (types.Connector, error) {
+func NewConnector(connType string, options ...model.Option) (model.Connector, error) {
 	switch connType {
-	case types.RedisV8Type:
-		return redisv8.NewConnector(options...)
+	case model.RedisV8Type:
+		return redisv8.NewRedisV8WithOpts(options...)
 	default:
-		return nil, types.ErrInvalidHandlerType
+		return nil, model.ErrInvalidHandlerType
 	}
 }
