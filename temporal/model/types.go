@@ -79,3 +79,18 @@ type Flusher interface {
 	// FlushAll deletes all keys the database
 	FlushAll(ctx context.Context) error
 }
+
+type SortedSet interface {
+	// AddScoredMember adds a member with a specific score to a sorted set.
+	// Returns the number of elements added to the sorted set.
+	AddScoredMember(ctx context.Context, key, member string, score float64) (int64, error)
+
+	// GetMembersByScoreRange retrieves members and their scores from a sorted set
+	// within the given score range.
+	// Returns slices of members and their scores, and an error if any.
+	GetMembersByScoreRange(ctx context.Context, key, minScore, maxScore string) ([]interface{}, []float64, error)
+
+	// RemoveMembersByScoreRange removes members from a sorted set within a specified score range.
+	// Returns the number of members removed.
+	RemoveMembersByScoreRange(ctx context.Context, key, minScore, maxScore string) (int64, error)
+}
