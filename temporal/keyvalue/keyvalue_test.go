@@ -5,39 +5,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TykTechnologies/storage/temporal/connector"
 	"github.com/TykTechnologies/storage/temporal/flusher"
+	"github.com/TykTechnologies/storage/temporal/internal/testutil"
 	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/stretchr/testify/assert"
 )
 
-func testConnectors(t *testing.T) []model.Connector {
-	t.Helper()
-
-	connectors := []model.Connector{}
-
-	// redisv8 list
-	redisConnector, err := connector.NewConnector(
-		"redisv8", model.WithRedisConfig(&model.RedisOptions{Addrs: []string{"localhost:6379"}}))
-	assert.Nil(t, err)
-
-	connectors = append(connectors, redisConnector)
-
-	return connectors
-}
-
-func closeConnectors(t *testing.T, connectors []model.Connector) {
-	t.Helper()
-
-	for _, connector := range connectors {
-		err := connector.Disconnect(context.Background())
-		assert.Nil(t, err)
-	}
-}
-
 func TestKeyValue_Set(t *testing.T) {
-	connectors := testConnectors(t)
-	defer closeConnectors(t, connectors)
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
 		name        string
@@ -107,8 +83,8 @@ func TestKeyValue_Set(t *testing.T) {
 }
 
 func TestKeyValue_Get(t *testing.T) {
-	connectors := testConnectors(t)
-	defer closeConnectors(t, connectors)
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
 		name          string
@@ -168,8 +144,8 @@ func TestKeyValue_Get(t *testing.T) {
 }
 
 func TestKeyValue_Delete(t *testing.T) {
-	connectors := testConnectors(t)
-	defer closeConnectors(t, connectors)
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
 		name        string
@@ -229,8 +205,8 @@ func TestKeyValue_Delete(t *testing.T) {
 }
 
 func TestKeyValue_Increment(t *testing.T) {
-	connectors := testConnectors(t)
-	defer closeConnectors(t, connectors)
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
 		name          string
@@ -302,8 +278,8 @@ func TestKeyValue_Increment(t *testing.T) {
 }
 
 func TestKeyValue_Decrement(t *testing.T) {
-	connectors := testConnectors(t)
-	defer closeConnectors(t, connectors)
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
 		name          string
@@ -375,8 +351,8 @@ func TestKeyValue_Decrement(t *testing.T) {
 }
 
 func TestKeyValue_Exist(t *testing.T) {
-	connectors := testConnectors(t)
-	defer closeConnectors(t, connectors)
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
 		name          string
@@ -436,8 +412,8 @@ func TestKeyValue_Exist(t *testing.T) {
 }
 
 func TestKeyValue_Expire(t *testing.T) {
-	connectors := testConnectors(t)
-	defer closeConnectors(t, connectors)
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
 		name        string
@@ -502,8 +478,8 @@ func TestKeyValue_Expire(t *testing.T) {
 }
 
 func TestKeyValue_TTL(t *testing.T) {
-	connectors := testConnectors(t)
-	defer closeConnectors(t, connectors)
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
 		name        string
@@ -563,8 +539,8 @@ func TestKeyValue_TTL(t *testing.T) {
 }
 
 func TestKeyValue_DeleteKeys(t *testing.T) {
-	connectors := testConnectors(t)
-	defer closeConnectors(t, connectors)
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
 		name            string
@@ -631,8 +607,8 @@ func TestKeyValue_DeleteKeys(t *testing.T) {
 }
 
 func TestKeyValue_DeleteScanMatch(t *testing.T) {
-	connectors := testConnectors(t)
-	defer closeConnectors(t, connectors)
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
 		name            string
@@ -699,8 +675,8 @@ func TestKeyValue_DeleteScanMatch(t *testing.T) {
 }
 
 func TestKeyValue_Keys(t *testing.T) {
-	connectors := testConnectors(t)
-	defer closeConnectors(t, connectors)
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
 		name         string
@@ -778,8 +754,8 @@ func TestKeyValue_Keys(t *testing.T) {
 }
 
 func TestKeyValue_GetMulti(t *testing.T) {
-	connectors := testConnectors(t)
-	defer closeConnectors(t, connectors)
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
 		name           string
@@ -857,8 +833,8 @@ func TestKeyValue_GetMulti(t *testing.T) {
 }
 
 func TestKeyValue_GetKeysAndValuesWithFilter(t *testing.T) {
-	connectors := testConnectors(t)
-	defer closeConnectors(t, connectors)
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
 		name           string
