@@ -51,6 +51,7 @@ func (r *subscriptionAdapter) Receive(ctx context.Context) (model.Message, error
 		msg := newMessageAdapter(m)
 		return msg, nil
 	case *redis.Subscription, *redis.Pong:
+		// TBD: should we return a message for these?
 		return nil, nil
 	case error:
 		return nil, fmt.Errorf("redis subscription error: %w", m)
