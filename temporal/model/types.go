@@ -94,3 +94,25 @@ type SortedSet interface {
 	// Returns the number of members removed.
 	RemoveMembersByScoreRange(ctx context.Context, key, minScore, maxScore string) (int64, error)
 }
+
+// Queue interface represents a pub/sub queue with methods to publish messages
+// and subscribe to channels.
+type Queue interface {
+	// Publish sends a message to the specified channel.
+	// It returns the number of clients that received the message.
+	Publish(ctx context.Context, channel, message string) (int64, error)
+
+	// Subscribe initializes a subscription to one or more channels.
+	// It returns a Subscription interface that allows receiving messages and closing the subscription.
+	Subscribe(ctx context.Context, channels ...string) (Subscription, error)
+}
+
+// Subscription interface represents a subscription to one or more channels.
+// It allows receiving messages and closing the subscription.
+type Subscription interface {
+	// Receive waits for and returns the next message from the subscription.
+	Receive(ctx context.Context) (interface{}, error)
+
+	// Close closes the subscription and cleans up resources.
+	Close() error
+}
