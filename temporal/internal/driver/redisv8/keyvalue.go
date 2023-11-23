@@ -3,6 +3,7 @@ package redisv8
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -159,12 +160,39 @@ func (r *RedisV8) Keys(ctx context.Context, pattern string) ([]string, error) {
 
 // GetMulti returns the values of all specified keys
 func (r *RedisV8) GetMulti(ctx context.Context, keys []string) ([]interface{}, error) {
-	cmd := r.client.MGet(ctx, keys...)
-	if cmd.Err() != nil {
-		return nil, cmd.Err()
-	}
+	switch client := r.client.(type) {
+	case *redis.ClusterClient:
+		getCmds := make([]*redis.StringCmd, 0)
+		pipe := client.Pipeline()
+		for _, key := range keys {
+			getCmds = append(getCmds, pipe.Get(ctx, key))
+		}
 
-	return cmd.Val(), nil
+		_, err := pipe.Exec(ctx)
+		if err != nil && err != redis.Nil {
+			return nil, err
+		}
+
+		values := make([]interface{}, len(getCmds))
+		for i, cmd := range getCmds {
+			if cmd.Err() != nil && cmd.Err() != redis.Nil {
+				values[i] = nil
+				continue
+			}
+			values[i] = cmd.Val()
+		}
+		return values, nil
+
+	case *redis.Client:
+		cmd := client.MGet(ctx, keys...)
+		if cmd.Err() != nil {
+			return nil, cmd.Err()
+		}
+		return cmd.Val(), nil
+
+	default:
+		return nil, fmt.Errorf("unsupported Redis client type")
+	}
 }
 
 // GetKeysAndValuesWithFilter returns all keys and their values for a given pattern
