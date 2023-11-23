@@ -28,6 +28,10 @@ func newMessageAdapter(msg *redis.Message) *messageAdapter {
 	return &messageAdapter{msg: msg}
 }
 
+func (m *messageAdapter) Type() {
+
+}
+
 func (m *messageAdapter) Channel() string {
 	return m.msg.Channel
 }
@@ -48,8 +52,10 @@ func (r *subscriptionAdapter) Receive(ctx context.Context) (model.Message, error
 		return msg, nil
 	case *redis.Subscription, *redis.Pong:
 		return nil, nil
+	case error:
+		return nil, fmt.Errorf("redis subscription error: %w", m)
 	default:
-		return nil, fmt.Errorf("unexpected message type: %T", msg)
+		return nil, fmt.Errorf("redis subscription error: unknown message type %T", m)
 	}
 }
 
@@ -75,6 +81,5 @@ func (r *RedisV8) Subscribe(ctx context.Context, channels ...string) (model.Subs
 	}
 
 	adapterSub := newSubscriptionAdapter(sub)
-
 	return adapterSub, nil
 }
