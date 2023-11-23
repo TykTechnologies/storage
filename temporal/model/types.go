@@ -94,3 +94,20 @@ type SortedSet interface {
 	// Returns the number of members removed.
 	RemoveMembersByScoreRange(ctx context.Context, key, minScore, maxScore string) (int64, error)
 }
+
+type Set interface {
+	// Returns all the members of the set value stored at key.
+	Members(ctx context.Context, key string) ([]string, error)
+
+	// Add the specified members to the set stored at key.
+	// Specified members that are already a member of this set are ignored.
+	// If key does not exist, a new set is created before adding the specified members.
+	AddMember(ctx context.Context, key, member string) error
+
+	// Remove the specified members from the set stored at key.
+	// Specified members that are not a member of this set are ignored.
+	RemoveMember(ctx context.Context, key, member string) error
+
+	// Returns if member is a member of the set stored at key.
+	IsMember(ctx context.Context, key, member string) (bool, error)
+}
