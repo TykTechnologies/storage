@@ -111,8 +111,16 @@ type Queue interface {
 // It allows receiving messages and closing the subscription.
 type Subscription interface {
 	// Receive waits for and returns the next message from the subscription.
-	Receive(ctx context.Context) (interface{}, error)
+	Receive(ctx context.Context) (Message, error)
 
 	// Close closes the subscription and cleans up resources.
 	Close() error
+}
+
+// Message represents a message received from a subscription.
+type Message interface {
+	// Channel returns the channel the message was received on.
+	Channel() string
+	// Payload returns the message payload.
+	Payload() string
 }

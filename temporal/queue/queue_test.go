@@ -8,7 +8,6 @@ import (
 
 	"github.com/TykTechnologies/storage/temporal/internal/testutil"
 	"github.com/TykTechnologies/storage/temporal/model"
-	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -163,7 +162,9 @@ func TestQueue_Subscribe(t *testing.T) {
 			setup: func(q model.Queue, channels []string, msg string) error {
 				for _, channel := range channels {
 					_, err := q.Publish(context.Background(), channel, msg)
-					return err
+					if err != nil {
+						return err
+					}
 				}
 
 				return nil
@@ -199,21 +200,16 @@ func TestQueue_Subscribe(t *testing.T) {
 					err = tc.setup(queue, tc.channels, tc.expectedMsg)
 					assert.Nil(t, err)
 
-					msg, err := sub.Receive(ctx)
-					if tc.wantErr {
-						assert.NotNil(t, err)
-						return
-					}
+					for _, ch := range tc.channels {
+						msg, err := sub.Receive(ctx)
+						if tc.wantErr {
+							assert.NotNil(t, err)
+							return
+						}
 
-					assert.Nil(t, err)
-
-					switch connector.Type() {
-					case model.RedisV8Type:
-						redisMsg, ok := msg.(*redis.Message)
-						assert.True(t, ok)
-						assert.Equal(t, tc.expectedMsg, redisMsg.Payload)
-					default:
-						assert.Fail(t, "unsupported connector type")
+						assert.Nil(t, err)
+						assert.Equal(t, ch, msg.Channel())
+						assert.Equal(t, tc.expectedMsg, msg.Payload())
 					}
 				}
 			})

@@ -2,9 +2,60 @@ package redisv8
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/TykTechnologies/storage/temporal/model"
+	"github.com/go-redis/redis/v8"
 )
+
+// subscribeAdapter is an adapter for redis.PubSub to satisfy model.Subscription interface.
+// Receive() method returns a model.Message instead of an interface{}.
+type subscriptionAdapter struct {
+	pubSub *redis.PubSub
+}
+
+// messageAdapter is an adapter for redis.Message to satisfy model.Message interface.
+// Channel() and Payload() methods return the channel and payload of the message.
+type messageAdapter struct {
+	msg *redis.Message
+}
+
+func newSubscriptionAdapter(pubSub *redis.PubSub) *subscriptionAdapter {
+	return &subscriptionAdapter{pubSub: pubSub}
+}
+
+func newMessageAdapter(msg *redis.Message) *messageAdapter {
+	return &messageAdapter{msg: msg}
+}
+
+func (m *messageAdapter) Channel() string {
+	return m.msg.Channel
+}
+
+func (m *messageAdapter) Payload() string {
+	return m.msg.Payload
+}
+
+func (r *subscriptionAdapter) Receive(ctx context.Context) (model.Message, error) {
+	msg, err := r.pubSub.Receive(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	switch m := msg.(type) {
+	case *redis.Message:
+		msg := newMessageAdapter(m)
+		return msg, nil
+	case *redis.Subscription, *redis.Pong:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unexpected message type: %T", msg)
+	}
+}
+
+func (r *subscriptionAdapter) Close() error {
+	return r.pubSub.Close()
+}
 
 func (r *RedisV8) Publish(ctx context.Context, channel, message string) (int64, error) {
 	return r.client.Publish(ctx, channel, message).Result()
@@ -16,12 +67,14 @@ func (r *RedisV8) Subscribe(ctx context.Context, channels ...string) (model.Subs
 	for range channels {
 		// The first message is always a confirmation of the subscription.
 		// We're ensuring the subscription is established before returning.
-		// That way, the caller can be sure that the subscription is ready to receive messages before publishing.
+		// This way, the caller can be sure that the subscription is ready to receive messages before publishing.
 		_, err := sub.Receive(ctx)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return sub, nil
+	adapterSub := newSubscriptionAdapter(sub)
+
+	return adapterSub, nil
 }
