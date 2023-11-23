@@ -316,10 +316,10 @@ func TestSet_RemoveMember(t *testing.T) {
 				err = set.RemoveMember(ctx, tc.key, tc.member)
 				assert.Equal(t, tc.expectedErr, err)
 
-				if tc.expectedErr == nil {
-					currentMembers, err := set.Members(ctx, tc.key)
+				if tc.expectedErr == nil && tc.expectedMembers != nil {
+					actualMembers, err := set.Members(ctx, tc.key)
 					assert.Nil(t, err)
-					assert.ElementsMatch(t, tc.expectedMembers, currentMembers)
+					assert.ElementsMatch(t, tc.expectedMembers, actualMembers)
 				}
 			})
 		}
