@@ -31,6 +31,10 @@ func TestQueue_Publish(t *testing.T) {
 			wantResult: 1,
 			setup: func(q model.Queue) ([]model.Subscription, error) {
 				sub1, err := q.Subscribe(context.Background(), "test_channel1")
+				if err != nil {
+					return nil, err
+				}
+				_, err = sub1.Receive(context.Background())
 				return []model.Subscription{sub1}, err
 			},
 		},
@@ -49,6 +53,10 @@ func TestQueue_Publish(t *testing.T) {
 			wantResult: 1,
 			setup: func(q model.Queue) ([]model.Subscription, error) {
 				sub1, err := q.Subscribe(context.Background(), "test_channel2")
+				if err != nil {
+					return nil, err
+				}
+				_, err = sub1.Receive(context.Background())
 				return []model.Subscription{sub1}, err
 			},
 		},
@@ -64,7 +72,15 @@ func TestQueue_Publish(t *testing.T) {
 					return nil, err
 				}
 				sub2, err := q.Subscribe(context.Background(), "multi_subscriber_channel")
-				return []model.Subscription{sub1, sub2}, err
+				if err != nil {
+					return nil, err
+				}
+				_, err = sub1.Receive(context.Background())
+				if err != nil {
+					return nil, err
+				}
+				_, err = sub2.Receive(context.Background())
+				return []model.Subscription{sub1}, err
 			},
 		},
 		{
@@ -75,6 +91,10 @@ func TestQueue_Publish(t *testing.T) {
 			wantResult: 1,
 			setup: func(q model.Queue) ([]model.Subscription, error) {
 				sub1, err := q.Subscribe(context.Background(), "test_channel3")
+				if err != nil {
+					return nil, err
+				}
+				_, err = sub1.Receive(context.Background())
 				return []model.Subscription{sub1}, err
 			},
 		},
@@ -86,6 +106,10 @@ func TestQueue_Publish(t *testing.T) {
 			wantResult: 1,
 			setup: func(q model.Queue) ([]model.Subscription, error) {
 				sub1, err := q.Subscribe(context.Background(), "test_channel4")
+				if err != nil {
+					return nil, err
+				}
+				_, err = sub1.Receive(context.Background())
 				return []model.Subscription{sub1}, err
 			},
 		},
@@ -97,6 +121,10 @@ func TestQueue_Publish(t *testing.T) {
 			wantResult: 1,
 			setup: func(q model.Queue) ([]model.Subscription, error) {
 				sub1, err := q.Subscribe(context.Background(), "special_@#$%^_channel")
+				if err != nil {
+					return nil, err
+				}
+				_, err = sub1.Receive(context.Background())
 				return []model.Subscription{sub1}, err
 			},
 		},
@@ -196,6 +224,15 @@ func TestQueue_Subscribe(t *testing.T) {
 				assert.NotNil(t, sub)
 				defer sub.Close()
 
+				for _, ch := range tc.channels {
+					msg, err := sub.Receive(ctx)
+
+					assert.Nil(t, err)
+					actualChannel, err := msg.Channel()
+					assert.Nil(t, err)
+					assert.Equal(t, ch, actualChannel)
+				}
+
 				if tc.setup != nil {
 					err = tc.setup(queue, tc.channels, tc.expectedMsg)
 					assert.Nil(t, err)
@@ -208,8 +245,13 @@ func TestQueue_Subscribe(t *testing.T) {
 						}
 
 						assert.Nil(t, err)
-						assert.Equal(t, ch, msg.Channel())
-						assert.Equal(t, tc.expectedMsg, msg.Payload())
+						actualChannel, err := msg.Channel()
+						assert.Nil(t, err)
+						assert.Equal(t, ch, actualChannel)
+
+						actualPayload, err := msg.Payload()
+						assert.Nil(t, err)
+						assert.Equal(t, tc.expectedMsg, actualPayload)
 					}
 				}
 			})

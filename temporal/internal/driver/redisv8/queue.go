@@ -2,7 +2,6 @@ package redisv8
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/go-redis/redis/v8"
@@ -14,30 +13,64 @@ type subscriptionAdapter struct {
 	pubSub *redis.PubSub
 }
 
-// messageAdapter is an adapter for redis.Message to satisfy model.Message interface.
+// messageAdapter is an adapter to satisfy model.Message interface.
 // Channel() and Payload() methods return the channel and payload of the message.
+// Type() method returns the type of the message.
 type messageAdapter struct {
-	msg *redis.Message
+	msg interface{}
 }
 
 func newSubscriptionAdapter(pubSub *redis.PubSub) *subscriptionAdapter {
 	return &subscriptionAdapter{pubSub: pubSub}
 }
 
-func newMessageAdapter(msg *redis.Message) *messageAdapter {
+func newMessageAdapter(msg interface{}) *messageAdapter {
 	return &messageAdapter{msg: msg}
 }
 
-func (m *messageAdapter) Type() {
-
+func (m *messageAdapter) Type() string {
+	switch m.msg.(type) {
+	case *redis.Message:
+		return model.MessageTypeMessage
+	case *redis.Subscription:
+		return model.MessageTypeSubscription
+	case *redis.Pong:
+		return model.MessageTypePong
+	case error:
+		return model.MessageTypeError
+	default:
+		return model.ErrUnknownMessageType.Error()
+	}
 }
 
-func (m *messageAdapter) Channel() string {
-	return m.msg.Channel
+func (m *messageAdapter) Channel() (string, error) {
+	switch msg := m.msg.(type) {
+	case *redis.Message:
+		return msg.Channel, nil
+	case *redis.Subscription:
+		return msg.Channel, nil
+	case *redis.Pong:
+		return "", nil
+	case error:
+		return "", msg
+	default:
+		return "", model.ErrUnknownMessageType
+	}
 }
 
-func (m *messageAdapter) Payload() string {
-	return m.msg.Payload
+func (m *messageAdapter) Payload() (string, error) {
+	switch msg := m.msg.(type) {
+	case *redis.Message:
+		return msg.Payload, nil
+	case *redis.Subscription:
+		return msg.Kind, nil
+	case *redis.Pong:
+		return msg.Payload, nil
+	case error:
+		return "", msg
+	default:
+		return "", model.ErrUnknownMessageType
+	}
 }
 
 func (r *subscriptionAdapter) Receive(ctx context.Context) (model.Message, error) {
@@ -46,18 +79,7 @@ func (r *subscriptionAdapter) Receive(ctx context.Context) (model.Message, error
 		return nil, err
 	}
 
-	switch m := msg.(type) {
-	case *redis.Message:
-		msg := newMessageAdapter(m)
-		return msg, nil
-	case *redis.Subscription, *redis.Pong:
-		// TBD: should we return a message for these?
-		return nil, nil
-	case error:
-		return nil, fmt.Errorf("redis subscription error: %w", m)
-	default:
-		return nil, fmt.Errorf("redis subscription error: unknown message type %T", m)
-	}
+	return newMessageAdapter(msg), nil
 }
 
 func (r *subscriptionAdapter) Close() error {
@@ -71,16 +93,8 @@ func (r *RedisV8) Publish(ctx context.Context, channel, message string) (int64, 
 // Subscribe initializes a subscription to one or more channels.
 func (r *RedisV8) Subscribe(ctx context.Context, channels ...string) (model.Subscription, error) {
 	sub := r.client.Subscribe(ctx, channels...)
-	for range channels {
-		// The first message is always a confirmation of the subscription.
-		// We're ensuring the subscription is established before returning.
-		// This way, the caller can be sure that the subscription is ready to receive messages before publishing.
-		_, err := sub.Receive(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	adapterSub := newSubscriptionAdapter(sub)
+
 	return adapterSub, nil
 }
