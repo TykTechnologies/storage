@@ -20,14 +20,17 @@ type messageAdapter struct {
 	msg interface{}
 }
 
+// newSubscriptionAdapter returns a new subscriptionAdapter.
 func newSubscriptionAdapter(pubSub *redis.PubSub) *subscriptionAdapter {
 	return &subscriptionAdapter{pubSub: pubSub}
 }
 
+// newMessageAdapter returns a new messageAdapter.
 func newMessageAdapter(msg interface{}) *messageAdapter {
 	return &messageAdapter{msg: msg}
 }
 
+// Type returns the message type.
 func (m *messageAdapter) Type() string {
 	switch m.msg.(type) {
 	case *redis.Message:
@@ -43,6 +46,7 @@ func (m *messageAdapter) Type() string {
 	}
 }
 
+// Channel returns the channel the message was received on.
 func (m *messageAdapter) Channel() (string, error) {
 	switch msg := m.msg.(type) {
 	case *redis.Message:
@@ -58,6 +62,7 @@ func (m *messageAdapter) Channel() (string, error) {
 	}
 }
 
+// Payload returns the message payload.
 func (m *messageAdapter) Payload() (string, error) {
 	switch msg := m.msg.(type) {
 	case *redis.Message:
@@ -73,6 +78,7 @@ func (m *messageAdapter) Payload() (string, error) {
 	}
 }
 
+// Receive waits for and returns the next message from the subscription.
 func (r *subscriptionAdapter) Receive(ctx context.Context) (model.Message, error) {
 	msg, err := r.pubSub.Receive(ctx)
 	if err != nil {
@@ -82,10 +88,12 @@ func (r *subscriptionAdapter) Receive(ctx context.Context) (model.Message, error
 	return newMessageAdapter(msg), nil
 }
 
+// Close closes the subscription and cleans up resources.
 func (r *subscriptionAdapter) Close() error {
 	return r.pubSub.Close()
 }
 
+// Publish sends a message to the specified channel.
 func (r *RedisV8) Publish(ctx context.Context, channel, message string) (int64, error) {
 	return r.client.Publish(ctx, channel, message).Result()
 }
