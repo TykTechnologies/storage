@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -241,6 +242,7 @@ func TestQueue_Subscribe(t *testing.T) {
 						msg, err := sub.Receive(ctx)
 						if tc.wantErr {
 							assert.NotNil(t, err)
+							fmt.Println("Message on error:", msg.Type())
 							return
 						}
 
@@ -257,4 +259,20 @@ func TestQueue_Subscribe(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestQueue_NewQueue(t *testing.T) {
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
+
+	for _, connector := range connectors {
+		t.Run(connector.Type(), func(t *testing.T) {
+			queue, err := NewQueue(connector)
+			assert.Nil(t, err)
+			assert.NotNil(t, queue)
+		})
+	}
+
+	_, err := NewQueue(&testutil.MockConnector{})
+	assert.NotNil(t, err)
 }

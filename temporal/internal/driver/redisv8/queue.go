@@ -37,10 +37,6 @@ func (m *messageAdapter) Type() string {
 		return model.MessageTypeMessage
 	case *redis.Subscription:
 		return model.MessageTypeSubscription
-	case *redis.Pong:
-		return model.MessageTypePong
-	case error:
-		return model.MessageTypeError
 	default:
 		return model.ErrUnknownMessageType.Error()
 	}
@@ -53,10 +49,6 @@ func (m *messageAdapter) Channel() (string, error) {
 		return msg.Channel, nil
 	case *redis.Subscription:
 		return msg.Channel, nil
-	case *redis.Pong:
-		return "", nil
-	case error:
-		return "", msg
 	default:
 		return "", model.ErrUnknownMessageType
 	}
@@ -69,10 +61,6 @@ func (m *messageAdapter) Payload() (string, error) {
 		return msg.Payload, nil
 	case *redis.Subscription:
 		return msg.Kind, nil
-	case *redis.Pong:
-		return msg.Payload, nil
-	case error:
-		return "", msg
 	default:
 		return "", model.ErrUnknownMessageType
 	}

@@ -140,21 +140,17 @@ type Message interface {
 	// It can be one of the following:
 	// - "message": a message received from a subscription with a payload and channel
 	// - "subscription": a subscription confirmation message with a channel
-	// - "pong": a pong message
-	// - "error": an error message
 	Type() string
 	// Channel returns the channel the message was received on.
 	// It can be one of the following depending on the message type:
 	// - the channel the message was received on
 	// - the channel the subscription was created on
-	// - an "pong" string
 	// - an empty string, returning an error
 	Channel() (string, error)
 	// Payload returns the message payload.
 	// It can be one of the following depending on the message type:
 	// - the message payload
 	// - the subscription kind (e.g. "subscribe", "unsubscribe")
-	// - the pong payload
 	// - an empty string, returning an error
 	Payload() (string, error)
 }

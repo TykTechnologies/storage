@@ -9,6 +9,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type MockConnector struct{}
+
+func (m *MockConnector) Type() string {
+	return "mock"
+}
+
+func (m *MockConnector) Connect(ctx context.Context) error {
+	return nil
+}
+
+func (m *MockConnector) Disconnect(ctx context.Context) error {
+	return nil
+}
+
+func (m *MockConnector) Ping(ctx context.Context) error {
+	return nil
+}
+
+func (m *MockConnector) As(i interface{}) bool {
+	return false
+}
+
 // Connectors returns a list of connectors to be used in tests.
 // If you are adding a new supported driver, add it here and it will be tested on all the tcs automatically.
 func TestConnectors(t *testing.T) []model.Connector {
