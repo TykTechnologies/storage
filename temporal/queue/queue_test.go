@@ -231,6 +231,13 @@ func TestQueue_Subscribe(t *testing.T) {
 					actualChannel, err := msg.Channel()
 					assert.Nil(t, err)
 					assert.Equal(t, ch, actualChannel)
+
+					actualPayload, err := msg.Payload()
+					assert.Nil(t, err)
+					assert.Equal(t, "subscribe", actualPayload)
+
+					actualType := msg.Type()
+					assert.Equal(t, model.MessageTypeSubscription, actualType)
 				}
 
 				if tc.setup != nil {
@@ -252,6 +259,9 @@ func TestQueue_Subscribe(t *testing.T) {
 						actualPayload, err := msg.Payload()
 						assert.Nil(t, err)
 						assert.Equal(t, tc.expectedMsg, actualPayload)
+
+						actualType := msg.Type()
+						assert.Equal(t, model.MessageTypeMessage, actualType)
 					}
 				}
 			})

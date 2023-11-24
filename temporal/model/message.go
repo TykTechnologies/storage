@@ -1,8 +1,6 @@
 package model
 
-var (
+const (
 	MessageTypeMessage      = "message"
 	MessageTypeSubscription = "subscription"
-	MessageTypePong         = "pong"
-	MessageTypeError        = "error"
 )
