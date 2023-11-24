@@ -2,7 +2,6 @@ package queue
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -242,7 +241,6 @@ func TestQueue_Subscribe(t *testing.T) {
 						msg, err := sub.Receive(ctx)
 						if tc.wantErr {
 							assert.NotNil(t, err)
-							fmt.Println("Message on error:", msg.Type())
 							return
 						}
 
