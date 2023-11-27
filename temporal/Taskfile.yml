@@ -10,3 +10,19 @@ tasks:
     desc: "Run Go tests for temporal storage"
     cmds:
       - go test -p 1 -v -coverprofile=temporal.cov -cover -coverpkg=./... ./...
+
+  generate-mocks:
+    desc: "Generate mocks for testing"
+    deps:
+      - install-mockery
+    cmds:
+      - mockery --all --keeptree --case=underscore --dir=model --output=tempmocks
+    sources:
+      - "./model/*.go"
+
+  install-mockery:
+    desc: "Install mockery v2"
+    status:
+      - type mockery
+    cmds:
+      - go install github.com/vektra/mockery/v2@v2.38.0
