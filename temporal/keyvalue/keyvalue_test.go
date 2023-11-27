@@ -7,7 +7,7 @@ import (
 
 	"github.com/TykTechnologies/storage/temporal/flusher"
 	"github.com/TykTechnologies/storage/temporal/internal/testutil"
-	"github.com/TykTechnologies/storage/temporal/model"
+	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -34,7 +34,7 @@ func TestKeyValue_Set(t *testing.T) {
 			key:         "",
 			value:       "value2",
 			expiration:  10 * time.Second,
-			expectedErr: model.ErrKeyEmpty,
+			expectedErr: temperr.KeyEmpty,
 		},
 		{
 			name:        "set_with_empty_value",
@@ -97,7 +97,7 @@ func TestKeyValue_Get(t *testing.T) {
 			name:          "non_existing_key",
 			key:           "key1",
 			expectedValue: "",
-			expectedErr:   model.ErrKeyNotFound,
+			expectedErr:   temperr.KeyNotFound,
 		},
 		{
 			name: "existing_key",
@@ -115,7 +115,7 @@ func TestKeyValue_Get(t *testing.T) {
 			name:          "empty_key",
 			key:           "",
 			expectedValue: "",
-			expectedErr:   model.ErrKeyEmpty,
+			expectedErr:   temperr.KeyEmpty,
 		},
 	}
 
@@ -172,7 +172,7 @@ func TestKeyValue_Delete(t *testing.T) {
 		{
 			name:        "empty_key",
 			key:         "",
-			expectedErr: model.ErrKeyEmpty,
+			expectedErr: temperr.KeyEmpty,
 		},
 	}
 
@@ -197,7 +197,7 @@ func TestKeyValue_Delete(t *testing.T) {
 
 				if err == nil {
 					_, err := kv.Get(ctx, tc.key)
-					assert.Equal(t, model.ErrKeyNotFound, err)
+					assert.Equal(t, temperr.KeyNotFound, err)
 				}
 			})
 		}
@@ -237,7 +237,7 @@ func TestKeyValue_Increment(t *testing.T) {
 			name:          "empty_key",
 			key:           "",
 			expectedValue: 0,
-			expectedErr:   model.ErrKeyEmpty,
+			expectedErr:   temperr.KeyEmpty,
 		},
 		{
 			name: "string_key_value",
@@ -249,7 +249,7 @@ func TestKeyValue_Increment(t *testing.T) {
 			},
 			key:           "counter",
 			expectedValue: 0,
-			expectedErr:   model.ErrKeyMisstype,
+			expectedErr:   temperr.KeyMisstype,
 		},
 	}
 
@@ -310,7 +310,7 @@ func TestKeyValue_Decrement(t *testing.T) {
 			name:          "empty_key",
 			key:           "",
 			expectedValue: 0,
-			expectedErr:   model.ErrKeyEmpty,
+			expectedErr:   temperr.KeyEmpty,
 		},
 		{
 			name: "string_key_value",
@@ -322,7 +322,7 @@ func TestKeyValue_Decrement(t *testing.T) {
 			},
 			key:           "counter",
 			expectedValue: 0,
-			expectedErr:   model.ErrKeyMisstype,
+			expectedErr:   temperr.KeyMisstype,
 		},
 	}
 
@@ -383,7 +383,7 @@ func TestKeyValue_Exist(t *testing.T) {
 			name:          "empty_key",
 			key:           "",
 			expectedValue: false,
-			expectedErr:   model.ErrKeyEmpty,
+			expectedErr:   temperr.KeyEmpty,
 		},
 	}
 
@@ -445,7 +445,7 @@ func TestKeyValue_Expire(t *testing.T) {
 			name:        "empty_key",
 			key:         "",
 			expiration:  10 * time.Second,
-			expectedErr: model.ErrKeyEmpty,
+			expectedErr: temperr.KeyEmpty,
 		},
 	}
 
@@ -510,7 +510,7 @@ func TestKeyValue_TTL(t *testing.T) {
 			name:        "empty_key",
 			key:         "",
 			expectedTTL: 0,
-			expectedErr: model.ErrKeyEmpty,
+			expectedErr: temperr.KeyEmpty,
 		},
 	}
 
@@ -578,7 +578,7 @@ func TestKeyValue_DeleteKeys(t *testing.T) {
 		{
 			name:        "empty_keys",
 			keys:        []string{},
-			expectedErr: model.ErrKeyEmpty,
+			expectedErr: temperr.KeyEmpty,
 		},
 	}
 

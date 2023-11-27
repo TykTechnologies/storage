@@ -3,6 +3,7 @@ package list
 import (
 	"github.com/TykTechnologies/storage/temporal/internal/driver/redisv8"
 	"github.com/TykTechnologies/storage/temporal/model"
+	"github.com/TykTechnologies/storage/temporal/temperr"
 )
 
 type List = model.List
@@ -14,6 +15,6 @@ func NewList(conn model.Connector) (List, error) {
 	case model.RedisV8Type:
 		return redisv8.NewRedisV8WithConnection(conn)
 	default:
-		return nil, model.ErrInvalidHandlerType
+		return nil, temperr.InvalidHandlerType
 	}
 }
