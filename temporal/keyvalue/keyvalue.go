@@ -1,10 +1,9 @@
 package temporal
 
 import (
-	"errors"
-
 	"github.com/TykTechnologies/storage/temporal/internal/driver/redisv8"
 	"github.com/TykTechnologies/storage/temporal/model"
+	"github.com/TykTechnologies/storage/temporal/temperr"
 )
 
 type KeyValue = model.KeyValue
@@ -17,6 +16,6 @@ func NewKeyValue(conn model.Connector) (KeyValue, error) {
 	case model.RedisV8Type:
 		return redisv8.NewRedisV8WithConnection(conn)
 	default:
-		return nil, errors.New("invalid driver")
+		return nil, temperr.InvalidHandlerType
 	}
 }
