@@ -13,5 +13,16 @@ tasks:
 
   generate-mocks:
     desc: "Generate mocks for testing"
+    deps:
+      - install-mockery
     cmds:
       - mockery --all --keeptree --case=underscore --dir=model --output=tempmocks
+    sources:
+      - "./model/*.go"
+
+  install-mockery:
+    desc: "Install mockery v2"
+    status:
+      - type mockery
+    cmds:
+      - go install github.com/vektra/mockery/v2@v2.38.0
