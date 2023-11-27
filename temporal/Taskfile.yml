@@ -10,3 +10,8 @@ tasks:
     desc: "Run Go tests for temporal storage"
     cmds:
       - go test -p 1 -v -coverprofile=temporal.cov -cover -coverpkg=./... ./...
+
+  generate-mocks:
+    desc: "Generate mocks for testing"
+    cmds:
+      - mockery --all --keeptree --case=underscore --dir=model --output=tempmocks
