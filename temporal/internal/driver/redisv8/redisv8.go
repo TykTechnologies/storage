@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/TykTechnologies/storage/temporal/internal/helper"
+	"github.com/TykTechnologies/storage/temporal/temperr"
 
 	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/go-redis/redis/v8"
@@ -26,7 +27,7 @@ func NewRedisV8WithOpts(options ...model.Option) (*RedisV8, error) {
 
 	opts := baseConfig.RedisConfig
 	if opts == nil {
-		return nil, model.ErrInvalidOptionsType
+		return nil, temperr.InvalidOptionsType
 	}
 
 	// poolSize applies per cluster node and not for the whole cluster.
@@ -79,7 +80,7 @@ func NewRedisV8WithOpts(options ...model.Option) (*RedisV8, error) {
 func NewRedisV8WithConnection(conn model.Connector) (*RedisV8, error) {
 	var client redis.UniversalClient
 	if conn == nil || !conn.As(&client) {
-		return nil, model.ErrInvalidConnector
+		return nil, temperr.InvalidConnector
 	}
 
 	return &RedisV8{connector: conn, client: client}, nil

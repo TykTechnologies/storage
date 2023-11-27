@@ -6,7 +6,7 @@ import (
 
 	"github.com/TykTechnologies/storage/temporal/flusher"
 	"github.com/TykTechnologies/storage/temporal/internal/testutil"
-	"github.com/TykTechnologies/storage/temporal/model"
+	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -49,7 +49,7 @@ func TestSet_AddMember(t *testing.T) {
 			key:             "",
 			member:          "member",
 			expectedMembers: []string{},
-			expectedErr:     model.ErrKeyEmpty,
+			expectedErr:     temperr.KeyEmpty,
 		},
 	}
 
@@ -115,7 +115,7 @@ func TestSet_Members(t *testing.T) {
 			name:            "empty_key",
 			key:             "",
 			expectedMembers: []string{},
-			expectedErr:     model.ErrKeyEmpty,
+			expectedErr:     temperr.KeyEmpty,
 		},
 	}
 
@@ -202,7 +202,7 @@ func TestSet_IsMember(t *testing.T) {
 			key:              "",
 			member:           "member",
 			expectedIsMember: false,
-			expectedErr:      model.ErrKeyEmpty,
+			expectedErr:      temperr.KeyEmpty,
 		},
 	}
 
@@ -293,7 +293,7 @@ func TestSet_RemoveMember(t *testing.T) {
 			key:             "",
 			member:          "member",
 			expectedMembers: []string{},
-			expectedErr:     model.ErrKeyEmpty,
+			expectedErr:     temperr.KeyEmpty,
 		},
 	}
 
