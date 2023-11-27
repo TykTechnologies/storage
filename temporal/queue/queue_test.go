@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net"
 	"strings"
-
 	"testing"
 	"time"
 

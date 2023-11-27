@@ -72,6 +72,10 @@ func (m *messageAdapter) Payload() (string, error) {
 func (r *subscriptionAdapter) Receive(ctx context.Context) (model.Message, error) {
 	msg, err := r.pubSub.Receive(ctx)
 	if err != nil {
+		if errors.Is(err, redis.ErrClosed) {
+			return nil, temperr.ClosedConnection
+		}
+
 		return nil, err
 	}
 
