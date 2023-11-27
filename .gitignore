@@ -2,3 +2,4 @@
 .idea/
 storage
 .DS_Store
+*.task/*
