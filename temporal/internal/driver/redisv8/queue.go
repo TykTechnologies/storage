@@ -2,8 +2,10 @@ package redisv8
 
 import (
 	"context"
+	"errors"
 
 	"github.com/TykTechnologies/storage/temporal/model"
+	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/go-redis/redis/v8"
 )
 
@@ -38,7 +40,7 @@ func (m *messageAdapter) Type() string {
 	case *redis.Subscription:
 		return model.MessageTypeSubscription
 	default:
-		return model.ErrUnknownMessageType.Error()
+		return temperr.UnknownMessageType.Error()
 	}
 }
 
@@ -50,7 +52,7 @@ func (m *messageAdapter) Channel() (string, error) {
 	case *redis.Subscription:
 		return msg.Channel, nil
 	default:
-		return "", model.ErrUnknownMessageType
+		return "", temperr.UnknownMessageType
 	}
 }
 
@@ -62,7 +64,7 @@ func (m *messageAdapter) Payload() (string, error) {
 	case *redis.Subscription:
 		return msg.Kind, nil
 	default:
-		return "", model.ErrUnknownMessageType
+		return "", temperr.UnknownMessageType
 	}
 }
 
@@ -83,7 +85,14 @@ func (r *subscriptionAdapter) Close() error {
 
 // Publish sends a message to the specified channel.
 func (r *RedisV8) Publish(ctx context.Context, channel, message string) (int64, error) {
-	return r.client.Publish(ctx, channel, message).Result()
+	res, err := r.client.Publish(ctx, channel, message).Result()
+	if err != nil {
+		if errors.Is(err, redis.ErrClosed) {
+			return 0, temperr.ClosedConnection
+		}
+	}
+
+	return res, err
 }
 
 // Subscribe initializes a subscription to one or more channels.

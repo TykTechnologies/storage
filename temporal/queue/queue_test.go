@@ -3,13 +3,15 @@ package queue
 import (
 	"context"
 	"errors"
-
+	"net"
 	"strings"
+
 	"testing"
 	"time"
 
 	"github.com/TykTechnologies/storage/temporal/internal/testutil"
 	"github.com/TykTechnologies/storage/temporal/model"
+	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -109,6 +111,13 @@ func TestQueue_Publish(t *testing.T) {
 				return []model.Subscription{sub1}, err
 			},
 		},
+		{
+			name:        "Publish with connection failure",
+			channel:     "test_channel5",
+			message:     "Message with connection failure",
+			expectedErr: temperr.ClosedConnection,
+			wantResult:  0,
+		},
 	}
 
 	ctx := context.Background()
@@ -119,6 +128,11 @@ func TestQueue_Publish(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
+				if tc.expectedErr != nil {
+					err = connector.Disconnect(context.Background())
+					assert.Nil(t, err)
+				}
+
 				if tc.setup != nil {
 					subs, err := tc.setup(queue)
 					assert.Nil(t, err)
@@ -131,10 +145,11 @@ func TestQueue_Publish(t *testing.T) {
 				if tc.expectedErr != nil {
 					assert.NotNil(t, err)
 					assert.Equal(t, tc.expectedErr, err)
-				} else {
-					assert.Nil(t, err)
-					assert.Equal(t, tc.wantResult, result)
+					return
 				}
+
+				assert.Nil(t, err)
+				assert.Equal(t, tc.wantResult, result)
 			})
 		}
 	}
@@ -147,7 +162,7 @@ func TestQueue_Subscribe(t *testing.T) {
 	testCases := []struct {
 		name        string
 		channels    []string
-		expectedErr error
+		expectedErr func(err error) bool
 		setup       func(q model.Queue, channels []string, msg string) error
 		expectedMsg string
 	}{
@@ -180,9 +195,12 @@ func TestQueue_Subscribe(t *testing.T) {
 			expectedMsg: "test",
 		},
 		{
-			name:        "Subscribe to a non-existent channel",
-			channels:    []string{"non_existent_channel"},
-			expectedErr: errors.New("i/o timeout"),
+			name:     "Subscribe to a non-existent channel",
+			channels: []string{"non_existent_channel"},
+			expectedErr: func(err error) bool {
+				var netErr net.Error
+				return errors.As(err, &netErr) && netErr.Timeout()
+			},
 			setup: func(q model.Queue, channels []string, msg string) error {
 				return nil
 			},
@@ -226,8 +244,7 @@ func TestQueue_Subscribe(t *testing.T) {
 					for _, ch := range tc.channels {
 						msg, err := sub.Receive(ctx)
 						if tc.expectedErr != nil {
-							assert.NotNil(t, err)
-							assert.Equal(t, tc.expectedErr.Error(), err.Error())
+							assert.True(t, tc.expectedErr(err))
 							return
 						}
 
