@@ -3,13 +3,13 @@ package redisv8
 import (
 	"context"
 
-	"github.com/TykTechnologies/storage/temporal/model"
+	"github.com/TykTechnologies/storage/temporal/temperr"
 )
 
 // Returns all the members of the set value stored at key
 func (r *RedisV8) Members(ctx context.Context, key string) ([]string, error) {
 	if key == "" {
-		return []string{}, model.ErrKeyEmpty
+		return []string{}, temperr.KeyEmpty
 	}
 
 	return r.client.SMembers(ctx, key).Result()
@@ -21,7 +21,7 @@ func (r *RedisV8) Members(ctx context.Context, key string) ([]string, error) {
 // It errors if the key is not a set.
 func (r *RedisV8) AddMember(ctx context.Context, key, member string) error {
 	if key == "" {
-		return model.ErrKeyEmpty
+		return temperr.KeyEmpty
 	}
 
 	return r.client.SAdd(ctx, key, member).Err()
@@ -32,7 +32,7 @@ func (r *RedisV8) AddMember(ctx context.Context, key, member string) error {
 // It errors if the key is not a set.
 func (r *RedisV8) RemoveMember(ctx context.Context, key, member string) error {
 	if key == "" {
-		return model.ErrKeyEmpty
+		return temperr.KeyEmpty
 	}
 
 	return r.client.SRem(ctx, key, member).Err()
@@ -41,7 +41,7 @@ func (r *RedisV8) RemoveMember(ctx context.Context, key, member string) error {
 // Returns if member is a member of the set stored at key.
 func (r *RedisV8) IsMember(ctx context.Context, key, member string) (bool, error) {
 	if key == "" {
-		return false, model.ErrKeyEmpty
+		return false, temperr.KeyEmpty
 	}
 
 	return r.client.SIsMember(ctx, key, member).Result()

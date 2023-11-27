@@ -3,6 +3,7 @@ package connector
 import (
 	"testing"
 
+	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/TykTechnologies/storage/temporal/model"
@@ -19,7 +20,7 @@ func TestNewConnector(t *testing.T) {
 			name:        "default",
 			typ:         "",
 			opts:        []model.Option{},
-			expectedErr: model.ErrInvalidHandlerType,
+			expectedErr: temperr.InvalidHandlerType,
 		},
 		{
 			name: "redisv8",
@@ -33,7 +34,7 @@ func TestNewConnector(t *testing.T) {
 			name:        "redisv8",
 			typ:         model.RedisV8Type,
 			opts:        []model.Option{model.WithNoopConfig()},
-			expectedErr: model.ErrInvalidOptionsType,
+			expectedErr: temperr.InvalidOptionsType,
 		},
 	}
 	for _, tt := range tests {
