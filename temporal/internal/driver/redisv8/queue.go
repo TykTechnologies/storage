@@ -87,10 +87,10 @@ func (r *RedisV8) Publish(ctx context.Context, channel, message string) (int64, 
 }
 
 // Subscribe initializes a subscription to one or more channels.
-func (r *RedisV8) Subscribe(ctx context.Context, channels ...string) (model.Subscription, error) {
+func (r *RedisV8) Subscribe(ctx context.Context, channels ...string) model.Subscription {
 	sub := r.client.Subscribe(ctx, channels...)
 
 	adapterSub := newSubscriptionAdapter(sub)
 
-	return adapterSub, nil
+	return adapterSub
 }

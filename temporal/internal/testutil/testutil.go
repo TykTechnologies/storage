@@ -9,25 +9,25 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type MockConnector struct{}
+type StubConnector struct{}
 
-func (m *MockConnector) Type() string {
+func (m *StubConnector) Type() string {
 	return "mock"
 }
 
-func (m *MockConnector) Connect(ctx context.Context) error {
+func (m *StubConnector) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (m *MockConnector) Disconnect(ctx context.Context) error {
+func (m *StubConnector) Disconnect(ctx context.Context) error {
 	return nil
 }
 
-func (m *MockConnector) Ping(ctx context.Context) error {
+func (m *StubConnector) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (m *MockConnector) As(i interface{}) bool {
+func (m *StubConnector) As(i interface{}) bool {
 	return false
 }
 

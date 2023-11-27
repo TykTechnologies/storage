@@ -121,7 +121,7 @@ type Queue interface {
 
 	// Subscribe initializes a subscription to one or more channels.
 	// It returns a Subscription interface that allows receiving messages and closing the subscription.
-	Subscribe(ctx context.Context, channels ...string) (Subscription, error)
+	Subscribe(ctx context.Context, channels ...string) Subscription
 }
 
 // Subscription interface represents a subscription to one or more channels.

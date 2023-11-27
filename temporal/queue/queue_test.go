@@ -2,6 +2,8 @@ package queue
 
 import (
 	"context"
+	"errors"
+
 	"strings"
 	"testing"
 	"time"
@@ -16,25 +18,22 @@ func TestQueue_Publish(t *testing.T) {
 	defer testutil.CloseConnectors(t, connectors)
 
 	testCases := []struct {
-		name       string
-		channel    string
-		message    string
-		wantErr    bool
-		wantResult int64
-		setup      func(q model.Queue) ([]model.Subscription, error)
+		name        string
+		channel     string
+		message     string
+		expectedErr error
+		wantResult  int64
+		setup       func(q model.Queue) ([]model.Subscription, error)
 	}{
 		{
 			name:       "Publish to a channel",
 			channel:    "test_channel1",
 			message:    "Hello, World!",
-			wantErr:    false,
 			wantResult: 1,
 			setup: func(q model.Queue) ([]model.Subscription, error) {
-				sub1, err := q.Subscribe(context.Background(), "test_channel1")
-				if err != nil {
-					return nil, err
-				}
-				_, err = sub1.Receive(context.Background())
+				sub1 := q.Subscribe(context.Background(), "test_channel1")
+
+				_, err := sub1.Receive(context.Background())
 				return []model.Subscription{sub1}, err
 			},
 		},
@@ -42,21 +41,17 @@ func TestQueue_Publish(t *testing.T) {
 			name:       "Publish to a channel without subscribers",
 			channel:    "non_subscribers_channel",
 			message:    "Hello, World!",
-			wantErr:    false,
 			wantResult: 0,
 		},
 		{
 			name:       "Publish with empty message",
 			channel:    "test_channel2",
 			message:    "",
-			wantErr:    false,
 			wantResult: 1,
 			setup: func(q model.Queue) ([]model.Subscription, error) {
-				sub1, err := q.Subscribe(context.Background(), "test_channel2")
-				if err != nil {
-					return nil, err
-				}
-				_, err = sub1.Receive(context.Background())
+				sub1 := q.Subscribe(context.Background(), "test_channel2")
+
+				_, err := sub1.Receive(context.Background())
 				return []model.Subscription{sub1}, err
 			},
 		},
@@ -64,18 +59,13 @@ func TestQueue_Publish(t *testing.T) {
 			name:       "Publish to multiple subscribers",
 			channel:    "multi_subscriber_channel",
 			message:    "Multi-subscriber message",
-			wantErr:    false,
 			wantResult: 2, // Assuming 2 subscribers for this test
 			setup: func(q model.Queue) ([]model.Subscription, error) {
-				sub1, err := q.Subscribe(context.Background(), "multi_subscriber_channel")
-				if err != nil {
-					return nil, err
-				}
-				sub2, err := q.Subscribe(context.Background(), "multi_subscriber_channel")
-				if err != nil {
-					return nil, err
-				}
-				_, err = sub1.Receive(context.Background())
+				sub1 := q.Subscribe(context.Background(), "multi_subscriber_channel")
+
+				sub2 := q.Subscribe(context.Background(), "multi_subscriber_channel")
+
+				_, err := sub1.Receive(context.Background())
 				if err != nil {
 					return nil, err
 				}
@@ -87,14 +77,11 @@ func TestQueue_Publish(t *testing.T) {
 			name:       "Publish with long message",
 			channel:    "test_channel3",
 			message:    strings.Repeat("long_message_", 1000), // Adjust length as needed
-			wantErr:    false,
 			wantResult: 1,
 			setup: func(q model.Queue) ([]model.Subscription, error) {
-				sub1, err := q.Subscribe(context.Background(), "test_channel3")
-				if err != nil {
-					return nil, err
-				}
-				_, err = sub1.Receive(context.Background())
+				sub1 := q.Subscribe(context.Background(), "test_channel3")
+
+				_, err := sub1.Receive(context.Background())
 				return []model.Subscription{sub1}, err
 			},
 		},
@@ -102,14 +89,11 @@ func TestQueue_Publish(t *testing.T) {
 			name:       "Publish with special characters in message",
 			channel:    "test_channel4",
 			message:    "Special!@#$%^&*()_+",
-			wantErr:    false,
 			wantResult: 1,
 			setup: func(q model.Queue) ([]model.Subscription, error) {
-				sub1, err := q.Subscribe(context.Background(), "test_channel4")
-				if err != nil {
-					return nil, err
-				}
-				_, err = sub1.Receive(context.Background())
+				sub1 := q.Subscribe(context.Background(), "test_channel4")
+
+				_, err := sub1.Receive(context.Background())
 				return []model.Subscription{sub1}, err
 			},
 		},
@@ -117,14 +101,11 @@ func TestQueue_Publish(t *testing.T) {
 			name:       "Publish to channel with special characters",
 			channel:    "special_@#$%^_channel",
 			message:    "Hello, World!",
-			wantErr:    false,
 			wantResult: 1,
 			setup: func(q model.Queue) ([]model.Subscription, error) {
-				sub1, err := q.Subscribe(context.Background(), "special_@#$%^_channel")
-				if err != nil {
-					return nil, err
-				}
-				_, err = sub1.Receive(context.Background())
+				sub1 := q.Subscribe(context.Background(), "special_@#$%^_channel")
+
+				_, err := sub1.Receive(context.Background())
 				return []model.Subscription{sub1}, err
 			},
 		},
@@ -147,8 +128,9 @@ func TestQueue_Publish(t *testing.T) {
 				}
 				result, err := queue.Publish(ctx, tc.channel, tc.message)
 
-				if tc.wantErr {
+				if tc.expectedErr != nil {
 					assert.NotNil(t, err)
+					assert.Equal(t, tc.expectedErr, err)
 				} else {
 					assert.Nil(t, err)
 					assert.Equal(t, tc.wantResult, result)
@@ -165,14 +147,13 @@ func TestQueue_Subscribe(t *testing.T) {
 	testCases := []struct {
 		name        string
 		channels    []string
-		wantErr     bool
+		expectedErr error
 		setup       func(q model.Queue, channels []string, msg string) error
 		expectedMsg string
 	}{
 		{
 			name:     "Subscribe to a single channel",
 			channels: []string{"test_channel1"},
-			wantErr:  false,
 			setup: func(q model.Queue, channels []string, msg string) error {
 				for _, channel := range channels {
 					_, err := q.Publish(context.Background(), channel, msg)
@@ -186,7 +167,6 @@ func TestQueue_Subscribe(t *testing.T) {
 		{
 			name:     "Subscribe to multiple channels",
 			channels: []string{"test_channel2", "test_channel3"},
-			wantErr:  false,
 			setup: func(q model.Queue, channels []string, msg string) error {
 				for _, channel := range channels {
 					_, err := q.Publish(context.Background(), channel, msg)
@@ -200,9 +180,9 @@ func TestQueue_Subscribe(t *testing.T) {
 			expectedMsg: "test",
 		},
 		{
-			name:     "Subscribe to a non-existent channel",
-			channels: []string{"non_existent_channel"},
-			wantErr:  true, // timeout error is expected
+			name:        "Subscribe to a non-existent channel",
+			channels:    []string{"non_existent_channel"},
+			expectedErr: errors.New("i/o timeout"),
 			setup: func(q model.Queue, channels []string, msg string) error {
 				return nil
 			},
@@ -219,8 +199,7 @@ func TestQueue_Subscribe(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
-				sub, err := queue.Subscribe(ctx, tc.channels...)
-				assert.NoError(t, err)
+				sub := queue.Subscribe(ctx, tc.channels...)
 				assert.NotNil(t, sub)
 				defer sub.Close()
 
@@ -246,8 +225,9 @@ func TestQueue_Subscribe(t *testing.T) {
 
 					for _, ch := range tc.channels {
 						msg, err := sub.Receive(ctx)
-						if tc.wantErr {
+						if tc.expectedErr != nil {
 							assert.NotNil(t, err)
+							assert.Equal(t, tc.expectedErr.Error(), err.Error())
 							return
 						}
 
@@ -281,6 +261,6 @@ func TestQueue_NewQueue(t *testing.T) {
 		})
 	}
 
-	_, err := NewQueue(&testutil.MockConnector{})
+	_, err := NewQueue(&testutil.StubConnector{})
 	assert.NotNil(t, err)
 }
