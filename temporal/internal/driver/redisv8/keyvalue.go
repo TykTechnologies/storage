@@ -154,30 +154,31 @@ func (r *RedisV8) DeleteScanMatch(ctx context.Context, pattern string) (int64, e
 	return deleted, nil
 }
 
-func (r *RedisV8) fetchKeys(ctx context.Context, pattern string) ([]string, error) {
-	values := make([]string, 0)
-	iter := r.client.Scan(ctx, 0, pattern, 0).Iterator()
-
-	for iter.Next(ctx) {
-		values = append(values, iter.Val())
-		if err := iter.Err(); err != nil {
-			return nil, err
-		}
-	}
-
-	return values, nil
-}
-
 // Keys returns all keys matching the given pattern
 func (r *RedisV8) Keys(ctx context.Context, pattern string) ([]string, error) {
 	sessions := make([]string, 0)
 	var err error
+
+	fnFetchKeys := func(ctx context.Context, pattern string) ([]string, error) {
+		values := make([]string, 0)
+		iter := r.client.Scan(ctx, 0, pattern, 0).Iterator()
+
+		for iter.Next(ctx) {
+			values = append(values, iter.Val())
+			if err := iter.Err(); err != nil {
+				return nil, err
+			}
+		}
+
+		return values, nil
+	}
+
 	switch client := r.client.(type) {
 	case *redis.ClusterClient:
 		ch := make(chan []string)
 		go func() {
 			err = client.ForEachMaster(ctx, func(context context.Context, client *redis.Client) error {
-				result, err := r.fetchKeys(ctx, pattern)
+				result, err := fnFetchKeys(ctx, pattern)
 				if err != nil {
 					return err
 				}
@@ -193,7 +194,7 @@ func (r *RedisV8) Keys(ctx context.Context, pattern string) ([]string, error) {
 		}
 
 	case *redis.Client:
-		sessions, err = r.fetchKeys(ctx, pattern)
+		sessions, err = fnFetchKeys(ctx, pattern)
 	}
 
 	if err != nil {

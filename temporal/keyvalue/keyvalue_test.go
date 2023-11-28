@@ -1008,6 +1008,7 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			cursor:    0,
 			count:     5,
 			expectedKeysCheck: func(s []string) bool {
+				fmt.Printf("keys: %v\n", s)
 				if len(s) != 5 {
 					return false
 				}
