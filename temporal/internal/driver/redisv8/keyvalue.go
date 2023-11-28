@@ -159,31 +159,17 @@ func (r *RedisV8) Keys(ctx context.Context, pattern string) ([]string, error) {
 	sessions := make([]string, 0)
 	var err error
 
-	fnFetchKeys := func(ctx context.Context, pattern string) ([]string, error) {
-		values := make([]string, 0)
-		iter := r.client.Scan(ctx, 0, pattern, 0).Iterator()
-
-		for iter.Next(ctx) {
-			values = append(values, iter.Val())
-			if err := iter.Err(); err != nil {
-				return nil, err
-			}
-		}
-
-		return values, nil
-	}
-
 	switch client := r.client.(type) {
 	case *redis.ClusterClient:
 		ch := make(chan []string)
 		go func() {
 			err = client.ForEachMaster(ctx, func(context context.Context, client *redis.Client) error {
-				result, err := fnFetchKeys(ctx, pattern)
+				result, err := r.fetchKeys(ctx, pattern, 0, 0)
 				if err != nil {
 					return err
 				}
 
-				ch <- result
+				ch <- result.Keys
 				return nil
 			})
 			close(ch)
@@ -194,7 +180,9 @@ func (r *RedisV8) Keys(ctx context.Context, pattern string) ([]string, error) {
 		}
 
 	case *redis.Client:
-		sessions, err = fnFetchKeys(ctx, pattern)
+		var result model.KeysCursorPair
+		result, err = r.fetchKeys(ctx, pattern, 0, 0)
+		sessions = result.Keys
 	}
 
 	if err != nil {
@@ -271,23 +259,6 @@ func (r *RedisV8) GetKeysAndValuesWithFilter(ctx context.Context,
 // GetKeysWithOpts retrieves keys with options like filter, cursor, and count
 func (r *RedisV8) GetKeysWithOpts(ctx context.Context, searchStr string, cursor uint64, count int) (model.KeysCursorPair, error) {
 	result := model.KeysCursorPair{}
-
-	fnFetchKeys := func(client *redis.Client, cursor uint64, count int) (model.KeysCursorPair, error) {
-		result := model.KeysCursorPair{}
-
-		result.Keys = make([]string, 0)
-
-		iter := client.Scan(ctx, cursor, searchStr, int64(count))
-
-		if err := iter.Err(); err != nil {
-			return result, err
-		}
-
-		result.Keys, result.Cursor = iter.Val()
-
-		return result, nil
-	}
-
 	var err error
 
 	switch v := r.client.(type) {
@@ -303,7 +274,7 @@ func (r *RedisV8) GetKeysWithOpts(ctx context.Context, searchStr string, cursor 
 				}
 
 				// TODO check if each master returns different cursors
-				result, err := fnFetchKeys(client, cursor, count)
+				result, err := r.fetchKeys(ctx, searchStr, cursor, int64(count))
 				if err != nil {
 					return err
 				}
@@ -319,7 +290,7 @@ func (r *RedisV8) GetKeysWithOpts(ctx context.Context, searchStr string, cursor 
 		}
 
 	case *redis.Client:
-		result, err = fnFetchKeys(v, cursor, count)
+		result, err = r.fetchKeys(ctx, searchStr, cursor, int64(count))
 	}
 
 	if err == redis.ErrClosed {
@@ -327,4 +298,20 @@ func (r *RedisV8) GetKeysWithOpts(ctx context.Context, searchStr string, cursor 
 	}
 
 	return result, err
+}
+
+func (r *RedisV8) fetchKeys(ctx context.Context, pattern string, cursor uint64, count int64) (model.KeysCursorPair, error) {
+	result := model.KeysCursorPair{}
+
+	result.Keys = make([]string, 0)
+
+	iter := r.client.Scan(ctx, cursor, pattern, int64(count))
+
+	if err := iter.Err(); err != nil {
+		return result, err
+	}
+
+	result.Keys, result.Cursor = iter.Val()
+
+	return result, nil
 }

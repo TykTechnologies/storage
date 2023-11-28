@@ -727,7 +727,7 @@ func TestKeyValue_Keys(t *testing.T) {
 				}
 			},
 			pattern:      "",
-			expectedKeys: []string{},
+			expectedKeys: []string{"test2", "test3"}, // SCAN will iterate over all the keys if no pattern provided.
 			expectedErr:  nil,
 		},
 	}
@@ -889,7 +889,7 @@ func TestKeyValue_GetKeysAndValuesWithFilter(t *testing.T) {
 				}
 			},
 			pattern:        "",
-			expectedValues: map[string]interface{}{},
+			expectedValues: map[string]interface{}{"key1": "value1", "key2": "value2", "test": "value2"},
 			expectedErr:    nil,
 		},
 	}
