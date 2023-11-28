@@ -265,3 +265,60 @@ func (r *RedisV8) GetKeysAndValuesWithFilter(ctx context.Context,
 
 	return result, nil
 }
+
+// GetKeysWithOpts retrieves keys with options like filter, cursor, and count
+func (r *RedisV8) GetKeysWithOpts(ctx context.Context, searchStr string, cursor uint64, count int) (model.KeysCursorPair, error) {
+	result := model.KeysCursorPair{}
+
+	fnFetchKeys := func(client *redis.Client, cursor uint64, count int) (model.KeysCursorPair, error) {
+		result := model.KeysCursorPair{}
+
+		result.Keys = make([]string, 0)
+
+		iter := client.Scan(ctx, cursor, searchStr, int64(count))
+
+		if err := iter.Err(); err != nil {
+			return result, err
+		}
+
+		result.Keys, result.Cursor = iter.Val()
+
+		return result, nil
+	}
+
+	var err error
+
+	switch v := r.client.(type) {
+	case *redis.ClusterClient:
+		ch := make(chan model.KeysCursorPair)
+
+		go func() {
+			err = v.ForEachMaster(ctx, func(context context.Context, client *redis.Client) error {
+				select {
+				case <-ctx.Done():
+					return errors.New("context cancelled while looking into redis")
+				default:
+				}
+
+				// TODO check if each master returns different cursors
+				result, err := fnFetchKeys(client, cursor, count)
+				if err != nil {
+					return err
+				}
+
+				ch <- result
+				return nil
+			})
+			close(ch)
+		}()
+
+		for v := range ch {
+			result.Keys = append(result.Keys, v.Keys...)
+		}
+
+	case *redis.Client:
+		result, err = fnFetchKeys(v, cursor, count)
+	}
+
+	return result, err
+}

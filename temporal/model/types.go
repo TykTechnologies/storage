@@ -73,6 +73,8 @@ type KeyValue interface {
 	GetMulti(ctx context.Context, keys []string) (values []interface{}, err error)
 	// GetKeysAndValuesWithFilter returns all keys and values that match the given pattern
 	GetKeysAndValuesWithFilter(ctx context.Context, pattern string) (keysAndValues map[string]interface{}, err error)
+	// GetKeysWithOpts returns all keys that match the given pattern with options (cursor, count)
+	GetKeysWithOpts(ctx context.Context, searchStr string, cursor uint64, count int) (KeysCursorPair, error)
 }
 
 type Flusher interface {

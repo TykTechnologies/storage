@@ -2,6 +2,9 @@ package temporal
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -910,6 +913,178 @@ func TestKeyValue_GetKeysAndValuesWithFilter(t *testing.T) {
 				data, err := kv.GetKeysAndValuesWithFilter(ctx, tc.pattern)
 				assert.Equal(t, tc.expectedErr, err)
 				assert.Equal(t, tc.expectedValues, data)
+			})
+		}
+	}
+}
+
+func TestRedisV8_GetKeysWithOpts(t *testing.T) {
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
+
+	tcs := []struct {
+		name              string
+		setup             func(model.KeyValue)
+		searchStr         string
+		cursor            uint64
+		count             int
+		expectedKeysCheck func([]string) bool
+		expectedErr       error
+	}{
+		{
+			name: "valid_search",
+			setup: func(redisV8 model.KeyValue) {
+				ctx := context.Background()
+				redisV8.Set(ctx, "key1", "value1", 0)
+				redisV8.Set(ctx, "key2", "value2", 0)
+			},
+			searchStr: "key*",
+			cursor:    0,
+			count:     10,
+			expectedKeysCheck: func(s []string) bool {
+				return len(s) == 2 && (s[0] == "key1" || s[0] == "key2") && (s[1] == "key1" || s[1] == "key2")
+			},
+			expectedErr: nil,
+		},
+		{
+			name:      "empty_search",
+			setup:     nil,
+			searchStr: "",
+			cursor:    0,
+			count:     10,
+			expectedKeysCheck: func(s []string) bool {
+				return len(s) == 0
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "specific_pattern_search",
+			setup: func(kv model.KeyValue) {
+				ctx := context.Background()
+				kv.Set(ctx, "specific1", "value1", 0)
+				kv.Set(ctx, "specific2", "value2", 0)
+			},
+			searchStr: "specific*",
+			cursor:    0,
+			count:     10,
+			expectedKeysCheck: func(s []string) bool {
+				return len(s) == 2 && (s[0] == "specific1" || s[0] == "specific2") && (s[1] == "specific1" || s[1] == "specific2")
+			},
+			expectedErr: nil,
+		},
+		{
+			name:      "non_matching_pattern",
+			setup:     nil,
+			searchStr: "nomatch*",
+			cursor:    0,
+			count:     10,
+			expectedKeysCheck: func(s []string) bool {
+				return len(s) == 0
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "paginated_search",
+			setup: func(kv model.KeyValue) {
+				ctx := context.Background()
+				for i := 0; i < 20; i++ {
+					kv.Set(ctx, fmt.Sprintf("pagekey%d", i), fmt.Sprintf("value%d", i), 0)
+				}
+			},
+			searchStr: "pagekey*",
+			cursor:    0,
+			count:     5,
+			expectedKeysCheck: func(s []string) bool {
+				if len(s) != 5 {
+					return false
+				}
+				storedValues := make(map[string]bool)
+				for _, key := range s {
+
+					if storedValues[key] {
+						return false
+					}
+
+					if !strings.HasPrefix(key, "pagekey") {
+						return false
+					}
+
+					storedValues[key] = true
+				}
+
+				return true
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "non_zero_cursor_pagination",
+			setup: func(kv model.KeyValue) {
+				ctx := context.Background()
+				for i := 0; i < 15; i++ {
+					kv.Set(ctx, fmt.Sprintf("cursorkey%d", i), fmt.Sprintf("value%d", i), 0)
+				}
+			},
+			searchStr: "cursorkey*",
+			cursor:    14,
+			count:     10,
+			expectedKeysCheck: func(s []string) bool {
+				return len(s) == 1 && strings.HasPrefix(s[0], "cursorkey")
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "non_zero_cursor_zero_count",
+			setup: func(kv model.KeyValue) {
+				ctx := context.Background()
+				for i := 0; i < 10; i++ {
+					kv.Set(ctx, fmt.Sprintf("zerocountkey%d", i), fmt.Sprintf("value%d", i), 0)
+				}
+			},
+			searchStr: "zerocountkey*",
+			cursor:    3, // Non-zero cursor
+			count:     0, // Zero count
+			expectedKeysCheck: func(s []string) bool {
+				return len(s) == 0
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "test_with_error_condition",
+			setup: func(kv model.KeyValue) {
+				// Setup that causes an error, like disconnecting the client or setting a timeout
+			},
+			searchStr: "key*",
+			cursor:    0,
+			count:     10,
+			expectedKeysCheck: func(s []string) bool {
+				return false // As we expect an error, the result should not matter
+			},
+			expectedErr: errors.New("expected error"), // Replace with the actual expected error
+		},
+	}
+
+	for _, connector := range connectors {
+		for _, tc := range tcs {
+			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
+				ctx := context.Background()
+
+				kv, err := NewKeyValue(connector)
+				assert.Nil(t, err)
+
+				flusher, err := flusher.NewFlusher(connector)
+				assert.Nil(t, err)
+				defer assert.Nil(t, flusher.FlushAll(ctx))
+
+				if tc.setup != nil {
+					tc.setup(kv)
+				}
+
+				result, err := kv.GetKeysWithOpts(ctx, tc.searchStr, tc.cursor, tc.count)
+				assert.Equal(t, tc.expectedErr, err)
+
+				if err == nil {
+					assert.True(t, tc.expectedKeysCheck(result.Keys))
+				}
 			})
 		}
 	}
