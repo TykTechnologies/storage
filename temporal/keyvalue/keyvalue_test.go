@@ -2,7 +2,6 @@ package temporal
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/TykTechnologies/storage/temporal/flusher"
 	"github.com/TykTechnologies/storage/temporal/internal/testutil"
+	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/stretchr/testify/assert"
 )
@@ -923,13 +923,14 @@ func TestRedisV8_GetKeysWithOpts(t *testing.T) {
 	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
-		name              string
-		setup             func(model.KeyValue)
-		searchStr         string
-		cursor            uint64
-		count             int
-		expectedKeysCheck func([]string) bool
-		expectedErr       error
+		name                string
+		setup               func(model.KeyValue)
+		searchStr           string
+		cursor              uint64
+		count               int
+		expectedKeysCheck   func([]string) bool
+		expectedErr         error
+		expectedCursorCheck func(uint64) bool
 	}{
 		{
 			name: "valid_search",
@@ -945,6 +946,9 @@ func TestRedisV8_GetKeysWithOpts(t *testing.T) {
 				return len(s) == 2 && (s[0] == "key1" || s[0] == "key2") && (s[1] == "key1" || s[1] == "key2")
 			},
 			expectedErr: nil,
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
+			},
 		},
 		{
 			name:      "empty_search",
@@ -956,6 +960,9 @@ func TestRedisV8_GetKeysWithOpts(t *testing.T) {
 				return len(s) == 0
 			},
 			expectedErr: nil,
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
+			},
 		},
 		{
 			name: "specific_pattern_search",
@@ -971,6 +978,9 @@ func TestRedisV8_GetKeysWithOpts(t *testing.T) {
 				return len(s) == 2 && (s[0] == "specific1" || s[0] == "specific2") && (s[1] == "specific1" || s[1] == "specific2")
 			},
 			expectedErr: nil,
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
+			},
 		},
 		{
 			name:      "non_matching_pattern",
@@ -982,6 +992,9 @@ func TestRedisV8_GetKeysWithOpts(t *testing.T) {
 				return len(s) == 0
 			},
 			expectedErr: nil,
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
+			},
 		},
 		{
 			name: "paginated_search",
@@ -1015,9 +1028,13 @@ func TestRedisV8_GetKeysWithOpts(t *testing.T) {
 				return true
 			},
 			expectedErr: nil,
+			expectedCursorCheck: func(c uint64) bool {
+				// Cursor should be different than 0 as there are more keys to be fetched
+				return c != 0
+			},
 		},
 		{
-			name: "non_zero_cursor_pagination",
+			name: "count higher than actual keys",
 			setup: func(kv model.KeyValue) {
 				ctx := context.Background()
 				for i := 0; i < 15; i++ {
@@ -1025,41 +1042,28 @@ func TestRedisV8_GetKeysWithOpts(t *testing.T) {
 				}
 			},
 			searchStr: "cursorkey*",
-			cursor:    14,
-			count:     10,
+			cursor:    0,
+			count:     20,
 			expectedKeysCheck: func(s []string) bool {
-				return len(s) == 1 && strings.HasPrefix(s[0], "cursorkey")
+				return len(s) == 15
 			},
 			expectedErr: nil,
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
+			},
 		},
 		{
-			name: "non_zero_cursor_zero_count",
-			setup: func(kv model.KeyValue) {
-				ctx := context.Background()
-				for i := 0; i < 10; i++ {
-					kv.Set(ctx, fmt.Sprintf("zerocountkey%d", i), fmt.Sprintf("value%d", i), 0)
-				}
-			},
-			searchStr: "zerocountkey*",
-			cursor:    3, // Non-zero cursor
-			count:     0, // Zero count
-			expectedKeysCheck: func(s []string) bool {
-				return len(s) == 0
-			},
-			expectedErr: nil,
-		},
-		{
-			name: "test_with_error_condition",
-			setup: func(kv model.KeyValue) {
-				// Setup that causes an error, like disconnecting the client or setting a timeout
-			},
-			searchStr: "key*",
+			name:      "test_with_error_condition",
+			searchStr: "keys*",
 			cursor:    0,
 			count:     10,
 			expectedKeysCheck: func(s []string) bool {
-				return false // As we expect an error, the result should not matter
+				return false
 			},
-			expectedErr: errors.New("expected error"), // Replace with the actual expected error
+			expectedErr: temperr.ClosedConnection,
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
+			},
 		},
 	}
 
@@ -1067,13 +1071,16 @@ func TestRedisV8_GetKeysWithOpts(t *testing.T) {
 		for _, tc := range tcs {
 			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
 				ctx := context.Background()
+				if tc.expectedErr == temperr.ClosedConnection {
+					assert.NoError(t, connector.Disconnect(ctx))
+				} else {
+					flusher, err := flusher.NewFlusher(connector)
+					assert.Nil(t, err)
+					defer assert.Nil(t, flusher.FlushAll(ctx))
+				}
 
 				kv, err := NewKeyValue(connector)
 				assert.Nil(t, err)
-
-				flusher, err := flusher.NewFlusher(connector)
-				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
 
 				if tc.setup != nil {
 					tc.setup(kv)
@@ -1084,6 +1091,7 @@ func TestRedisV8_GetKeysWithOpts(t *testing.T) {
 
 				if err == nil {
 					assert.True(t, tc.expectedKeysCheck(result.Keys))
+					assert.True(t, tc.expectedCursorCheck(result.Cursor))
 				}
 			})
 		}

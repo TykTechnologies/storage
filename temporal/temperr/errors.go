@@ -8,6 +8,7 @@ var (
 	InvalidOptionsType   = errors.New("invalid configuration options type")
 	InvalidHandlerType   = errors.New("invalid handler type")
 	InvalidConfiguration = errors.New("invalid configuration")
+	ClosedConnection     = errors.New("connection closed")
 
 	// Key related errors
 	KeyNotFound = errors.New("key not found")

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/go-redis/redis/v8"
 )
@@ -318,6 +319,10 @@ func (r *RedisV8) GetKeysWithOpts(ctx context.Context, searchStr string, cursor 
 
 	case *redis.Client:
 		result, err = fnFetchKeys(v, cursor, count)
+	}
+
+	if err == redis.ErrClosed {
+		return result, temperr.ClosedConnection
 	}
 
 	return result, err

@@ -30,6 +30,10 @@ func CloseConnectors(t *testing.T, connectors []model.Connector) {
 	t.Helper()
 
 	for _, connector := range connectors {
+		if err := connector.Ping(context.Background()); err != nil {
+			// Connector is already closed.
+			continue
+		}
 		err := connector.Disconnect(context.Background())
 		assert.Nil(t, err)
 	}
