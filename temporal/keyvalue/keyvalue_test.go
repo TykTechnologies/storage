@@ -918,7 +918,7 @@ func TestKeyValue_GetKeysAndValuesWithFilter(t *testing.T) {
 	}
 }
 
-func TestRedisV8_GetKeysWithOpts(t *testing.T) {
+func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 	connectors := testutil.TestConnectors(t)
 	defer testutil.CloseConnectors(t, connectors)
 
