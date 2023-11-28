@@ -7,20 +7,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TykTechnologies/storage/temporal/model"
+	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/go-redis/redis/v8"
 )
 
 // Get retrieves the value for a given key from Redis
 func (r *RedisV8) Get(ctx context.Context, key string) (string, error) {
 	if key == "" {
-		return "", model.ErrKeyEmpty
+		return "", temperr.KeyEmpty
 	}
 
 	result, err := r.client.Get(ctx, key).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return "", model.ErrKeyNotFound
+			return "", temperr.KeyNotFound
 		}
 
 		return "", err
@@ -32,7 +32,7 @@ func (r *RedisV8) Get(ctx context.Context, key string) (string, error) {
 // Set sets the string value of a key
 func (r *RedisV8) Set(ctx context.Context, key, value string, expiration time.Duration) error {
 	if key == "" {
-		return model.ErrKeyEmpty
+		return temperr.KeyEmpty
 	}
 
 	return r.client.Set(ctx, key, value, expiration).Err()
@@ -41,7 +41,7 @@ func (r *RedisV8) Set(ctx context.Context, key, value string, expiration time.Du
 // Delete removes the specified keys
 func (r *RedisV8) Delete(ctx context.Context, key string) error {
 	if key == "" {
-		return model.ErrKeyEmpty
+		return temperr.KeyEmpty
 	}
 
 	_, err := r.client.Del(ctx, key).Result()
@@ -52,12 +52,12 @@ func (r *RedisV8) Delete(ctx context.Context, key string) error {
 // Increment atomically increments the integer value of a key by one
 func (r *RedisV8) Increment(ctx context.Context, key string) (int64, error) {
 	if key == "" {
-		return 0, model.ErrKeyEmpty
+		return 0, temperr.KeyEmpty
 	}
 
 	res, err := r.client.Incr(ctx, key).Result()
 	if err != nil && strings.EqualFold(err.Error(), "ERR value is not an integer or out of range") {
-		return 0, model.ErrKeyMisstype
+		return 0, temperr.KeyMisstype
 	}
 
 	return res, err
@@ -66,12 +66,12 @@ func (r *RedisV8) Increment(ctx context.Context, key string) (int64, error) {
 // Decrement atomically decrements the integer value of a key by one
 func (r *RedisV8) Decrement(ctx context.Context, key string) (int64, error) {
 	if key == "" {
-		return 0, model.ErrKeyEmpty
+		return 0, temperr.KeyEmpty
 	}
 
 	res, err := r.client.Decr(ctx, key).Result()
 	if err != nil && strings.EqualFold(err.Error(), "ERR value is not an integer or out of range") {
-		return 0, model.ErrKeyMisstype
+		return 0, temperr.KeyMisstype
 	}
 
 	return res, err
@@ -80,7 +80,7 @@ func (r *RedisV8) Decrement(ctx context.Context, key string) (int64, error) {
 // Exists checks if a key exists
 func (r *RedisV8) Exists(ctx context.Context, key string) (bool, error) {
 	if key == "" {
-		return false, model.ErrKeyEmpty
+		return false, temperr.KeyEmpty
 	}
 
 	result, err := r.client.Exists(ctx, key).Result()
@@ -91,7 +91,7 @@ func (r *RedisV8) Exists(ctx context.Context, key string) (bool, error) {
 // Expire sets a timeout on key. After the timeout has expired, the key will automatically be deleted
 func (r *RedisV8) Expire(ctx context.Context, key string, expiration time.Duration) error {
 	if key == "" {
-		return model.ErrKeyEmpty
+		return temperr.KeyEmpty
 	}
 
 	return r.client.Expire(ctx, key, expiration).Err()
@@ -100,7 +100,7 @@ func (r *RedisV8) Expire(ctx context.Context, key string, expiration time.Durati
 // TTL returns the remaining time to live of a key that has a timeout
 func (r *RedisV8) TTL(ctx context.Context, key string) (int64, error) {
 	if key == "" {
-		return 0, model.ErrKeyEmpty
+		return 0, temperr.KeyEmpty
 	}
 
 	duration, err := r.client.TTL(ctx, key).Result()
@@ -114,7 +114,7 @@ func (r *RedisV8) TTL(ctx context.Context, key string) (int64, error) {
 // DeleteKeys removes the specified keys. A key is ignored if it does not exist
 func (r *RedisV8) DeleteKeys(ctx context.Context, keys []string) (int64, error) {
 	if len(keys) == 0 {
-		return 0, model.ErrKeyEmpty
+		return 0, temperr.KeyEmpty
 	}
 
 	return r.client.Del(ctx, keys...).Result()

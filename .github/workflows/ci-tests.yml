@@ -147,8 +147,8 @@ jobs:
             -Dsonar.organization=tyktechnologies
             -Dsonar.projectKey=TykTechnologies_storage
             -Dsonar.sources=.
-            -Dsonar.coverage.exclusions=**/*_test.go,**/mocks/*.go
-            -Dsonar.exclusions=**/mocks/*.go
+            -Dsonar.coverage.exclusions=**/*_test.go,**/mocks/*.go,**/tempmocks/*.go
+            -Dsonar.exclusions=**/mocks/*.go,**/tempmocks/*.go
             -Dsonar.test.inclusions=**/*_test.go
             -Dsonar.tests=.
             -Dsonar.go.coverage.reportPaths=merged-coverage.cov
