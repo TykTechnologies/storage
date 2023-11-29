@@ -7,7 +7,6 @@ includes:
 env:
   TEST_TIMEOUT:
     sh: echo ${TEST_TIMEOUT:-"5m"}
-  REDIS_ADDR: "localhost:6379"
   REDIS_ADDR_SINGLE: "localhost:6379"
   REDIS_ADDR_CLUSTER: "localhost:7000,localhost:7001,localhost:7002,localhost:7003,localhost:7004,localhost:7005"
 
@@ -28,9 +27,9 @@ tasks:
 
         if [ "{{.DB}}" == "redis" ]; then
           if [ "{{.REDIS_SETUP}}" == "cluster" ]; then
-            export REDIS_ADDR=$REDIS_ADDR_CLUSTER
+            export REDIS_ADDRS=$REDIS_ADDR_CLUSTER
           else
-            export REDIS_ADDR=$REDIS_ADDR_SINGLE
+            export REDIS_ADDRS=$REDIS_ADDR_SINGLE
           fi
         fi
 

@@ -2,6 +2,9 @@ package testutil
 
 import (
 	"context"
+	"log"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/TykTechnologies/storage/temporal/connector"
@@ -17,13 +20,36 @@ func TestConnectors(t *testing.T) []model.Connector {
 	connectors := []model.Connector{}
 
 	// redisv8 list
-	redisConnector, err := connector.NewConnector(
-		"redisv8", model.WithRedisConfig(&model.RedisOptions{Addrs: []string{"localhost:6379"}}))
-	assert.Nil(t, err)
+	redisConnector := newRedisConnector(t)
 
 	connectors = append(connectors, redisConnector)
 
 	return connectors
+}
+
+func newRedisConnector(t *testing.T) model.Connector {
+	t.Helper()
+	addrs := []string{}
+	enableCluster := false
+
+	addrsEnv := os.Getenv("REDIS_ADDRS")
+	if addrsEnv == "" {
+		log.Println("REDIS_ADDRS not set, using default localhost:6379")
+		addrsEnv = "localhost:6379"
+	}
+
+	if strings.Contains(addrsEnv, ",") {
+		addrs = strings.Split(addrsEnv, ",")
+		enableCluster = true
+	} else {
+		addrs = append(addrs, addrsEnv)
+	}
+
+	redisConnector, err := connector.NewConnector(
+		"redisv8", model.WithRedisConfig(&model.RedisOptions{Addrs: addrs, EnableCluster: enableCluster}))
+	assert.Nil(t, err)
+
+	return redisConnector
 }
 
 func CloseConnectors(t *testing.T, connectors []model.Connector) {
