@@ -2,6 +2,7 @@ package temporal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -936,8 +937,8 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			name: "valid_search",
 			setup: func(redisV8 model.KeyValue) {
 				ctx := context.Background()
-				redisV8.Set(ctx, "key1", "value1", 0)
-				redisV8.Set(ctx, "key2", "value2", 0)
+				assert.NoError(t, redisV8.Set(ctx, "key1", "value1", 0))
+				assert.NoError(t, redisV8.Set(ctx, "key2", "value2", 0))
 			},
 			searchStr: "key*",
 			cursor:    0,
@@ -968,14 +969,16 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			name: "specific_pattern_search",
 			setup: func(kv model.KeyValue) {
 				ctx := context.Background()
-				kv.Set(ctx, "specific1", "value1", 0)
-				kv.Set(ctx, "specific2", "value2", 0)
+				assert.NoError(t, kv.Set(ctx, "specific1", "value1", 0))
+				assert.NoError(t, kv.Set(ctx, "specific2", "value2", 0))
 			},
 			searchStr: "specific*",
 			cursor:    0,
 			count:     10,
 			expectedKeysCheck: func(s []string) bool {
-				return len(s) == 2 && (s[0] == "specific1" || s[0] == "specific2") && (s[1] == "specific1" || s[1] == "specific2")
+				return len(s) == 2 &&
+					(s[0] == "specific1" || s[0] == "specific2") &&
+					(s[1] == "specific1" || s[1] == "specific2")
 			},
 			expectedErr: nil,
 			expectedCursorCheck: func(c uint64) bool {
@@ -1001,7 +1004,7 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			setup: func(kv model.KeyValue) {
 				ctx := context.Background()
 				for i := 0; i < 20; i++ {
-					kv.Set(ctx, fmt.Sprintf("pagekey%d", i), fmt.Sprintf("value%d", i), 0)
+					assert.NoError(t, kv.Set(ctx, fmt.Sprintf("pagekey%d", i), fmt.Sprintf("value%d", i), 0))
 				}
 			},
 			searchStr: "pagekey*",
@@ -1014,7 +1017,6 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 
 				storedValues := make(map[string]bool)
 				for _, key := range s {
-
 					if storedValues[key] {
 						return false
 					}
@@ -1039,7 +1041,7 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			setup: func(kv model.KeyValue) {
 				ctx := context.Background()
 				for i := 0; i < 15; i++ {
-					kv.Set(ctx, fmt.Sprintf("cursorkey%d", i), fmt.Sprintf("value%d", i), 0)
+					assert.NoError(t, kv.Set(ctx, fmt.Sprintf("cursorkey%d", i), fmt.Sprintf("value%d", i), 0))
 				}
 			},
 			searchStr: "cursorkey*",
@@ -1072,7 +1074,7 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 		for _, tc := range tcs {
 			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
 				ctx := context.Background()
-				if tc.expectedErr == temperr.ClosedConnection {
+				if errors.Is(tc.expectedErr, temperr.ClosedConnection) {
 					assert.NoError(t, connector.Disconnect(ctx))
 				} else {
 					flusher, err := flusher.NewFlusher(connector)

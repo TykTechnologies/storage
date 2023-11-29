@@ -172,6 +172,7 @@ func (r *RedisV8) Keys(ctx context.Context, pattern string) ([]string, error) {
 				ch <- result.Keys
 				return nil
 			})
+
 			close(ch)
 		}()
 
@@ -197,24 +198,29 @@ func (r *RedisV8) GetMulti(ctx context.Context, keys []string) ([]interface{}, e
 	switch client := r.client.(type) {
 	case *redis.ClusterClient:
 		getCmds := make([]*redis.StringCmd, 0)
+
 		pipe := client.Pipeline()
+
 		for _, key := range keys {
 			getCmds = append(getCmds, pipe.Get(ctx, key))
 		}
 
 		_, err := pipe.Exec(ctx)
-		if err != nil && err != redis.Nil {
+		if err != nil && !errors.Is(err, redis.Nil) {
 			return nil, err
 		}
 
 		values := make([]interface{}, len(getCmds))
+
 		for i, cmd := range getCmds {
-			if cmd.Err() != nil && cmd.Err() != redis.Nil {
+			if cmd.Err() != nil && !errors.Is(cmd.Err(), redis.Nil) {
 				values[i] = nil
 				continue
 			}
+
 			values[i] = cmd.Val()
 		}
+
 		return values, nil
 
 	case *redis.Client:
@@ -222,6 +228,7 @@ func (r *RedisV8) GetMulti(ctx context.Context, keys []string) ([]interface{}, e
 		if cmd.Err() != nil {
 			return nil, cmd.Err()
 		}
+
 		return cmd.Val(), nil
 
 	default:
@@ -257,7 +264,11 @@ func (r *RedisV8) GetKeysAndValuesWithFilter(ctx context.Context,
 }
 
 // GetKeysWithOpts retrieves keys with options like filter, cursor, and count
-func (r *RedisV8) GetKeysWithOpts(ctx context.Context, searchStr string, cursor uint64, count int) (model.KeysCursorPair, error) {
+func (r *RedisV8) GetKeysWithOpts(ctx context.Context,
+	searchStr string,
+	cursor uint64,
+	count int,
+) (model.KeysCursorPair, error) {
 	result := model.KeysCursorPair{}
 	var err error
 
@@ -282,6 +293,7 @@ func (r *RedisV8) GetKeysWithOpts(ctx context.Context, searchStr string, cursor 
 				ch <- result
 				return nil
 			})
+
 			close(ch)
 		}()
 
@@ -293,14 +305,18 @@ func (r *RedisV8) GetKeysWithOpts(ctx context.Context, searchStr string, cursor 
 		result, err = r.fetchKeys(ctx, searchStr, cursor, int64(count))
 	}
 
-	if err == redis.ErrClosed {
+	if errors.Is(err, redis.ErrClosed) {
 		return result, temperr.ClosedConnection
 	}
 
 	return result, err
 }
 
-func (r *RedisV8) fetchKeys(ctx context.Context, pattern string, cursor uint64, count int64) (model.KeysCursorPair, error) {
+func (r *RedisV8) fetchKeys(ctx context.Context,
+	pattern string,
+	cursor uint64,
+	count int64,
+) (model.KeysCursorPair, error) {
 	result := model.KeysCursorPair{}
 
 	result.Keys = make([]string, 0)
