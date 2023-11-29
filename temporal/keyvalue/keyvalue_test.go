@@ -1006,12 +1006,12 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			},
 			searchStr: "pagekey*",
 			cursor:    0,
-			count:     5,
+			count:     5, // Count is 5 but Redis SCAN does not guarantee that it will return 5 keys
 			expectedKeysCheck: func(s []string) bool {
-				fmt.Printf("keys: %v\n", s)
-				if len(s) != 5 {
+				if len(s) == 0 {
 					return false
 				}
+
 				storedValues := make(map[string]bool)
 				for _, key := range s {
 
