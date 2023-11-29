@@ -9,6 +9,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type StubConnector struct{}
+
+func (m *StubConnector) Type() string {
+	return "mock"
+}
+
+func (m *StubConnector) Connect(ctx context.Context) error {
+	return nil
+}
+
+func (m *StubConnector) Disconnect(ctx context.Context) error {
+	return nil
+}
+
+func (m *StubConnector) Ping(ctx context.Context) error {
+	return nil
+}
+
+func (m *StubConnector) As(i interface{}) bool {
+	return false
+}
+
 // Connectors returns a list of connectors to be used in tests.
 // If you are adding a new supported driver, add it here and it will be tested on all the tcs automatically.
 func TestConnectors(t *testing.T) []model.Connector {
@@ -30,6 +52,10 @@ func CloseConnectors(t *testing.T, connectors []model.Connector) {
 	t.Helper()
 
 	for _, connector := range connectors {
+		if err := connector.Ping(context.Background()); err != nil {
+			// Connector is already closed.
+			continue
+		}
 		err := connector.Disconnect(context.Background())
 		assert.Nil(t, err)
 	}
