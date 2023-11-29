@@ -58,9 +58,20 @@ jobs:
           - storagetype: temporal
             database: redis
             version: 6
+            redistype: single
           - storagetype: temporal
             database: redis
             version: 7
+            redistype: single
+          - storagetype: temporal
+            database: redis
+            version: 6
+            redistype: cluster
+          - storagetype: temporal
+            database: redis
+            version: 7
+            redistype: cluster
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -89,11 +100,12 @@ jobs:
 
       - if: ${{ matrix.database == 'redis' }}
         name: Start Redis '${{ matrix.version }}'
-        run: task -t bin/Taskfile-db.yml start-redis REDIS_VERSION=${{ matrix.version }}
+        run: task -t bin/Taskfile-db.yml start-redis-${{matrix.redistype}} REDIS_VERSION=${{ matrix.version }}
 
       - name: Run tests
         env:
           DB: ${{ matrix.database }}
+          REDIS_SETUP: ${{ matrix.redistype }}
         run: task test-${{ matrix.storagetype }}
 
       - uses: actions/upload-artifact@v2
