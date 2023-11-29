@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/TykTechnologies/storage/temporal/connector"
@@ -31,7 +30,6 @@ func newRedisConnector(t *testing.T) model.Connector {
 	t.Helper()
 
 	addrs := []string{}
-	enableCluster := false
 
 	addrsEnv := os.Getenv("REDIS_ADDRS")
 	if addrsEnv == "" {
@@ -40,11 +38,11 @@ func newRedisConnector(t *testing.T) model.Connector {
 		addrsEnv = "localhost:6379"
 	}
 
-	if strings.Contains(addrsEnv, ",") {
-		addrs = strings.Split(addrsEnv, ",")
+	enableCluster := false
+	enableClusterEnv := os.Getenv("REDIS_ENABLE_CLUSTER")
+	if enableClusterEnv != "" {
+		log.Println("REDIS_ENABLE_CLUSTER is set, using cluster mode")
 		enableCluster = true
-	} else {
-		addrs = append(addrs, addrsEnv)
 	}
 
 	redisConnector, err := connector.NewConnector(
