@@ -19,4 +19,4 @@ tasks:
         for port in $(seq 7000 7005); do
           docker run --name redis-${port} --net redis-cluster-net -d -p ${port}:${port} -p $((port+10000)):$((port+10000)) redis:{{.REDIS_VERSION}} redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes;
         done
-      - docker run --net redis-cluster-net --rm redis:{{.REDIS_VERSION}} redis-cli --cluster create $(for port in $(seq 7000 7005); do echo "$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' redis-${port}):${port}"; done) --cluster-replicas 1
+      - docker run --net redis-cluster-net --rm redis:{{.REDIS_VERSION}} redis-cli --cluster create [ip:port list] --cluster-replicas 1 --cluster-yes
