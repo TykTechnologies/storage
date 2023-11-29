@@ -2,7 +2,7 @@ version: '3'
 
 services:
   redis-master:
-    image: 'bitnami/redis:${REDIS_VERSION}'
+    image: 'bitnami/redis:${REDIS_VERSION}.0'
     ports:
       - '6379:6379'
     environment:
@@ -10,7 +10,7 @@ services:
       - ALLOW_EMPTY_PASSWORD=yes
 
   redis-replica-1:
-    image: 'bitnami/redis:${REDIS_VERSION}'
+    image: 'bitnami/redis:${REDIS_VERSION}.0'
     ports:
       - '6379'
     depends_on:
@@ -21,7 +21,7 @@ services:
       - REDIS_MASTER_PORT_NUMBER=6379
       - ALLOW_EMPTY_PASSWORD=yes
   redis-replica-2:
-    image: 'bitnami/redis:${REDIS_VERSION}'
+    image: 'bitnami/redis:${REDIS_VERSION}.0'
     ports:
       - '6379'
     depends_on:
