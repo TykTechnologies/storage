@@ -31,7 +31,12 @@ tasks:
           coveragefile="${pkg_base}.cov"
           tags=$([[ ${pkg} == *"driver"* ]] && echo "-tags {{.DB}}" || echo "")
 
-          REDIS_ENABLE_CLUSTER=true go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -coverprofile=${coveragefile} -v ${pkg}
+          # Set REDIS_ENABLE_CLUSTER conditionally and run the test
+          if [ "{{.DB}}" == "redis" ] && [ "{{.REDIS_SETUP}}" == "cluster" ]; then
+            REDIS_ENABLE_CLUSTER=true go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -coverprofile=${coveragefile} -v ${pkg}
+          else
+            go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -coverprofile=${coveragefile} -v ${pkg}
+          fi
 
           if [ -f "${coveragefile}" ]; then
             mkdir -p "coverage/$(dirname ${pkg})"
