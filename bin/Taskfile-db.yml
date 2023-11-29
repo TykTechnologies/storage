@@ -14,6 +14,7 @@ tasks:
   start-redis-cluster:
     cmds:
       - echo "Starting Redis Cluster..."
+      - echo "Redis version: ${{.REDIS_VERSION}}"
       - docker network create redis-cluster-net
       - >
         for port in $(seq 7000 7005); do

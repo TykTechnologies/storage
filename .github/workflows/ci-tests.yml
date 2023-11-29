@@ -42,7 +42,7 @@ jobs:
           path: |
             golanglint.xml
   test:
-    name: Tests ${{ matrix.storagetype }} storage - DB ${{ matrix.database }} ${{ matrix.version }} ${{ matrix.instancetype }}}
+    name: Tests ${{ matrix.storagetype }} storage - DB ${{ matrix.database }} ${{ matrix.version }} ${{ matrix.instancetype }}
     needs: [golangci-lint]
     runs-on: ubuntu-latest
     strategy:
