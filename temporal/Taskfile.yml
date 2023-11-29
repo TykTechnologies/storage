@@ -9,7 +9,12 @@ tasks:
   run-tests:
     desc: "Run Go tests for temporal storage"
     cmds:
-      - go test -p 1 -v -coverprofile=temporal.cov -cover -coverpkg=./... ./...
+      - |
+        if [ "{{.REDIS_SETUP}}" = "cluster" ]; then
+          REDIS_ENABLE_CLUSTER=true go test -p 1 -v -coverprofile=temporal.cov -cover -coverpkg=./... ./...
+        else
+          go test -p 1 -v -coverprofile=temporal.cov -cover -coverpkg=./... ./...
+        fi
 
   generate-mocks:
     desc: "Generate mocks for testing"

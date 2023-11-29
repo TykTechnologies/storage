@@ -23,21 +23,11 @@ tasks:
           echo "STORAGE_TYPE and DB must be set."
           exit 1
         fi
-
-        export REDIS_ADDRS=$REDIS_ADDR
-
         for pkg in $(go list ./{{.STORAGE_TYPE}}/...); do
           pkg_base=$(basename $pkg)
           coveragefile="${pkg_base}.cov"
           tags=$([[ ${pkg} == *"driver"* ]] && echo "-tags {{.DB}}" || echo "")
-
-          # Set REDIS_ENABLE_CLUSTER conditionally and run the test
-          if [ "{{.DB}}" == "redis" ] && [ "{{.REDIS_SETUP}}" == "cluster" ]; then
-            REDIS_ENABLE_CLUSTER=true go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -coverprofile=${coveragefile} -v ${pkg}
-          else
-            go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -coverprofile=${coveragefile} -v ${pkg}
-          fi
-
+          go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -coverprofile=${coveragefile} -v ${pkg}
           if [ -f "${coveragefile}" ]; then
             mkdir -p "coverage/$(dirname ${pkg})"
             mv ${coveragefile} "coverage/${pkg}.cov"
