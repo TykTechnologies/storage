@@ -14,4 +14,4 @@ tasks:
   start-redis-cluster:
     cmds:
       - echo "Starting Redis Cluster..."
-      - REDIS_VERSION={{.REDIS_VERSION}} docker-compose up --detach
+      - REDIS_VERSION={{.REDIS_VERSION}} docker-compose up -f redis-cluster/docker-compose.yml -d

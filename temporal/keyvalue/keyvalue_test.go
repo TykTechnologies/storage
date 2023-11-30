@@ -937,8 +937,8 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			name: "valid_search",
 			setup: func(redisV8 model.KeyValue) {
 				ctx := context.Background()
-				assert.NoError(t, redisV8.Set(ctx, "key1", "value1", 0))
 				assert.NoError(t, redisV8.Set(ctx, "key2", "value2", 0))
+				assert.NoError(t, redisV8.Set(ctx, "key1", "value1", 0))
 			},
 			searchStr: "key*",
 			cursor:    0,
@@ -1018,10 +1018,12 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 				storedValues := make(map[string]bool)
 				for _, key := range s {
 					if storedValues[key] {
+						fmt.Println("Duplicate key:", key)
 						return false
 					}
 
 					if !strings.HasPrefix(key, "pagekey") {
+						fmt.Println("Key does not match pattern:", key)
 						return false
 					}
 

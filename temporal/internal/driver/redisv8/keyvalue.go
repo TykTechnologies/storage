@@ -277,20 +277,31 @@ func (r *RedisV8) GetKeysWithOpts(ctx context.Context,
 		ch := make(chan model.KeysCursorPair)
 
 		go func() {
+			fmt.Println("Executing go rutine")
 			err = v.ForEachMaster(ctx, func(context context.Context, client *redis.Client) error {
-				select {
-				case <-ctx.Done():
-					return errors.New("context cancelled while looking into redis")
-				default:
-				}
+				localCursor := cursor
+				for {
+					select {
+					case <-ctx.Done():
+						return errors.New("context cancelled while looking into redis")
+					default:
+					}
 
-				// TODO check if each master returns different cursors
-				result, err := r.fetchKeys(ctx, searchStr, cursor, int64(count))
-				if err != nil {
-					return err
-				}
+					result, err := r.fetchKeys(ctx, searchStr, localCursor, int64(count))
+					if err != nil {
+						return err
+					}
 
-				ch <- result
+					fmt.Println("RESULT:", result)
+
+					ch <- result
+					localCursor = result.Cursor
+
+					if result.Cursor == 0 {
+						fmt.Println("CURSOR IS 0, RETURNING")
+						break
+					}
+				}
 				return nil
 			})
 
@@ -308,6 +319,8 @@ func (r *RedisV8) GetKeysWithOpts(ctx context.Context,
 	if errors.Is(err, redis.ErrClosed) {
 		return result, temperr.ClosedConnection
 	}
+
+	fmt.Println("RETURNING:", result)
 
 	return result, err
 }

@@ -35,12 +35,12 @@ func newRedisConnector(t *testing.T) model.Connector {
 	if addrsEnv == "" {
 		log.Println("REDIS_ADDRS not set, using default localhost:6379")
 
-		addrsEnv = "localhost:6379"
+		addrsEnv = "localhost:7000"
 	}
 
 	addrs = append(addrs, addrsEnv)
 
-	enableCluster := false
+	enableCluster := true
 	enableClusterEnv := os.Getenv("REDIS_ENABLE_CLUSTER")
 
 	if enableClusterEnv != "" {
