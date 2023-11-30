@@ -14,4 +14,4 @@ tasks:
   start-redis-cluster:
     cmds:
       - echo "Starting Redis Cluster..."
-      - REDIS_VERSION={{.REDIS_VERSION}} REDIS_ADDRS='localhost:7000' docker-compose -f=redis-cluster/docker-compose.yml up -d
+      - REDIS_VERSION={{.REDIS_VERSION}} REDIS_ADDRS='localhost:7000' docker-compose -f redis-cluster/docker-compose.yml up -d
