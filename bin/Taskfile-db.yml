@@ -15,4 +15,3 @@ tasks:
     cmds:
       - echo "Starting Redis Cluster..."
       - REDIS_VERSION={{.REDIS_VERSION}} docker-compose up --detach
-      - docker exec bin_redis-node-5_1 redis-cli --cluster fix localhost:6379 --cluster-yes
