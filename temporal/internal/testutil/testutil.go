@@ -40,7 +40,7 @@ func newRedisConnector(t *testing.T) model.Connector {
 
 	addrs = append(addrs, addrsEnv)
 
-	enableCluster := true
+	enableCluster := false
 	enableClusterEnv := os.Getenv("REDIS_ENABLE_CLUSTER")
 
 	if enableClusterEnv != "" {
