@@ -1,33 +1,86 @@
-version: '3'
+# Copyright VMware, Inc.
+# SPDX-License-Identifier: APACHE-2.0
 
+version: '2'
 services:
-  redis-master:
-    image: 'bitnami/redis:${REDIS_VERSION}.0'
-    ports:
-      - '6379:6379'
+  redis-node-0:
+    image: docker.io/bitnami/redis-cluster:${REDIS_VERSION}.0
+    volumes:
+      - redis-cluster_data-0:/bitnami/redis/data
     environment:
-      - REDIS_REPLICATION_MODE=master
-      - ALLOW_EMPTY_PASSWORD=yes
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+    ports:
+      - "6379:6379"
 
-  redis-replica-1:
-    image: 'bitnami/redis:${REDIS_VERSION}.0'
-    ports:
-      - '6379'
-    depends_on:
-      - redis-master
+  redis-node-1:
+    image: docker.io/bitnami/redis-cluster:${REDIS_VERSION}.0
+    volumes:
+      - redis-cluster_data-1:/bitnami/redis/data
     environment:
-      - REDIS_REPLICATION_MODE=slave
-      - REDIS_MASTER_HOST=redis-master
-      - REDIS_MASTER_PORT_NUMBER=6379
-      - ALLOW_EMPTY_PASSWORD=yes
-  redis-replica-2:
-    image: 'bitnami/redis:${REDIS_VERSION}.0'
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
     ports:
-      - '6379'
-    depends_on:
-      - redis-master
+      - "6380:6379"
+
+  redis-node-2:
+    image: docker.io/bitnami/redis-cluster:${REDIS_VERSION}.0
+    volumes:
+      - redis-cluster_data-2:/bitnami/redis/data
     environment:
-      - REDIS_REPLICATION_MODE=slave
-      - REDIS_MASTER_HOST=redis-master
-      - REDIS_MASTER_PORT_NUMBER=6379
-      - ALLOW_EMPTY_PASSWORD=yes
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+    ports:
+      - "6381:6379"
+
+  redis-node-3:
+    image: docker.io/bitnami/redis-cluster:${REDIS_VERSION}.0
+    volumes:
+      - redis-cluster_data-3:/bitnami/redis/data
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+    ports:
+      - "6382:6379"
+
+  redis-node-4:
+    image: docker.io/bitnami/redis-cluster:${REDIS_VERSION}.0
+    volumes:
+      - redis-cluster_data-4:/bitnami/redis/data
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+    ports:
+      - "6383:6379"
+
+  redis-node-5:
+    image: docker.io/bitnami/redis-cluster:${REDIS_VERSION}.0
+    volumes:
+      - redis-cluster_data-5:/bitnami/redis/data
+    depends_on:
+      - redis-node-0
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_CLUSTER_REPLICAS=1'
+      - 'REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5'
+      - 'REDIS_CLUSTER_CREATOR=yes'
+    ports:
+      - "6384:6379"
+
+volumes:
+  redis-cluster_data-0:
+    driver: local
+  redis-cluster_data-1:
+    driver: local
+  redis-cluster_data-2:
+    driver: local
+  redis-cluster_data-3:
+    driver: local
+  redis-cluster_data-4:
+    driver: local
+  redis-cluster_data-5:
+    driver: local

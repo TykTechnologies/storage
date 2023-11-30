@@ -1081,7 +1081,6 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 					assert.Nil(t, err)
 					defer assert.Nil(t, flusher.FlushAll(ctx))
 				}
-
 				kv, err := NewKeyValue(connector)
 				assert.Nil(t, err)
 
