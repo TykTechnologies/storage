@@ -1018,12 +1018,10 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 				storedValues := make(map[string]bool)
 				for _, key := range s {
 					if storedValues[key] {
-						fmt.Println("Duplicate key:", key)
 						return false
 					}
 
 					if !strings.HasPrefix(key, "pagekey") {
-						fmt.Println("Key does not match pattern:", key)
 						return false
 					}
 
