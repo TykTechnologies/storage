@@ -61,18 +61,37 @@ func TestNewConnector(t *testing.T) {
 }
 
 func TestNewConnector_WithOnConnect(t *testing.T) {
-	var called bool
-	onConnect := func(ctx context.Context) error {
-		called = true
-		return nil
-	}
+	t.Run("redisv8_with_on_connect", func(t *testing.T) {
+		var called bool
+		onConnect := func(ctx context.Context) error {
+			called = true
+			return nil
+		}
 
-	connector, err := NewConnector(model.RedisV8Type, WithRedisConfig(&model.RedisOptions{
-		Addrs: []string{"localhost:6379"},
-	}), model.WithOnConnect(onConnect))
-	assert.NoError(t, err)
-	assert.True(t, connector != nil)
+		connector, err := NewConnector(model.RedisV8Type, WithRedisConfig(&model.RedisOptions{
+			Addrs: []string{"localhost:6379"},
+		}), model.WithOnConnect(onConnect))
+		assert.NoError(t, err)
+		assert.True(t, connector != nil)
 
-	assert.Nil(t, connector.Ping(context.Background()))
-	assert.True(t, called)
+		assert.Nil(t, connector.Ping(context.Background()))
+		assert.True(t, called)
+	})
+
+	t.Run("redisv8_with_on_connect_err", func(t *testing.T) {
+		var called bool
+		onConnect := func(ctx context.Context) error {
+			called = true
+			return nil
+		}
+
+		connector, err := NewConnector(model.RedisV8Type, WithRedisConfig(&model.RedisOptions{
+			Addrs: []string{"localhost:8888"},
+		}), model.WithOnConnect(onConnect))
+		assert.NoError(t, err)
+		assert.True(t, connector != nil)
+
+		assert.NotNil(t, connector.Ping(context.Background()))
+		assert.False(t, called)
+	})
 }
