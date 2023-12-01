@@ -1003,13 +1003,13 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			name: "paginated_search",
 			setup: func(kv model.KeyValue) {
 				ctx := context.Background()
-				for i := 0; i < 20; i++ {
+				for i := 0; i < 50; i++ {
 					assert.NoError(t, kv.Set(ctx, fmt.Sprintf("pagekey%d", i), fmt.Sprintf("value%d", i), 0))
 				}
 			},
 			searchStr: "pagekey*",
 			cursor:    0,
-			count:     5, // Count is 5 but Redis SCAN does not guarantee that it will return 5 keys
+			count:     5, // Count is 1 but Redis SCAN does not guarantee that it will return 1 keys
 			expectedKeysCheck: func(s []string) bool {
 				if len(s) == 0 {
 					return false

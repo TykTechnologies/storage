@@ -14,4 +14,7 @@ var (
 	KeyNotFound = errors.New("key not found")
 	KeyEmpty    = errors.New("key cannot be empty")
 	KeyMisstype = errors.New("invalid operation for key type")
+
+	// Redis related errors
+	InvalidRedisClient = errors.New("invalid redis client")
 )
