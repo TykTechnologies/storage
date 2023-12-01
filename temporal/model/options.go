@@ -1,5 +1,7 @@
 package model
 
+import "context"
+
 type Option interface {
 	Apply(*BaseConfig)
 }
@@ -11,10 +13,6 @@ type opts struct {
 func (o *opts) Apply(bcfg *BaseConfig) {
 	o.fn(bcfg)
 }
-
-const (
-	RedisV8Type = "redisv8"
-)
 
 // WithRedisConfig is a helper function to create a ConnectionOption for Redis.
 func WithRedisConfig(config *RedisOptions) Option {
@@ -30,6 +28,25 @@ func WithNoopConfig() Option {
 	return &opts{
 		fn: func(bcfg *BaseConfig) {
 			// Empty function that does nothing.
+		},
+	}
+}
+
+// WithRetries is a helper function to create a RetryOption for the storage.
+func WithRetries(config *RetryOptions) Option {
+	return &opts{
+		fn: func(bcfg *BaseConfig) {
+			bcfg.RetryConfig = config
+		},
+	}
+}
+
+// WithOnConnect is a helper function to trigger onConnect when a connection or reconnection
+// is established.
+func WithOnConnect(onConnect func(context.Context) error) Option {
+	return &opts{
+		fn: func(bcfg *BaseConfig) {
+			bcfg.OnConnect = onConnect
 		},
 	}
 }
