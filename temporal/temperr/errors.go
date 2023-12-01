@@ -17,4 +17,7 @@ var (
 
 	// Redis related errors
 	InvalidRedisClient = errors.New("invalid redis client")
+
+	// Others
+	UnknownMessageType = errors.New("unknown message type")
 )

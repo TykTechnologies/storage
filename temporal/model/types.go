@@ -113,3 +113,46 @@ type Set interface {
 	// Returns if member is a member of the set stored at key.
 	IsMember(ctx context.Context, key, member string) (bool, error)
 }
+
+// Queue interface represents a pub/sub queue with methods to publish messages
+// and subscribe to channels.
+type Queue interface {
+	// Publish sends a message to the specified channel.
+	// It returns the number of clients that received the message.
+	Publish(ctx context.Context, channel, message string) (int64, error)
+
+	// Subscribe initializes a subscription to one or more channels.
+	// It returns a Subscription interface that allows receiving messages and closing the subscription.
+	Subscribe(ctx context.Context, channels ...string) Subscription
+}
+
+// Subscription interface represents a subscription to one or more channels.
+// It allows receiving messages and closing the subscription.
+type Subscription interface {
+	// Receive waits for and returns the next message from the subscription.
+	Receive(ctx context.Context) (Message, error)
+
+	// Close closes the subscription and cleans up resources.
+	Close() error
+}
+
+// Message represents a message received from a subscription.
+type Message interface {
+	// Type returns the message type.
+	// It can be one of the following:
+	// - "message": a message received from a subscription with a payload and channel
+	// - "subscription": a subscription confirmation message with a channel
+	Type() string
+	// Channel returns the channel the message was received on.
+	// It can be one of the following depending on the message type:
+	// - the channel the message was received on
+	// - the channel the subscription was created on
+	// - an empty string, returning an error
+	Channel() (string, error)
+	// Payload returns the message payload.
+	// It can be one of the following depending on the message type:
+	// - the message payload
+	// - the subscription kind (e.g. "subscribe", "unsubscribe")
+	// - an empty string, returning an error
+	Payload() (string, error)
+}
