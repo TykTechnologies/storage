@@ -1,7 +1,14 @@
 package model
 
+import (
+	"context"
+	"time"
+)
+
 type BaseConfig struct {
 	RedisConfig *RedisOptions
+	RetryConfig *RetryOptions
+	OnConnect   func(context.Context) error
 }
 
 // RedisOptions contains options specific to Redis storage.
@@ -35,4 +42,13 @@ type RedisOptions struct {
 	MaxActive int `json:"optimisation_max_active"`
 	// Enable Redis Cluster support
 	EnableCluster bool `json:"enable_cluster"`
+}
+
+type RetryOptions struct {
+	// Maximum number of retries before error.
+	MaxRetries int
+	// Minimum backoff between each retry.
+	MinRetryBackoff time.Duration
+	// Maximum backoff between each retry.
+	MaxRetryBackoff time.Duration
 }

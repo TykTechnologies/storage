@@ -1,6 +1,7 @@
 package connector
 
 import (
+	"context"
 	"testing"
 
 	"github.com/TykTechnologies/storage/temporal/temperr"
@@ -23,7 +24,7 @@ func TestNewConnector(t *testing.T) {
 			expectedErr: temperr.InvalidHandlerType,
 		},
 		{
-			name: "redisv8",
+			name: "redisv8_with_config",
 			typ:  model.RedisV8Type,
 			opts: []model.Option{WithRedisConfig(&model.RedisOptions{
 				Addrs: []string{"localhost:6379"},
@@ -31,10 +32,20 @@ func TestNewConnector(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			name:        "redisv8",
+			name:        "redisv8_with_noop_config",
 			typ:         model.RedisV8Type,
 			opts:        []model.Option{model.WithNoopConfig()},
 			expectedErr: temperr.InvalidOptionsType,
+		},
+		{
+			name: "redisv8_with_multiple_opts",
+			typ:  model.RedisV8Type,
+			opts: []model.Option{WithRedisConfig(&model.RedisOptions{
+				Addrs: []string{"localhost:6379"},
+			}), model.WithRetries(&model.RetryOptions{
+				MaxRetries: 3,
+			})},
+			expectedErr: nil,
 		},
 	}
 	for _, tt := range tests {
@@ -47,4 +58,21 @@ func TestNewConnector(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewConnector_WithOnConnect(t *testing.T) {
+	var called bool
+	onConnect := func(ctx context.Context) error {
+		called = true
+		return nil
+	}
+
+	connector, err := NewConnector(model.RedisV8Type, WithRedisConfig(&model.RedisOptions{
+		Addrs: []string{"localhost:6379"},
+	}), model.WithOnConnect(onConnect))
+	assert.NoError(t, err)
+	assert.True(t, connector != nil)
+
+	assert.Nil(t, connector.Ping(context.Background()))
+	assert.True(t, called)
 }
