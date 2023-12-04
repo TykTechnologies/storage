@@ -53,9 +53,9 @@ func newRedisConnector(t *testing.T) model.Connector {
 
 	addrs := []string{}
 
-	addrsEnv := os.Getenv("REDIS_ADDRS")
+	addrsEnv := os.Getenv("TEST_REDIS_ADDRS")
 	if addrsEnv == "" {
-		log.Println("REDIS_ADDRS not set, using default localhost:6379")
+		log.Println("TEST_REDIS_ADDRS not set, using default localhost:6379")
 
 		addrsEnv = "localhost:6379"
 	}
