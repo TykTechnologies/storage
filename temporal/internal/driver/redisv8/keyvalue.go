@@ -3,6 +3,7 @@ package redisv8
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -244,40 +245,40 @@ func (r *RedisV8) Keys(ctx context.Context, pattern string) ([]string, error) {
 }
 
 // GetMulti returns the values of all specified keys
-func (r *RedisV8) GetMulti(ctx context.Context, keys []string) ([]interface{}, error) {
+func (r *RedisV8) GetMulti(ctx context.Context, keys []string) ([]string, error) {
+	result := make([]string, 0)
+
 	switch client := r.client.(type) {
 	case *redis.ClusterClient:
-		values := make([]interface{}, len(keys))
 
-		for i, key := range keys {
-			cmd := client.Get(ctx, key)
-			if err := cmd.Err(); err != nil {
-				if errors.Is(err, redis.Nil) {
-					// Converting value to nil to match the behavior of the standalone client
-					values[i] = nil
-				} else {
-					return nil, err
-				}
-			} else {
-				val := cmd.Val()
-				if val == "" {
-					values[i] = nil
-				} else {
-					values[i] = val
-				}
-			}
+		getCmds := make([]*redis.StringCmd, 0)
+		pipe := client.Pipeline()
+		for _, key := range keys {
+			getCmds = append(getCmds, pipe.Get(r.client.Context(), key))
+		}
+		_, err := pipe.Exec(r.client.Context())
+		if err != nil && err != redis.Nil {
+			return nil, temperr.KeyNotFound
+		}
+		for _, cmd := range getCmds {
+			result = append(result, cmd.Val())
 		}
 
-		return values, nil
+		return result, nil
 
 	case *redis.Client:
-		cmd := r.client.MGet(ctx, keys...)
-		if cmd.Err() != nil {
-			return nil, cmd.Err()
+		values, err := r.client.MGet(r.client.Context(), keys...).Result()
+		if err != nil {
+			return nil, temperr.KeyNotFound
 		}
-
-		return cmd.Val(), nil
-
+		for _, val := range values {
+			strVal := fmt.Sprint(val)
+			if strVal == "<nil>" {
+				strVal = ""
+			}
+			result = append(result, strVal)
+		}
+		return result, nil
 	default:
 		return nil, temperr.InvalidRedisClient
 	}
@@ -286,13 +287,13 @@ func (r *RedisV8) GetMulti(ctx context.Context, keys []string) ([]interface{}, e
 // GetKeysAndValuesWithFilter returns all keys and their values for a given pattern
 func (r *RedisV8) GetKeysAndValuesWithFilter(ctx context.Context,
 	pattern string,
-) (map[string]interface{}, error) {
+) (map[string]string, error) {
 	keys, err := r.Keys(ctx, pattern)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make(map[string]interface{})
+	result := make(map[string]string)
 
 	if len(keys) == 0 {
 		return result, nil

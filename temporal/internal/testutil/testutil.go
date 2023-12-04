@@ -63,14 +63,12 @@ func newRedisConnector(t *testing.T) model.Connector {
 	addrs = append(addrs, addrsEnv)
 
 	enableCluster := false
-	enableClusterEnv := os.Getenv("REDIS_ENABLE_CLUSTER")
+	enableClusterEnv := os.Getenv("TEST_ENABLE_CLUSTER")
 
 	if enableClusterEnv != "" {
-		log.Println("REDIS_ENABLE_CLUSTER is set, using cluster mode")
+		log.Println("TEST_ENABLE_CLUSTER is set, using cluster mode")
 
 		enableCluster = true
-	} else {
-		log.Println("REDIS_ENABLE_CLUSTER not set, using standalone mode")
 	}
 
 	redisConnector, err := connector.NewConnector(

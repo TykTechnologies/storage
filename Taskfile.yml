@@ -47,7 +47,7 @@ tasks:
         vars:
           STORAGE_TYPE: persistent
           DB: "{{.DB}}"
-          REDIS_SETUP: "{{.REDIS_SETUP}}"
+          DB_SETUP: "{{.DB_SETUP}}"
 
   test-temporal:
     desc: "Run tests for temporal storage with specified database"
@@ -56,6 +56,6 @@ tasks:
         vars:
           STORAGE_TYPE: temporal
           DB: "{{.DB}}"
-          REDIS_SETUP: "{{.REDIS_SETUP}}"
+          DB_SETUP: "{{.DB_SETUP}}"
       - mkdir -p coverage/temporal
       - cp temporal/temporal.cov coverage/temporal/temporal.cov

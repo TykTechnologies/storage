@@ -105,7 +105,7 @@ jobs:
       - name: Run tests
         env:
           DB: ${{ matrix.database }}
-          REDIS_SETUP: ${{ matrix.instancetype }}
+          DB_SETUP: ${{ matrix.instancetype }}
         run: task test-${{ matrix.storagetype }}
 
       - uses: actions/upload-artifact@v2
