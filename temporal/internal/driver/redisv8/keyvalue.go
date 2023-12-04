@@ -250,16 +250,22 @@ func (r *RedisV8) GetMulti(ctx context.Context, keys []string) ([]string, error)
 
 	switch client := r.client.(type) {
 	case *redis.ClusterClient:
-
 		getCmds := make([]*redis.StringCmd, 0)
 		pipe := client.Pipeline()
+
 		for _, key := range keys {
 			getCmds = append(getCmds, pipe.Get(r.client.Context(), key))
 		}
+
 		_, err := pipe.Exec(r.client.Context())
-		if err != nil && err != redis.Nil {
-			return nil, temperr.KeyNotFound
+		if err != nil {
+			if errors.Is(err, redis.Nil) {
+				return nil, temperr.KeyNotFound
+			}
+
+			return nil, err
 		}
+
 		for _, cmd := range getCmds {
 			result = append(result, cmd.Val())
 		}
@@ -271,13 +277,16 @@ func (r *RedisV8) GetMulti(ctx context.Context, keys []string) ([]string, error)
 		if err != nil {
 			return nil, temperr.KeyNotFound
 		}
+
 		for _, val := range values {
 			strVal := fmt.Sprint(val)
 			if strVal == "<nil>" {
 				strVal = ""
 			}
+
 			result = append(result, strVal)
 		}
+
 		return result, nil
 	default:
 		return nil, temperr.InvalidRedisClient
