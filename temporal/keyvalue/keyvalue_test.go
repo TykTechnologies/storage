@@ -765,7 +765,7 @@ func TestKeyValue_GetMulti(t *testing.T) {
 		name           string
 		setup          func(db KeyValue)
 		keys           []string
-		expectedValues []string
+		expectedValues []interface{}
 		expectedErr    error
 	}{
 		{
@@ -785,13 +785,13 @@ func TestKeyValue_GetMulti(t *testing.T) {
 				}
 			},
 			keys:           []string{"key1", "key2"},
-			expectedValues: []string{"value1", "value2"},
+			expectedValues: []interface{}{"value1", "value2"},
 			expectedErr:    nil,
 		},
 		{
 			name:           "non_existing_keys",
 			keys:           []string{"key1", "key2"},
-			expectedValues: []string{"", ""},
+			expectedValues: []interface{}{nil, nil},
 			expectedErr:    nil,
 		},
 		{
@@ -807,7 +807,7 @@ func TestKeyValue_GetMulti(t *testing.T) {
 				}
 			},
 			keys:           []string{"key1", "key2"},
-			expectedValues: []string{"value1", ""},
+			expectedValues: []interface{}{"value1", nil},
 			expectedErr:    nil,
 		},
 	}
@@ -844,7 +844,7 @@ func TestKeyValue_GetKeysAndValuesWithFilter(t *testing.T) {
 		name           string
 		setup          func(db KeyValue)
 		pattern        string
-		expectedValues map[string]string
+		expectedValues map[string]interface{}
 		expectedErr    error
 	}{
 		{
@@ -864,13 +864,13 @@ func TestKeyValue_GetKeysAndValuesWithFilter(t *testing.T) {
 				}
 			},
 			pattern:        "key*",
-			expectedValues: map[string]string{"key1": "value1", "key2": "value2"},
+			expectedValues: map[string]interface{}{"key1": "value1", "key2": "value2"},
 			expectedErr:    nil,
 		},
 		{
 			name:           "non_matching_pattern",
 			pattern:        "key*",
-			expectedValues: map[string]string{},
+			expectedValues: map[string]interface{}{},
 			expectedErr:    nil,
 		},
 		{
@@ -890,7 +890,7 @@ func TestKeyValue_GetKeysAndValuesWithFilter(t *testing.T) {
 				}
 			},
 			pattern:        "",
-			expectedValues: map[string]string{"key1": "value1", "key2": "value2", "test": "value2"},
+			expectedValues: map[string]interface{}{"key1": "value1", "key2": "value2", "test": "value2"},
 			expectedErr:    nil,
 		},
 	}

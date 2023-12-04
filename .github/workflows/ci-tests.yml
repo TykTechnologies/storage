@@ -57,7 +57,7 @@ jobs:
             version: 4.2
           - storagetype: temporal
             database: redis
-            version: 6.0
+            version: 6.0.0
             instancetype: single
           - storagetype: temporal
             database: redis

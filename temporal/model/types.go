@@ -74,9 +74,9 @@ type KeyValue interface {
 	// Keys returns all keys that match the given pattern
 	Keys(ctx context.Context, pattern string) (keys []string, err error)
 	// GetMulti returns the values of all specified keys
-	GetMulti(ctx context.Context, keys []string) (values []string, err error)
+	GetMulti(ctx context.Context, keys []string) (values []interface{}, err error)
 	// GetKeysAndValuesWithFilter returns all keys and values that match the given pattern
-	GetKeysAndValuesWithFilter(ctx context.Context, pattern string) (keysAndValues map[string]string, err error)
+	GetKeysAndValuesWithFilter(ctx context.Context, pattern string) (keysAndValues map[string]interface{}, err error)
 	// GetKeysWithOpts returns all keys that match the given pattern with options (cursor, count)
 	GetKeysWithOpts(ctx context.Context, searchStr string, cursor uint64, count int) (KeysCursorPair, error)
 }
