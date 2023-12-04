@@ -1,6 +1,7 @@
 package redisv8
 
 import (
+	"context"
 	"crypto/tls"
 	"time"
 
@@ -15,7 +16,9 @@ type RedisV8 struct {
 	connector model.Connector
 	client    redis.UniversalClient
 
-	cfg *model.RedisOptions
+	cfg       *model.RedisOptions
+	onConnect func(context.Context) error
+	retryCfg  *model.RetryOptions
 }
 
 // NewList returns a new redisv8List instance.
@@ -64,6 +67,24 @@ func NewRedisV8WithOpts(options ...model.Option) (*RedisV8, error) {
 		TLSConfig:        tlsConfig,
 	}
 
+	driver := &RedisV8{cfg: opts}
+
+	if baseConfig.RetryConfig != nil {
+		driver.retryCfg = baseConfig.RetryConfig
+
+		universalOpts.MaxRetries = baseConfig.RetryConfig.MaxRetries
+		universalOpts.MinRetryBackoff = baseConfig.RetryConfig.MinRetryBackoff
+		universalOpts.MaxRetryBackoff = baseConfig.RetryConfig.MaxRetryBackoff
+	}
+
+	if baseConfig.OnConnect != nil {
+		driver.onConnect = baseConfig.OnConnect
+
+		universalOpts.OnConnect = func(ctx context.Context, conn *redis.Conn) error {
+			return baseConfig.OnConnect(ctx)
+		}
+	}
+
 	switch {
 	case opts.MasterName != "":
 		client = redis.NewFailoverClient(universalOpts.Failover())
@@ -73,7 +94,9 @@ func NewRedisV8WithOpts(options ...model.Option) (*RedisV8, error) {
 		client = redis.NewClient(universalOpts.Simple())
 	}
 
-	return &RedisV8{client: client, cfg: opts}, nil
+	driver.client = client
+
+	return driver, nil
 }
 
 // NewRedisV8WithConnection returns a new redisv8List instance with a custom redis connection.

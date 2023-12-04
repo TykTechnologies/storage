@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+const (
+	RedisV8Type = "redisv8"
+)
+
 type Connector interface {
 	// Disconnect disconnects from the backend
 	Disconnect(context.Context) error
