@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/TykTechnologies/storage/temporal/temperr"
@@ -67,9 +68,13 @@ func TestNewConnector_WithOnConnect(t *testing.T) {
 			called = true
 			return nil
 		}
+		addrs := os.Getenv("TEST_REDIS_ADDRS")
+		if addrs == "" {
+			addrs = "localhost:6379"
+		}
 
 		connector, err := NewConnector(model.RedisV8Type, WithRedisConfig(&model.RedisOptions{
-			Addrs: []string{"localhost:6379"},
+			Addrs: []string{addrs},
 		}), model.WithOnConnect(onConnect))
 		assert.NoError(t, err)
 		assert.True(t, connector != nil)
