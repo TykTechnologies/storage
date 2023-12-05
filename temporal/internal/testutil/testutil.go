@@ -65,14 +65,29 @@ func newRedisConnector(t *testing.T) model.Connector {
 	enableCluster := false
 	enableClusterEnv := os.Getenv("TEST_ENABLE_CLUSTER")
 
-	if enableClusterEnv != "" {
+	if enableClusterEnv == "true" {
 		log.Println("TEST_ENABLE_CLUSTER is set, using cluster mode")
 
 		enableCluster = true
 	}
 
+	tlsConfig := &model.TLS{}
+
+	tlsEnv := os.Getenv("TEST_ENABLE_TLS")
+	if tlsEnv != "" {
+		log.Println("TEST_ENABLE_TLS is set, using TLS")
+
+		tlsConfig.Enable = true
+
+		tlsConfig.CertFile = os.Getenv("TEST_TLS_CERT_FILE")
+		tlsConfig.KeyFile = os.Getenv("TEST_TLS_KEY_FILE")
+		tlsConfig.CAFile = os.Getenv("TEST_TLS_CA_FILE")
+		tlsConfig.InsecureSkipVerify = os.Getenv("TEST_TLS_INSECURE_SKIP_VERIFY") == "true"
+	}
+
 	redisConnector, err := connector.NewConnector(
-		"redisv8", model.WithRedisConfig(&model.RedisOptions{Addrs: addrs, EnableCluster: enableCluster}))
+		"redisv8", model.WithRedisConfig(&model.RedisOptions{Addrs: addrs, EnableCluster: enableCluster}),
+		model.WithTLS(tlsConfig))
 	assert.Nil(t, err)
 
 	return redisConnector

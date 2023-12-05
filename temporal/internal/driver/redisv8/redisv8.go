@@ -3,6 +3,10 @@ package redisv8
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
+	"errors"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/TykTechnologies/storage/temporal/internal/helper"
@@ -44,12 +48,16 @@ func NewRedisV8WithOpts(options ...model.Option) (*RedisV8, error) {
 		timeout = time.Duration(opts.Timeout) * time.Second
 	}
 
+	var err error
 	var tlsConfig *tls.Config
-	if opts.UseSSL {
-		tlsConfig = &tls.Config{
-			InsecureSkipVerify: opts.SSLInsecureSkipVerify,
+
+	if baseConfig.TLS != nil && baseConfig.TLS.Enable {
+		tlsConfig, err = handleTLS(baseConfig.TLS)
+		if err != nil {
+			return nil, err
 		}
 	}
+
 	var client redis.UniversalClient
 
 	universalOpts := &redis.UniversalOptions{
@@ -107,4 +115,84 @@ func NewRedisV8WithConnection(conn model.Connector) (*RedisV8, error) {
 	}
 
 	return &RedisV8{connector: conn, client: client}, nil
+}
+
+func handleTLS(cfg *model.TLS) (*tls.Config, error) {
+	TLSConf := &tls.Config{
+		InsecureSkipVerify: cfg.InsecureSkipVerify,
+	}
+
+	if cfg.CertFile != "" && cfg.KeyFile != "" {
+		cert, err := tls.LoadX509KeyPair(cfg.CertFile, cfg.KeyFile)
+		if err != nil {
+			return nil, err
+		}
+
+		TLSConf.Certificates = []tls.Certificate{cert}
+	}
+
+	if cfg.CAFile != "" {
+		caPem, err := os.ReadFile(cfg.CAFile)
+		if err != nil {
+			return nil, err
+		}
+
+		certPool := x509.NewCertPool()
+		if !certPool.AppendCertsFromPEM(caPem) {
+			return nil, fmt.Errorf("failed to add CA certificate")
+		}
+
+		TLSConf.RootCAs = certPool
+	}
+
+	minVersion, maxVersion, err := handleTLSVersion(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	TLSConf.MinVersion = uint16(minVersion)
+	TLSConf.MaxVersion = uint16(maxVersion)
+
+	return TLSConf, nil
+}
+
+func handleTLSVersion(cfg *model.TLS) (minVersion, maxVersion int, err error) {
+	validVersions := map[string]int{
+		"1.0": tls.VersionTLS10,
+		"1.1": tls.VersionTLS11,
+		"1.2": tls.VersionTLS12,
+		"1.3": tls.VersionTLS13,
+	}
+
+	if cfg.MaxVersion == "" {
+		cfg.MaxVersion = "1.3"
+	}
+
+	if _, ok := validVersions[cfg.MaxVersion]; ok {
+		maxVersion = validVersions[cfg.MaxVersion]
+	} else {
+		err = errors.New("Invalid MaxVersion specified. Please specify a valid TLS version: 1.0, 1.1, 1.2, or 1.3")
+		return
+	}
+
+	if cfg.MinVersion == "" {
+		cfg.MinVersion = "1.2"
+	}
+
+	if _, ok := validVersions[cfg.MinVersion]; ok {
+		minVersion = validVersions[cfg.MinVersion]
+	} else {
+		err = errors.New("Invalid MinVersion specified. Please specify a valid TLS version: 1.0, 1.1, 1.2, or 1.3")
+		return
+	}
+
+	if minVersion > maxVersion {
+		err = errors.New(
+			"MinVersion is higher than MaxVersion. Please specify a valid MinVersion that is lower or equal to MaxVersion",
+		)
+
+		return
+	}
+
+	return
 }

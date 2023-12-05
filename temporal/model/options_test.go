@@ -16,13 +16,11 @@ func TestOptions(t *testing.T) {
 		{
 			name: "WithRedisConfig",
 			givenOption: WithRedisConfig(&RedisOptions{
-				Username:              "test",
-				Password:              "test",
-				Host:                  "test",
-				Port:                  1234,
-				Timeout:               1234,
-				UseSSL:                true,
-				SSLInsecureSkipVerify: true,
+				Username: "test",
+				Password: "test",
+				Host:     "test",
+				Port:     1234,
+				Timeout:  1234,
 				Hosts: map[string]string{
 					"test": "test",
 				},
@@ -35,13 +33,11 @@ func TestOptions(t *testing.T) {
 			}),
 			expectedBaseCfg: &BaseConfig{
 				RedisConfig: &RedisOptions{
-					Username:              "test",
-					Password:              "test",
-					Host:                  "test",
-					Port:                  1234,
-					Timeout:               1234,
-					UseSSL:                true,
-					SSLInsecureSkipVerify: true,
+					Username: "test",
+					Password: "test",
+					Host:     "test",
+					Port:     1234,
+					Timeout:  1234,
 					Hosts: map[string]string{
 						"test": "test",
 					},

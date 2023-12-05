@@ -50,3 +50,11 @@ func WithOnConnect(onConnect func(context.Context) error) Option {
 		},
 	}
 }
+
+func WithTLS(config *TLS) Option {
+	return &opts{
+		fn: func(bcfg *BaseConfig) {
+			bcfg.TLS = config
+		},
+	}
+}
