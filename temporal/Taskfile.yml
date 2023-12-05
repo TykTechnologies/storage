@@ -10,7 +10,8 @@ tasks:
     desc: "Run Go tests for temporal storage"
     cmds:
       - |
-        echo "------Current Directory: $(pwd)"
+        echo "------Current Directory:"
+        pwd
         if [ "{{.DB_SETUP}}" = "cluster" ]; then
           TEST_REDIS_ADDRS=localhost:7000 TEST_ENABLE_CLUSTER=true go test -p 1 -v -coverprofile=temporal.cov -cover -coverpkg=./... ./...
         elif [ "{{.DB_SETUP}}" = "TLS" ]; then
