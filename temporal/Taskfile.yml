@@ -10,13 +10,10 @@ tasks:
     desc: "Run Go tests for temporal storage"
     cmds:
       - |
-        echo "------Current Directory:"
-        pwd
         if [ "{{.DB_SETUP}}" = "cluster" ]; then
           TEST_REDIS_ADDRS=localhost:7000 TEST_ENABLE_CLUSTER=true go test -p 1 -v -coverprofile=temporal.cov -cover -coverpkg=./... ./...
         elif [ "{{.DB_SETUP}}" = "TLS" ]; then
-          # Set the environment variables needed for TLS setup
-          TEST_ENABLE_TLS=true TEST_TLS_CERT_FILE=/home/runner/work/storage/storage/bin/cert.pem TEST_TLS_KEY_FILE=/home/runner/work/storage/storage/bin/key.pem TEST_TLS_CA_FILE=/home/runner/work/storage/storage/bin/cert.pem TEST_TLS_INSECURE_SKIP_VERIFY=true go test -p 1 -v -coverprofile=temporal.cov -cover -coverpkg=./... ./...
+          TEST_ENABLE_TLS=true TEST_TLS_CERT_FILE=/home/runner/work/storage/storage/bin/redis_TLS/cert.pem TEST_TLS_KEY_FILE=/home/runner/work/storage/storage/bin/redis_TLS/key.pem TEST_TLS_CA_FILE=/home/runner/work/storage/storage/bin/redis_TLS/cert.pem TEST_TLS_INSECURE_SKIP_VERIFY=true go test -p 1 -v -coverprofile=temporal.cov -cover -coverpkg=./... ./...
         else
           go test -p 1 -v -coverprofile=temporal.cov -cover -coverpkg=./... ./...
         fi
