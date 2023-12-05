@@ -255,30 +255,42 @@ func (r *RedisV8) GetMulti(ctx context.Context, keys []string) ([]interface{}, e
 	}
 }
 
-func (r *RedisV8) getMultiCluster(ctx context.Context, client *redis.ClusterClient, keys []string) ([]interface{}, error) {
+func (r *RedisV8) getMultiCluster(ctx context.Context,
+	client *redis.ClusterClient,
+	keys []string,
+) ([]interface{}, error) {
 	values := make([]interface{}, len(keys))
+
 	for i, key := range keys {
 		value, err := r.getValueFromCluster(ctx, client, key)
 		if err != nil {
 			return nil, err
 		}
+
 		values[i] = value
 	}
+
 	return values, nil
 }
 
-func (r *RedisV8) getValueFromCluster(ctx context.Context, client *redis.ClusterClient, key string) (interface{}, error) {
+func (r *RedisV8) getValueFromCluster(ctx context.Context,
+	client *redis.ClusterClient,
+	key string,
+) (interface{}, error) {
 	cmd := client.Get(ctx, key)
 	if err := cmd.Err(); err != nil {
 		if errors.Is(err, redis.Nil) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	val := cmd.Val()
 	if val == "" {
 		return nil, nil
 	}
+
 	return val, nil
 }
 
