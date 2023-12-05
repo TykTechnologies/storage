@@ -67,10 +67,6 @@ jobs:
             database: redis
             version: 6.0
             instancetype: cluster
-          - storagetype: temporal
-            database: redis
-            version: 7.0
-            instancetype: cluster
 
     steps:
       - name: Checkout repository
