@@ -19,10 +19,20 @@ var (
 	InvalidRedisClient = errors.New("invalid redis client")
 
 	// TLS related errors
-	InvalidTLSMaxVersion = errors.New("invalid MaxVersion specified. Please specify a valid TLS version: 1.0, 1.1, 1.2, or 1.3")
-	InvalidTLSMinVersion = errors.New("invalid MinVersion specified. Please specify a valid TLS version: 1.0, 1.1, 1.2, or 1.3")
-	InvalidTLSVersion    = errors.New("MinVersion is higher than MaxVersion. Please specify a valid MinVersion that is lower or equal to MaxVersion")
-	AppendCertsFromPEM   = errors.New("failed to add CA certificate")
+	// TLS related errors
+	InvalidTLSMaxVersion = errors.New(
+		"invalid MaxVersion specified. Please specify a valid TLS version: " +
+			"1.0, 1.1, 1.2, or 1.3",
+	)
+	InvalidTLSMinVersion = errors.New(
+		"invalid MinVersion specified. Please specify a valid TLS version: " +
+			"1.0, 1.1, 1.2, or 1.3",
+	)
+	InvalidTLSVersion = errors.New(
+		"MinVersion is higher than MaxVersion. Please specify a valid " +
+			"MinVersion that is lower or equal to MaxVersion",
+	)
+	AppendCertsFromPEM = errors.New("failed to add CA certificate")
 
 	// Others
 	UnknownMessageType = errors.New("unknown message type")

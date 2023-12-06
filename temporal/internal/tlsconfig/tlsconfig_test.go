@@ -82,7 +82,6 @@ func TestHandleTLS(t *testing.T) {
 			if err == nil && tt.expectedErr != nil {
 				t.Errorf("HandleTLS() error = %v, expectedErr %v", err, tt.expectedErr)
 			}
-
 		})
 	}
 }
@@ -151,8 +150,20 @@ func TestHandleTLSVersion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			minVersion, maxVersion, err := HandleTLSVersion(tt.cfg)
 
-			if (err != nil && tt.wantErr == nil) || (err == nil && tt.wantErr != nil) || (err != nil && tt.wantErr != nil && err.Error() != tt.wantErr.Error()) {
+			if (err != nil) != (tt.wantErr != nil) {
 				t.Errorf("HandleTLSVersion() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.wantErr != nil {
+				if err == nil {
+					t.Errorf("HandleTLSVersion() error = %v, wantErr %v", err, tt.wantErr)
+					return
+				}
+
+				if err.Error() != tt.wantErr.Error() {
+					t.Errorf("HandleTLSVersion() error = %v, wantErr %v", err, tt.wantErr)
+				}
 			}
 
 			if minVersion != tt.wantMinVersion {
