@@ -69,7 +69,7 @@ jobs:
             instancetype: cluster
           - storagetype: temporal
             database: redis
-            version: 7.0
+            version: 7.0.0
             instancetype: TLS
 
     steps:
