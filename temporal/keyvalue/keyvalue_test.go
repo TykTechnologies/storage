@@ -1046,7 +1046,7 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			},
 			searchStr: "cursorkey*",
 			cursor:    0,
-			count:     20,
+			count:     50,
 			expectedKeysCheck: func(s []string) bool {
 				return len(s) == 15
 			},
