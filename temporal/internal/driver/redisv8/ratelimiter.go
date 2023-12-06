@@ -12,7 +12,7 @@ import (
 // SetRollingWindow sets a rolling window of values in a Redis sorted set.
 // It returns a slice of strings (the values in the rolling window) and an error if any occurs.
 func (r *RedisV8) SetRollingWindow(ctx context.Context, keyName string,
-	per int64, value_override string, pipeline bool,
+	per int64, valueOverride string, pipeline bool,
 ) ([]string, error) {
 	now := time.Now()
 	onePeriodAgo := now.Add(time.Duration(-1*per) * time.Second)
@@ -35,8 +35,8 @@ func (r *RedisV8) SetRollingWindow(ctx context.Context, keyName string,
 			Score: float64(now.UnixNano()),
 		}
 
-		if value_override != "-1" {
-			element.Member = value_override
+		if valueOverride != "-1" {
+			element.Member = valueOverride
 		} else {
 			element.Member = strconv.Itoa(int(now.UnixNano()))
 		}

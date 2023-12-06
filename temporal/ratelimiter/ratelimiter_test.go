@@ -61,10 +61,10 @@ func TestRedisCluster_SetRollingWindow(t *testing.T) {
 			expectedLen:   0,
 		},
 		{
-			name:          "value_override_minus_one",
+			name:          "valueOverride",
 			keyName:       "key_value_override",
 			per:           60,
-			valueOverride: "-1", // value_override set to "-1"
+			valueOverride: "-1",
 			pipeline:      false,
 			expectedErr:   nil,
 			expectedLen:   0,
