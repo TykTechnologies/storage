@@ -51,6 +51,7 @@ func WithOnConnect(onConnect func(context.Context) error) Option {
 	}
 }
 
+// WithTLS is a helper function to create a TLSOption for the storage.
 func WithTLS(config *TLS) Option {
 	return &opts{
 		fn: func(bcfg *BaseConfig) {
