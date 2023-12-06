@@ -247,40 +247,59 @@ func (r *RedisV8) Keys(ctx context.Context, pattern string) ([]string, error) {
 func (r *RedisV8) GetMulti(ctx context.Context, keys []string) ([]interface{}, error) {
 	switch client := r.client.(type) {
 	case *redis.ClusterClient:
-		values := make([]interface{}, len(keys))
-
-		for i, key := range keys {
-			cmd := client.Get(ctx, key)
-			if err := cmd.Err(); err != nil {
-				if errors.Is(err, redis.Nil) {
-					// Converting value to nil to match the behavior of the standalone client
-					values[i] = nil
-				} else {
-					return nil, err
-				}
-			} else {
-				val := cmd.Val()
-				if val == "" {
-					values[i] = nil
-				} else {
-					values[i] = val
-				}
-			}
-		}
-
-		return values, nil
-
+		return r.getMultiCluster(ctx, client, keys)
 	case *redis.Client:
-		cmd := r.client.MGet(ctx, keys...)
-		if cmd.Err() != nil {
-			return nil, cmd.Err()
-		}
-
-		return cmd.Val(), nil
-
+		return r.getMultiStandalone(ctx, client, keys)
 	default:
 		return nil, temperr.InvalidRedisClient
 	}
+}
+
+func (r *RedisV8) getMultiCluster(ctx context.Context,
+	client *redis.ClusterClient,
+	keys []string,
+) ([]interface{}, error) {
+	values := make([]interface{}, len(keys))
+
+	for i, key := range keys {
+		value, err := r.getValueFromCluster(ctx, client, key)
+		if err != nil {
+			return nil, err
+		}
+
+		values[i] = value
+	}
+
+	return values, nil
+}
+
+func (r *RedisV8) getValueFromCluster(ctx context.Context,
+	client *redis.ClusterClient,
+	key string,
+) (interface{}, error) {
+	cmd := client.Get(ctx, key)
+	if err := cmd.Err(); err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	val := cmd.Val()
+	if val == "" {
+		return nil, nil
+	}
+
+	return val, nil
+}
+
+func (r *RedisV8) getMultiStandalone(ctx context.Context, client *redis.Client, keys []string) ([]interface{}, error) {
+	cmd := client.MGet(ctx, keys...)
+	if cmd.Err() != nil {
+		return nil, cmd.Err()
+	}
+	return cmd.Val(), nil
 }
 
 // GetKeysAndValuesWithFilter returns all keys and their values for a given pattern

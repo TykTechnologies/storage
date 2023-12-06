@@ -61,15 +61,11 @@ jobs:
             instancetype: single
           - storagetype: temporal
             database: redis
-            version: 7.0
+            version: 7.0.0
             instancetype: single
           - storagetype: temporal
             database: redis
-            version: 6.0
-            instancetype: cluster
-          - storagetype: temporal
-            database: redis
-            version: 7.0
+            version: 6.0.0
             instancetype: cluster
           - storagetype: temporal
             database: redis

@@ -58,4 +58,4 @@ tasks:
           DB: "{{.DB}}"
           DB_SETUP: "{{.DB_SETUP}}"
       - mkdir -p coverage/temporal
-      - cp temporal/temporal.cov coverage/temporal/temporal.cov
+      - cp temporal/*.cov coverage/temporal/
