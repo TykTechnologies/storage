@@ -51,6 +51,24 @@ func TestRedisCluster_SetRollingWindow(t *testing.T) {
 			expectedErr:   temperr.InvalidPeriod,
 			expectedLen:   0,
 		},
+		{
+			name:          "pipeline_enabled",
+			keyName:       "key_pipeline",
+			per:           60,
+			valueOverride: "pipeline_value",
+			pipeline:      true,
+			expectedErr:   nil,
+			expectedLen:   0,
+		},
+		{
+			name:          "value_override_minus_one",
+			keyName:       "key_value_override",
+			per:           60,
+			valueOverride: "-1", // value_override set to "-1"
+			pipeline:      false,
+			expectedErr:   nil,
+			expectedLen:   0,
+		},
 	}
 
 	for _, connector := range connectors {
@@ -115,6 +133,30 @@ func TestRedisCluster_GetRollingWindow(t *testing.T) {
 				_, err = rateLimiter.SetRollingWindow(ctx, "key_non_empty", 60, "value2", false)
 				assert.Nil(t, err)
 			},
+		},
+		{
+			name:        "pipeline_enabled",
+			keyName:     "key_pipeline",
+			per:         60,
+			pipeline:    true,
+			expectedErr: nil,
+			expectedLen: 0,
+		},
+		{
+			name:        "negative_period",
+			keyName:     "key_negative_period",
+			per:         -10,
+			pipeline:    false,
+			expectedErr: temperr.InvalidPeriod,
+			expectedLen: 0,
+		},
+		{
+			name:        "empty_key_name",
+			keyName:     "",
+			per:         60,
+			pipeline:    false,
+			expectedErr: temperr.KeyEmpty,
+			expectedLen: 0,
 		},
 	}
 

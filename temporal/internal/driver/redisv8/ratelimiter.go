@@ -69,6 +69,14 @@ func (r *RedisV8) GetRollingWindow(ctx context.Context, keyName string, per int6
 	var zrange *redis.StringSliceCmd
 	var err error
 
+	if keyName == "" {
+		return []string{}, temperr.KeyEmpty
+	}
+
+	if per <= 0 {
+		return []string{}, temperr.InvalidPeriod
+	}
+
 	pipeFn := func(pipe redis.Pipeliner) error {
 		pipe.ZRemRangeByScore(ctx, keyName, "-inf", strconv.FormatInt(onePeriodAgo.UnixNano(), 10))
 		zrange = pipe.ZRange(ctx, keyName, 0, -1)
