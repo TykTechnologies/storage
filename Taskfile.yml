@@ -1,8 +1,8 @@
 version: "3"
 includes:
- temporal: 
-  taskfile: "temporal/Taskfile.yml"
-  dir: "./temporal"
+  temporal:
+    taskfile: "temporal/Taskfile.yml"
+    dir: "./temporal"
 
 env:
   TEST_TIMEOUT:
@@ -47,6 +47,7 @@ tasks:
         vars:
           STORAGE_TYPE: persistent
           DB: "{{.DB}}"
+          DB_SETUP: "{{.DB_SETUP}}"
 
   test-temporal:
     desc: "Run tests for temporal storage with specified database"
@@ -55,5 +56,6 @@ tasks:
         vars:
           STORAGE_TYPE: temporal
           DB: "{{.DB}}"
+          DB_SETUP: "{{.DB_SETUP}}"
       - mkdir -p coverage/temporal
-      - cp temporal/temporal.cov coverage/temporal/temporal.cov
+      - cp temporal/*.cov coverage/temporal/

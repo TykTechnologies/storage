@@ -2,11 +2,15 @@ package temporal
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/TykTechnologies/storage/temporal/flusher"
 	"github.com/TykTechnologies/storage/temporal/internal/testutil"
+	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/stretchr/testify/assert"
 )
@@ -724,7 +728,7 @@ func TestKeyValue_Keys(t *testing.T) {
 				}
 			},
 			pattern:      "",
-			expectedKeys: []string{},
+			expectedKeys: []string{"test2", "test3"}, // SCAN will iterate over all the keys if no pattern provided.
 			expectedErr:  nil,
 		},
 	}
@@ -886,7 +890,7 @@ func TestKeyValue_GetKeysAndValuesWithFilter(t *testing.T) {
 				}
 			},
 			pattern:        "",
-			expectedValues: map[string]interface{}{},
+			expectedValues: map[string]interface{}{"key1": "value1", "key2": "value2", "test": "value2"},
 			expectedErr:    nil,
 		},
 	}
@@ -910,6 +914,187 @@ func TestKeyValue_GetKeysAndValuesWithFilter(t *testing.T) {
 				data, err := kv.GetKeysAndValuesWithFilter(ctx, tc.pattern)
 				assert.Equal(t, tc.expectedErr, err)
 				assert.Equal(t, tc.expectedValues, data)
+			})
+		}
+	}
+}
+
+func TestKeyValue_GetKeysWithOpts(t *testing.T) {
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
+
+	tcs := []struct {
+		name                string
+		setup               func(model.KeyValue)
+		searchStr           string
+		cursor              uint64
+		count               int
+		expectedKeysCheck   func([]string) bool
+		expectedErr         error
+		expectedCursorCheck func(uint64) bool
+	}{
+		{
+			name: "valid_search",
+			setup: func(redisV8 model.KeyValue) {
+				ctx := context.Background()
+				assert.NoError(t, redisV8.Set(ctx, "key2", "value2", 0))
+				assert.NoError(t, redisV8.Set(ctx, "key1", "value1", 0))
+			},
+			searchStr: "key*",
+			cursor:    0,
+			count:     10,
+			expectedKeysCheck: func(s []string) bool {
+				return len(s) == 2 && (s[0] == "key1" || s[0] == "key2") && (s[1] == "key1" || s[1] == "key2")
+			},
+			expectedErr: nil,
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
+			},
+		},
+		{
+			name:      "empty_search",
+			setup:     nil,
+			searchStr: "",
+			cursor:    0,
+			count:     10,
+			expectedKeysCheck: func(s []string) bool {
+				return len(s) == 0
+			},
+			expectedErr: nil,
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
+			},
+		},
+		{
+			name: "specific_pattern_search",
+			setup: func(kv model.KeyValue) {
+				ctx := context.Background()
+				assert.NoError(t, kv.Set(ctx, "specific1", "value1", 0))
+				assert.NoError(t, kv.Set(ctx, "specific2", "value2", 0))
+			},
+			searchStr: "specific*",
+			cursor:    0,
+			count:     10,
+			expectedKeysCheck: func(s []string) bool {
+				return len(s) == 2 &&
+					(s[0] == "specific1" || s[0] == "specific2") &&
+					(s[1] == "specific1" || s[1] == "specific2")
+			},
+			expectedErr: nil,
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
+			},
+		},
+		{
+			name:      "non_matching_pattern",
+			setup:     nil,
+			searchStr: "nomatch*",
+			cursor:    0,
+			count:     10,
+			expectedKeysCheck: func(s []string) bool {
+				return len(s) == 0
+			},
+			expectedErr: nil,
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
+			},
+		},
+		{
+			name: "paginated_search",
+			setup: func(kv model.KeyValue) {
+				ctx := context.Background()
+				for i := 0; i < 50; i++ {
+					assert.NoError(t, kv.Set(ctx, fmt.Sprintf("pagekey%d", i), fmt.Sprintf("value%d", i), 0))
+				}
+			},
+			searchStr: "pagekey*",
+			cursor:    0,
+			count:     5, // Count is 1 but Redis SCAN does not guarantee that it will return 1 keys
+			expectedKeysCheck: func(s []string) bool {
+				if len(s) == 0 {
+					return false
+				}
+
+				storedValues := make(map[string]bool)
+				for _, key := range s {
+					if storedValues[key] {
+						return false
+					}
+
+					if !strings.HasPrefix(key, "pagekey") {
+						return false
+					}
+
+					storedValues[key] = true
+				}
+
+				return true
+			},
+			expectedErr: nil,
+			expectedCursorCheck: func(c uint64) bool {
+				// Cursor should be different than 0 as there are more keys to be fetched
+				return c != 0
+			},
+		},
+		{
+			name: "count_higher_than_actual_keys",
+			setup: func(kv model.KeyValue) {
+				ctx := context.Background()
+				for i := 0; i < 15; i++ {
+					assert.NoError(t, kv.Set(ctx, fmt.Sprintf("cursorkey%d", i), fmt.Sprintf("value%d", i), 0))
+				}
+			},
+			searchStr: "cursorkey*",
+			cursor:    0,
+			count:     20,
+			expectedKeysCheck: func(s []string) bool {
+				return len(s) == 15
+			},
+			expectedErr: nil,
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
+			},
+		},
+		{
+			name:      "test_with_error_condition",
+			searchStr: "keys*",
+			cursor:    0,
+			count:     10,
+			expectedKeysCheck: func(s []string) bool {
+				return false
+			},
+			expectedErr: temperr.ClosedConnection,
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
+			},
+		},
+	}
+
+	for _, connector := range connectors {
+		for _, tc := range tcs {
+			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
+				ctx := context.Background()
+				if errors.Is(tc.expectedErr, temperr.ClosedConnection) {
+					assert.NoError(t, connector.Disconnect(ctx))
+				} else {
+					flusher, err := flusher.NewFlusher(connector)
+					assert.Nil(t, err)
+					defer assert.Nil(t, flusher.FlushAll(ctx))
+				}
+				kv, err := NewKeyValue(connector)
+				assert.Nil(t, err)
+
+				if tc.setup != nil {
+					tc.setup(kv)
+				}
+
+				keys, cursor, err := kv.GetKeysWithOpts(ctx, tc.searchStr, tc.cursor, tc.count)
+				assert.Equal(t, tc.expectedErr, err)
+
+				if err == nil {
+					assert.True(t, tc.expectedKeysCheck(keys))
+					assert.True(t, tc.expectedCursorCheck(cursor))
+				}
 			})
 		}
 	}

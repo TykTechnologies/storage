@@ -116,54 +116,188 @@ func (r *RedisV8) DeleteKeys(ctx context.Context, keys []string) (int64, error) 
 		return 0, temperr.KeyEmpty
 	}
 
-	return r.client.Del(ctx, keys...).Result()
+	switch v := r.client.(type) {
+	case *redis.ClusterClient:
+		return r.deleteKeysCluster(ctx, v, keys)
+	case *redis.Client:
+		return v.Del(ctx, keys...).Result()
+	default:
+		return 0, temperr.InvalidRedisClient
+	}
 }
 
-// DeleteScanMatch uses the SCAN command to find all keys matching the given pattern and deletes them
-func (r *RedisV8) DeleteScanMatch(ctx context.Context, pattern string) (int64, error) {
-	var deleted int64
-	var cursor uint64
-	var err error
+// deleteKeysCluster removes the specified keys on a cluster
+func (r *RedisV8) deleteKeysCluster(ctx context.Context, cluster *redis.ClusterClient, keys []string) (int64, error) {
+	var totalDeleted int64
 
-	for {
-		var keys []string
+	for _, key := range keys {
+		delCmd := redis.NewIntCmd(ctx, "DEL", key)
 
-		keys, cursor, err = r.client.Scan(ctx, cursor, pattern, 0).Result()
+		// Process the command, which sends it to the appropriate node
+		if err := cluster.Process(ctx, delCmd); err != nil {
+			return totalDeleted, err
+		}
+
+		// Accumulate the count of deleted keys
+		deleted, err := delCmd.Result()
 		if err != nil {
-			return deleted, err
+			return totalDeleted, err
 		}
 
-		if len(keys) > 0 {
-			var del int64
-
-			del, err = r.client.Del(ctx, keys...).Result()
-			if err != nil {
-				return deleted, err
-			}
-
-			deleted += del
-		}
-
-		if cursor == 0 {
-			break
-		}
+		totalDeleted += deleted
 	}
 
-	return deleted, nil
+	return totalDeleted, nil
+}
+
+// DeleteScanMatch deletes all keys matching the given pattern
+func (r *RedisV8) DeleteScanMatch(ctx context.Context, pattern string) (int64, error) {
+	var totalDeleted int64
+
+	switch client := r.client.(type) {
+	case *redis.ClusterClient:
+		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
+			deleted, err := r.deleteScanMatchSingleNode(ctx, client, pattern)
+			if err != nil {
+				return err
+			}
+
+			totalDeleted += deleted
+			return nil
+		})
+		if err != nil {
+			return totalDeleted, err
+		}
+
+	case *redis.Client:
+		var err error
+		totalDeleted, err = r.deleteScanMatchSingleNode(ctx, client, pattern)
+
+		if err != nil {
+			return totalDeleted, err
+		}
+
+	default:
+		return totalDeleted, temperr.InvalidRedisClient
+	}
+
+	return totalDeleted, nil
+}
+
+// deleteScanMatchSingleNode deletes all keys matching the given pattern on a single node
+func (r *RedisV8) deleteScanMatchSingleNode(ctx context.Context, client redis.Cmdable, pattern string) (int64, error) {
+	var deleted, cursor uint64
+	var err error
+
+	var keys []string
+	keys, _, err = client.Scan(ctx, cursor, pattern, 0).Result()
+
+	if err != nil {
+		return int64(deleted), err
+	}
+
+	if len(keys) > 0 {
+		del, err := client.Del(ctx, keys...).Result()
+		if err != nil {
+			return int64(deleted), err
+		}
+
+		deleted += uint64(del)
+	}
+
+	return int64(deleted), nil
 }
 
 // Keys returns all keys matching the given pattern
 func (r *RedisV8) Keys(ctx context.Context, pattern string) ([]string, error) {
-	return r.client.Keys(ctx, pattern).Result()
+	var sessions []string
+
+	switch client := r.client.(type) {
+	case *redis.ClusterClient:
+		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
+			keys, _, err := fetchKeys(ctx, client, pattern, 0, 0)
+			if err != nil {
+				return err
+			}
+
+			sessions = append(sessions, keys...)
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+
+	case *redis.Client:
+		keys, _, err := fetchKeys(ctx, client, pattern, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+
+		sessions = keys
+
+	default:
+		return nil, temperr.InvalidRedisClient
+	}
+
+	return sessions, nil
 }
 
 // GetMulti returns the values of all specified keys
 func (r *RedisV8) GetMulti(ctx context.Context, keys []string) ([]interface{}, error) {
-	cmd := r.client.MGet(ctx, keys...)
+	switch client := r.client.(type) {
+	case *redis.ClusterClient:
+		return r.getMultiCluster(ctx, client, keys)
+	case *redis.Client:
+		return r.getMultiStandalone(ctx, client, keys)
+	default:
+		return nil, temperr.InvalidRedisClient
+	}
+}
+
+func (r *RedisV8) getMultiCluster(ctx context.Context,
+	client *redis.ClusterClient,
+	keys []string,
+) ([]interface{}, error) {
+	values := make([]interface{}, len(keys))
+
+	for i, key := range keys {
+		value, err := r.getValueFromCluster(ctx, client, key)
+		if err != nil {
+			return nil, err
+		}
+
+		values[i] = value
+	}
+
+	return values, nil
+}
+
+func (r *RedisV8) getValueFromCluster(ctx context.Context,
+	client *redis.ClusterClient,
+	key string,
+) (interface{}, error) {
+	cmd := client.Get(ctx, key)
+	if err := cmd.Err(); err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	val := cmd.Val()
+	if val == "" {
+		return nil, nil
+	}
+
+	return val, nil
+}
+
+func (r *RedisV8) getMultiStandalone(ctx context.Context, client *redis.Client, keys []string) ([]interface{}, error) {
+	cmd := client.MGet(ctx, keys...)
 	if cmd.Err() != nil {
 		return nil, cmd.Err()
 	}
-
 	return cmd.Val(), nil
 }
 
@@ -192,4 +326,73 @@ func (r *RedisV8) GetKeysAndValuesWithFilter(ctx context.Context,
 	}
 
 	return result, nil
+}
+
+// GetKeysWithOpts retrieves keys with options like filter, cursor, and count
+func (r *RedisV8) GetKeysWithOpts(ctx context.Context,
+	searchStr string,
+	cursor uint64,
+	count int,
+) ([]string, uint64, error) {
+	var keys []string
+	var finalCursor uint64
+
+	switch client := r.client.(type) {
+	case *redis.ClusterClient:
+		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
+			localKeys, localCursor, err := fetchKeys(ctx, client, searchStr, cursor, int64(count))
+			if err != nil {
+				return err
+			}
+
+			keys = append(keys, localKeys...)
+			finalCursor = localCursor
+			return nil
+		})
+		if err != nil {
+			if errors.Is(err, redis.ErrClosed) {
+				return keys, finalCursor, temperr.ClosedConnection
+			}
+
+			return keys, finalCursor, err
+		}
+
+	case *redis.Client:
+		localKeys, localCursor, err := fetchKeys(ctx, client, searchStr, cursor, int64(count))
+		if err != nil {
+			if errors.Is(err, redis.ErrClosed) {
+				return localKeys, localCursor, temperr.ClosedConnection
+			}
+
+			return localKeys, localCursor, err
+		}
+
+		keys = localKeys
+		finalCursor = localCursor
+
+	default:
+		return nil, 0, temperr.InvalidRedisClient
+	}
+
+	return keys, finalCursor, nil
+}
+
+// fetchKeys retrieves keys with options like filter, cursor, and count
+func fetchKeys(ctx context.Context,
+	client redis.UniversalClient,
+	pattern string,
+	cursor uint64,
+	count int64,
+) ([]string, uint64, error) {
+	var keys []string
+	var finalCursor uint64
+
+	iter := client.Scan(ctx, cursor, pattern, count)
+	if err := iter.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	keys, finalCursor = iter.Val()
+
+	return keys, finalCursor, nil
 }

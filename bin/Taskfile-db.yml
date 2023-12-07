@@ -6,7 +6,13 @@ tasks:
       - echo "Starting MongoDB..."
       - docker run --name mongo -d -p 27017:27017 mongo:{{.MONGO_VERSION}}
 
-  start-redis:
+  start-redis-single:
     cmds:
-      - echo "Starting Redis..."
-      - docker run --name redis -d -p 6379:6379 redis:{{.REDIS_VERSION}}
+      - echo "Starting Redis single instance..."
+      - docker run --name redis-single -d -p 6379:6379 redis:{{.REDIS_VERSION}}
+
+  start-redis-cluster:
+    cmds:
+      - echo "Starting Redis Cluster..."
+      - docker run -d -p 7000-7050:7000-7050 -p 5000-5010:5000-5010 -e IP='0.0.0.0' --name redis-cluster grokzen/redis-cluster:{{.REDIS_VERSION}}
+      - sleep 5 # wait for cluster to start

@@ -42,7 +42,7 @@ jobs:
           path: |
             golanglint.xml
   test:
-    name: Tests ${{ matrix.storagetype }} storage - DB ${{ matrix.database }} ${{ matrix.version }}
+    name: Tests ${{ matrix.storagetype }} storage - DB ${{ matrix.database }} ${{ matrix.version }} ${{ matrix.instancetype }}
     needs: [golangci-lint]
     runs-on: ubuntu-latest
     strategy:
@@ -57,10 +57,17 @@ jobs:
             version: 4.2
           - storagetype: temporal
             database: redis
-            version: 6
+            version: 6.0.0
+            instancetype: single
           - storagetype: temporal
             database: redis
-            version: 7
+            version: 7.0.0
+            instancetype: single
+          - storagetype: temporal
+            database: redis
+            version: 6.0.0
+            instancetype: cluster
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -89,11 +96,12 @@ jobs:
 
       - if: ${{ matrix.database == 'redis' }}
         name: Start Redis '${{ matrix.version }}'
-        run: task -t bin/Taskfile-db.yml start-redis REDIS_VERSION=${{ matrix.version }}
+        run: task -t bin/Taskfile-db.yml start-redis-${{matrix.instancetype}} REDIS_VERSION=${{ matrix.version }}
 
       - name: Run tests
         env:
           DB: ${{ matrix.database }}
+          DB_SETUP: ${{ matrix.instancetype }}
         run: task test-${{ matrix.storagetype }}
 
       - uses: actions/upload-artifact@v2
