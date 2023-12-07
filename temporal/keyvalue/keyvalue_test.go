@@ -1037,7 +1037,7 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			},
 		},
 		{
-			name: "count higher than actual keys",
+			name: "count_higher_than_actual_keys",
 			setup: func(kv model.KeyValue) {
 				ctx := context.Background()
 				for i := 0; i < 15; i++ {
@@ -1088,12 +1088,12 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 					tc.setup(kv)
 				}
 
-				result, err := kv.GetKeysWithOpts(ctx, tc.searchStr, tc.cursor, tc.count)
+				keys, cursor, err := kv.GetKeysWithOpts(ctx, tc.searchStr, tc.cursor, tc.count)
 				assert.Equal(t, tc.expectedErr, err)
 
 				if err == nil {
-					assert.True(t, tc.expectedKeysCheck(result.Keys))
-					assert.True(t, tc.expectedCursorCheck(result.Cursor))
+					assert.True(t, tc.expectedKeysCheck(keys))
+					assert.True(t, tc.expectedCursorCheck(cursor))
 				}
 			})
 		}
