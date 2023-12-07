@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/TykTechnologies/storage/temporal/internal/testutil"
 	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/stretchr/testify/assert"
 
@@ -51,6 +52,12 @@ func TestNewConnector(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
+			tlsConfig := testutil.CheckTLS()
+			if tlsConfig != nil {
+				tt.opts = append(tt.opts, model.WithTLS(tlsConfig))
+			}
+
 			connector, err := NewConnector(tt.typ, tt.opts...)
 			assert.Equal(t, tt.expectedErr, err)
 
@@ -62,6 +69,7 @@ func TestNewConnector(t *testing.T) {
 }
 
 func TestNewConnector_WithOnConnect(t *testing.T) {
+	tlsConfig := testutil.CheckTLS()
 	t.Run("redisv8_with_on_connect", func(t *testing.T) {
 		var called bool
 		onConnect := func(ctx context.Context) error {
@@ -75,7 +83,7 @@ func TestNewConnector_WithOnConnect(t *testing.T) {
 
 		connector, err := NewConnector(model.RedisV8Type, WithRedisConfig(&model.RedisOptions{
 			Addrs: []string{addrs},
-		}), model.WithOnConnect(onConnect))
+		}), model.WithTLS(tlsConfig), model.WithOnConnect(onConnect))
 		assert.NoError(t, err)
 		assert.True(t, connector != nil)
 
