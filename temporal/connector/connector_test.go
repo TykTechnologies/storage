@@ -16,6 +16,7 @@ func checkTLS(t *testing.T) *model.TLS {
 
 	var tlsConfig *model.TLS
 	if os.Getenv("TEST_ENABLE_TLS") == "true" {
+		tlsConfig = &model.TLS{} // initializing with zero values
 		tlsConfig.Enable = true
 
 		tlsConfig.CertFile = os.Getenv("TEST_TLS_CERT_FILE")
