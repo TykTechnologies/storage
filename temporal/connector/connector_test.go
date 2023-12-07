@@ -5,12 +5,27 @@ import (
 	"os"
 	"testing"
 
-	"github.com/TykTechnologies/storage/temporal/internal/testutil"
 	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/TykTechnologies/storage/temporal/model"
 )
+
+func checkTLS(t *testing.T) *model.TLS {
+	t.Helper()
+
+	var tlsConfig *model.TLS
+	if os.Getenv("TEST_ENABLE_TLS") == "true" {
+		tlsConfig.Enable = true
+
+		tlsConfig.CertFile = os.Getenv("TEST_TLS_CERT_FILE")
+		tlsConfig.KeyFile = os.Getenv("TEST_TLS_KEY_FILE")
+		tlsConfig.CAFile = os.Getenv("TEST_TLS_CA_FILE")
+		tlsConfig.InsecureSkipVerify = os.Getenv("TEST_TLS_INSECURE_SKIP_VERIFY") == "true"
+	}
+
+	return tlsConfig
+}
 
 func TestNewConnector(t *testing.T) {
 	tests := []struct {
@@ -53,7 +68,7 @@ func TestNewConnector(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			tlsConfig := testutil.CheckTLS()
+			tlsConfig := checkTLS(t)
 			if tlsConfig != nil {
 				tt.opts = append(tt.opts, model.WithTLS(tlsConfig))
 			}
@@ -69,7 +84,7 @@ func TestNewConnector(t *testing.T) {
 }
 
 func TestNewConnector_WithOnConnect(t *testing.T) {
-	tlsConfig := testutil.CheckTLS()
+	tlsConfig := checkTLS(t)
 	t.Run("redisv8_with_on_connect", func(t *testing.T) {
 		var called bool
 		onConnect := func(ctx context.Context) error {

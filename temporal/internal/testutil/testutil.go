@@ -71,7 +71,15 @@ func newRedisConnector(t *testing.T) model.Connector {
 		enableCluster = true
 	}
 
-	tlsConfig := CheckTLS()
+	var tlsConfig *model.TLS
+	if os.Getenv("TEST_ENABLE_TLS") == "true" {
+		tlsConfig.Enable = true
+
+		tlsConfig.CertFile = os.Getenv("TEST_TLS_CERT_FILE")
+		tlsConfig.KeyFile = os.Getenv("TEST_TLS_KEY_FILE")
+		tlsConfig.CAFile = os.Getenv("TEST_TLS_CA_FILE")
+		tlsConfig.InsecureSkipVerify = os.Getenv("TEST_TLS_INSECURE_SKIP_VERIFY") == "true"
+	}
 
 	redisConnector, err := connector.NewConnector(
 		"redisv8", model.WithRedisConfig(&model.RedisOptions{Addrs: addrs, EnableCluster: enableCluster}),
@@ -92,18 +100,4 @@ func CloseConnectors(t *testing.T, connectors []model.Connector) {
 		err := connector.Disconnect(context.Background())
 		assert.Nil(t, err)
 	}
-}
-
-func CheckTLS() *model.TLS {
-	var tlsConfig *model.TLS
-	if os.Getenv("TEST_ENABLE_TLS") == "true" {
-		tlsConfig.Enable = true
-
-		tlsConfig.CertFile = os.Getenv("TEST_TLS_CERT_FILE")
-		tlsConfig.KeyFile = os.Getenv("TEST_TLS_KEY_FILE")
-		tlsConfig.CAFile = os.Getenv("TEST_TLS_CA_FILE")
-		tlsConfig.InsecureSkipVerify = os.Getenv("TEST_TLS_INSECURE_SKIP_VERIFY") == "true"
-	}
-
-	return tlsConfig
 }
