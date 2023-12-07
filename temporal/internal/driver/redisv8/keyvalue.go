@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/go-redis/redis/v8"
 )
@@ -216,12 +215,12 @@ func (r *RedisV8) Keys(ctx context.Context, pattern string) ([]string, error) {
 	switch client := r.client.(type) {
 	case *redis.ClusterClient:
 		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
-			result, err := fetchKeys(ctx, client, pattern, 0, 0)
+			keys, _, err := fetchKeys(ctx, client, pattern, 0, 0)
 			if err != nil {
 				return err
 			}
 
-			sessions = append(sessions, result.Keys...)
+			sessions = append(sessions, keys...)
 			return nil
 		})
 		if err != nil {
@@ -229,12 +228,12 @@ func (r *RedisV8) Keys(ctx context.Context, pattern string) ([]string, error) {
 		}
 
 	case *redis.Client:
-		result, err := fetchKeys(ctx, client, pattern, 0, 0)
+		keys, _, err := fetchKeys(ctx, client, pattern, 0, 0)
 		if err != nil {
 			return nil, err
 		}
 
-		sessions = result.Keys
+		sessions = keys
 
 	default:
 		return nil, temperr.InvalidRedisClient
@@ -334,46 +333,48 @@ func (r *RedisV8) GetKeysWithOpts(ctx context.Context,
 	searchStr string,
 	cursor uint64,
 	count int,
-) (model.KeysCursorPair, error) {
-	var result model.KeysCursorPair
+) ([]string, uint64, error) {
+	var keys []string
+	var finalCursor uint64
 
 	switch client := r.client.(type) {
 	case *redis.ClusterClient:
 		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
-			localResult, err := fetchKeys(ctx, client, searchStr, cursor, int64(count))
+			localKeys, localCursor, err := fetchKeys(ctx, client, searchStr, cursor, int64(count))
 			if err != nil {
 				return err
 			}
 
-			result.Keys = append(result.Keys, localResult.Keys...)
-			result.Cursor = localResult.Cursor
+			keys = append(keys, localKeys...)
+			finalCursor = localCursor
 			return nil
 		})
 		if err != nil {
 			if errors.Is(err, redis.ErrClosed) {
-				return result, temperr.ClosedConnection
+				return keys, finalCursor, temperr.ClosedConnection
 			}
 
-			return result, err
+			return keys, finalCursor, err
 		}
 
 	case *redis.Client:
-		var err error
-		result, err = fetchKeys(ctx, client, searchStr, cursor, int64(count))
-
+		localKeys, localCursor, err := fetchKeys(ctx, client, searchStr, cursor, int64(count))
 		if err != nil {
 			if errors.Is(err, redis.ErrClosed) {
-				return result, temperr.ClosedConnection
+				return localKeys, localCursor, temperr.ClosedConnection
 			}
 
-			return result, err
+			return localKeys, localCursor, err
 		}
 
+		keys = localKeys
+		finalCursor = localCursor
+
 	default:
-		return result, temperr.InvalidRedisClient
+		return nil, 0, temperr.InvalidRedisClient
 	}
 
-	return result, nil
+	return keys, finalCursor, nil
 }
 
 // fetchKeys retrieves keys with options like filter, cursor, and count
@@ -382,18 +383,16 @@ func fetchKeys(ctx context.Context,
 	pattern string,
 	cursor uint64,
 	count int64,
-) (model.KeysCursorPair, error) {
-	result := model.KeysCursorPair{}
+) ([]string, uint64, error) {
+	var keys []string
+	var finalCursor uint64
 
-	result.Keys = make([]string, 0)
-
-	iter := client.Scan(ctx, cursor, pattern, int64(count))
-
+	iter := client.Scan(ctx, cursor, pattern, count)
 	if err := iter.Err(); err != nil {
-		return result, err
+		return nil, 0, err
 	}
 
-	result.Keys, result.Cursor = iter.Val()
+	keys, finalCursor = iter.Val()
 
-	return result, nil
+	return keys, finalCursor, nil
 }
