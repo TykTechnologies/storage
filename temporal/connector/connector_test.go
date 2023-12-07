@@ -68,7 +68,6 @@ func TestNewConnector(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			tlsConfig := checkTLS(t)
 			if tlsConfig != nil {
 				tt.opts = append(tt.opts, model.WithTLS(tlsConfig))
