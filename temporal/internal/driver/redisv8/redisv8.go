@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/TykTechnologies/storage/temporal/internal/helper"
+	"github.com/TykTechnologies/storage/temporal/internal/tlsconfig"
 	"github.com/TykTechnologies/storage/temporal/temperr"
 
 	"github.com/TykTechnologies/storage/temporal/model"
@@ -44,12 +45,16 @@ func NewRedisV8WithOpts(options ...model.Option) (*RedisV8, error) {
 		timeout = time.Duration(opts.Timeout) * time.Second
 	}
 
+	var err error
 	var tlsConfig *tls.Config
-	if opts.UseSSL {
-		tlsConfig = &tls.Config{
-			InsecureSkipVerify: opts.SSLInsecureSkipVerify,
+
+	if baseConfig.TLS != nil && baseConfig.TLS.Enable {
+		tlsConfig, err = tlsconfig.HandleTLS(baseConfig.TLS)
+		if err != nil {
+			return nil, err
 		}
 	}
+
 	var client redis.UniversalClient
 
 	universalOpts := &redis.UniversalOptions{

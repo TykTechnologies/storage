@@ -11,6 +11,23 @@ import (
 	"github.com/TykTechnologies/storage/temporal/model"
 )
 
+func checkTLS(t *testing.T) *model.TLS {
+	t.Helper()
+
+	var tlsConfig *model.TLS
+	if os.Getenv("TEST_ENABLE_TLS") == "true" {
+		tlsConfig = &model.TLS{} // initializing with zero values
+		tlsConfig.Enable = true
+
+		tlsConfig.CertFile = os.Getenv("TEST_TLS_CERT_FILE")
+		tlsConfig.KeyFile = os.Getenv("TEST_TLS_KEY_FILE")
+		tlsConfig.CAFile = os.Getenv("TEST_TLS_CA_FILE")
+		tlsConfig.InsecureSkipVerify = os.Getenv("TEST_TLS_INSECURE_SKIP_VERIFY") == "true"
+	}
+
+	return tlsConfig
+}
+
 func TestNewConnector(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -51,6 +68,11 @@ func TestNewConnector(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			tlsConfig := checkTLS(t)
+			if tlsConfig != nil {
+				tt.opts = append(tt.opts, model.WithTLS(tlsConfig))
+			}
+
 			connector, err := NewConnector(tt.typ, tt.opts...)
 			assert.Equal(t, tt.expectedErr, err)
 
@@ -62,6 +84,7 @@ func TestNewConnector(t *testing.T) {
 }
 
 func TestNewConnector_WithOnConnect(t *testing.T) {
+	tlsConfig := checkTLS(t)
 	t.Run("redisv8_with_on_connect", func(t *testing.T) {
 		var called bool
 		onConnect := func(ctx context.Context) error {
@@ -75,7 +98,7 @@ func TestNewConnector_WithOnConnect(t *testing.T) {
 
 		connector, err := NewConnector(model.RedisV8Type, WithRedisConfig(&model.RedisOptions{
 			Addrs: []string{addrs},
-		}), model.WithOnConnect(onConnect))
+		}), model.WithTLS(tlsConfig), model.WithOnConnect(onConnect))
 		assert.NoError(t, err)
 		assert.True(t, connector != nil)
 

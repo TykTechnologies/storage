@@ -9,6 +9,7 @@ type BaseConfig struct {
 	RedisConfig *RedisOptions
 	RetryConfig *RetryOptions
 	OnConnect   func(context.Context) error
+	TLS         *TLS
 }
 
 // RedisOptions contains options specific to Redis storage.
@@ -22,13 +23,8 @@ type RedisOptions struct {
 	// Connection port. For example: 6379
 	Port int `json:"port"`
 	// Set a custom timeout for Redis network operations. Default value 5 seconds.
-	Timeout int `json:"timeout"`
-	// Enable SSL/TLS connection between your Tyk Gateway & Redis.
-	UseSSL bool `json:"use_ssl"`
-	// Disable TLS verification
-	SSLInsecureSkipVerify bool `json:"ssl_insecure_skip_verify"`
-
-	Hosts map[string]string `json:"hosts"` // Deprecated: Addrs instead.
+	Timeout int               `json:"timeout"`
+	Hosts   map[string]string `json:"hosts"` // Deprecated: Addrs instead.
 	// If you have multi-node setup, you should use this field instead. For example: ["host1:port1", "host2:port2"].
 	Addrs []string `json:"addrs"`
 	// Redis sentinel master name
@@ -51,4 +47,26 @@ type RetryOptions struct {
 	MinRetryBackoff time.Duration
 	// Maximum backoff between each retry.
 	MaxRetryBackoff time.Duration
+}
+
+type TLS struct {
+	// Flag that can be used to enable TLS. Defaults to false (disabled).
+	Enable bool `json:"enable"`
+	// Flag that can be used to skip TLS verification if TLS is enabled.
+	// Defaults to false.
+	InsecureSkipVerify bool `json:"insecure_skip_verify"`
+	// Path to the CA file.
+	CAFile string `json:"ca_file"`
+	// Path to the cert file.
+	CertFile string `json:"cert_file"`
+	// Path to the key file.
+	KeyFile string `json:"key_file"`
+	// Maximum TLS version that is supported.
+	// Options: ["1.0", "1.1", "1.2", "1.3"].
+	// Defaults to "1.3".
+	MaxVersion string `json:"max_version"`
+	// Minimum TLS version that is supported.
+	// Options: ["1.0", "1.1", "1.2", "1.3"].
+	// Defaults to "1.2".
+	MinVersion string `json:"min_version"`
 }
