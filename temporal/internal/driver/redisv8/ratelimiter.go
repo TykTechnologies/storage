@@ -9,99 +9,86 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-// SetRollingWindow sets a rolling window of values in a Redis sorted set.
-// It returns a slice of strings (the values in the rolling window) and an error if any occurs.
-func (r *RedisV8) SetRollingWindow(ctx context.Context, keyName string,
-	per int64, valueOverride string, pipeline bool,
-) ([]string, error) {
-	now := time.Now()
-	onePeriodAgo := now.Add(time.Duration(-1*per) * time.Second)
-	var zrange *redis.StringSliceCmd
-	var err error
-
+// SetRollingWindow updates a sorted set in Redis to represent a rolling time window of values.
+func (r *RedisV8) SetRollingWindow(ctx context.Context, now time.Time, keyName string, per int64, valueOverride string, pipeline bool) ([]string, error) {
 	if keyName == "" {
 		return []string{}, temperr.KeyEmpty
 	}
-
 	if per <= 0 {
 		return []string{}, temperr.InvalidPeriod
 	}
 
+	onePeriodAgo := now.Add(time.Duration(-1*per) * time.Second)
+	expire := time.Duration(per) * time.Second
+
+	memberValue := valueOverride
+	if valueOverride == "-1" {
+		memberValue = strconv.Itoa(int(now.UnixNano()))
+	}
+	element := redis.Z{
+		Score:  float64(now.UnixNano()),
+		Member: memberValue,
+	}
+
+	var zrange *redis.StringSliceCmd
+	var err error
+
+	exec := r.client.TxPipelined
+	if pipeline {
+		exec = r.client.Pipelined
+	}
+
 	pipeFn := func(pipe redis.Pipeliner) error {
+		// removing elements outside the rolling window.
 		pipe.ZRemRangeByScore(ctx, keyName, "-inf", strconv.Itoa(int(onePeriodAgo.UnixNano())))
+		// getting the current range of values within the window.
 		zrange = pipe.ZRange(ctx, keyName, 0, -1)
-
-		element := redis.Z{
-			Score: float64(now.UnixNano()),
-		}
-
-		if valueOverride != "-1" {
-			element.Member = valueOverride
-		} else {
-			element.Member = strconv.Itoa(int(now.UnixNano()))
-		}
-
+		// adding the new element and set the expiration time.
 		pipe.ZAdd(ctx, keyName, &element)
-		pipe.Expire(ctx, keyName, time.Duration(per)*time.Second)
-
+		pipe.Expire(ctx, keyName, expire)
 		return nil
 	}
 
-	if pipeline {
-		_, err = r.client.Pipelined(ctx, pipeFn)
-	} else {
-		_, err = r.client.TxPipelined(ctx, pipeFn)
-	}
-
+	_, err = exec(ctx, pipeFn)
 	if err != nil {
-		return []string{}, err
+		return nil, err
 	}
 
 	return zrange.Result()
 }
 
-// GetRollingWindow retrieves a rolling window of values from a Redis sorted set.
-// It returns a slice of strings (the values in the rolling window) and an error if any occurs.
-func (r *RedisV8) GetRollingWindow(ctx context.Context, keyName string, per int64, pipeline bool) ([]string, error) {
-	now := time.Now()
-	onePeriodAgo := now.Add(time.Duration(-1*per) * time.Second)
-
-	var zrange *redis.StringSliceCmd
-	var err error
-
+// GetRollingWindow removes a part of a sorted set in Redis and extracts a timed window of values.
+func (r *RedisV8) GetRollingWindow(ctx context.Context, now time.Time, keyName string, per int64, pipeline bool) ([]string, error) {
 	if keyName == "" {
 		return []string{}, temperr.KeyEmpty
 	}
-
 	if per <= 0 {
 		return []string{}, temperr.InvalidPeriod
 	}
 
-	pipeFn := func(pipe redis.Pipeliner) error {
-		pipe.ZRemRangeByScore(ctx, keyName, "-inf", strconv.FormatInt(onePeriodAgo.UnixNano(), 10))
-		zrange = pipe.ZRange(ctx, keyName, 0, -1)
+	onePeriodAgo := now.Add(time.Duration(-1*per) * time.Second)
+	period := strconv.FormatInt(onePeriodAgo.UnixNano(), 10)
 
+	var zrange *redis.StringSliceCmd
+	var err error
+
+	exec := r.client.TxPipelined
+	if pipeline {
+		exec = r.client.Pipelined
+	}
+
+	pipeFn := func(pipe redis.Pipeliner) error {
+		// removing old elements outside the rolling window
+		pipe.ZRemRangeByScore(ctx, keyName, "-inf", period)
+		// retrieving the current range of values
+		zrange = pipe.ZRange(ctx, keyName, 0, -1)
 		return nil
 	}
 
-	if pipeline {
-		_, err = r.client.Pipelined(ctx, pipeFn)
-	} else {
-		_, err = r.client.TxPipelined(ctx, pipeFn)
-	}
-
+	_, err = exec(ctx, pipeFn)
 	if err != nil {
 		return nil, err
 	}
 
-	values, err := zrange.Result()
-	if err != nil {
-		return nil, err
-	}
-
-	if values == nil {
-		return []string{}, nil
-	}
-
-	return values, nil
+	return zrange.Result()
 }

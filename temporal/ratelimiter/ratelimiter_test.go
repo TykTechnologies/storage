@@ -3,6 +3,7 @@ package ratelimiter
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/TykTechnologies/storage/temporal/flusher"
 	"github.com/TykTechnologies/storage/temporal/internal/testutil"
@@ -74,6 +75,7 @@ func TestRedisCluster_SetRollingWindow(t *testing.T) {
 	for _, connector := range connectors {
 		for _, tc := range tcs {
 			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
+				now := time.Now()
 				ctx := context.Background()
 
 				rateLimiter, err := NewRateLimit(connector)
@@ -83,14 +85,14 @@ func TestRedisCluster_SetRollingWindow(t *testing.T) {
 				assert.Nil(t, err)
 				defer assert.Nil(t, flusher.FlushAll(ctx))
 
-				result, err := rateLimiter.SetRollingWindow(ctx, tc.keyName, tc.per, tc.valueOverride, tc.pipeline)
+				result, err := rateLimiter.SetRollingWindow(ctx, now, tc.keyName, tc.per, tc.valueOverride, tc.pipeline)
 
 				assert.Equal(t, tc.expectedErr, err)
 
 				if err == nil {
 					assert.Equal(t, tc.expectedLen, len(result))
 					// Executing SetRollingWindow again should return expectedLen + 1 if err == nil
-					result, err = rateLimiter.SetRollingWindow(ctx, tc.keyName, tc.per, tc.valueOverride, tc.pipeline)
+					result, err = rateLimiter.SetRollingWindow(ctx, now, tc.keyName, tc.per, tc.valueOverride, tc.pipeline)
 					assert.NoError(t, err)
 					assert.Equal(t, tc.expectedLen+1, len(result))
 				}
@@ -128,9 +130,10 @@ func TestRedisCluster_GetRollingWindow(t *testing.T) {
 			expectedErr: nil,
 			expectedLen: 2,
 			preTest: func(ctx context.Context, rateLimiter model.RateLimit) {
-				_, err := rateLimiter.SetRollingWindow(ctx, "key_non_empty", 60, "value1", false)
+				now := time.Now()
+				_, err := rateLimiter.SetRollingWindow(ctx, now, "key_non_empty", 60, "value1", false)
 				assert.Nil(t, err)
-				_, err = rateLimiter.SetRollingWindow(ctx, "key_non_empty", 60, "value2", false)
+				_, err = rateLimiter.SetRollingWindow(ctx, now, "key_non_empty", 60, "value2", false)
 				assert.Nil(t, err)
 			},
 		},
@@ -172,7 +175,7 @@ func TestRedisCluster_GetRollingWindow(t *testing.T) {
 					tc.preTest(ctx, rateLimiter)
 				}
 
-				result, err := rateLimiter.GetRollingWindow(ctx, tc.keyName, tc.per, tc.pipeline)
+				result, err := rateLimiter.GetRollingWindow(ctx, time.Now(), tc.keyName, tc.per, tc.pipeline)
 
 				assert.Equal(t, tc.expectedErr, err)
 				if err == nil {
