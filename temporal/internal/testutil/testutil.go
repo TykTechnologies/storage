@@ -71,12 +71,9 @@ func newRedisConnector(t *testing.T) model.Connector {
 		enableCluster = true
 	}
 
-	tlsConfig := &model.TLS{}
-
-	tlsEnv := os.Getenv("TEST_ENABLE_TLS")
-	if tlsEnv != "" {
-		log.Println("TEST_ENABLE_TLS is set, using TLS")
-
+	var tlsConfig *model.TLS
+	if os.Getenv("TEST_ENABLE_TLS") == "true" {
+		tlsConfig = &model.TLS{} // initializing with zero values
 		tlsConfig.Enable = true
 
 		tlsConfig.CertFile = os.Getenv("TEST_TLS_CERT_FILE")

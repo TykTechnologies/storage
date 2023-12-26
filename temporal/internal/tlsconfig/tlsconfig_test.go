@@ -3,6 +3,7 @@ package tlsconfig
 import (
 	"crypto/tls"
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/TykTechnologies/storage/temporal/model"
@@ -20,9 +21,9 @@ func TestHandleTLS(t *testing.T) {
 			cfg: &model.TLS{
 				Enable:             true,
 				InsecureSkipVerify: false,
-				CertFile:           "../../../bin/redis_TLS/cert.pem",
-				KeyFile:            "../../../bin/redis_TLS/key.pem",
-				CAFile:             "../../../bin/redis_TLS/cert.pem",
+				CertFile:           os.Getenv("TEST_TLS_CERT_FILE"),
+				KeyFile:            os.Getenv("TEST_TLS_KEY_FILE"),
+				CAFile:             os.Getenv("TEST_TLS_CA_FILE"),
 				MaxVersion:         "1.3",
 				MinVersion:         "1.2",
 			},
@@ -45,9 +46,9 @@ func TestHandleTLS(t *testing.T) {
 			cfg: &model.TLS{
 				Enable:             true,
 				InsecureSkipVerify: false,
-				CertFile:           "../../../bin/redis_TLS/cert.pem",
-				KeyFile:            "../../../bin/redis_TLS/key.pem",
-				CAFile:             "../../../bin/redis_TLS/cert.pem",
+				CertFile:           os.Getenv("TEST_TLS_CERT_FILE"),
+				KeyFile:            os.Getenv("TEST_TLS_KEY_FILE"),
+				CAFile:             os.Getenv("TEST_TLS_CA_FILE"),
 				MaxVersion:         "1.4",
 				MinVersion:         "1.2",
 			},
@@ -58,8 +59,8 @@ func TestHandleTLS(t *testing.T) {
 			cfg: &model.TLS{
 				Enable:             true,
 				InsecureSkipVerify: false,
-				CertFile:           "../../../bin/redis_TLS/cert.pem",
-				KeyFile:            "../../../bin/redis_TLS/key.pem",
+				CertFile:           os.Getenv("TEST_TLS_CERT_FILE"),
+				KeyFile:            os.Getenv("TEST_TLS_KEY_FILE"),
 				CAFile:             "invalid/cafile",
 				MaxVersion:         "1.3",
 				MinVersion:         "1.2",
