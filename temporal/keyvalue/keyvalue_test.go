@@ -850,7 +850,7 @@ func TestKeyValue_GetKeysAndValuesWithFilter(t *testing.T) {
 		{
 			name: "existing_keys_pattern",
 			setup: func(db KeyValue) {
-				err := db.Set(context.Background(), "key1", "value1", 0)
+				err := db.Set(context.Background(), "key", "value", 0)
 				if err != nil {
 					t.Fatalf("Set() error = %v", err)
 				}
@@ -864,7 +864,7 @@ func TestKeyValue_GetKeysAndValuesWithFilter(t *testing.T) {
 				}
 			},
 			pattern:        "key*",
-			expectedValues: map[string]interface{}{"key1": "value1", "key2": "value2"},
+			expectedValues: map[string]interface{}{"key": "value", "key2": "value2"},
 			expectedErr:    nil,
 		},
 		{
