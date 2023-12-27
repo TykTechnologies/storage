@@ -1,4 +1,4 @@
-package redisv8
+package redisv9
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 )
 
 // Returns all the members of the set value stored at key
-func (r *RedisV8) Members(ctx context.Context, key string) ([]string, error) {
+func (r *RedisV9) Members(ctx context.Context, key string) ([]string, error) {
 	if key == "" {
 		return []string{}, temperr.KeyEmpty
 	}
@@ -19,7 +19,7 @@ func (r *RedisV8) Members(ctx context.Context, key string) ([]string, error) {
 // Specified members that are already a member of this set are ignored.
 // If key does not exist, a new set is created before adding the specified members.
 // It errors if the key is not a set.
-func (r *RedisV8) AddMember(ctx context.Context, key, member string) error {
+func (r *RedisV9) AddMember(ctx context.Context, key, member string) error {
 	if key == "" {
 		return temperr.KeyEmpty
 	}
@@ -30,7 +30,7 @@ func (r *RedisV8) AddMember(ctx context.Context, key, member string) error {
 // Remove the specified members from the set stored at key.
 // Specified members that are not a member of this set are ignored.
 // It errors if the key is not a set.
-func (r *RedisV8) RemoveMember(ctx context.Context, key, member string) error {
+func (r *RedisV9) RemoveMember(ctx context.Context, key, member string) error {
 	if key == "" {
 		return temperr.KeyEmpty
 	}
@@ -39,7 +39,7 @@ func (r *RedisV8) RemoveMember(ctx context.Context, key, member string) error {
 }
 
 // Returns if member is a member of the set stored at key.
-func (r *RedisV8) IsMember(ctx context.Context, key, member string) (bool, error) {
+func (r *RedisV9) IsMember(ctx context.Context, key, member string) (bool, error) {
 	if key == "" {
 		return false, temperr.KeyEmpty
 	}

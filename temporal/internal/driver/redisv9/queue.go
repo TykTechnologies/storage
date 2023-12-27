@@ -1,4 +1,4 @@
-package redisv8
+package redisv9
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 
 	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/TykTechnologies/storage/temporal/temperr"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 // subscribeAdapter is an adapter for redis.PubSub to satisfy model.Subscription interface.
@@ -88,7 +88,7 @@ func (r *subscriptionAdapter) Close() error {
 }
 
 // Publish sends a message to the specified channel.
-func (r *RedisV8) Publish(ctx context.Context, channel, message string) (int64, error) {
+func (r *RedisV9) Publish(ctx context.Context, channel, message string) (int64, error) {
 	res, err := r.client.Publish(ctx, channel, message).Result()
 	if err != nil {
 		if errors.Is(err, redis.ErrClosed) {
@@ -100,7 +100,7 @@ func (r *RedisV8) Publish(ctx context.Context, channel, message string) (int64, 
 }
 
 // Subscribe initializes a subscription to one or more channels.
-func (r *RedisV8) Subscribe(ctx context.Context, channels ...string) model.Subscription {
+func (r *RedisV9) Subscribe(ctx context.Context, channels ...string) model.Subscription {
 	sub := r.client.Subscribe(ctx, channels...)
 
 	adapterSub := newSubscriptionAdapter(sub)

@@ -1,4 +1,4 @@
-package redisv8
+package redisv9
 
 import (
 	"context"
@@ -10,10 +10,10 @@ import (
 	"github.com/TykTechnologies/storage/temporal/temperr"
 
 	"github.com/TykTechnologies/storage/temporal/model"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
-type RedisV8 struct {
+type RedisV9 struct {
 	connector model.Connector
 	client    redis.UniversalClient
 
@@ -22,8 +22,8 @@ type RedisV8 struct {
 	retryCfg  *model.RetryOptions
 }
 
-// NewList returns a new redisv8List instance.
-func NewRedisV8WithOpts(options ...model.Option) (*RedisV8, error) {
+// NewList returns a new RedisV9 instance.
+func NewRedisV9WithOpts(options ...model.Option) (*RedisV9, error) {
 	baseConfig := &model.BaseConfig{}
 	for _, opt := range options {
 		opt.Apply(baseConfig)
@@ -67,12 +67,12 @@ func NewRedisV8WithOpts(options ...model.Option) (*RedisV8, error) {
 		DialTimeout:      timeout,
 		ReadTimeout:      timeout,
 		WriteTimeout:     timeout,
-		IdleTimeout:      240 * timeout,
+		ConnMaxIdleTime:  240 * timeout,
 		PoolSize:         poolSize,
 		TLSConfig:        tlsConfig,
 	}
 
-	driver := &RedisV8{cfg: opts}
+	driver := &RedisV9{cfg: opts}
 
 	if baseConfig.RetryConfig != nil {
 		driver.retryCfg = baseConfig.RetryConfig
@@ -104,12 +104,12 @@ func NewRedisV8WithOpts(options ...model.Option) (*RedisV8, error) {
 	return driver, nil
 }
 
-// NewRedisV8WithConnection returns a new redisv8List instance with a custom redis connection.
-func NewRedisV8WithConnection(conn model.Connector) (*RedisV8, error) {
+// NewRedisV9WithConnection returns a new redisv8List instance with a custom redis connection.
+func NewRedisV9WithConnection(conn model.Connector) (*RedisV9, error) {
 	var client redis.UniversalClient
 	if conn == nil || !conn.As(&client) {
 		return nil, temperr.InvalidConnector
 	}
 
-	return &RedisV8{connector: conn, client: client}, nil
+	return &RedisV9{connector: conn, client: client}, nil
 }

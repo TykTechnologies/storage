@@ -200,9 +200,7 @@ func TestQueue_Subscribe(t *testing.T) {
 				var netErr net.Error
 				return errors.As(err, &netErr) && netErr.Timeout()
 			},
-			setup: func(q model.Queue, channels []string, msg string) error {
-				return nil
-			},
+			setup:       nil,
 			expectedMsg: "",
 		},
 	}

@@ -43,7 +43,7 @@ linters-settings:
     extra-rules: true
 
     # Select the Go version to target.
-    lang-version: "1.17"
+    lang-version: "1.18"
 
   lll:
     # Max line length; lines longer will be reported

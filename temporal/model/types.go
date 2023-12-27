@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	RedisV8Type = "redisv8"
+	RedisV9Type = "redisv9"
 )
 
 type Connector interface {

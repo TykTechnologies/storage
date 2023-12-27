@@ -7,7 +7,7 @@ on:
       - main
 
 env:
-  GO_VERSION: "1.16.x"
+  GO_VERSION: "1.18"
 
 jobs:
   golangci-lint:
@@ -67,6 +67,14 @@ jobs:
             database: redis
             version: 6.0.0
             instancetype: cluster
+          - storagetype: temporal
+            database: redis
+            version: 7.0.0
+            instancetype: cluster
+          - storagetype: temporal
+            database: redis
+            version: 7.2.0
+            instancetype: single
           - storagetype: temporal
             database: redis
             version: 7.0.0
