@@ -40,7 +40,7 @@ func TestConnectors(t *testing.T) []model.Connector {
 
 	connectors := []model.Connector{}
 
-	// redisv8 list
+	// redisv9 list
 	redisConnector := newRedisConnector(t)
 
 	connectors = append(connectors, redisConnector)
@@ -83,7 +83,7 @@ func newRedisConnector(t *testing.T) model.Connector {
 	}
 
 	redisConnector, err := connector.NewConnector(
-		"redisv8", model.WithRedisConfig(&model.RedisOptions{Addrs: addrs, EnableCluster: enableCluster}),
+		"redisv9", model.WithRedisConfig(&model.RedisOptions{Addrs: addrs, EnableCluster: enableCluster}),
 		model.WithTLS(tlsConfig))
 	assert.Nil(t, err)
 

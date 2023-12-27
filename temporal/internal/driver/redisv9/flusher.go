@@ -1,13 +1,13 @@
-package redisv8
+package redisv9
 
 import (
 	"context"
 
 	"github.com/TykTechnologies/storage/temporal/temperr"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
-func (r *RedisV8) FlushAll(ctx context.Context) error {
+func (r *RedisV9) FlushAll(ctx context.Context) error {
 	switch client := r.client.(type) {
 	case *redis.ClusterClient:
 		return client.ForEachMaster(ctx, func(context context.Context, client *redis.Client) error {

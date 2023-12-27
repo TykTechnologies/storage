@@ -935,10 +935,10 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 	}{
 		{
 			name: "valid_search",
-			setup: func(redisV8 model.KeyValue) {
+			setup: func(redis model.KeyValue) {
 				ctx := context.Background()
-				assert.NoError(t, redisV8.Set(ctx, "key2", "value2", 0))
-				assert.NoError(t, redisV8.Set(ctx, "key1", "value1", 0))
+				assert.NoError(t, redis.Set(ctx, "key2", "value2", 0))
+				assert.NoError(t, redis.Set(ctx, "key1", "value1", 0))
 			},
 			searchStr: "key*",
 			cursor:    0,
