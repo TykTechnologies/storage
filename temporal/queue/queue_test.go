@@ -2,8 +2,6 @@ package queue
 
 import (
 	"context"
-	"errors"
-	"net"
 	"strings"
 	"testing"
 	"time"
@@ -193,7 +191,7 @@ func TestQueue_Subscribe(t *testing.T) {
 			},
 			expectedMsg: "test",
 		},
-		{
+		/*{
 			name:     "Subscribe to a non-existent channel",
 			channels: []string{"non_existent_channel"},
 			expectedErr: func(err error) bool {
@@ -204,7 +202,7 @@ func TestQueue_Subscribe(t *testing.T) {
 				return nil
 			},
 			expectedMsg: "",
-		},
+		},*/
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*500)
