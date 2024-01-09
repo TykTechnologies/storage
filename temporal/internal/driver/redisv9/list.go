@@ -87,26 +87,34 @@ func (r *RedisV9) Append(ctx context.Context, pipelined bool, key string, values
 // Pop removes and returns the first count elements of the list stored at key.
 // If stop is -1, all the elements from start to the end of the list are removed and returned.
 func (r *RedisV9) Pop(ctx context.Context, key string, stop int64) ([]string, error) {
-	var res *redis.StringSliceCmd
+	if stop == 0 {
+		stop = -1
+	}
 
+	var lrange *redis.StringSliceCmd
 	_, err := r.client.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		search := stop
-		if search > 0 {
-			search--
-		}
-		res = pipe.LRange(ctx, key, 0, search)
+		lrange = pipe.LRange(ctx, key, 0, getStopIndex(stop))
 
 		if stop == -1 {
 			pipe.Del(ctx, key)
 		} else {
 			pipe.LTrim(ctx, key, stop, -1)
 		}
-
 		return nil
 	})
+
 	if err != nil {
 		return nil, err
 	}
 
-	return res.Result()
+	return lrange.Val(), nil
+}
+
+// getStopIndex computes the stop index for LRange command.
+// Returns stop-1 if stop is not -1, otherwise returns stop itself.
+func getStopIndex(stop int64) int64 {
+	if stop != -1 {
+		return stop - 1
+	}
+	return stop
 }
