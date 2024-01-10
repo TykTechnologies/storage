@@ -102,7 +102,6 @@ func (r *RedisV9) Pop(ctx context.Context, key string, stop int64) ([]string, er
 		}
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -116,5 +115,6 @@ func getStopIndex(stop int64) int64 {
 	if stop != -1 {
 		return stop - 1
 	}
+
 	return stop
 }
