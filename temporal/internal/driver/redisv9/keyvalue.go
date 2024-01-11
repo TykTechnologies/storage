@@ -162,6 +162,10 @@ func (r *RedisV9) DeleteScanMatch(ctx context.Context, pattern string) (int64, e
 		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
 			deleted, err := r.deleteScanMatchSingleNode(ctx, client, pattern)
 			if err != nil {
+				if errors.Is(err, redis.ErrClosed) {
+					err = temperr.ClosedConnection
+				}
+
 				if firstError == nil {
 					firstError = err
 				}
@@ -232,6 +236,10 @@ func (r *RedisV9) Keys(ctx context.Context, pattern string) ([]string, error) {
 		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
 			keys, _, err := fetchKeys(ctx, client, pattern, 0, 0)
 			if err != nil {
+				if errors.Is(err, redis.ErrClosed) {
+					err = temperr.ClosedConnection
+				}
+
 				if firstError == nil {
 					firstError = err
 				}

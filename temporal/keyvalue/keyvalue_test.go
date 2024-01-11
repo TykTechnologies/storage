@@ -652,12 +652,23 @@ func TestKeyValue_DeleteScanMatch(t *testing.T) {
 			pattern:     "",
 			expectedErr: nil,
 		},
+		{
+			name:            "closed_connection",
+			pattern:         "key*",
+			expectedDeleted: 0,
+			expectedErr:     temperr.ClosedConnection,
+		},
 	}
 
 	for _, connector := range connectors {
 		for _, tc := range tcs {
 			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
 				ctx := context.Background()
+
+				if errors.Is(tc.expectedErr, temperr.ClosedConnection) {
+					err := connector.Disconnect(ctx)
+					assert.Nil(t, err)
+				}
 
 				kv, err := NewKeyValue(connector)
 				assert.Nil(t, err)
@@ -731,12 +742,23 @@ func TestKeyValue_Keys(t *testing.T) {
 			expectedKeys: []string{"test2", "test3"}, // SCAN will iterate over all the keys if no pattern provided.
 			expectedErr:  nil,
 		},
+		{
+			name:         "closed_connection",
+			pattern:      "key*",
+			expectedKeys: []string{},
+			expectedErr:  temperr.ClosedConnection,
+		},
 	}
 
 	for _, connector := range connectors {
 		for _, tc := range tcs {
 			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
 				ctx := context.Background()
+
+				if errors.Is(tc.expectedErr, temperr.ClosedConnection) {
+					err := connector.Disconnect(ctx)
+					assert.Nil(t, err)
+				}
 
 				kv, err := NewKeyValue(connector)
 				assert.Nil(t, err)
