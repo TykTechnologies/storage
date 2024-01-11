@@ -162,10 +162,6 @@ func (r *RedisV9) DeleteScanMatch(ctx context.Context, pattern string) (int64, e
 		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
 			deleted, err := r.deleteScanMatchSingleNode(ctx, client, pattern)
 			if err != nil {
-				if errors.Is(err, redis.ErrClosed) {
-					err = temperr.ClosedConnection
-				}
-
 				if firstError == nil {
 					firstError = err
 				}
@@ -179,6 +175,10 @@ func (r *RedisV9) DeleteScanMatch(ctx context.Context, pattern string) (int64, e
 			return nil
 		})
 
+		if errors.Is(err, redis.ErrClosed) || errors.Is(firstError, redis.ErrClosed) {
+			return totalDeleted, temperr.ClosedConnection
+		}
+
 		if firstError != nil {
 			return totalDeleted, firstError
 		}
@@ -191,6 +191,10 @@ func (r *RedisV9) DeleteScanMatch(ctx context.Context, pattern string) (int64, e
 		totalDeleted, err = r.deleteScanMatchSingleNode(ctx, client, pattern)
 
 		if err != nil {
+			if errors.Is(err, redis.ErrClosed) {
+				return totalDeleted, temperr.ClosedConnection
+			}
+
 			return totalDeleted, err
 		}
 
@@ -236,10 +240,6 @@ func (r *RedisV9) Keys(ctx context.Context, pattern string) ([]string, error) {
 		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
 			keys, _, err := fetchKeys(ctx, client, pattern, 0, 0)
 			if err != nil {
-				if errors.Is(err, redis.ErrClosed) {
-					err = temperr.ClosedConnection
-				}
-
 				if firstError == nil {
 					firstError = err
 				}
@@ -253,6 +253,10 @@ func (r *RedisV9) Keys(ctx context.Context, pattern string) ([]string, error) {
 			return nil
 		})
 
+		if errors.Is(err, redis.ErrClosed) || errors.Is(firstError, redis.ErrClosed) {
+			return nil, temperr.ClosedConnection
+		}
+
 		if firstError != nil {
 			return nil, firstError
 		}
@@ -263,6 +267,10 @@ func (r *RedisV9) Keys(ctx context.Context, pattern string) ([]string, error) {
 	case *redis.Client:
 		keys, _, err := fetchKeys(ctx, client, pattern, 0, 0)
 		if err != nil {
+			if errors.Is(err, redis.ErrClosed) {
+				return nil, temperr.ClosedConnection
+			}
+
 			return nil, err
 		}
 
@@ -376,10 +384,6 @@ func (r *RedisV9) GetKeysWithOpts(ctx context.Context,
 		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
 			localKeys, _, err := fetchKeys(ctx, client, searchStr, cursor, int64(count))
 			if err != nil {
-				if errors.Is(err, redis.ErrClosed) {
-					err = temperr.ClosedConnection
-				}
-
 				if firstError == nil {
 					firstError = err
 				}
@@ -392,6 +396,10 @@ func (r *RedisV9) GetKeysWithOpts(ctx context.Context,
 
 			return nil
 		})
+
+		if errors.Is(err, redis.ErrClosed) || errors.Is(firstError, redis.ErrClosed) {
+			return keys, temperr.ClosedConnection
+		}
 
 		if firstError != nil {
 			return keys, firstError

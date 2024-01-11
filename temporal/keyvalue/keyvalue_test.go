@@ -665,17 +665,18 @@ func TestKeyValue_DeleteScanMatch(t *testing.T) {
 			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
 				ctx := context.Background()
 
-				if errors.Is(tc.expectedErr, temperr.ClosedConnection) {
-					err := connector.Disconnect(ctx)
-					assert.Nil(t, err)
-				}
-
 				kv, err := NewKeyValue(connector)
 				assert.Nil(t, err)
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
+
+				if errors.Is(tc.expectedErr, temperr.ClosedConnection) {
+					err := connector.Disconnect(ctx)
+					assert.Nil(t, err)
+				} else {
+					defer assert.Nil(t, flusher.FlushAll(ctx))
+				}
 
 				if tc.setup != nil {
 					tc.setup(kv)
@@ -755,17 +756,18 @@ func TestKeyValue_Keys(t *testing.T) {
 			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
 				ctx := context.Background()
 
-				if errors.Is(tc.expectedErr, temperr.ClosedConnection) {
-					err := connector.Disconnect(ctx)
-					assert.Nil(t, err)
-				}
-
 				kv, err := NewKeyValue(connector)
 				assert.Nil(t, err)
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
+
+				if errors.Is(tc.expectedErr, temperr.ClosedConnection) {
+					err := connector.Disconnect(ctx)
+					assert.Nil(t, err)
+				} else {
+					defer assert.Nil(t, flusher.FlushAll(ctx))
+				}
 
 				if tc.setup != nil {
 					tc.setup(kv)
