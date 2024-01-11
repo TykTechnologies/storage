@@ -903,6 +903,32 @@ func TestKeyValue_GetKeysAndValuesWithFilter(t *testing.T) {
 			expectedValues: map[string]interface{}{"key": "value", "key2": "value2"},
 			expectedErr:    nil,
 		},
+		{
+			name:           "non_matching_pattern",
+			pattern:        "key*",
+			expectedValues: map[string]interface{}{},
+			expectedErr:    nil,
+		},
+		{
+			name: "empty_pattern",
+			setup: func(db KeyValue) {
+				err := db.Set(context.Background(), "key1", "value1", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+				err = db.Set(context.Background(), "key2", "value2", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+				err = db.Set(context.Background(), "test", "value2", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
+			pattern:        "",
+			expectedValues: map[string]interface{}{"key1": "value1", "key2": "value2", "test": "value2"},
+			expectedErr:    nil,
+		},
 	}
 
 	for _, connector := range connectors {
@@ -938,14 +964,13 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
-		name                string
-		setup               func(model.KeyValue)
-		searchStr           string
-		cursor              uint64
-		count               int
-		expectedKeysCheck   func([]string) bool
-		expectedErr         error
-		expectedCursorCheck func(uint64) bool
+		name              string
+		setup             func(model.KeyValue)
+		searchStr         string
+		cursor            uint64
+		count             int
+		expectedKeysCheck func([]string) bool
+		expectedErr       error
 	}{
 		{
 			name: "valid_search",
@@ -961,9 +986,6 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 				return len(s) == 2 && (s[0] == "key1" || s[0] == "key2") && (s[1] == "key1" || s[1] == "key2")
 			},
 			expectedErr: nil,
-			expectedCursorCheck: func(c uint64) bool {
-				return c == 0
-			},
 		},
 		{
 			name:      "empty_search",
@@ -975,9 +997,6 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 				return len(s) == 0
 			},
 			expectedErr: nil,
-			expectedCursorCheck: func(c uint64) bool {
-				return c == 0
-			},
 		},
 		{
 			name: "specific_pattern_search",
@@ -995,9 +1014,6 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 					(s[1] == "specific1" || s[1] == "specific2")
 			},
 			expectedErr: nil,
-			expectedCursorCheck: func(c uint64) bool {
-				return c == 0
-			},
 		},
 		{
 			name:      "non_matching_pattern",
@@ -1009,9 +1025,6 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 				return len(s) == 0
 			},
 			expectedErr: nil,
-			expectedCursorCheck: func(c uint64) bool {
-				return c == 0
-			},
 		},
 		{
 			name: "paginated_search",
@@ -1045,10 +1058,6 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 				return true
 			},
 			expectedErr: nil,
-			expectedCursorCheck: func(c uint64) bool {
-				// Cursor should be different than 0 as there are more keys to be fetched
-				return c != 0
-			},
 		},
 		{
 			name: "count_higher_than_actual_keys",
@@ -1060,14 +1069,11 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			},
 			searchStr: "cursorkey*",
 			cursor:    0,
-			count:     50,
+			count:     100,
 			expectedKeysCheck: func(s []string) bool {
 				return len(s) == 15
 			},
 			expectedErr: nil,
-			expectedCursorCheck: func(c uint64) bool {
-				return c == 0
-			},
 		},
 		{
 			name:      "test_with_error_condition",
@@ -1078,9 +1084,6 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 				return false
 			},
 			expectedErr: temperr.ClosedConnection,
-			expectedCursorCheck: func(c uint64) bool {
-				return c == 0
-			},
 		},
 	}
 
@@ -1105,12 +1108,10 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 					tc.setup(kv)
 				}
 
-				keys, cursor, err := kv.GetKeysWithOpts(ctx, tc.searchStr, tc.cursor, tc.count)
+				keys, err := kv.GetKeysWithOpts(ctx, tc.searchStr, tc.cursor, tc.count)
 				assert.Equal(t, tc.expectedErr, err)
-
 				if err == nil {
 					assert.True(t, tc.expectedKeysCheck(keys))
-					assert.True(t, tc.expectedCursorCheck(cursor))
 				}
 			})
 		}
