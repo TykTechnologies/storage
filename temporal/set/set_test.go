@@ -63,10 +63,7 @@ func TestSet_AddMember(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer func(ctx context.Context) {
-					err := flusher.FlushAll(ctx)
-					assert.Nil(t, err)
-				}(ctx)
+				defer assert.Nil(t, flusher.FlushAll(ctx))
 
 				if tc.setup != nil {
 					tc.setup(set)
@@ -132,10 +129,7 @@ func TestSet_Members(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer func(ctx context.Context) {
-					err := flusher.FlushAll(ctx)
-					assert.Nil(t, err)
-				}(ctx)
+				defer assert.Nil(t, flusher.FlushAll(ctx))
 
 				if tc.setup != nil {
 					tc.setup(set)
@@ -222,10 +216,7 @@ func TestSet_IsMember(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer func(ctx context.Context) {
-					err := flusher.FlushAll(ctx)
-					assert.Nil(t, err)
-				}(ctx)
+				defer assert.Nil(t, flusher.FlushAll(ctx))
 
 				if tc.setup != nil {
 					tc.setup(set)
@@ -316,10 +307,7 @@ func TestSet_RemoveMember(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer func(ctx context.Context) {
-					err := flusher.FlushAll(ctx)
-					assert.Nil(t, err)
-				}(ctx)
+				defer assert.Nil(t, flusher.FlushAll(ctx))
 
 				if tc.setup != nil {
 					tc.setup(set)
