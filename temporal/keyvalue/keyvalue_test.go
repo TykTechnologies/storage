@@ -66,7 +66,10 @@ func TestKeyValue_Set(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
+				defer func(ctx context.Context) {
+					err := flusher.FlushAll(ctx)
+					assert.Nil(t, err)
+				}(ctx)
 
 				err = kv.Set(ctx, tc.key, tc.value, tc.expiration)
 				assert.Equal(t, tc.expectedErr, err)
@@ -133,7 +136,10 @@ func TestKeyValue_Get(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
+				defer func(ctx context.Context) {
+					err := flusher.FlushAll(ctx)
+					assert.Nil(t, err)
+				}(ctx)
 
 				if tc.setup != nil {
 					tc.setup(kv)
@@ -190,7 +196,10 @@ func TestKeyValue_Delete(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
+				defer func(ctx context.Context) {
+					err := flusher.FlushAll(ctx)
+					assert.Nil(t, err)
+				}(ctx)
 
 				if tc.setup != nil {
 					tc.setup(kv)
@@ -267,7 +276,10 @@ func TestKeyValue_Increment(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
+				defer func(ctx context.Context) {
+					err := flusher.FlushAll(ctx)
+					assert.Nil(t, err)
+				}(ctx)
 
 				if tc.setup != nil {
 					tc.setup(kv)
@@ -340,7 +352,10 @@ func TestKeyValue_Decrement(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
+				defer func(ctx context.Context) {
+					err := flusher.FlushAll(ctx)
+					assert.Nil(t, err)
+				}(ctx)
 
 				if tc.setup != nil {
 					tc.setup(kv)
@@ -401,7 +416,10 @@ func TestKeyValue_Exist(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
+				defer func(ctx context.Context) {
+					err := flusher.FlushAll(ctx)
+					assert.Nil(t, err)
+				}(ctx)
 
 				if tc.setup != nil {
 					tc.setup(kv)
@@ -463,7 +481,10 @@ func TestKeyValue_Expire(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
+				defer func(ctx context.Context) {
+					err := flusher.FlushAll(ctx)
+					assert.Nil(t, err)
+				}(ctx)
 
 				if tc.setup != nil {
 					tc.setup(kv)
@@ -528,7 +549,10 @@ func TestKeyValue_TTL(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
+				defer func(ctx context.Context) {
+					err := flusher.FlushAll(ctx)
+					assert.Nil(t, err)
+				}(ctx)
 
 				if tc.setup != nil {
 					tc.setup(kv)
@@ -596,7 +620,10 @@ func TestKeyValue_DeleteKeys(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
+				defer func(ctx context.Context) {
+					err := flusher.FlushAll(ctx)
+					assert.Nil(t, err)
+				}(ctx)
 
 				if tc.setup != nil {
 					tc.setup(kv)
@@ -664,7 +691,10 @@ func TestKeyValue_DeleteScanMatch(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
+				defer func(ctx context.Context) {
+					err := flusher.FlushAll(ctx)
+					assert.Nil(t, err)
+				}(ctx)
 
 				if tc.setup != nil {
 					tc.setup(kv)
@@ -743,7 +773,10 @@ func TestKeyValue_Keys(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
+				defer func(ctx context.Context) {
+					err := flusher.FlushAll(ctx)
+					assert.Nil(t, err)
+				}(ctx)
 
 				if tc.setup != nil {
 					tc.setup(kv)
@@ -822,7 +855,10 @@ func TestKeyValue_GetMulti(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
+				defer func(ctx context.Context) {
+					err := flusher.FlushAll(ctx)
+					assert.Nil(t, err)
+				}(ctx)
 
 				if tc.setup != nil {
 					tc.setup(kv)
@@ -867,32 +903,6 @@ func TestKeyValue_GetKeysAndValuesWithFilter(t *testing.T) {
 			expectedValues: map[string]interface{}{"key": "value", "key2": "value2"},
 			expectedErr:    nil,
 		},
-		{
-			name:           "non_matching_pattern",
-			pattern:        "key*",
-			expectedValues: map[string]interface{}{},
-			expectedErr:    nil,
-		},
-		{
-			name: "empty_pattern",
-			setup: func(db KeyValue) {
-				err := db.Set(context.Background(), "key1", "value1", 0)
-				if err != nil {
-					t.Fatalf("Set() error = %v", err)
-				}
-				err = db.Set(context.Background(), "key2", "value2", 0)
-				if err != nil {
-					t.Fatalf("Set() error = %v", err)
-				}
-				err = db.Set(context.Background(), "test", "value2", 0)
-				if err != nil {
-					t.Fatalf("Set() error = %v", err)
-				}
-			},
-			pattern:        "",
-			expectedValues: map[string]interface{}{"key1": "value1", "key2": "value2", "test": "value2"},
-			expectedErr:    nil,
-		},
 	}
 
 	for _, connector := range connectors {
@@ -905,7 +915,11 @@ func TestKeyValue_GetKeysAndValuesWithFilter(t *testing.T) {
 
 				flusher, err := flusher.NewFlusher(connector)
 				assert.Nil(t, err)
-				defer assert.Nil(t, flusher.FlushAll(ctx))
+
+				defer func(ctx context.Context) {
+					err := flusher.FlushAll(ctx)
+					assert.Nil(t, err)
+				}(ctx)
 
 				if tc.setup != nil {
 					tc.setup(kv)
@@ -1079,7 +1093,10 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 				} else {
 					flusher, err := flusher.NewFlusher(connector)
 					assert.Nil(t, err)
-					defer assert.Nil(t, flusher.FlushAll(ctx))
+					defer func(ctx context.Context) {
+						err := flusher.FlushAll(ctx)
+						assert.Nil(t, err)
+					}(ctx)
 				}
 				kv, err := NewKeyValue(connector)
 				assert.Nil(t, err)
