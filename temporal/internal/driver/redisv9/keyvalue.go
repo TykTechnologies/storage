@@ -388,6 +388,7 @@ func (r *RedisV9) GetKeysWithOpts(ctx context.Context,
 		if firstError != nil {
 			return keys, firstError
 		}
+
 		if err != nil {
 			return keys, err
 		}
