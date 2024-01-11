@@ -77,10 +77,7 @@ func TestSortedSet_AddScoredMember(t *testing.T) {
 		flusher, err := flusher.NewFlusher(connector)
 		assert.Nil(t, err)
 
-		defer func(ctx context.Context) {
-			err := flusher.FlushAll(ctx)
-			assert.Nil(t, err)
-		}(ctx)
+		defer assert.Nil(t, flusher.FlushAll(ctx))
 
 		for _, tc := range testCases {
 			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
@@ -203,10 +200,7 @@ func TestSortedSet_GetMembersByScoreRange(t *testing.T) {
 		flusher, err := flusher.NewFlusher(connector)
 		assert.Nil(t, err)
 
-		defer func(ctx context.Context) {
-			err := flusher.FlushAll(ctx)
-			assert.Nil(t, err)
-		}(ctx)
+		defer assert.Nil(t, flusher.FlushAll(ctx))
 
 		for _, member := range testMembers {
 			_, err := sortedSet.AddScoredMember(ctx, testKey, member.member, member.score)
@@ -298,10 +292,7 @@ func TestSortedSet_RemoveMembersByScoreRange(t *testing.T) {
 		flusher, err := flusher.NewFlusher(connector)
 		assert.Nil(t, err)
 
-		defer func(ctx context.Context) {
-			err := flusher.FlushAll(ctx)
-			assert.Nil(t, err)
-		}(ctx)
+		defer assert.Nil(t, flusher.FlushAll(ctx))
 
 		for _, member := range testMembers {
 			_, err := sortedSet.AddScoredMember(ctx, testKey, member.member, member.score)
