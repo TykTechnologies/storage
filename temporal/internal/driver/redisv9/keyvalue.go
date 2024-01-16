@@ -377,17 +377,14 @@ func (r *RedisV9) GetKeysWithOpts(ctx context.Context,
 ) ([]string, int, error) {
 	var keys []string
 	var mutex sync.Mutex
-	var firstError error
+
 	currentCursor := 0
 	switch client := r.client.(type) {
 	case *redis.ClusterClient:
 		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
 			localKeys, cursor, err := fetchKeys(ctx, client, searchStr, cursor, int64(count))
 			if err != nil {
-				if firstError == nil {
-					firstError = err
-				}
-				return nil // Continue to next node
+				return err
 			}
 
 			mutex.Lock()
@@ -406,12 +403,8 @@ func (r *RedisV9) GetKeysWithOpts(ctx context.Context,
 			return nil
 		})
 
-		if errors.Is(err, redis.ErrClosed) || errors.Is(firstError, redis.ErrClosed) {
+		if errors.Is(err, redis.ErrClosed) {
 			return keys, 0, temperr.ClosedConnection
-		}
-
-		if firstError != nil {
-			return keys, 0, firstError
 		}
 
 		if err != nil {
