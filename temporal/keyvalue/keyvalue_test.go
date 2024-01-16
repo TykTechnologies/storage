@@ -1116,7 +1116,6 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 					tc.setup(kv)
 				}
 
-				// TODO: Check cursor
 				keys, cursor, err := kv.GetKeysWithOpts(ctx, tc.searchStr, tc.cursor, tc.count)
 				assert.Equal(t, tc.expectedErr, err)
 				if err == nil {
