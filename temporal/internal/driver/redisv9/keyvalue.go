@@ -374,15 +374,15 @@ func (r *RedisV9) GetKeysWithOpts(ctx context.Context,
 	searchStr string,
 	cursor uint64,
 	count int,
-) ([]string, error) {
+) ([]string, int, error) {
 	var keys []string
 	var mutex sync.Mutex
 	var firstError error
-
+	currentCursor := 0
 	switch client := r.client.(type) {
 	case *redis.ClusterClient:
 		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
-			localKeys, _, err := fetchKeys(ctx, client, searchStr, cursor, int64(count))
+			localKeys, cursor, err := fetchKeys(ctx, client, searchStr, cursor, int64(count))
 			if err != nil {
 				if firstError == nil {
 					firstError = err
@@ -392,40 +392,50 @@ func (r *RedisV9) GetKeysWithOpts(ctx context.Context,
 
 			mutex.Lock()
 			keys = append(keys, localKeys...)
+
+			if cursor != 0 {
+				currentCursor = int(cursor)
+			}
+
+			if cursor != uint64(currentCursor) {
+				return errors.New("cursor mismatch")
+			}
+
 			mutex.Unlock()
 
 			return nil
 		})
 
 		if errors.Is(err, redis.ErrClosed) || errors.Is(firstError, redis.ErrClosed) {
-			return keys, temperr.ClosedConnection
+			return keys, 0, temperr.ClosedConnection
 		}
 
 		if firstError != nil {
-			return keys, firstError
+			return keys, 0, firstError
 		}
 
 		if err != nil {
-			return keys, err
+			return keys, 0, err
 		}
 
 	case *redis.Client:
-		localKeys, _, err := fetchKeys(ctx, client, searchStr, cursor, int64(count))
+		localKeys, cursor, err := fetchKeys(ctx, client, searchStr, cursor, int64(count))
 		if err != nil {
 			if errors.Is(err, redis.ErrClosed) {
-				return localKeys, temperr.ClosedConnection
+				return localKeys, currentCursor, temperr.ClosedConnection
 			}
 
-			return localKeys, err
+			return localKeys, currentCursor, err
 		}
 
+		currentCursor = int(cursor)
 		keys = localKeys
 
 	default:
-		return nil, temperr.InvalidRedisClient
+		return nil, currentCursor, temperr.InvalidRedisClient
 	}
 
-	return keys, nil
+	return keys, currentCursor, nil
 }
 
 func fetchKeys(ctx context.Context,
@@ -436,20 +446,11 @@ func fetchKeys(ctx context.Context,
 ) ([]string, uint64, error) {
 	var keys []string
 
-	for {
-		var iterKeys []string
-		var err error
+	var err error
 
-		iterKeys, cursor, err = client.Scan(ctx, cursor, pattern, count).Result()
-		if err != nil {
-			return nil, 0, err
-		}
-
-		keys = append(keys, iterKeys...)
-
-		if cursor == 0 {
-			break
-		}
+	keys, cursor, err = client.Scan(ctx, cursor, pattern, count).Result()
+	if err != nil {
+		return nil, 0, err
 	}
 
 	return keys, cursor, nil

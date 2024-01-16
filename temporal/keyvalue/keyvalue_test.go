@@ -949,13 +949,14 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 	defer testutil.CloseConnectors(t, connectors)
 
 	tcs := []struct {
-		name              string
-		setup             func(model.KeyValue)
-		searchStr         string
-		cursor            uint64
-		count             int
-		expectedKeysCheck func([]string) bool
-		expectedErr       error
+		name                string
+		setup               func(model.KeyValue)
+		searchStr           string
+		cursor              uint64
+		count               int
+		expectedKeysCheck   func([]string) bool
+		expectedCursorCheck func(uint64) bool
+		expectedErr         error
 	}{
 		{
 			name: "valid_search",
@@ -970,6 +971,9 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			expectedKeysCheck: func(s []string) bool {
 				return len(s) == 2 && (s[0] == "key1" || s[0] == "key2") && (s[1] == "key1" || s[1] == "key2")
 			},
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
+			},
 			expectedErr: nil,
 		},
 		{
@@ -980,6 +984,9 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			count:     10,
 			expectedKeysCheck: func(s []string) bool {
 				return len(s) == 0
+			},
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
 			},
 			expectedErr: nil,
 		},
@@ -998,6 +1005,9 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 					(s[0] == "specific1" || s[0] == "specific2") &&
 					(s[1] == "specific1" || s[1] == "specific2")
 			},
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
+			},
 			expectedErr: nil,
 		},
 		{
@@ -1008,6 +1018,9 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			count:     10,
 			expectedKeysCheck: func(s []string) bool {
 				return len(s) == 0
+			},
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
 			},
 			expectedErr: nil,
 		},
@@ -1042,6 +1055,10 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 
 				return true
 			},
+			expectedCursorCheck: func(c uint64) bool {
+				// Cursor should be different than 0 as there are more keys to be fetched
+				return c != 0
+			},
 			expectedErr: nil,
 		},
 		{
@@ -1058,6 +1075,9 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			expectedKeysCheck: func(s []string) bool {
 				return len(s) == 15
 			},
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
+			},
 			expectedErr: nil,
 		},
 		{
@@ -1067,6 +1087,9 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 			count:     10,
 			expectedKeysCheck: func(s []string) bool {
 				return false
+			},
+			expectedCursorCheck: func(c uint64) bool {
+				return c == 0
 			},
 			expectedErr: temperr.ClosedConnection,
 		},
@@ -1093,10 +1116,12 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 					tc.setup(kv)
 				}
 
-				keys, err := kv.GetKeysWithOpts(ctx, tc.searchStr, tc.cursor, tc.count)
+				// TODO: Check cursor
+				keys, cursor, err := kv.GetKeysWithOpts(ctx, tc.searchStr, tc.cursor, tc.count)
 				assert.Equal(t, tc.expectedErr, err)
 				if err == nil {
 					assert.True(t, tc.expectedKeysCheck(keys))
+					assert.True(t, tc.expectedCursorCheck(uint64(cursor)))
 				}
 			})
 		}
