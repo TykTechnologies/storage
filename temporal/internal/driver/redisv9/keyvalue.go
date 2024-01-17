@@ -390,13 +390,7 @@ func (r *RedisV9) GetKeysWithOpts(ctx context.Context,
 			mutex.Lock()
 			keys = append(keys, localKeys...)
 
-			if cursor != 0 {
-				currentCursor = int(cursor)
-			}
-
-			if cursor != uint64(currentCursor) {
-				return errors.New("cursor mismatch")
-			}
+			currentCursor = int(cursor)
 
 			mutex.Unlock()
 
