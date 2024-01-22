@@ -99,12 +99,18 @@ func (r *RedisV9) Expire(ctx context.Context, key string, expiration time.Durati
 // TTL returns the remaining time to live of a key that has a timeout
 func (r *RedisV9) TTL(ctx context.Context, key string) (int64, error) {
 	if key == "" {
-		return 0, temperr.KeyEmpty
+		return -2, temperr.KeyEmpty
 	}
 
 	duration, err := r.client.TTL(ctx, key).Result()
 	if err != nil {
 		return 0, err
+	}
+
+	// since redis-go v8.3.1, if there's no expiration or the key doesn't exists,
+	// the ttl returned is measured in nanoseconds
+	if duration.Nanoseconds() == -1 || duration.Nanoseconds() == -2 {
+		return duration.Nanoseconds(), nil
 	}
 
 	return int64(duration.Seconds()), nil
