@@ -77,8 +77,25 @@ type KeyValue interface {
 	GetMulti(ctx context.Context, keys []string) (values []interface{}, err error)
 	// GetKeysAndValuesWithFilter returns all keys and values that match the given pattern
 	GetKeysAndValuesWithFilter(ctx context.Context, pattern string) (keysAndValues map[string]interface{}, err error)
-	// GetKeysWithOpts returns all keys that match the given pattern with options (cursor, count)
-	GetKeysWithOpts(ctx context.Context, searchStr string, cursor uint64, count int) ([]string, int, error)
+	// GetKeysWithOpts performs a paginated scan of keys in a database.
+	//
+	// Parameters:
+	//
+	//	ctx:       Execution context.
+	//	searchStr: Pattern for filtering keys (glob-style patterns allowed).
+	//	cursor:    Map of node addresses to cursor positions for pagination.
+	//	           A nil map is recommended for the first call to this method.
+	//	count:     Approximate number of keys to return per scan.
+	//
+	// Returns:
+	//
+	//	keys:          	Slice of keys matching the searchStr pattern.
+	//	updatedCursor: 	Updated cursor map for subsequent pagination.
+	//					Use this value for the cursor parameter in the next call to this method.
+	//	continueScan:  	Indicates if more keys are available for scanning (true if any cursor is non-zero).
+	//	err:           	Error, if any occurred during execution.
+	GetKeysWithOpts(ctx context.Context, searchStr string, cursors map[string]uint64,
+		count int64) (keys []string, updatedCursor map[string]uint64, continueScan bool, err error)
 }
 
 type Flusher interface {
