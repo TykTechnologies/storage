@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/TykTechnologies/storage/temporal/temperr"
@@ -159,18 +160,34 @@ func (r *RedisV9) deleteKeysCluster(ctx context.Context, cluster *redis.ClusterC
 // DeleteScanMatch deletes all keys matching the given pattern
 func (r *RedisV9) DeleteScanMatch(ctx context.Context, pattern string) (int64, error) {
 	var totalDeleted int64
+	var mutex sync.Mutex
+	var firstError error
 
 	switch client := r.client.(type) {
 	case *redis.ClusterClient:
 		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
 			deleted, err := r.deleteScanMatchSingleNode(ctx, client, pattern)
 			if err != nil {
-				return err
+				if firstError == nil {
+					firstError = err
+				}
+				return nil // Continue with other nodes
 			}
 
+			mutex.Lock()
 			totalDeleted += deleted
+			mutex.Unlock()
+
 			return nil
 		})
+
+		if errors.Is(err, redis.ErrClosed) || errors.Is(firstError, redis.ErrClosed) {
+			return totalDeleted, temperr.ClosedConnection
+		}
+
+		if firstError != nil {
+			return totalDeleted, firstError
+		}
 		if err != nil {
 			return totalDeleted, err
 		}
@@ -180,6 +197,10 @@ func (r *RedisV9) DeleteScanMatch(ctx context.Context, pattern string) (int64, e
 		totalDeleted, err = r.deleteScanMatchSingleNode(ctx, client, pattern)
 
 		if err != nil {
+			if errors.Is(err, redis.ErrClosed) {
+				return totalDeleted, temperr.ClosedConnection
+			}
+
 			return totalDeleted, err
 		}
 
@@ -217,18 +238,34 @@ func (r *RedisV9) deleteScanMatchSingleNode(ctx context.Context, client redis.Cm
 // Keys returns all keys matching the given pattern
 func (r *RedisV9) Keys(ctx context.Context, pattern string) ([]string, error) {
 	var sessions []string
+	var mutex sync.Mutex
+	var firstError error
 
 	switch client := r.client.(type) {
 	case *redis.ClusterClient:
 		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
 			keys, _, err := fetchKeys(ctx, client, pattern, 0, 0)
 			if err != nil {
-				return err
+				if firstError == nil {
+					firstError = err
+				}
+				return nil // continue with other nodes
 			}
 
+			mutex.Lock()
 			sessions = append(sessions, keys...)
+			mutex.Unlock()
+
 			return nil
 		})
+
+		if errors.Is(err, redis.ErrClosed) || errors.Is(firstError, redis.ErrClosed) {
+			return nil, temperr.ClosedConnection
+		}
+
+		if firstError != nil {
+			return nil, firstError
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -236,6 +273,10 @@ func (r *RedisV9) Keys(ctx context.Context, pattern string) ([]string, error) {
 	case *redis.Client:
 		keys, _, err := fetchKeys(ctx, client, pattern, 0, 0)
 		if err != nil {
+			if errors.Is(err, redis.ErrClosed) {
+				return nil, temperr.ClosedConnection
+			}
+
 			return nil, err
 		}
 
@@ -334,56 +375,93 @@ func (r *RedisV9) GetKeysAndValuesWithFilter(ctx context.Context,
 	return result, nil
 }
 
-// GetKeysWithOpts retrieves keys with options like filter, cursor, and count
+// GetKeysWithOpts performs a paginated scan of keys in a Redis database using the SCAN command.
+// It receives a cursor map that contains the cursor position for each Redis node in the cluster.
+//
+// Parameters:
+//
+//	ctx:       Execution context.
+//	searchStr: Pattern for filtering keys (glob-style patterns allowed).
+//	cursor:    Map of Redis node addresses to cursor positions for pagination.
+//			   In the first iteration, map must be empty or nil.
+//	count:     Approximate number of keys to return per scan.
+//
+// Returns:
+//
+//	keys:          Slice of keys matching the searchStr pattern.
+//	updatedCursor: Updated cursor map for subsequent pagination.
+//	continueScan:  Indicates if more keys are available for scanning (true if any cursor is non-zero).
+//	err:           Error, if any occurred during execution.
 func (r *RedisV9) GetKeysWithOpts(ctx context.Context,
 	searchStr string,
-	cursor uint64,
-	count int,
-) ([]string, uint64, error) {
+	cursor map[string]uint64,
+	count int64,
+) ([]string, map[string]uint64, bool, error) {
 	var keys []string
-	var finalCursor uint64
+	var mutex sync.Mutex
+	var continueScan bool
+
+	if cursor == nil {
+		cursor = make(map[string]uint64)
+	}
 
 	switch client := r.client.(type) {
 	case *redis.ClusterClient:
 		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
-			localKeys, localCursor, err := fetchKeys(ctx, client, searchStr, cursor, int64(count))
+			currentCursor, exists := cursor[client.String()]
+			if exists && currentCursor == 0 {
+				// Cursor is zero, no more keys to scan
+				return nil
+			}
+
+			localKeys, fkCursor, err := fetchKeys(ctx, client, searchStr, cursor[client.String()], count)
 			if err != nil {
 				return err
 			}
 
+			mutex.Lock()
 			keys = append(keys, localKeys...)
-			finalCursor = localCursor
+			cursor[client.String()] = fkCursor
+			if fkCursor != 0 {
+				continueScan = true
+			}
+			mutex.Unlock()
+
 			return nil
 		})
-		if err != nil {
-			if errors.Is(err, redis.ErrClosed) {
-				return keys, finalCursor, temperr.ClosedConnection
-			}
 
-			return keys, finalCursor, err
+		if errors.Is(err, redis.ErrClosed) {
+			return keys, cursor, continueScan, temperr.ClosedConnection
+		}
+
+		if err != nil {
+			return keys, cursor, continueScan, err
 		}
 
 	case *redis.Client:
-		localKeys, localCursor, err := fetchKeys(ctx, client, searchStr, cursor, int64(count))
+		localKeys, fkCursor, err := fetchKeys(ctx, client, searchStr, cursor[client.String()], int64(count))
 		if err != nil {
 			if errors.Is(err, redis.ErrClosed) {
-				return localKeys, localCursor, temperr.ClosedConnection
+				return localKeys, cursor, continueScan, temperr.ClosedConnection
 			}
 
-			return localKeys, localCursor, err
+			return localKeys, cursor, continueScan, err
 		}
 
+		cursor[client.String()] = fkCursor
+
+		if fkCursor != 0 {
+			continueScan = true
+		}
 		keys = localKeys
-		finalCursor = localCursor
 
 	default:
-		return nil, 0, temperr.InvalidRedisClient
+		return nil, cursor, continueScan, temperr.InvalidRedisClient
 	}
 
-	return keys, finalCursor, nil
+	return keys, cursor, continueScan, nil
 }
 
-// fetchKeys retrieves keys with options like filter, cursor, and count
 func fetchKeys(ctx context.Context,
 	client redis.UniversalClient,
 	pattern string,
@@ -391,14 +469,13 @@ func fetchKeys(ctx context.Context,
 	count int64,
 ) ([]string, uint64, error) {
 	var keys []string
-	var finalCursor uint64
 
-	iter := client.Scan(ctx, cursor, pattern, count)
-	if err := iter.Err(); err != nil {
+	var err error
+
+	keys, cursor, err = client.Scan(ctx, cursor, pattern, count).Result()
+	if err != nil {
 		return nil, 0, err
 	}
 
-	keys, finalCursor = iter.Val()
-
-	return keys, finalCursor, nil
+	return keys, cursor, nil
 }

@@ -222,7 +222,7 @@ func (_m *KeyValue) GetKeysAndValuesWithFilter(ctx context.Context, pattern stri
 }
 
 // GetKeysWithOpts provides a mock function with given fields: ctx, searchStr, cursor, count
-func (_m *KeyValue) GetKeysWithOpts(ctx context.Context, searchStr string, cursor uint64, count int) ([]string, uint64, error) {
+func (_m *KeyValue) GetKeysWithOpts(ctx context.Context, searchStr string, cursor uint64, count int) ([]string, error) {
 	ret := _m.Called(ctx, searchStr, cursor, count)
 
 	if len(ret) == 0 {
@@ -230,9 +230,8 @@ func (_m *KeyValue) GetKeysWithOpts(ctx context.Context, searchStr string, curso
 	}
 
 	var r0 []string
-	var r1 uint64
-	var r2 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, uint64, int) ([]string, uint64, error)); ok {
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, uint64, int) ([]string, error)); ok {
 		return rf(ctx, searchStr, cursor, count)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, string, uint64, int) []string); ok {
@@ -243,19 +242,13 @@ func (_m *KeyValue) GetKeysWithOpts(ctx context.Context, searchStr string, curso
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, uint64, int) uint64); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, string, uint64, int) error); ok {
 		r1 = rf(ctx, searchStr, cursor, count)
 	} else {
-		r1 = ret.Get(1).(uint64)
+		r1 = ret.Error(1)
 	}
 
-	if rf, ok := ret.Get(2).(func(context.Context, string, uint64, int) error); ok {
-		r2 = rf(ctx, searchStr, cursor, count)
-	} else {
-		r2 = ret.Error(2)
-	}
-
-	return r0, r1, r2
+	return r0, r1
 }
 
 // GetMulti provides a mock function with given fields: ctx, keys
