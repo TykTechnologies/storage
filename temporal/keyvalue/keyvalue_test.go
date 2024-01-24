@@ -506,15 +506,39 @@ func TestKeyValue_TTL(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			name:        "non_existing_key",
+			name: "existing_non_exipiring_key",
+			setup: func(db KeyValue) {
+				err := db.Set(context.Background(), "key2", "value1", -1*time.Second)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
 			key:         "key2",
-			expectedTTL: 0,
+			expectedTTL: -1,
+			expectedErr: nil,
+		},
+		{
+			name: "key_without_ttl",
+			setup: func(db KeyValue) {
+				err := db.Set(context.Background(), "key_without_ttl", "value1", 0*time.Second)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+			},
+			key:         "key_without_ttl",
+			expectedTTL: -1,
+			expectedErr: nil,
+		},
+		{
+			name:        "non_existing_key",
+			key:         "non_existing_key",
+			expectedTTL: -2,
 			expectedErr: nil,
 		},
 		{
 			name:        "empty_key",
 			key:         "",
-			expectedTTL: 0,
+			expectedTTL: -2,
 			expectedErr: temperr.KeyEmpty,
 		},
 	}
