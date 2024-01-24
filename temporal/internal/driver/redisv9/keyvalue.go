@@ -370,13 +370,14 @@ func (r *RedisV9) GetKeysAndValuesWithFilter(ctx context.Context,
 }
 
 // GetKeysWithOpts performs a paginated scan of keys in a Redis database using the SCAN command.
+// It receives a cursor map that contains the cursor position for each Redis node in the cluster.
 //
 // Parameters:
 //
 //	ctx:       Execution context.
 //	searchStr: Pattern for filtering keys (glob-style patterns allowed).
 //	cursor:    Map of Redis node addresses to cursor positions for pagination.
-//	           Initializes internally if nil.
+//			   In the first iteration, map must be empty or nil.
 //	count:     Approximate number of keys to return per scan.
 //
 // Returns:
