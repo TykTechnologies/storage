@@ -3,4 +3,5 @@
 storage
 .DS_Store
 *.task/*
+temporal/.task/
 *.cov
