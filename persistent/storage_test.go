@@ -1,6 +1,7 @@
 package persistent
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,6 +9,9 @@ import (
 
 func TestNewPersistentStorage(t *testing.T) {
 	testCases := []string{Mgo, OfficialMongo, "unvalid"}
+	if os.Getenv("STORAGE_VERSION") == "6.0" || os.Getenv("STORAGE_VERSION") == "7.0" {
+		testCases = []string{OfficialMongo, "unvalid"}
+	}
 
 	for _, tc := range testCases {
 		t.Run(tc, func(t *testing.T) {

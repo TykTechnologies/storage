@@ -19,6 +19,7 @@ tasks:
     desc: "Run Go tests for specified storage and database"
     cmds:
       - |
+        echo "Running tests for {{.STORAGE_TYPE}} {{.DB}} {{.STORAGE_VERSION}} "
         if [ -z "{{.STORAGE_TYPE}}" ] || [ -z "{{.DB}}" ]; then
           echo "STORAGE_TYPE and DB must be set."
           exit 1
@@ -26,7 +27,7 @@ tasks:
         for pkg in $(go list ./{{.STORAGE_TYPE}}/...); do
           pkg_base=$(basename $pkg)
           coveragefile="${pkg_base}.cov"
-          tags=$([[ ${pkg} == *"driver"* ]] && echo "-tags {{.DB}}" || echo "")
+          tags=$([[ ${pkg} == *"driver"* ]] && echo "-tags {{.DB}}{{.STORAGE_VERSION}} " || echo "")
           go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -coverprofile=${coveragefile} -v ${pkg}
           if [ -f "${coveragefile}" ]; then
             mkdir -p "coverage/$(dirname ${pkg})"
@@ -48,6 +49,7 @@ tasks:
           STORAGE_TYPE: persistent
           DB: "{{.DB}}"
           DB_SETUP: "{{.DB_SETUP}}"
+          DB_VERSION: "{{.DB_VERSION}}"
 
   test-temporal:
     desc: "Run tests for temporal storage with specified database"
@@ -57,5 +59,6 @@ tasks:
           STORAGE_TYPE: temporal
           DB: "{{.DB}}"
           DB_SETUP: "{{.DB_SETUP}}"
+          DB_VERSION: "{{.DB_VERSION}}"
       - mkdir -p coverage/temporal
       - cp temporal/*.cov coverage/temporal/
