@@ -19,7 +19,7 @@ tasks:
     desc: "Run Go tests for specified storage and database"
     cmds:
       - |
-        echo "Running tests for {{.STORAGE_TYPE}} {{.DB}} {{.STORAGE_VERSION}} "
+        echo "Running tests for {{.STORAGE_TYPE}} {{.DB}} {{.DB_VERSION}} "
         if [ -z "{{.STORAGE_TYPE}}" ] || [ -z "{{.DB}}" ]; then
           echo "STORAGE_TYPE and DB must be set."
           exit 1
@@ -27,7 +27,7 @@ tasks:
         for pkg in $(go list ./{{.STORAGE_TYPE}}/...); do
           pkg_base=$(basename $pkg)
           coveragefile="${pkg_base}.cov"
-          tags=$([[ ${pkg} == *"driver"* ]] && echo "-tags {{.DB}}{{.STORAGE_VERSION}} " || echo "")
+          tags=$([[ ${pkg} == *"driver"* ]] && echo "-tags {{.DB}}{{.DB_VERSION}} " || echo "")
           go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -coverprofile=${coveragefile} -v ${pkg}
           if [ -f "${coveragefile}" ]; then
             mkdir -p "coverage/$(dirname ${pkg})"
