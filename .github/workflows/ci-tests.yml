@@ -60,7 +60,7 @@ jobs:
             version: 7.0
           - storagetype: persistent
             database: mongo
-            version: 6.1
+            version: 6.0
           - storagetype: temporal
             database: redis
             version: 6.0.0
