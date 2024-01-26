@@ -1,7 +1,6 @@
 package persistent
 
 import (
-	"fmt"
 	"os"
 	"testing"
 
