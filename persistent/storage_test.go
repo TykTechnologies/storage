@@ -11,7 +11,6 @@ import (
 func TestNewPersistentStorage(t *testing.T) {
 	testCases := []string{Mgo, OfficialMongo, "unvalid"}
 
-	fmt.Println("DB_VERSION: ", os.Getenv("DB_VERSION"))
 	// This is a hack to skip the tests for MongoDB 6 and 7
 	if os.Getenv("DB_VERSION") == "6" || os.Getenv("DB_VERSION") == "7" {
 		testCases = []string{OfficialMongo, "unvalid"}
