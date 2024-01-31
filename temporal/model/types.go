@@ -55,7 +55,8 @@ type KeyValue interface {
 	Get(ctx context.Context, key string) (value string, err error)
 	// Set sets the string value of a key
 	Set(ctx context.Context, key, value string, ttl time.Duration) error
-	// SetIfNotExist sets the string value of a key if the key does not exist. Returns true if the key was set, false otherwise.
+	// SetIfNotExist sets the string value of a key if the key does not exist.
+	// Returns true if the key was set, false otherwise.
 	SetIfNotExist(ctx context.Context, key, value string, expiration time.Duration) (bool, error)
 	// Delete removes the specified keys
 	Delete(ctx context.Context, key string) error
