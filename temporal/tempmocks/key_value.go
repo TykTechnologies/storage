@@ -373,6 +373,34 @@ func (_m *KeyValue) Set(ctx context.Context, key string, value string, ttl time.
 	return r0
 }
 
+// SetIfNotExist provides a mock function with given fields: ctx, key, value, expiration
+func (_m *KeyValue) SetIfNotExist(ctx context.Context, key string, value string, expiration time.Duration) (bool, error) {
+	ret := _m.Called(ctx, key, value, expiration)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetIfNotExist")
+	}
+
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, time.Duration) (bool, error)); ok {
+		return rf(ctx, key, value, expiration)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, time.Duration) bool); ok {
+		r0 = rf(ctx, key, value, expiration)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, time.Duration) error); ok {
+		r1 = rf(ctx, key, value, expiration)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // TTL provides a mock function with given fields: ctx, key
 func (_m *KeyValue) TTL(ctx context.Context, key string) (int64, error) {
 	ret := _m.Called(ctx, key)

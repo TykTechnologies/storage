@@ -477,3 +477,16 @@ func fetchKeys(ctx context.Context,
 
 	return keys, cursor, nil
 }
+
+func (r *RedisV9) SetIfNotExist(ctx context.Context, key, value string, expiration time.Duration) (bool, error) {
+	if key == "" {
+		return false, temperr.KeyEmpty
+	}
+
+	res := r.client.SetNX(ctx, key, value, expiration)
+	if res.Err() != nil {
+		return false, res.Err()
+	}
+
+	return res.Val(), nil
+}
