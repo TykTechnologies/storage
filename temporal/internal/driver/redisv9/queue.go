@@ -73,7 +73,7 @@ func (m *messageAdapter) Payload() (string, error) {
 func (r *subscriptionAdapter) Receive(ctx context.Context) (model.Message, error) {
 	timeout := time.Duration(0)
 	if deadline, ok := ctx.Deadline(); ok {
-		timeout = deadline.Sub(time.Now())
+		timeout = time.Until(deadline)
 	}
 
 	msg, err := r.pubSub.ReceiveTimeout(ctx, timeout)
