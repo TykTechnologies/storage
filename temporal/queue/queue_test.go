@@ -3,7 +3,6 @@ package queue
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -294,24 +293,22 @@ func TestQueue_Ctx(t *testing.T) {
 
 			didReceive := make(chan bool, 1)
 			go func(context.Context) {
-
 				defer func() {
 					close(didReceive)
 				}()
+
 				sub := queue.Subscribe(ctx, "test_channel")
 				defer sub.Close()
-
 				for {
 					select {
 					case <-ctx.Done():
 						return
 					default:
-						msg, _ := sub.Receive(ctx)
-						//assert.NotNil(t, err)
+						msg, err := sub.Receive(ctx)
 						if msg.Type() == model.MessageTypeSubscription {
 							continue
 						} else {
-							fmt.Print("Received message")
+							assert.NotNil(t, err)
 							didReceive <- true
 							return
 						}
@@ -319,7 +316,8 @@ func TestQueue_Ctx(t *testing.T) {
 				}
 			}(ctx)
 
-			queue.Publish(context.Background(), "test_channel", "test")
+			_, err = queue.Publish(context.Background(), "test_channel", "test")
+			assert.Nil(t, err)
 
 			// cancel the context now that the goroutine is running
 			cancel()
@@ -327,7 +325,5 @@ func TestQueue_Ctx(t *testing.T) {
 			// wait for the goroutine to exit
 			<-didReceive
 		})
-
 	}
-
 }
