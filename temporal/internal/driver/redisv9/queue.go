@@ -3,6 +3,8 @@ package redisv9
 import (
 	"context"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/TykTechnologies/storage/temporal/temperr"
@@ -70,7 +72,13 @@ func (m *messageAdapter) Payload() (string, error) {
 
 // Receive waits for and returns the next message from the subscription.
 func (r *subscriptionAdapter) Receive(ctx context.Context) (model.Message, error) {
-	msg, err := r.pubSub.Receive(ctx)
+	timeout := time.Duration(0)
+	deadline, ok := ctx.Deadline()
+	if ok {
+		timeout = deadline.Sub(time.Now())
+	}
+
+	msg, err := r.pubSub.ReceiveTimeout(ctx, timeout)
 	if err != nil {
 		if errors.Is(err, redis.ErrClosed) {
 			return nil, temperr.ClosedConnection
