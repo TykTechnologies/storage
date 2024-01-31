@@ -3,7 +3,6 @@ package redisv9
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/TykTechnologies/storage/temporal/model"
