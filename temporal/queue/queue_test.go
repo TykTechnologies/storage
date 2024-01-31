@@ -278,3 +278,52 @@ func TestQueue_NewQueue(t *testing.T) {
 	_, err := NewQueue(&testutil.StubConnector{})
 	assert.NotNil(t, err)
 }
+
+func TestQueue_Ctx(t *testing.T) {
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
+
+	for _, connector := range connectors {
+		t.Run(connector.Type(), func(t *testing.T) {
+			queue, err := NewQueue(connector)
+			assert.Nil(t, err)
+			assert.NotNil(t, queue)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+
+			didReceive := make(chan bool, 1)
+			go func(context.Context) {
+				defer func() {
+					close(didReceive)
+				}()
+
+				sub := queue.Subscribe(ctx, "test_channel")
+				defer sub.Close()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						msg, err := sub.Receive(ctx)
+						if msg.Type() == model.MessageTypeSubscription {
+							continue
+						} else {
+							assert.NotNil(t, err)
+							didReceive <- true
+							return
+						}
+					}
+				}
+			}(ctx)
+
+			_, err = queue.Publish(context.Background(), "test_channel", "test")
+			assert.Nil(t, err)
+
+			// cancel the context now that the goroutine is running
+			cancel()
+
+			// wait for the goroutine to exit
+			<-didReceive
+		})
+	}
+}
