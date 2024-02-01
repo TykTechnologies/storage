@@ -30,3 +30,12 @@ func (h *RedisV9) As(i interface{}) bool {
 
 	return false
 }
+
+func (h *RedisV9) SetAs(i interface{}) bool {
+	if x, ok := i.(*redis.UniversalClient); ok {
+		h.client = *x
+		return true
+	}
+
+	return false
+}

@@ -22,6 +22,8 @@ type Connector interface {
 	// As converts i to driver-specific types.
 	// Same concept as https://gocloud.dev/concepts/as/ but for connectors.
 	As(i interface{}) bool
+
+	SetAs(i interface{}) bool
 }
 
 type List interface {
