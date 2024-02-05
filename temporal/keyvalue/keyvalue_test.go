@@ -719,6 +719,8 @@ func TestKeyValue_Keys(t *testing.T) {
 	connectors := testutil.TestConnectors(t)
 	defer testutil.CloseConnectors(t, connectors)
 
+	fiftyExpectedKeys := make([]string, 50)
+
 	tcs := []struct {
 		name         string
 		setup        func(db KeyValue)
@@ -729,21 +731,16 @@ func TestKeyValue_Keys(t *testing.T) {
 		{
 			name: "existing_keys_pattern",
 			setup: func(db KeyValue) {
-				err := db.Set(context.Background(), "key1", "value1", 0)
-				if err != nil {
-					t.Fatalf("Set() error = %v", err)
-				}
-				err = db.Set(context.Background(), "key2", "value2", 0)
-				if err != nil {
-					t.Fatalf("Set() error = %v", err)
-				}
-				err = db.Set(context.Background(), "test", "value2", 0)
-				if err != nil {
-					t.Fatalf("Set() error = %v", err)
+				for i := 1; i <= 50; i++ {
+					fiftyExpectedKeys[i-1] = fmt.Sprintf("key%d", i)
+					err := db.Set(context.Background(), fmt.Sprintf("key%d", i), fmt.Sprintf("value%d", i), 0)
+					if err != nil {
+						t.Fatalf("Set() error = %v", err)
+					}
 				}
 			},
+			expectedKeys: fiftyExpectedKeys,
 			pattern:      "key*",
-			expectedKeys: []string{"key1", "key2"},
 			expectedErr:  nil,
 		},
 		{
