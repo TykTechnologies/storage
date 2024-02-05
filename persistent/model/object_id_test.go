@@ -92,7 +92,6 @@ func TestUnmarshalJSON(t *testing.T) {
 
 	var id2 ObjectID
 	err = id2.UnmarshalJSON(idBytes)
-
 	if err != nil {
 		t.Fatal(err)
 	}

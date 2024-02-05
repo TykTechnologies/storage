@@ -195,7 +195,6 @@ func (r *RedisV9) DeleteScanMatch(ctx context.Context, pattern string) (int64, e
 	case *redis.Client:
 		var err error
 		totalDeleted, err = r.deleteScanMatchSingleNode(ctx, client, pattern)
-
 		if err != nil {
 			if errors.Is(err, redis.ErrClosed) {
 				return totalDeleted, temperr.ClosedConnection
@@ -218,7 +217,6 @@ func (r *RedisV9) deleteScanMatchSingleNode(ctx context.Context, client redis.Cm
 
 	var keys []string
 	keys, _, err = client.Scan(ctx, cursor, pattern, 0).Result()
-
 	if err != nil {
 		return int64(deleted), err
 	}
@@ -479,13 +477,26 @@ func fetchKeys(ctx context.Context,
 	return keys, cursor, nil
 }
 
+func (r *RedisV9) SetIfNotExist(ctx context.Context, key, value string, expiration time.Duration) (bool, error) {
+	if key == "" {
+		return false, temperr.KeyEmpty
+	}
+
+	res := r.client.SetNX(ctx, key, value, expiration)
+	if res.Err() != nil {
+		return false, res.Err()
+	}
+
+	return res.Val(), nil
+}
+
 func fetchAllKeys(ctx context.Context,
 	client redis.UniversalClient,
 	pattern string,
 ) ([]string, error) {
-
 	iter := client.Scan(ctx, 0, pattern, 0).Iterator()
 	var keys []string
+
 	for iter.Next(ctx) {
 		keys = append(keys, iter.Val())
 	}

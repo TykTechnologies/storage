@@ -1258,3 +1258,96 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 		}
 	}
 }
+
+func TestKeyValue_SetIfNotExist(t *testing.T) {
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
+
+	tcs := []struct {
+		name        string
+		key         string
+		value       string
+		pre         func(kv model.KeyValue)
+		expiration  time.Duration
+		expectedErr error
+		expectedSet bool
+	}{
+		{
+			name:        "set_with_valid_key_and_value",
+			key:         "key1",
+			value:       "value1",
+			expiration:  10 * time.Second,
+			expectedErr: nil,
+			expectedSet: true,
+		},
+		{
+			name:        "set_with_empty_key",
+			key:         "",
+			value:       "value2",
+			expiration:  10 * time.Second,
+			expectedErr: temperr.KeyEmpty,
+		},
+		{
+			name:        "set_with_empty_value",
+			key:         "key3",
+			value:       "",
+			expiration:  10 * time.Second,
+			expectedErr: nil,
+			expectedSet: true,
+		},
+		{
+			name:        "set_with_no_expiration",
+			key:         "key4",
+			value:       "value4",
+			expiration:  10 * time.Second,
+			expectedErr: nil,
+			expectedSet: true,
+		},
+		{
+			name:        "set_already_existing_key",
+			key:         "key5",
+			value:       "value5",
+			expiration:  10 * time.Second,
+			expectedErr: nil,
+			pre: func(kv model.KeyValue) {
+				t.Helper()
+				err := kv.Set(context.Background(), "key5", "value5", 10*time.Second)
+				assert.Nil(t, err)
+			},
+			expectedSet: false,
+		},
+	}
+
+	for _, connector := range connectors {
+		for _, tc := range tcs {
+			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
+				ctx := context.Background()
+
+				kv, err := NewKeyValue(connector)
+				assert.Nil(t, err)
+
+				flusher, err := flusher.NewFlusher(connector)
+				assert.Nil(t, err)
+				defer assert.Nil(t, flusher.FlushAll(ctx))
+
+				if tc.pre != nil {
+					tc.pre(kv)
+				}
+
+				val, err := kv.SetIfNotExist(ctx, tc.key, tc.value, tc.expiration)
+				assert.Equal(t, tc.expectedErr, err)
+				assert.Equal(t, tc.expectedSet, val)
+				if err == nil {
+					actualValue, err := kv.Get(ctx, tc.key)
+					assert.Nil(t, err)
+
+					assert.Equal(t, tc.value, actualValue)
+
+					actualTTL, err := kv.TTL(ctx, tc.key)
+					assert.Nil(t, err)
+					assert.True(t, actualTTL <= int64(tc.expiration.Seconds()))
+				}
+			})
+		}
+	}
+}

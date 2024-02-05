@@ -55,6 +55,12 @@ jobs:
           - storagetype: persistent
             database: mongo
             version: 4.2
+          - storagetype: persistent
+            database: mongo
+            version: 7.0
+          - storagetype: persistent
+            database: mongo
+            version: 6.0
           - storagetype: temporal
             database: redis
             version: 6.0.0
@@ -114,6 +120,7 @@ jobs:
         env:
           DB: ${{ matrix.database }}
           DB_SETUP: ${{ matrix.instancetype }}
+          DB_VERSION: ${{ matrix.version }}
         run: task test-${{ matrix.storagetype }}
 
       - uses: actions/upload-artifact@v2
