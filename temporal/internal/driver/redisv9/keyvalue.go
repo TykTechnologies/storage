@@ -242,7 +242,7 @@ func (r *RedisV9) Keys(ctx context.Context, pattern string) ([]string, error) {
 	switch client := r.client.(type) {
 	case *redis.ClusterClient:
 		err := client.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
-			keys, _, err := fetchKeys(ctx, client, pattern, 0, 0)
+			keys, err := fetchAllKeys(ctx, client, pattern)
 			if err != nil {
 				if firstError == nil {
 					firstError = err
@@ -269,7 +269,7 @@ func (r *RedisV9) Keys(ctx context.Context, pattern string) ([]string, error) {
 		}
 
 	case *redis.Client:
-		keys, _, err := fetchKeys(ctx, client, pattern, 0, 0)
+		keys, err := fetchAllKeys(ctx, client, pattern)
 		if err != nil {
 			if errors.Is(err, redis.ErrClosed) {
 				return nil, temperr.ClosedConnection
@@ -279,7 +279,6 @@ func (r *RedisV9) Keys(ctx context.Context, pattern string) ([]string, error) {
 		}
 
 		sessions = keys
-
 	default:
 		return nil, temperr.InvalidRedisClient
 	}
@@ -412,7 +411,7 @@ func (r *RedisV9) GetKeysWithOpts(ctx context.Context,
 				return nil
 			}
 
-			localKeys, fkCursor, err := fetchKeys(ctx, client, searchStr, cursor[client.String()], count)
+			localKeys, fkCursor, err := fetchKeysWithCursor(ctx, client, searchStr, cursor[client.String()], count)
 			if err != nil {
 				return err
 			}
@@ -437,7 +436,7 @@ func (r *RedisV9) GetKeysWithOpts(ctx context.Context,
 		}
 
 	case *redis.Client:
-		localKeys, fkCursor, err := fetchKeys(ctx, client, searchStr, cursor[client.String()], int64(count))
+		localKeys, fkCursor, err := fetchKeysWithCursor(ctx, client, searchStr, cursor[client.String()], int64(count))
 		if err != nil {
 			if errors.Is(err, redis.ErrClosed) {
 				return localKeys, cursor, continueScan, temperr.ClosedConnection
@@ -460,7 +459,20 @@ func (r *RedisV9) GetKeysWithOpts(ctx context.Context,
 	return keys, cursor, continueScan, nil
 }
 
-func fetchKeys(ctx context.Context,
+func (r *RedisV9) SetIfNotExist(ctx context.Context, key, value string, expiration time.Duration) (bool, error) {
+	if key == "" {
+		return false, temperr.KeyEmpty
+	}
+
+	res := r.client.SetNX(ctx, key, value, expiration)
+	if res.Err() != nil {
+		return false, res.Err()
+	}
+
+	return res.Val(), nil
+}
+
+func fetchKeysWithCursor(ctx context.Context,
 	client redis.UniversalClient,
 	pattern string,
 	cursor uint64,
@@ -478,15 +490,16 @@ func fetchKeys(ctx context.Context,
 	return keys, cursor, nil
 }
 
-func (r *RedisV9) SetIfNotExist(ctx context.Context, key, value string, expiration time.Duration) (bool, error) {
-	if key == "" {
-		return false, temperr.KeyEmpty
+func fetchAllKeys(ctx context.Context,
+	client redis.UniversalClient,
+	pattern string,
+) ([]string, error) {
+	iter := client.Scan(ctx, 0, pattern, 0).Iterator()
+	var keys []string
+
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
 	}
 
-	res := r.client.SetNX(ctx, key, value, expiration)
-	if res.Err() != nil {
-		return false, res.Err()
-	}
-
-	return res.Val(), nil
+	return keys, iter.Err()
 }
