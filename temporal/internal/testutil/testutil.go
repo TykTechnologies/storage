@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/TykTechnologies/storage/temporal/connector"
+	"github.com/TykTechnologies/storage/temporal/internal/driver/local"
 	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/stretchr/testify/assert"
 )
@@ -42,8 +43,11 @@ func TestConnectors(t *testing.T) []model.Connector {
 
 	// redisv9 list
 	redisConnector := newRedisConnector(t)
-
 	connectors = append(connectors, redisConnector)
+
+	// local non-blocking hashmap
+	localConnector := local.NewLocalConnector(local.NewLockFreeStore())
+	connectors = append(connectors, localConnector)
 
 	return connectors
 }

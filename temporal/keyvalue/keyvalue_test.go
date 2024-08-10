@@ -100,7 +100,7 @@ func TestKeyValue_Get(t *testing.T) {
 	}{
 		{
 			name:          "non_existing_key",
-			key:           "key1",
+			key:           "key",
 			expectedValue: "",
 			expectedErr:   temperr.KeyNotFound,
 		},
@@ -1220,6 +1220,10 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 	}
 
 	for _, connector := range connectors {
+		if connector.Type() == "local" {
+			// local connector does not support SCAN
+			continue
+		}
 		for _, tc := range tcs {
 			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
 				ctx := context.Background()
