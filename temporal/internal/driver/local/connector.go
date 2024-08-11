@@ -9,6 +9,7 @@ import (
 
 type LocalConnector struct {
 	Store     KVStore
+	Broker    Broker
 	mutex     sync.RWMutex
 	connected bool
 }

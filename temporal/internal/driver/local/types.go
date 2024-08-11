@@ -2,6 +2,8 @@ package local
 
 import (
 	"time"
+
+	"github.com/TykTechnologies/storage/temporal/model"
 )
 
 type Object struct {
@@ -36,4 +38,9 @@ type KVStore interface {
 	Set(key string, value interface{}) error
 	Delete(key string) error
 	FlushAll() error
+}
+
+type Broker interface {
+	Publish(channel, message string) (int64, error)
+	Subscribe(channels ...string) model.Subscription
 }

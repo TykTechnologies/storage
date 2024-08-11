@@ -3,12 +3,14 @@ package local
 import "github.com/dustinxie/lockfree"
 
 type LockFreeStore struct {
-	store lockfree.HashMap
+	store  lockfree.HashMap
+	Broker Broker
 }
 
 func NewLockFreeStore() *LockFreeStore {
 	return &LockFreeStore{
-		store: lockfree.NewHashMap(),
+		store:  lockfree.NewHashMap(),
+		Broker: NewMockBroker(),
 	}
 }
 
