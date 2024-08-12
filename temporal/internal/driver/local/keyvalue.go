@@ -257,6 +257,12 @@ func (api *API) Decrement(ctx context.Context, key string) (newValue int64, err 
 		default:
 			return 0, temperr.KeyMisstype
 		}
+	} else {
+		var ok bool
+		v, ok = o.Value.(int64)
+		if !ok {
+			return 0, temperr.KeyMisstype
+		}
 	}
 
 	o.Value = v - 1

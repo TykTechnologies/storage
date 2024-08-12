@@ -326,6 +326,25 @@ func TestKeyValue_Decrement(t *testing.T) {
 			expectedErr:   nil,
 		},
 		{
+			name: "multi_decr_existing_key",
+			setup: func(db KeyValue) {
+				err := db.Set(context.Background(), "counter", "10", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+
+				for i := 0; i < 5; i++ {
+					_, err := db.Decrement(context.Background(), "counter")
+					if err != nil {
+						t.Fatalf("Set() error = %v", err)
+					}
+				}
+			},
+			key:           "counter",
+			expectedValue: 4,
+			expectedErr:   nil,
+		},
+		{
 			name:          "empty_key",
 			key:           "",
 			expectedValue: 0,
