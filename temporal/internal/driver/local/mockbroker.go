@@ -102,7 +102,6 @@ func (ms *MockSubscription) Close() error {
 	}
 
 	ms.closed = true
-	close(ms.msgChan)
 
 	ms.broker.mu.Lock()
 	defer ms.broker.mu.Unlock()
