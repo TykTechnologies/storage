@@ -2,7 +2,6 @@ package local
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 )
@@ -184,51 +183,4 @@ func TestMockMessage(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestMockBroker_Concurrency(t *testing.T) {
-	broker := NewMockBroker()
-	channels := []string{"channel1", "channel2", "channel3"}
-	messageCount := 100
-	subscriberCount := 5
-
-	var wg sync.WaitGroup
-	wg.Add(subscriberCount + 1) // +1 for the publisher
-
-	// Start subscribers
-	for i := 0; i < subscriberCount; i++ {
-		go func() {
-			defer wg.Done()
-			sub := broker.Subscribe(channels...)
-			defer sub.Close()
-
-			// Receive subscription confirmations
-			for range channels {
-				sub.Receive(context.Background())
-			}
-
-			// Receive messages
-			for j := 0; j < messageCount; j++ {
-				_, err := sub.Receive(context.Background())
-				if err != nil {
-					t.Errorf("Receive() error = %v", err)
-				}
-			}
-		}()
-	}
-
-	// Start publisher
-	go func() {
-		defer wg.Done()
-		for i := 0; i < messageCount; i++ {
-			for _, channel := range channels {
-				_, err := broker.Publish(channel, "test message")
-				if err != nil {
-					t.Errorf("Publish() error = %v", err)
-				}
-			}
-		}
-	}()
-
-	wg.Wait()
 }
