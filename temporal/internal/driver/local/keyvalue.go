@@ -404,7 +404,7 @@ func (api *API) Keys(ctx context.Context, pattern string) ([]string, error) {
 	if deletedKeyIndexObj != nil {
 		deletedKeysList := deletedKeyIndexObj.Value.(map[string]bool)
 		deletedKeys = make(map[string]bool, len(deletedKeysList))
-		for key, _ := range deletedKeysList {
+		for key := range deletedKeysList {
 			deletedKeys[key] = true
 		}
 	} else {
@@ -412,7 +412,7 @@ func (api *API) Keys(ctx context.Context, pattern string) ([]string, error) {
 	}
 
 	var retKeys []string
-	for key, _ := range keyIndex {
+	for key := range keyIndex {
 		// Check if the key matches the pattern and is not deleted
 		if (pattern == "" || strings.HasPrefix(key, pattern)) && !deletedKeys[key] {
 			retKeys = append(retKeys, key)

@@ -11,7 +11,7 @@ func (api *API) FlushAll(ctx context.Context) error {
 	}
 
 	keys := keyIndex.Value.(map[string]bool)
-	for key, _ := range keys {
+	for key := range keys {
 		api.Delete(ctx, key)
 	}
 

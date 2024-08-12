@@ -158,7 +158,7 @@ func (api *API) DeleteAllKeys() bool {
 		return false
 	}
 
-	for key, _ := range o.Value.(map[string]bool) {
+	for key := range o.Value.(map[string]bool) {
 		api.Store.Delete(key)
 	}
 
@@ -285,7 +285,7 @@ func (api *API) ScanKeys(pattern string) ([]string, error) {
 	if deletedKeyIndexObj != nil {
 		deletedKeysList := deletedKeyIndexObj.Value.(map[string]bool)
 		deletedKeys = make(map[string]bool, len(deletedKeysList))
-		for key, _ := range deletedKeysList {
+		for key := range deletedKeysList {
 			deletedKeys[key] = true
 		}
 	} else {
@@ -293,7 +293,7 @@ func (api *API) ScanKeys(pattern string) ([]string, error) {
 	}
 
 	var keys []string
-	for key, _ := range keyIndex {
+	for key := range keyIndex {
 		// Check if the key matches the pattern and is not deleted
 		if (pattern == "" || strings.HasPrefix(key, pattern)) && !deletedKeys[key] {
 			keys = append(keys, key)
