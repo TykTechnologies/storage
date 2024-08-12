@@ -157,6 +157,14 @@ func (api *API) Increment(ctx context.Context, key string) (int64, error) {
 		return 1, nil
 	}
 
+	if o.Deleted || o.IsExpired() {
+		o = &Object{
+			Value: int64(0),
+			Type:  TypeCounter,
+			NoExp: true,
+		}
+	}
+
 	var v int64 = -1
 	if o.Type != TypeCounter {
 		switch o.Value.(type) {
@@ -233,6 +241,14 @@ func (api *API) Decrement(ctx context.Context, key string) (newValue int64, err 
 		return -1, nil
 	}
 
+	if o.Deleted || o.IsExpired() {
+		o = &Object{
+			Value: int64(0),
+			Type:  TypeCounter,
+			NoExp: true,
+		}
+	}
+
 	var v int64
 	if o.Type != TypeCounter {
 		switch o.Value.(type) {
@@ -280,12 +296,12 @@ func (api *API) Exists(ctx context.Context, key string) (exists bool, err error)
 		return false, temperr.KeyEmpty
 	}
 
-	o, err := api.Store.Get(key)
+	o, err := api.Get(ctx, key)
 	if err != nil {
-		return false, err
+		return false, nil
 	}
 
-	if o == nil {
+	if o == "" {
 		return false, nil
 	}
 
@@ -399,7 +415,7 @@ func (api *API) Keys(ctx context.Context, pattern string) ([]string, error) {
 	if keyIndexObj == nil {
 		return nil, nil
 	}
-	keyIndex := keyIndexObj.Value.(map[string]bool)
+	keyIndex := keyIndexObj.Value.(map[string]interface{})
 
 	// Get the deleted key index
 	deletedKeyIndexObj, err := api.Store.Get(deletedKeyIndexKey)
@@ -408,7 +424,7 @@ func (api *API) Keys(ctx context.Context, pattern string) ([]string, error) {
 	}
 	var deletedKeys map[string]bool
 	if deletedKeyIndexObj != nil {
-		deletedKeysList := deletedKeyIndexObj.Value.(map[string]bool)
+		deletedKeysList := deletedKeyIndexObj.Value.(map[string]interface{})
 		deletedKeys = make(map[string]bool, len(deletedKeysList))
 		for key := range deletedKeysList {
 			deletedKeys[key] = true

@@ -10,11 +10,15 @@ func (api *API) FlushAll(ctx context.Context) error {
 		return err
 	}
 
-	keys := keyIndex.Value.(map[string]bool)
+	keys := keyIndex.Value.(map[string]interface{})
 	for key := range keys {
-		api.Delete(ctx, key)
+		err := api.Delete(ctx, key)
+		if err != nil {
+			return err
+		}
 	}
 
-	api.Store.FlushAll()
+	// If supported
+	//api.Store.FlushAll()
 	return nil
 }
