@@ -239,6 +239,20 @@ func TestKeyValue_Increment(t *testing.T) {
 			expectedErr:   nil,
 		},
 		{
+			name: "multi_increment_existing_key",
+			key:  "counter",
+			setup: func(db KeyValue) {
+				for i := 0; i < 5; i++ {
+					_, err := db.Increment(context.Background(), "counter")
+					if err != nil {
+						t.Fatalf("Set() error = %v", err)
+					}
+				}
+			},
+			expectedValue: 6,
+			expectedErr:   nil,
+		},
+		{
 			name:          "empty_key",
 			key:           "",
 			expectedValue: 0,

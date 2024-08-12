@@ -2,6 +2,7 @@ package local
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -136,6 +137,7 @@ func (api *API) Increment(ctx context.Context, key string) (int64, error) {
 		o = &Object{
 			Value: int64(1),
 			Type:  TypeCounter,
+			NoExp: true,
 		}
 
 		api.Store.Set(key, o)
@@ -147,6 +149,7 @@ func (api *API) Increment(ctx context.Context, key string) (int64, error) {
 		o = &Object{
 			Value: int64(1),
 			Type:  TypeCounter,
+			NoExp: true,
 		}
 
 		api.Store.Set(key, o)
@@ -154,19 +157,23 @@ func (api *API) Increment(ctx context.Context, key string) (int64, error) {
 		return 1, nil
 	}
 
-	var v int64
+	var v int64 = -1
 	if o.Type != TypeCounter {
 		switch o.Value.(type) {
 		case int:
+			fmt.Println("int")
 			o.Type = TypeCounter
 			v = int64(o.Value.(int))
 		case int64:
+			fmt.Println("int64")
 			o.Type = TypeCounter
 			v = o.Value.(int64)
 		case int32:
+			fmt.Println("int32")
 			o.Type = TypeCounter
 			v = int64(o.Value.(int32))
 		case string:
+			fmt.Println("string")
 			// try to convert
 			conv, err := strconv.Atoi(o.Value.(string))
 			if err != nil {
@@ -176,6 +183,12 @@ func (api *API) Increment(ctx context.Context, key string) (int64, error) {
 			v = int64(conv)
 			o.Type = TypeCounter
 		default:
+			return 0, temperr.KeyMisstype
+		}
+	} else {
+		var ok bool
+		v, ok = o.Value.(int64)
+		if !ok {
 			return 0, temperr.KeyMisstype
 		}
 	}
@@ -200,6 +213,7 @@ func (api *API) Decrement(ctx context.Context, key string) (newValue int64, err 
 		o = &Object{
 			Value: int64(-1),
 			Type:  TypeCounter,
+			NoExp: true,
 		}
 
 		api.Store.Set(key, o)
@@ -211,6 +225,7 @@ func (api *API) Decrement(ctx context.Context, key string) (newValue int64, err 
 		o = &Object{
 			Value: int64(-1),
 			Type:  TypeCounter,
+			NoExp: true,
 		}
 
 		api.Store.Set(key, o)
