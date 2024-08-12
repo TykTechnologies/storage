@@ -47,7 +47,17 @@ func NewLocalStore(connector model.Connector) *API {
 		Broker:    connector.(*LocalConnector).Broker,
 	}
 
+	initAlready, _ := api.Store.Get(keyIndexKey)
+	if initAlready != nil {
+		return api
+	}
+
 	// init the key indexes
+	api.initialiseKeyIndexes()
+	return api
+}
+
+func (api *API) initialiseKeyIndexes() {
 	api.Store.Set(keyIndexKey, &Object{
 		Type:  TypeList,
 		Value: map[string]interface{}{},
@@ -59,6 +69,4 @@ func NewLocalStore(connector model.Connector) *API {
 		Value: map[string]interface{}{},
 		NoExp: true,
 	})
-
-	return api
 }

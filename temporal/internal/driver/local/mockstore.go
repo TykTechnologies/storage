@@ -49,3 +49,9 @@ func (m *MockStore) FlushAll() error {
 	m.data = make(map[string]interface{})
 	return nil
 }
+
+func (m *MockStore) Features() map[ExtendedFeature]bool {
+	return map[ExtendedFeature]bool{
+		FeatureFlushAll: true,
+	}
+}

@@ -126,6 +126,14 @@ func (api *API) Delete(ctx context.Context, key string) error {
 	return api.updateDeletedKeysIndex(key)
 }
 
+func NewCounter(value int64) *Object {
+	return &Object{
+		Value: value,
+		Type:  TypeCounter,
+		NoExp: true,
+	}
+}
+
 func (api *API) Increment(ctx context.Context, key string) (int64, error) {
 	if key == "" {
 		return 0, temperr.KeyEmpty
@@ -134,11 +142,7 @@ func (api *API) Increment(ctx context.Context, key string) (int64, error) {
 	o, err := api.Store.Get(key)
 	if err != nil {
 		// create the object
-		o = &Object{
-			Value: int64(1),
-			Type:  TypeCounter,
-			NoExp: true,
-		}
+		o = NewCounter(1)
 
 		api.Store.Set(key, o)
 		api.addToKeyIndex(key)
@@ -146,11 +150,7 @@ func (api *API) Increment(ctx context.Context, key string) (int64, error) {
 	}
 
 	if o == nil {
-		o = &Object{
-			Value: int64(1),
-			Type:  TypeCounter,
-			NoExp: true,
-		}
+		o = NewCounter(1)
 
 		api.Store.Set(key, o)
 		api.addToKeyIndex(key)
@@ -158,11 +158,8 @@ func (api *API) Increment(ctx context.Context, key string) (int64, error) {
 	}
 
 	if o.Deleted || o.IsExpired() {
-		o = &Object{
-			Value: int64(0),
-			Type:  TypeCounter,
-			NoExp: true,
-		}
+		o = NewCounter(0)
+		api.addToKeyIndex(key)
 	}
 
 	var v int64 = -1
@@ -181,7 +178,6 @@ func (api *API) Increment(ctx context.Context, key string) (int64, error) {
 			o.Type = TypeCounter
 			v = int64(o.Value.(int32))
 		case string:
-			fmt.Println("string")
 			// try to convert
 			conv, err := strconv.Atoi(o.Value.(string))
 			if err != nil {
@@ -247,6 +243,7 @@ func (api *API) Decrement(ctx context.Context, key string) (newValue int64, err 
 			Type:  TypeCounter,
 			NoExp: true,
 		}
+		api.addToKeyIndex(key)
 	}
 
 	var v int64
@@ -422,22 +419,17 @@ func (api *API) Keys(ctx context.Context, pattern string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var deletedKeys map[string]bool
-	if deletedKeyIndexObj != nil {
-		deletedKeysList := deletedKeyIndexObj.Value.(map[string]interface{})
-		deletedKeys = make(map[string]bool, len(deletedKeysList))
-		for key := range deletedKeysList {
-			deletedKeys[key] = true
-		}
-	} else {
-		deletedKeys = make(map[string]bool)
-	}
+
+	deletedKeys := deletedKeyIndexObj.Value.(map[string]interface{})
 
 	var retKeys []string
 	for key := range keyIndex {
 		// Check if the key matches the pattern and is not deleted
-		if (pattern == "" || strings.HasPrefix(key, pattern)) && !deletedKeys[key] {
-			retKeys = append(retKeys, key)
+		if pattern == "" || strings.HasPrefix(key, pattern) {
+			_, f := deletedKeys[key]
+			if !f {
+				retKeys = append(retKeys, key)
+			}
 		}
 	}
 

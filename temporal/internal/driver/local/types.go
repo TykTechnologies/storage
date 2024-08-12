@@ -33,11 +33,18 @@ func (o *Object) SetExpireAt(t time.Time) {
 	o.NoExp = false
 }
 
+type ExtendedFeature string
+
+const (
+	FeatureFlushAll ExtendedFeature = "flushall"
+)
+
 type KVStore interface {
 	Get(key string) (*Object, error)
 	Set(key string, value interface{}) error
 	Delete(key string) error
 	FlushAll() error
+	Features() map[ExtendedFeature]bool
 }
 
 type Broker interface {
