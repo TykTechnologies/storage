@@ -98,8 +98,15 @@ func (api *API) Delete(ctx context.Context, key string) error {
 		return nil // Key doesn't exist, no need to delete
 	}
 
+	// Check if hard delete is supported by the store
+	_, delSupport := api.Store.Features()[FeatureHardDelete]
+	if delSupport {
+		return api.Store.Delete(key)
+	}
+
 	o.Deleted = true
 	o.DeletedAt = time.Now()
+	o.Value = "" // empty the value to save memory
 
 	if err := api.Store.Set(key, o); err != nil {
 		return err

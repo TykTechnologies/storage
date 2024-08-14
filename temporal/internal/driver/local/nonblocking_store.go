@@ -63,6 +63,7 @@ func (m *LockFreeStore) FlushAll() error {
 
 func (m *LockFreeStore) Features() map[ExtendedFeature]bool {
 	return map[ExtendedFeature]bool{
-		FeatureFlushAll: true,
+		FeatureFlushAll:   true,
+		FeatureHardDelete: true,
 	}
 }

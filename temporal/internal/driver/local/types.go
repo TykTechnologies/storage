@@ -36,7 +36,8 @@ func (o *Object) SetExpireAt(t time.Time) {
 type ExtendedFeature string
 
 const (
-	FeatureFlushAll ExtendedFeature = "flushall"
+	FeatureFlushAll   ExtendedFeature = "flushall"
+	FeatureHardDelete ExtendedFeature = "harddelete"
 )
 
 type KVStore interface {
