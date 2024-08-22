@@ -2,6 +2,7 @@ package local
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	"github.com/TykTechnologies/storage/temporal/temperr"
@@ -18,6 +19,34 @@ func NewListObject(value []string) *Object {
 	}
 }
 
+func (a *API) getListValue(o *Object) ([]string, error) {
+	list := make([]string, 0)
+	switch o.Value.(type) {
+	case []string:
+		list = o.Value.([]string)
+	case []interface{}:
+		// Convert []interface{} to []string
+		for i, _ := range o.Value.([]interface{}) {
+			v := o.Value.([]interface{})[i]
+			s, ok := v.(string)
+			if !ok {
+				return nil, temperr.KeyMisstype
+			}
+			list = append(list, s)
+		}
+	case []byte:
+		// Convert []byte to []string
+		for i, _ := range o.Value.([]byte) {
+			v := o.Value.([]byte)[i]
+			list = append(list, string(v))
+		}
+	default:
+		return nil, temperr.KeyMisstype
+	}
+
+	return list, nil
+}
+
 // Remove the first count occurrences of elements equal to element from the list stored at key. If count is 0 remove all elements equal to element.
 func (a *API) Remove(ctx context.Context, key string, count int64, iElement interface{}) (int64, error) {
 	obj, err := a.Store.Get(key)
@@ -29,7 +58,10 @@ func (a *API) Remove(ctx context.Context, key string, count int64, iElement inte
 		return 0, nil
 	}
 
-	list := obj.Value.([]string)
+	list, err := a.getListValue(obj)
+	if err != nil {
+		return 0, err
+	}
 	var removed int64
 	var newList []string
 	_, ok := iElement.([]byte)
@@ -88,7 +120,11 @@ func (api *API) Range(ctx context.Context, key string, start, stop int64) ([]str
 		return nil, nil
 	}
 
-	list := o.Value.([]string)
+	list, err := api.getListValue(o)
+	if err != nil {
+		return nil, err
+	}
+
 	length := int64(len(list))
 
 	// Convert negative indices to positive
@@ -131,7 +167,12 @@ func (api *API) Length(ctx context.Context, key string) (int64, error) {
 		return 0, nil
 	}
 
-	return int64(len(o.Value.([]string))), nil
+	v, err := api.getListValue(o)
+	if err != nil {
+		return 0, err
+	}
+
+	return int64(len(v)), nil
 }
 
 // Insert all the specified values at the head of the list stored at key.
@@ -140,6 +181,7 @@ func (api *API) Length(ctx context.Context, key string) (int64, error) {
 func (api *API) Prepend(ctx context.Context, pipelined bool, key string, values ...[]byte) error {
 	o, err := api.Store.Get(key)
 	if err != nil {
+		fmt.Println(err)
 		return err
 	}
 
@@ -156,6 +198,7 @@ func (api *API) Prepend(ctx context.Context, pipelined bool, key string, values 
 
 		o = NewListObject(l)
 		api.Store.Set(key, o)
+		api.addToKeyIndex(key)
 		return nil
 	}
 
@@ -185,16 +228,29 @@ func (api *API) Append(ctx context.Context, pipelined bool, key string, values .
 		}
 		o = NewListObject(l)
 		api.Store.Set(key, o)
+		api.addToKeyIndex(key)
 		return nil
 	}
 
-	if o.Type != TypeList {
+	if o.Type != TypeList && o.Type != TypeDeleted {
 		return temperr.KeyMisstype
 	}
 
-	for _, value := range values {
-		o.Value = append(o.Value.([]string), string(value))
+	if o.Type == TypeDeleted {
+		o.Type = TypeList
 	}
+
+	list, err := api.getListValue(o)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("list value is", list, "for key", key)
+	for _, value := range values {
+		fmt.Println("adding", string(value))
+		list = append(list, string(value))
+	}
+	o.Value = list
 
 	api.Store.Set(key, o)
 	return nil
@@ -212,7 +268,11 @@ func (api *API) Pop(ctx context.Context, key string, stop int64) ([]string, erro
 		return nil, nil
 	}
 
-	list := o.Value.([]string)
+	list, err := api.getListValue(o)
+	if err != nil {
+		return nil, err
+	}
+
 	length := int64(len(list))
 
 	var incl int64 = 0

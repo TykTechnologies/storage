@@ -3,6 +3,7 @@ package local
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -85,7 +86,11 @@ func (api *API) SetIfNotExist(ctx context.Context, key, value string, expiration
 }
 
 func (api *API) Delete(ctx context.Context, key string) error {
-	if key == "" {
+	return api.deleteWithOptions(ctx, key, false)
+}
+
+func (api *API) deleteWithOptions(ctx context.Context, key string, emptyOK bool) error {
+	if key == "" && !emptyOK {
 		return temperr.KeyEmpty
 	}
 
@@ -168,6 +173,8 @@ func (api *API) getCounterValue(o *Object) (int64, error) {
 		return v, nil
 	case int32:
 		return int64(v), nil
+	case float64:
+		return int64(v), nil
 	case string:
 		i, err := strconv.Atoi(v)
 		if err != nil {
@@ -175,6 +182,7 @@ func (api *API) getCounterValue(o *Object) (int64, error) {
 		}
 		return int64(i), err
 	default:
+		slog.Error("Counter value is not valid", "type", fmt.Sprintf("%T", o.Value))
 		return 0, temperr.KeyMisstype
 	}
 }

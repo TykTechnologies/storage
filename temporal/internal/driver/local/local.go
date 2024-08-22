@@ -12,14 +12,15 @@ type API struct {
 }
 
 const (
-	keyIndexKey        = "rumbaba:keyIndex"
-	deletedKeyIndexKey = "rumbaba:deletedKeyIndex"
+	keyIndexKey        = "localstore:keyIndex"
+	deletedKeyIndexKey = "localstore:deletedKeyIndex"
 
 	TypeBytes     = "bytes"
 	TypeSet       = "set"
 	TypeSortedSet = "sortedset"
 	TypeList      = "list"
 	TypeCounter   = "counter"
+	TypeDeleted   = "deleted"
 )
 
 var mockStore *MockStore

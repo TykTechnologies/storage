@@ -63,11 +63,14 @@ func (api *API) AddMember(ctx context.Context, key, member string) error {
 	if err != nil {
 		o = NewSetObject([]interface{}{member})
 		api.Store.Set(key, o)
+		api.addToKeyIndex(key)
+		return nil
 	}
 
 	if o == nil {
 		o = NewSetObject([]interface{}{member})
 		api.Store.Set(key, o)
+		api.addToKeyIndex(key)
 		return nil
 	}
 

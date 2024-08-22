@@ -2,6 +2,7 @@ package local
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -27,6 +28,15 @@ func (s SortedSet) Less(i, j int) bool {
 	return s[i].Score < s[j].Score
 }
 
+func (s *SortedSetEntry) MarshalJSON() ([]byte, error) {
+	asStr := fmt.Sprintf("%f:%s", s.Score, s.Member)
+	b, err := json.Marshal(asStr)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
 func NewSortedSetObject() *Object {
 	return &Object{
 		Type:  TypeSortedSet,
@@ -35,22 +45,67 @@ func NewSortedSetObject() *Object {
 	}
 }
 
+func (api *API) getSortedSetValue(o *Object) (SortedSet, error) {
+	if o.Value == nil {
+		return nil, nil
+	}
+
+	switch o.Value.(type) {
+	case SortedSet:
+		return o.Value.(SortedSet), nil
+	case []interface{}:
+		sortedSet := make(SortedSet, 0)
+		arr := o.Value.([]interface{})
+		for i, _ := range arr {
+			vs, ok := arr[i].(string)
+			if !ok {
+				return nil, fmt.Errorf("invalid set member (tp): %T", arr[i])
+			}
+
+			parts := strings.Split(vs, ":")
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("invalid set member (parts): %T", vs)
+			}
+
+			score, err := strconv.ParseFloat(parts[0], 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid set member (parse): %T", vs)
+			}
+
+			sortedSet = append(sortedSet, SortedSetEntry{
+				Score:  score,
+				Member: parts[1],
+			})
+		}
+		return sortedSet, nil
+
+	default:
+		return nil, fmt.Errorf("invalid sorted set")
+
+	}
+}
+
 func (api *API) AddScoredMember(ctx context.Context, key, member string, score float64) (int64, error) {
 	var added int64
 	o, err := api.Store.Get(key)
 	if err != nil {
 		o = NewSortedSetObject()
+		api.addToKeyIndex(key)
 	}
 
 	if o == nil {
 		o = NewSortedSetObject()
+		api.addToKeyIndex(key)
 	}
 
 	if o.Type != TypeSortedSet {
 		return 0, fmt.Errorf("key is not a sorted set")
 	}
 
-	sortedSet := o.Value.(SortedSet)
+	sortedSet, err := api.getSortedSetValue(o)
+	if err != nil {
+		return 0, err
+	}
 
 	index := -1
 	for j, entry := range sortedSet {
@@ -69,7 +124,10 @@ func (api *API) AddScoredMember(ctx context.Context, key, member string, score f
 
 	sort.Sort(sortedSet)
 	o.Value = sortedSet
-	api.Store.Set(key, o)
+	err = api.Store.Set(key, o)
+	if err != nil {
+		return 0, err
+	}
 	return added, nil
 }
 
@@ -91,7 +149,10 @@ func (api *API) GetMembersByScoreRange(ctx context.Context, key, minScore, maxSc
 		return nil, nil, temperr.KeyMisstype
 	}
 
-	sortedSet := o.Value.(SortedSet)
+	sortedSet, err := api.getSortedSetValue(o)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	from, fromInclusive, err := parseScore(minScore)
 	if err != nil {
@@ -139,7 +200,10 @@ func (api *API) RemoveMembersByScoreRange(ctx context.Context, key, minScore, ma
 		return 0, nil
 	}
 
-	sortedSet := o.Value.(SortedSet)
+	sortedSet, err := api.getSortedSetValue(o)
+	if err != nil {
+		return 0, err
+	}
 
 	from, fromInclusive, err := parseScore(minScore)
 	if err != nil {

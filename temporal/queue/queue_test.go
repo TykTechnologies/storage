@@ -33,7 +33,6 @@ func TestQueue_Publish(t *testing.T) {
 			wantResult: 1,
 			setup: func(q model.Queue) ([]model.Subscription, error) {
 				sub1 := q.Subscribe(context.Background(), "test_channel1")
-
 				_, err := sub1.Receive(context.Background())
 				return []model.Subscription{sub1}, err
 			},
@@ -127,6 +126,20 @@ func TestQueue_Publish(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
+				if connector.Type() == model.CRDTType {
+					if tc.wantResult > 1 {
+						t.Skip("CRDT does not have knowledge of subscriber count")
+					}
+
+					if tc.expectedErr == temperr.ClosedConnection {
+						t.Skip("CRDT does not mimic connection failure")
+					}
+
+					if tc.name == "Publish to a channel without subscribers" {
+						t.Skip("CRDT does not have knowledge of subscriber count")
+					}
+				}
+
 				if tc.expectedErr != nil {
 					err = connector.Disconnect(context.Background())
 					assert.Nil(t, err)
@@ -180,7 +193,7 @@ func TestQueue_Subscribe(t *testing.T) {
 		},
 		{
 			name:     "Subscribe to multiple channels",
-			channels: []string{"test_channel2", "test_channel3"},
+			channels: []string{"test_channel3", "test_channel4"},
 			setup: func(q model.Queue, channels []string, msg string) error {
 				for _, channel := range channels {
 					_, err := q.Publish(context.Background(), channel, msg)

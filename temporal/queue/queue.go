@@ -17,6 +17,8 @@ func NewQueue(conn model.Connector) (Queue, error) {
 		return redisv9.NewRedisV9WithConnection(conn)
 	case model.LocalType:
 		return local.NewLocalStore(conn), nil
+	case model.CRDTType:
+		return local.NewLocalStoreWithCRDTBackend(conn)
 	default:
 		return nil, temperr.InvalidHandlerType
 	}

@@ -1,6 +1,8 @@
 package temporal
 
 import (
+	"fmt"
+
 	"github.com/TykTechnologies/storage/temporal/internal/driver/local"
 	"github.com/TykTechnologies/storage/temporal/internal/driver/redisv9"
 	"github.com/TykTechnologies/storage/temporal/model"
@@ -18,7 +20,10 @@ func NewKeyValue(conn model.Connector) (KeyValue, error) {
 		return redisv9.NewRedisV9WithConnection(conn)
 	case model.LocalType:
 		return local.NewLocalStore(conn), nil
+	case model.CRDTType:
+		return local.NewLocalStoreWithCRDTBackend(conn)
+
 	default:
-		return nil, temperr.InvalidHandlerType
+		return nil, fmt.Errorf("err: %v, type: %v", temperr.InvalidHandlerType, conn.Type())
 	}
 }

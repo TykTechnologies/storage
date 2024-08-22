@@ -721,6 +721,11 @@ func TestKeyValue_DeleteScanMatch(t *testing.T) {
 	for _, connector := range connectors {
 		for _, tc := range tcs {
 			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
+				if errors.Is(tc.expectedErr, temperr.ClosedConnection) {
+					if connector.Type() == model.CRDTType {
+						t.Skip("skipping test for CRDT as mocking connect")
+					}
+				}
 				ctx := context.Background()
 
 				kv, err := NewKeyValue(connector)
@@ -809,6 +814,11 @@ func TestKeyValue_Keys(t *testing.T) {
 	for _, connector := range connectors {
 		for _, tc := range tcs {
 			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
+				if errors.Is(tc.expectedErr, temperr.ClosedConnection) {
+					if connector.Type() == model.CRDTType {
+						t.Skip("skipping test for CRDT as mocking connect")
+					}
+				}
 				ctx := context.Background()
 
 				kv, err := NewKeyValue(connector)
@@ -1253,8 +1263,8 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 	}
 
 	for _, connector := range connectors {
-		if connector.Type() == "local" {
-			// local connector does not support SCAN
+		if connector.Type() == model.LocalType || connector.Type() == model.CRDTType {
+			// local and crdt connector does not support SCAN
 			continue
 		}
 		for _, tc := range tcs {

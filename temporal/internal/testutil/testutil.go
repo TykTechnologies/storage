@@ -34,6 +34,8 @@ func (m *StubConnector) As(i interface{}) bool {
 	return false
 }
 
+var singleConnector *local.CRDTStorConnector
+
 // Connectors returns a list of connectors to be used in tests.
 // If you are adding a new supported driver, add it here and it will be tested on all the tcs automatically.
 func TestConnectors(t *testing.T) []model.Connector {
@@ -48,6 +50,15 @@ func TestConnectors(t *testing.T) []model.Connector {
 	// local non-blocking hashmap
 	localConnector := local.NewLocalConnector(local.NewLockFreeStore())
 	connectors = append(connectors, localConnector)
+
+	// crdtConnector uses a single instance
+	if singleConnector == nil {
+		cfg := local.NewCRDTConfigForTests()
+		singleConnector = local.NewCRDTConnector(cfg)
+		err := singleConnector.Connect(context.Background())
+		assert.Nil(t, err)
+	}
+	connectors = append(connectors, singleConnector)
 
 	return connectors
 }

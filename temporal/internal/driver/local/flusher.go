@@ -23,7 +23,7 @@ func (api *API) FlushAll(ctx context.Context) error {
 
 	keys := keyIndex.Value.(map[string]interface{})
 	for key := range keys {
-		err := api.Delete(ctx, key)
+		err := api.deleteWithOptions(ctx, key, true)
 		if err != nil {
 			return err
 		}
