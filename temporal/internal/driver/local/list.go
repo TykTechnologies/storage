@@ -206,11 +206,17 @@ func (api *API) Prepend(ctx context.Context, pipelined bool, key string, values 
 		return temperr.KeyMisstype
 	}
 
-	// values is in order, but needs to be inserted in reverse order
-	for i := len(values) - 1; i >= 0; i-- {
-		o.Value = append([]string{string(values[i])}, o.Value.([]string)...)
+	objectVals, err := api.getListValue(o)
+	if err != nil {
+		return err
 	}
 
+	// values is in order, but needs to be inserted in reverse order
+	for i := len(values) - 1; i >= 0; i-- {
+		objectVals = append([]string{string(values[i])}, objectVals...)
+	}
+
+	o.Value = objectVals
 	api.Store.Set(key, o)
 	return nil
 }

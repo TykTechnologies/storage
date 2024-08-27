@@ -18,7 +18,13 @@ func NewConnector(connType string, options ...model.Option) (model.Connector, er
 		return redisv9.NewRedisV9WithOpts(options...)
 	case model.LocalType:
 		return local.NewLocalConnector(local.NewLockFreeStore()), nil
+
 	default:
 		return nil, temperr.InvalidHandlerType
 	}
+}
+
+func NewCRDTConnector(cfg *model.CRDTConfig) (model.Connector, error) {
+	c := local.NewCRDTConnector(cfg)
+	return c, nil
 }

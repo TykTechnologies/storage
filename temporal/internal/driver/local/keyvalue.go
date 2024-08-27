@@ -55,6 +55,7 @@ func (api *API) Set(ctx context.Context, key, value string, ttl time.Duration) e
 
 	if !o.NoExp {
 		o.SetExpire(ttl)
+		defer api.addOrUpdateTTLIndex(key, o)
 	}
 
 	if err := api.Store.Set(key, o); err != nil {
@@ -258,6 +259,7 @@ func (api *API) Expire(ctx context.Context, key string, ttl time.Duration) error
 	} else {
 		o.SetExpire(ttl)
 		o.NoExp = false
+		defer api.addOrUpdateTTLIndex(key, o)
 	}
 
 	return api.Store.Set(key, o)

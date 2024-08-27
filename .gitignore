@@ -5,3 +5,4 @@ storage
 *.task/*
 temporal/.task/
 *.cov
+private.key

@@ -11,10 +11,27 @@ import (
 )
 
 type CRDTStorConnector struct {
-	cfg       *CRDTConfig
+	cfg       *model.CRDTConfig
 	connected bool
 	Conn      *connector.Connector
 	mx        sync.Mutex
+}
+
+func NewCRDTConnector(cfg *model.CRDTConfig) *CRDTStorConnector {
+	c := &CRDTStorConnector{
+		cfg: cfg,
+		mx:  sync.Mutex{},
+	}
+
+	if cfg.ConnectOnInstantiate {
+		err := c.Connect(context.Background())
+		if err != nil {
+			slog.Error("failed to start CRDT connector", "error", err)
+			return nil
+		}
+	}
+
+	return c
 }
 
 // Disconnect disconnects from the backend
@@ -58,7 +75,7 @@ func (c *CRDTStorConnector) Connect(i interface{}) error {
 	logger := slog.Default()
 	cntr := connector.NewConnector(c.cfg.TagName, c.cfg.TagName, 3, logger, c.cfg.PrimaryKey, c.cfg.DBName)
 
-	cntr.ListenAddr = c.cfg.ListenAddr
+	cntr.ListenAddrs = c.cfg.ListenAddrs
 	err := cntr.Initialize(c.cfg.BootstrapAddr)
 	if err != nil {
 		return err

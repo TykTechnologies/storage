@@ -1,9 +1,8 @@
-package local
+package model
 
 import (
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/TykTechnologies/cannery/v2/connector"
@@ -11,22 +10,16 @@ import (
 )
 
 type CRDTConfig struct {
-	ListenAddr     string
-	BootstrapAddr  string
-	PrimaryKey     []byte
-	DBName         string
-	TagName        string
-	MockDisconnect bool
+	ListenAddrs          []string
+	BootstrapAddr        string
+	PrimaryKey           []byte
+	DBName               string
+	TagName              string
+	MockDisconnect       bool
+	ConnectOnInstantiate bool
 }
 
-func NewCRDTConnector(cfg *CRDTConfig) *CRDTStorConnector {
-	return &CRDTStorConnector{
-		cfg: cfg,
-		mx:  sync.Mutex{},
-	}
-}
-
-func NewCRDTConfig(opts ...Option) *CRDTConfig {
+func NewCRDTConfig(opts ...CRDTOption) *CRDTConfig {
 	cfg := defaultConfig()
 	for _, opt := range opts {
 		opt(cfg)
@@ -36,7 +29,7 @@ func NewCRDTConfig(opts ...Option) *CRDTConfig {
 
 func defaultConfig() *CRDTConfig {
 	return &CRDTConfig{
-		ListenAddr:    "/ip4/0.0.0.0/tcp/7654",
+		ListenAddrs:   []string{"/ip4/0.0.0.0/tcp/7654"},
 		BootstrapAddr: "",
 		PrimaryKey:    nil,
 		DBName:        "crdt-db",
@@ -64,9 +57,17 @@ func NewCRDTConfigForTests() *CRDTConfig {
 	)
 }
 
-type Option func(*CRDTConfig)
+type CRDTOption func(*CRDTConfig)
 
-func WithRandomKey() Option {
+const defaultKeyFileName = "id.key"
+
+func WithConnectOnInstantiate() CRDTOption {
+	return func(c *CRDTConfig) {
+		c.ConnectOnInstantiate = true
+	}
+}
+
+func WithRandomKey() CRDTOption {
 	return func(c *CRDTConfig) {
 		err := connector.GenerateIdentityKey(defaultKeyFileName)
 		if err != nil {
@@ -84,13 +85,13 @@ func WithRandomKey() Option {
 	}
 }
 
-func WithMockDisconnect() Option {
+func WithMockDisconnect() CRDTOption {
 	return func(c *CRDTConfig) {
 		c.MockDisconnect = true
 	}
 }
 
-func WithKeyFromFile(keyFile string) Option {
+func WithKeyFromFile(keyFile string) CRDTOption {
 	return func(c *CRDTConfig) {
 		dat, err := os.ReadFile(keyFile)
 		if err != nil {
@@ -102,31 +103,37 @@ func WithKeyFromFile(keyFile string) Option {
 	}
 }
 
-func WithListenAddr(addr string) Option {
+func WithListenAddr(addr string) CRDTOption {
 	return func(c *CRDTConfig) {
-		c.ListenAddr = addr
+		c.ListenAddrs = append(c.ListenAddrs, addr)
 	}
 }
 
-func WithBootstrapAddr(addr string) Option {
+func WithListenAddrs(addrs []string) CRDTOption {
+	return func(c *CRDTConfig) {
+		c.ListenAddrs = addrs
+	}
+}
+
+func WithBootstrapAddr(addr string) CRDTOption {
 	return func(c *CRDTConfig) {
 		c.BootstrapAddr = addr
 	}
 }
 
-func WithPrimaryKey(key []byte) Option {
+func WithPrimaryKey(key []byte) CRDTOption {
 	return func(c *CRDTConfig) {
 		c.PrimaryKey = key
 	}
 }
 
-func WithDBName(name string) Option {
+func WithDBName(name string) CRDTOption {
 	return func(c *CRDTConfig) {
 		c.DBName = name
 	}
 }
 
-func WithTagName(name string) Option {
+func WithTagName(name string) CRDTOption {
 	return func(c *CRDTConfig) {
 		c.TagName = name
 	}

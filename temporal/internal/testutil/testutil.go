@@ -53,7 +53,7 @@ func TestConnectors(t *testing.T) []model.Connector {
 
 	// crdtConnector uses a single instance
 	if singleConnector == nil {
-		cfg := local.NewCRDTConfigForTests()
+		cfg := model.NewCRDTConfigForTests()
 		singleConnector = local.NewCRDTConnector(cfg)
 		err := singleConnector.Connect(context.Background())
 		assert.Nil(t, err)

@@ -9,11 +9,13 @@ type API struct {
 	Store     KVStore
 	Connector model.Connector
 	Broker    Broker
+	Stopped   bool
 }
 
 const (
 	keyIndexKey        = "localstore:keyIndex"
 	deletedKeyIndexKey = "localstore:deletedKeyIndex"
+	ttlIndexKey        = "localstore:ttlIndex"
 
 	TypeBytes     = "bytes"
 	TypeSet       = "set"
@@ -70,4 +72,16 @@ func (api *API) initialiseKeyIndexes() {
 		Value: map[string]interface{}{},
 		NoExp: true,
 	})
+
+	api.Store.Set(ttlIndexKey, &Object{
+		Type:  TypeList,
+		Value: map[string]interface{}{},
+		NoExp: true,
+	})
+
+	go api.walkTTLIndex()
+}
+
+func (api *API) Stop() {
+	api.Stopped = true
 }

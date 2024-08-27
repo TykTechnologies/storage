@@ -13,12 +13,8 @@ import (
 	"github.com/ipfs/go-datastore"
 )
 
-const defaultKeyFileName = "id.key"
-
-
-
 type CRDTStore struct {
-	cfg       *CRDTConfig
+	cfg       *model.CRDTConfig
 	crdt      *CRDTStorConnector
 	mx        sync.Mutex
 	publisher *publisher.Publisher
@@ -51,7 +47,7 @@ func NewLocalStoreWithCRDTBackend(connector model.Connector) (*API, error) {
 	return api, nil
 }
 
-func NewCRDTStore(cfg *CRDTConfig, conn model.Connector) (*CRDTStore, error) {
+func NewCRDTStore(cfg *model.CRDTConfig, conn model.Connector) (*CRDTStore, error) {
 	return &CRDTStore{
 		cfg:  cfg,
 		crdt: conn.(*CRDTStorConnector),
