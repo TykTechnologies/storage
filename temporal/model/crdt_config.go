@@ -1,11 +1,14 @@
 package model
 
 import (
+	"bytes"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
 	"github.com/TykTechnologies/cannery/v2/connector"
+	"github.com/libp2p/go-libp2p/core/pnet"
 	"golang.org/x/exp/rand"
 )
 
@@ -13,6 +16,7 @@ type CRDTConfig struct {
 	ListenAddrs          []string
 	BootstrapAddr        string
 	PrimaryKey           []byte
+	SharedKey            []byte
 	DBName               string
 	TagName              string
 	MockDisconnect       bool
@@ -34,6 +38,7 @@ func defaultConfig() *CRDTConfig {
 		PrimaryKey:    nil,
 		DBName:        "crdt-db",
 		TagName:       "crdt-service",
+		SharedKey:     nil,
 	}
 }
 
@@ -64,6 +69,26 @@ const defaultKeyFileName = "id.key"
 func WithConnectOnInstantiate() CRDTOption {
 	return func(c *CRDTConfig) {
 		c.ConnectOnInstantiate = true
+	}
+}
+
+func WithSharedKey(filename string) CRDTOption {
+	return func(c *CRDTConfig) {
+		d, err := os.ReadFile(filename)
+		if err != nil {
+			log.Fatal("could not read PSK file from", filename, err)
+		}
+
+		s := ""
+		s += fmt.Sprintln("/key/swarm/psk/1.0.0/")
+		s += fmt.Sprintln("/base64/")
+		s += fmt.Sprintf("%s", string(d))
+		psk, err := pnet.DecodeV1PSK(bytes.NewBuffer([]byte(s)))
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		c.SharedKey = psk
 	}
 }
 

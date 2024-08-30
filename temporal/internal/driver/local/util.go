@@ -40,6 +40,7 @@ func (api *API) addOrUpdateTTLIndex(keyName string, obj *Object) error {
 }
 
 func (api *API) walkTTLIndex() {
+	return // disable for now (there are distribution issues)
 	for {
 		if api.Stopped {
 			return
@@ -94,20 +95,20 @@ func getTime(obj interface{}) (time.Time, error) {
 
 		t, err := time.Parse(defaulttimeFormat, str)
 		if err != nil {
-			return time.Time{}, fmt.Errorf("invalid time format")
+			return time.Time{}, fmt.Errorf("invalid time format: ", err)
 		}
 
 		return t, nil
 	case string:
 		t, err := time.Parse(defaulttimeFormat, v)
 		if err != nil {
-			return time.Time{}, fmt.Errorf("invalid time format (from string)")
+			return time.Time{}, fmt.Errorf("invalid time format (from string): ", err)
 		}
 
 		return t, nil
 
 	default:
-		return time.Time{}, fmt.Errorf("invalid type for time")
+		return time.Time{}, fmt.Errorf("invalid type for time: %T", v)
 	}
 }
 

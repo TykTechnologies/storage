@@ -3,7 +3,7 @@ module github.com/TykTechnologies/storage
 go 1.21.4
 
 require (
-	github.com/TykTechnologies/cannery/v2 v2.0.0-20240823070430-c21ed640bd0a
+	github.com/TykTechnologies/cannery/v2 v2.0.0-20240827112314-f808b9c7f5ec
 	github.com/dustinxie/lockfree v0.0.0-20210712051436-ed0ed42fd0d6
 	github.com/google/go-cmp v0.6.0
 	github.com/ipfs/go-datastore v0.6.0
@@ -182,4 +182,4 @@ require (
 )
 
 // for dev purposes
-// replace github.com/TykTechnologies/cannery/v2 => ../cannery
+replace github.com/TykTechnologies/cannery/v2 => ../cannery

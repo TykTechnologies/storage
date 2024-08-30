@@ -73,7 +73,7 @@ func (c *CRDTStorConnector) As(i interface{}) bool {
 
 func (c *CRDTStorConnector) Connect(i interface{}) error {
 	logger := slog.Default()
-	cntr := connector.NewConnector(c.cfg.TagName, c.cfg.TagName, 3, logger, c.cfg.PrimaryKey, c.cfg.DBName)
+	cntr := connector.NewConnector(c.cfg.TagName, c.cfg.TagName, 3, logger, c.cfg.PrimaryKey, c.cfg.SharedKey, c.cfg.DBName)
 
 	cntr.ListenAddrs = c.cfg.ListenAddrs
 	err := cntr.Initialize(c.cfg.BootstrapAddr)
