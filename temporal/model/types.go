@@ -7,6 +7,7 @@ import (
 
 const (
 	RedisV9Type = "redisv9"
+	LocalType   = "local"
 )
 
 type Connector interface {

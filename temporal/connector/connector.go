@@ -1,6 +1,7 @@
 package connector
 
 import (
+	"github.com/TykTechnologies/storage/temporal/internal/driver/local"
 	"github.com/TykTechnologies/storage/temporal/internal/driver/redisv9"
 	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/TykTechnologies/storage/temporal/temperr"
@@ -15,6 +16,8 @@ func NewConnector(connType string, options ...model.Option) (model.Connector, er
 	switch connType {
 	case model.RedisV9Type:
 		return redisv9.NewRedisV9WithOpts(options...)
+	case model.LocalType:
+		return local.NewLocalConnector(local.NewLockFreeStore()), nil
 	default:
 		return nil, temperr.InvalidHandlerType
 	}

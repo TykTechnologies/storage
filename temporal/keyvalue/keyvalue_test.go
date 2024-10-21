@@ -100,7 +100,7 @@ func TestKeyValue_Get(t *testing.T) {
 	}{
 		{
 			name:          "non_existing_key",
-			key:           "key1",
+			key:           "key",
 			expectedValue: "",
 			expectedErr:   temperr.KeyNotFound,
 		},
@@ -239,6 +239,20 @@ func TestKeyValue_Increment(t *testing.T) {
 			expectedErr:   nil,
 		},
 		{
+			name: "multi_increment_existing_key",
+			key:  "counter",
+			setup: func(db KeyValue) {
+				for i := 0; i < 5; i++ {
+					_, err := db.Increment(context.Background(), "counter")
+					if err != nil {
+						t.Fatalf("Set() error = %v", err)
+					}
+				}
+			},
+			expectedValue: 6,
+			expectedErr:   nil,
+		},
+		{
 			name:          "empty_key",
 			key:           "",
 			expectedValue: 0,
@@ -309,6 +323,25 @@ func TestKeyValue_Decrement(t *testing.T) {
 			name:          "non_existing_key",
 			key:           "counter",
 			expectedValue: -1,
+			expectedErr:   nil,
+		},
+		{
+			name: "multi_decr_existing_key",
+			setup: func(db KeyValue) {
+				err := db.Set(context.Background(), "counter", "10", 0)
+				if err != nil {
+					t.Fatalf("Set() error = %v", err)
+				}
+
+				for i := 0; i < 5; i++ {
+					_, err := db.Decrement(context.Background(), "counter")
+					if err != nil {
+						t.Fatalf("Set() error = %v", err)
+					}
+				}
+			},
+			key:           "counter",
+			expectedValue: 4,
 			expectedErr:   nil,
 		},
 		{
@@ -1220,6 +1253,10 @@ func TestKeyValue_GetKeysWithOpts(t *testing.T) {
 	}
 
 	for _, connector := range connectors {
+		if connector.Type() == "local" {
+			// local connector does not support SCAN
+			continue
+		}
 		for _, tc := range tcs {
 			t.Run(connector.Type()+"_"+tc.name, func(t *testing.T) {
 				ctx := context.Background()
