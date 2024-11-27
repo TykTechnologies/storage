@@ -17,6 +17,7 @@ var (
 
 	// Redis related errors
 	InvalidRedisClient = errors.New("invalid redis client")
+	InvalidPeriod      = errors.New("invalid period specified")
 
 	// TLS related errors
 	// TLS related errors
