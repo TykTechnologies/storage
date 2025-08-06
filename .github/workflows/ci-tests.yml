@@ -8,39 +8,70 @@ on:
 
 env:
   GO_VERSION: "1.18"
+  BRANCH_NAME: ${{ github.base_ref || github.ref_name }} # base_ref for PRs is 'master', but merges read in ref_name
+
 
 jobs:
   golangci-lint:
     runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.draft }}
     steps:
-      - name: use gh token
-        env:
-          TOKEN: "${{ secrets.ORG_GH_TOKEN }}"
-        run: >
-          git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
-      - name: Checkout Storage
-        uses: actions/checkout@v2
+      - name: "Checkout PR"
+        uses: TykTechnologies/github-actions/.github/actions/checkout-pr@main
         with:
-          fetch-depth: 2
-      - name: Fetch base branch
-        if: ${{ github.event_name == 'pull_request' }}
-        run: git fetch origin ${{ github.base_ref }}
-      - name: Setup Golang
-        uses: actions/setup-go@v3
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: Download golangci-lint
-        run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
-      - name: golangci-lint
-        if: ${{ contains(fromJSON('["push","pull_request"]'), github.event_name) }}
+          token: ${{ secrets.ORG_GH_TOKEN }}
+
+      - name: "Get base ref"
         run: |
-          $(go env GOPATH)/bin/golangci-lint run --format checkstyle --timeout=300s --max-issues-per-linter=0 --max-same-issues=0 --issues-exit-code=0 --new-from-rev=origin/${{ github.base_ref }} ./... > golanglint.xml
+          git fetch origin ${{ env.BRANCH_NAME }}
+          git rev-parse origin/${{ env.BRANCH_NAME }}
+
+      - name: Setup Golang
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/golangci-lint
+          key: 'golangci-lint-${{ runner.os }}-${{ hashFiles(''**/go.sum'') }}'
+          restore-keys: |
+            golangci-lint-${{ runner.os }}-
+
+      - name: Setup CI Tooling
+        uses: shrink/actions-docker-extract@v3
+        with:
+          image: tykio/ci-tools:latest
+          path: /usr/local/bin/golangci-lint
+          destination: /usr/local/bin
+
+      - run: golangci-lint version && golangci-lint cache status
+
+      - name: golangci-lint
+        if: ${{ github.event_name == 'pull_request' }}
+        # This is a pull request, but exiting here skips CI tests (`needs: golangci-lint`). Exit code 0 to always run tests.
+        # PR uses the "prod" config and must pass.
+        run: |
+          golangci-lint run --out-format colored-line-number,checkstyle:golangci-lint-report.json \
+                            --issues-exit-code=0 --new-from-rev=origin/${{ env.BRANCH_NAME }} -v ./...
+
+      - name: golangci-lint-on-push
+        if: ${{ github.event_name == 'push' }}
+        # Using the default config, reports stats to sonarcloud. No requirements on passing other than KPIs tracked in dev.
+        run: |
+          golangci-lint run --out-format checkstyle:golangci-lint-report.json --issues-exit-code=0 -v ./...
+
       - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
         with:
           name: golangcilint
           retention-days: 1
           path: |
-            golanglint.xml
+            golangci-lint-report.json
+
   test:
     name: Tests ${{ matrix.storagetype }} storage - DB ${{ matrix.database }} ${{ matrix.version }} ${{ matrix.instancetype }}
     needs: [golangci-lint]
