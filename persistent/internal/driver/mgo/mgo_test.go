@@ -1369,7 +1369,7 @@ func TestUniqueIndexConstraintViolation(t *testing.T) {
 
 		// Try to insert second document with same email - should fail
 		obj2 := &dummyDBObject{
-			Id:    model.NewObjectID(),
+			ID:    model.NewObjectID(),
 			Email: "test@example.com",
 			Name:  "Jane",
 		}
@@ -1401,7 +1401,7 @@ func TestUniqueIndexConstraintViolation(t *testing.T) {
 
 		// Insert second document with different combination - should succeed
 		obj2 := &dummyDBObject{
-			Id:    model.NewObjectID(),
+			ID:    model.NewObjectID(),
 			Name:  "Jane",
 			Email: "user2_org1", // using email field to store user_id_org_id combination
 		}
@@ -1410,7 +1410,7 @@ func TestUniqueIndexConstraintViolation(t *testing.T) {
 
 		// Try to insert third document with same combination as first - should fail
 		obj3 := &dummyDBObject{
-			Id:    model.NewObjectID(),
+			ID:    model.NewObjectID(),
 			Name:  "Bob",
 			Email: "user1_org1", // same combination as first - should fail
 		}
