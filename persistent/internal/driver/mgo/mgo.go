@@ -330,6 +330,10 @@ func (d *mgoDriver) CreateIndex(ctx context.Context, row model.DBObject, index m
 		newIndex.ExpireAfter = time.Duration(index.TTL) * time.Second
 	}
 
+	if index.Unique {
+		newIndex.Unique = true
+	}
+
 	return d.handleStoreError(col.EnsureIndex(newIndex))
 }
 
@@ -382,6 +386,10 @@ func (d *mgoDriver) GetIndexes(ctx context.Context, row model.DBObject) ([]model
 		if indexesSpec[i].ExpireAfter > 0 {
 			newIndex.IsTTLIndex = true
 			newIndex.TTL = int(indexesSpec[i].ExpireAfter.Seconds())
+		}
+
+		if indexesSpec[i].Unique {
+			newIndex.Unique = true
 		}
 
 		indexes = append(indexes, newIndex)

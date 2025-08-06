@@ -6,4 +6,5 @@ type Index struct {
 	Keys       []DBM
 	IsTTLIndex bool
 	TTL        int
+	Unique     bool
 }

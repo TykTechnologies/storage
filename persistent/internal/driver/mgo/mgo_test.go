@@ -1285,6 +1285,44 @@ func TestIndexes(t *testing.T) {
 				},
 			},
 		},
+		{
+			testName: "unique index case",
+			givenIndex: model.Index{
+				Name:   "unique_email",
+				Keys:   []model.DBM{{"email": 1}},
+				Unique: true,
+			},
+			expectedIndexes: []model.Index{
+				{
+					Name: "_id_",
+					Keys: []model.DBM{{"_id": int32(1)}},
+				},
+				{
+					Name:   "unique_email",
+					Keys:   []model.DBM{{"email": int32(1)}},
+					Unique: true,
+				},
+			},
+		},
+		{
+			testName: "unique compound index case",
+			givenIndex: model.Index{
+				Name:   "unique_user_org",
+				Keys:   []model.DBM{{"user_id": 1}, {"org_id": 1}},
+				Unique: true,
+			},
+			expectedIndexes: []model.Index{
+				{
+					Name: "_id_",
+					Keys: []model.DBM{{"_id": int32(1)}},
+				},
+				{
+					Name:   "unique_user_org",
+					Keys:   []model.DBM{{"user_id": int32(1)}, {"org_id": int32(1)}},
+					Unique: true,
+				},
+			},
+		},
 	}
 
 	for _, tc := range tcs {
@@ -1303,6 +1341,75 @@ func TestIndexes(t *testing.T) {
 			assert.EqualValues(t, tc.expectedIndexes, actualIndexes)
 		})
 	}
+}
+
+func TestUniqueIndexConstraintViolation(t *testing.T) {
+	defer cleanDB(t)
+
+	t.Run("unique constraint violation", func(t *testing.T) {
+		ctx := context.Background()
+		driver, obj := prepareEnvironment(t)
+		defer helper.ErrPrint(driver.Drop(ctx, obj))
+
+		// Create unique index on email field
+		uniqueIndex := model.Index{
+			Name:   "unique_email",
+			Keys:   []model.DBM{{"email": 1}},
+			Unique: true,
+		}
+		err := driver.CreateIndex(ctx, obj, uniqueIndex)
+		assert.NoError(t, err)
+
+		// Insert first document
+		obj.SetObjectID(model.NewObjectID())
+		obj.SetDataMap(map[string]interface{}{"email": "test@example.com", "name": "John"})
+		err = driver.Insert(ctx, obj)
+		assert.NoError(t, err)
+
+		// Try to insert second document with same email - should fail
+		obj2 := &test_DBObject{}
+		obj2.SetObjectID(model.NewObjectID())
+		obj2.SetDataMap(map[string]interface{}{"email": "test@example.com", "name": "Jane"})
+		err = driver.Insert(ctx, obj2)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "duplicate key error")
+	})
+
+	t.Run("unique compound index constraint violation", func(t *testing.T) {
+		ctx := context.Background()
+		driver, obj := prepareEnvironment(t)
+		defer helper.ErrPrint(driver.Drop(ctx, obj))
+
+		// Create unique compound index
+		uniqueIndex := model.Index{
+			Name:   "unique_user_org",
+			Keys:   []model.DBM{{"user_id": 1}, {"org_id": 1}},
+			Unique: true,
+		}
+		err := driver.CreateIndex(ctx, obj, uniqueIndex)
+		assert.NoError(t, err)
+
+		// Insert first document
+		obj.SetObjectID(model.NewObjectID())
+		obj.SetDataMap(map[string]interface{}{"user_id": "user1", "org_id": "org1", "name": "John"})
+		err = driver.Insert(ctx, obj)
+		assert.NoError(t, err)
+
+		// Insert second document with different combination - should succeed
+		obj2 := &test_DBObject{}
+		obj2.SetObjectID(model.NewObjectID())
+		obj2.SetDataMap(map[string]interface{}{"user_id": "user2", "org_id": "org1", "name": "Jane"})
+		err = driver.Insert(ctx, obj2)
+		assert.NoError(t, err)
+
+		// Try to insert third document with same combination as first - should fail
+		obj3 := &test_DBObject{}
+		obj3.SetObjectID(model.NewObjectID())
+		obj3.SetDataMap(map[string]interface{}{"user_id": "user1", "org_id": "org1", "name": "Bob"})
+		err = driver.Insert(ctx, obj3)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "duplicate key error")
+	})
 }
 
 func TestPing(t *testing.T) {

@@ -272,6 +272,10 @@ func (d *mongoDriver) CreateIndex(ctx context.Context, row model.DBObject, index
 		opts.SetExpireAfterSeconds(int32(index.TTL))
 	}
 
+	if index.Unique {
+		opts.SetUnique(true)
+	}
+
 	indexModel := mongo.IndexModel{
 		Keys:    keys,
 		Options: opts,
@@ -328,6 +332,10 @@ func (d *mongoDriver) GetIndexes(ctx context.Context, row model.DBObject) ([]mod
 		if TTL := thisIndex.ExpireAfterSeconds; TTL != nil {
 			newIndex.TTL = int(*TTL)
 			newIndex.IsTTLIndex = true
+		}
+
+		if unique := thisIndex.Unique; unique != nil && *unique {
+			newIndex.Unique = true
 		}
 
 		indexes = append(indexes, newIndex)
