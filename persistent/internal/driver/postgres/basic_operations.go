@@ -11,9 +11,9 @@ import (
 	"time"
 )
 
-func (p *driver) Insert(ctx context.Context, objects ...model.DBObject) error {
+func (d *driver) Insert(ctx context.Context, objects ...model.DBObject) error {
 	// Check if the database connection is valid
-	if p.db == nil {
+	if d.db == nil {
 		return errors.New(types.ErrorSessionClosed)
 	}
 
@@ -23,7 +23,7 @@ func (p *driver) Insert(ctx context.Context, objects ...model.DBObject) error {
 			obj.SetObjectID(model.NewObjectID())
 		}
 
-		result := p.db.WithContext(ctx).Table(obj.TableName()).Create(obj)
+		result := d.db.WithContext(ctx).Table(obj.TableName()).Create(obj)
 		if result.Error != nil {
 			return result.Error
 		}
@@ -31,8 +31,8 @@ func (p *driver) Insert(ctx context.Context, objects ...model.DBObject) error {
 	return nil
 }
 
-func (p *driver) Delete(ctx context.Context, object model.DBObject, filters ...model.DBM) error {
-	tableName, err := p.validateDBAndTable(object)
+func (d *driver) Delete(ctx context.Context, object model.DBObject, filters ...model.DBM) error {
+	tableName, err := d.validateDBAndTable(object)
 	if err != nil {
 		return err
 	}
@@ -43,10 +43,10 @@ func (p *driver) Delete(ctx context.Context, object model.DBObject, filters ...m
 	}
 
 	// Start building the query with the table name
-	db := p.db.WithContext(ctx).Table(tableName)
+	db := d.db.WithContext(ctx).Table(tableName)
 	// If we have a filter, use our translator function
 	if len(filters) == 1 {
-		db = p.translateQuery(db, filters[0], object)
+		db = d.translateQuery(db, filters[0], object)
 	} else {
 		// If no filter is provided, use the object's ID as the filter
 		id := object.GetObjectID()
@@ -71,8 +71,8 @@ func (p *driver) Delete(ctx context.Context, object model.DBObject, filters ...m
 	return nil
 }
 
-func (p *driver) Update(ctx context.Context, object model.DBObject, filters ...model.DBM) error {
-	tableName, err := p.validateDBAndTable(object)
+func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...model.DBM) error {
+	tableName, err := d.validateDBAndTable(object)
 	if err != nil {
 		return err
 	}
@@ -99,10 +99,10 @@ func (p *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 	}
 
 	// Start building the query with the table name
-	tx := p.db.WithContext(ctx).Table(tableName)
+	tx := d.db.WithContext(ctx).Table(tableName)
 	// If we have a filter, use our translator function
 	if len(filters) == 1 {
-		tx = p.translateQuery(tx, filters[0], object)
+		tx = d.translateQuery(tx, filters[0], object)
 	} else {
 		// If no filter is provided, use the object's ID as the filter
 		id := object.GetObjectID()
@@ -135,9 +135,9 @@ This is useful for batch updates where multiple records need to be updated based
 - Without Filter: When no filter is provided, it updates each object individually based on its ID. This is useful
 for updating a collection of specific records with different values.
 */
-func (p *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filters ...model.DBM) error {
+func (d *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filters ...model.DBM) error {
 	// Check if the database connection is valid
-	if p.db == nil {
+	if d.db == nil {
 		return errors.New(types.ErrorSessionClosed)
 	}
 
@@ -151,7 +151,7 @@ func (p *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filte
 	}
 
 	// Start a transaction
-	tx := p.db.WithContext(ctx).Begin()
+	tx := d.db.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		return tx.Error
 	}
@@ -261,8 +261,8 @@ func (p *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filte
 		// Add the filter condition if provided
 		if len(filters) == 1 {
 			filter := filters[0]
-			db := p.db.WithContext(ctx).Table(tableName)
-			db = p.translateQuery(db, filter, objects[0])
+			db := d.db.WithContext(ctx).Table(tableName)
+			db = d.translateQuery(db, filter, objects[0])
 
 			whereConditions := []string{}
 			whereArgs := []interface{}{}
@@ -338,8 +338,8 @@ func (p *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filte
 	return tx.Commit().Error
 }
 
-func (p *driver) UpdateAll(ctx context.Context, row model.DBObject, query, update model.DBM) error {
-	tableName, err := p.validateDBAndTable(row)
+func (d *driver) UpdateAll(ctx context.Context, row model.DBObject, query, update model.DBM) error {
+	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
 		return err
 	}
@@ -349,12 +349,12 @@ func (p *driver) UpdateAll(ctx context.Context, row model.DBObject, query, updat
 		return nil // Nothing to update
 	}
 
-	db := p.db.WithContext(ctx).Table(tableName)
+	db := d.db.WithContext(ctx).Table(tableName)
 	// Apply the query filter
-	db = p.translateQuery(db, query, row)
+	db = d.translateQuery(db, query, row)
 
 	// Apply MongoDB update operators
-	db, err = p.applyMongoUpdateOperators(db, update)
+	db, err = d.applyMongoUpdateOperators(db, update)
 	if err != nil {
 		return err
 	}
@@ -362,15 +362,15 @@ func (p *driver) UpdateAll(ctx context.Context, row model.DBObject, query, updat
 	return nil
 }
 
-func (p *driver) Upsert(ctx context.Context, row model.DBObject, query, update model.DBM) error {
+func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update model.DBM) error {
 	// Check if the database connection is valid
-	tableName, err := p.validateDBAndTable(row)
+	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
 		return err
 	}
 
 	// Start a transaction
-	tx := p.db.WithContext(ctx).Begin()
+	tx := d.db.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		return tx.Error
 	}
@@ -384,10 +384,10 @@ func (p *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 	}()
 
 	db := tx.Table(tableName)
-	db = p.translateQuery(db, query, row)
+	db = d.translateQuery(db, query, row)
 
 	// Apply MongoDB update operators
-	db, err = p.applyMongoUpdateOperators(db, update)
+	db, err = d.applyMongoUpdateOperators(db, update)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -437,7 +437,7 @@ func (p *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 	} else {
 		// Update succeeded, get the updated row
 		result := tx.Table(tableName)
-		result = p.translateQuery(result, query, row)
+		result = d.translateQuery(result, query, row)
 		result = result.First(row)
 		if result.Error != nil {
 			tx.Rollback()

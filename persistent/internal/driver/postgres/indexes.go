@@ -18,8 +18,8 @@ type IndexRow struct {
 	Comment    *string // Using pointer for nullable string
 }
 
-func (p *driver) CreateIndex(ctx context.Context, row model.DBObject, index model.Index) error {
-	tableName, err := p.validateDBAndTable(row)
+func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index model.Index) error {
+	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
 		return err
 	}
@@ -30,7 +30,7 @@ func (p *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 	}
 
 	// Check if the index already exists
-	exists, err := p.indexExists(ctx, tableName, index.Name)
+	exists, err := d.indexExists(ctx, tableName, index.Name)
 	if err != nil {
 		return fmt.Errorf("failed to check if index exists: %w", err)
 	}
@@ -91,7 +91,7 @@ func (p *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 	}
 
 	// Execute the statement
-	err = p.db.WithContext(ctx).Exec(createIndexSQL).Error
+	err = d.db.WithContext(ctx).Exec(createIndexSQL).Error
 	if err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
@@ -99,8 +99,8 @@ func (p *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 	return nil
 }
 
-func (p *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.Index, error) {
-	tableName, err := p.validateDBAndTable(row)
+func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.Index, error) {
+	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func (p *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
     `
 
 	var rows []IndexRow
-	err = p.db.WithContext(ctx).Raw(query, tableName).Scan(&rows).Error
+	err = d.db.WithContext(ctx).Raw(query, tableName).Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to query indexes: %w", err)
 	}
@@ -171,8 +171,8 @@ func (p *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
 	return indexes, nil
 }
 
-func (p *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
-	tableName, err := p.validateDBAndTable(row)
+func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
+	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
 		return err
 	}
@@ -196,7 +196,7 @@ func (p *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 
 	var indexNames []string
 	// Execute the query
-	err = p.db.WithContext(ctx).Raw(query, tableName).Pluck("index_name", &indexNames).Error
+	err = d.db.WithContext(ctx).Raw(query, tableName).Pluck("index_name", &indexNames).Error
 	if err != nil {
 		return fmt.Errorf("failed to query indexes: %w", err)
 	}
@@ -206,7 +206,7 @@ func (p *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 	}
 
 	// Start a transaction
-	tx := p.db.WithContext(ctx).Begin()
+	tx := d.db.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -234,7 +234,7 @@ func (p *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 }
 
 // Helper function to check if an index exists
-func (p *driver) indexExists(ctx context.Context, tableName, indexName string) (bool, error) {
+func (d *driver) indexExists(ctx context.Context, tableName, indexName string) (bool, error) {
 	query := `
         SELECT EXISTS (
             SELECT 1 
@@ -245,7 +245,7 @@ func (p *driver) indexExists(ctx context.Context, tableName, indexName string) (
     `
 
 	var exists bool
-	err := p.db.WithContext(ctx).Raw(query, tableName, indexName).Scan(&exists).Error
+	err := d.db.WithContext(ctx).Raw(query, tableName, indexName).Scan(&exists).Error
 	if err != nil {
 		return false, err
 	}

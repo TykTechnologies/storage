@@ -64,9 +64,9 @@ type BasicInfo struct {
 	MaxConnections string
 }
 
-func (p *driver) HasTable(ctx context.Context, tableName string) (bool, error) {
+func (d *driver) HasTable(ctx context.Context, tableName string) (bool, error) {
 	// Check if the database connection is valid
-	if p.db == nil {
+	if d.db == nil {
 		return false, errors.New(types.ErrorSessionClosed)
 	}
 
@@ -75,11 +75,11 @@ func (p *driver) HasTable(ctx context.Context, tableName string) (bool, error) {
 		return false, errors.New(types.ErrorEmptyTableName)
 	}
 
-	return p.db.Migrator().HasTable(tableName), nil
+	return d.db.Migrator().HasTable(tableName), nil
 }
 
-func (p *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DBM, error) {
-	tableName, err := p.validateDBAndTable(row)
+func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DBM, error) {
+	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func (p *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
     `
 	var basicStats BasicStats
 
-	err = p.db.WithContext(ctx).Raw(basicStatsQuery, tableName).Scan(&basicStats).Error
+	err = d.db.WithContext(ctx).Raw(basicStatsQuery, tableName).Scan(&basicStats).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("table %s not found", tableName)
@@ -174,7 +174,7 @@ func (p *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
     `
 
 	var indexStatsRows []IndexStats
-	err = p.db.WithContext(ctx).Raw(indexStatsQuery, tableName).Scan(&indexStatsRows).Error
+	err = d.db.WithContext(ctx).Raw(indexStatsQuery, tableName).Scan(&indexStatsRows).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get index statistics: %w", err)
 	}
@@ -223,7 +223,7 @@ func (p *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
     `
 
 	var columnStatsRows []ColumnStats
-	err = p.db.WithContext(ctx).Raw(columnStatsQuery, tableName, tableName).Scan(&columnStatsRows).Error
+	err = d.db.WithContext(ctx).Raw(columnStatsQuery, tableName, tableName).Scan(&columnStatsRows).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get column statistics: %w", err)
 	}
@@ -274,13 +274,13 @@ func (p *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
 	return stats, nil
 }
 
-func (p *driver) GetTables(ctx context.Context) ([]string, error) {
-	if p.db == nil {
+func (d *driver) GetTables(ctx context.Context) ([]string, error) {
+	if d.db == nil {
 		return []string{}, errors.New(types.ErrorSessionClosed)
 	}
 
 	// Use GORM's Migrator interface to get all tables
-	tables, err := p.db.WithContext(ctx).Migrator().GetTables()
+	tables, err := d.db.WithContext(ctx).Migrator().GetTables()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tables: %w", err)
 	}
@@ -288,8 +288,8 @@ func (p *driver) GetTables(ctx context.Context) ([]string, error) {
 	return tables, nil
 }
 
-func (p *driver) DropTable(ctx context.Context, name string) (int, error) {
-	if p.db == nil {
+func (d *driver) DropTable(ctx context.Context, name string) (int, error) {
+	if d.db == nil {
 		return 0, errors.New(types.ErrorSessionClosed)
 	}
 
@@ -298,7 +298,7 @@ func (p *driver) DropTable(ctx context.Context, name string) (int, error) {
 		return 0, errors.New(types.ErrorEmptyTableName)
 	}
 
-	exist, err := p.HasTable(ctx, name)
+	exist, err := d.HasTable(ctx, name)
 	if err != nil || !exist {
 		return 0, err
 	}
@@ -307,21 +307,21 @@ func (p *driver) DropTable(ctx context.Context, name string) (int, error) {
 	// This is to return the number of affected rows
 	var rowCount int64
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", name)
-	err = p.db.WithContext(ctx).Raw(countQuery).Scan(&rowCount).Error
+	err = d.db.WithContext(ctx).Raw(countQuery).Scan(&rowCount).Error
 	if err != nil {
 		return 0, err
 	}
 
-	err = p.db.Migrator().DropTable(ctx, name)
+	err = d.db.Migrator().DropTable(ctx, name)
 	if err != nil {
 		return 0, fmt.Errorf("failed to drop table %s: %w", name, err)
 	}
 	return int(rowCount), nil
 }
 
-func (p *driver) Drop(ctx context.Context, object model.DBObject) error {
+func (d *driver) Drop(ctx context.Context, object model.DBObject) error {
 	// Check if the database connection is valid
-	tableName, err := p.validateDBAndTable(object)
+	tableName, err := d.validateDBAndTable(object)
 	if err != nil {
 		return err
 	}
@@ -332,7 +332,7 @@ func (p *driver) Drop(ctx context.Context, object model.DBObject) error {
 		return fmt.Errorf("invalid table name: %s", tableName)
 	}
 
-	err = p.db.WithContext(ctx).Migrator().DropTable(tableName)
+	err = d.db.WithContext(ctx).Migrator().DropTable(tableName)
 	if err != nil {
 		return fmt.Errorf("failed to drop table %s: %w", tableName, err)
 	}
@@ -340,9 +340,9 @@ func (p *driver) Drop(ctx context.Context, object model.DBObject) error {
 	return nil
 }
 
-func (p *driver) Migrate(ctx context.Context, objects []model.DBObject, options ...model.DBM) error {
+func (d *driver) Migrate(ctx context.Context, objects []model.DBObject, options ...model.DBM) error {
 	// Check if the database connection is valid
-	if p.db == nil {
+	if d.db == nil {
 		return errors.New(types.ErrorSessionClosed)
 	}
 
@@ -357,7 +357,7 @@ func (p *driver) Migrate(ctx context.Context, objects []model.DBObject, options 
 	}
 
 	// Use GORM's context
-	db := p.db.WithContext(ctx)
+	db := d.db.WithContext(ctx)
 	// Process each object
 	for _, obj := range objects {
 		// Get the table name
@@ -389,7 +389,7 @@ func (p *driver) Migrate(ctx context.Context, objects []model.DBObject, options 
 					}
 
 					// Create the index using our existing CreateIndex function
-					err = p.CreateIndex(ctx, obj, index)
+					err = d.CreateIndex(ctx, obj, index)
 					if err != nil {
 						// If the error is just that the index already exists, we can continue
 						if err.Error() == types.ErrorIndexAlreadyExist {
@@ -405,8 +405,8 @@ func (p *driver) Migrate(ctx context.Context, objects []model.DBObject, options 
 	return nil
 }
 
-func (p *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
-	if p.db == nil {
+func (d *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
+	if d.db == nil {
 		return utils.Info{}, errors.New(types.ErrorSessionClosed)
 	}
 
@@ -426,7 +426,7 @@ func (p *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
             current_setting('max_connections') AS max_connections
     `
 	var basicInfo BasicInfo
-	err := p.db.WithContext(ctx).Raw(basicInfoQuery).Scan(&basicInfo).Error
+	err := d.db.WithContext(ctx).Raw(basicInfoQuery).Scan(&basicInfo).Error
 	if err != nil {
 		return utils.Info{}, fmt.Errorf("failed to get database info: %w", err)
 	}
@@ -455,7 +455,7 @@ func (p *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
     `
 
 	var connectionCount int
-	err = p.db.WithContext(ctx).Raw(connectionCountQuery).Scan(&connectionCount).Error
+	err = d.db.WithContext(ctx).Raw(connectionCountQuery).Scan(&connectionCount).Error
 	if err == nil {
 		info.CurrentConnections = connectionCount
 	}
@@ -472,7 +472,7 @@ func (p *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
     `
 
 	var tableCount int
-	err = p.db.WithContext(ctx).Raw(tableCountQuery).Scan(&tableCount).Error
+	err = d.db.WithContext(ctx).Raw(tableCountQuery).Scan(&tableCount).Error
 	if err == nil {
 		info.TableCount = tableCount
 	}

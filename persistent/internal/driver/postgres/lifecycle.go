@@ -78,14 +78,14 @@ func (l *lifeCycle) DBType() utils.DBType {
 	return utils.PostgresDB
 }
 
-func (p *driver) Ping(ctx context.Context) error {
+func (d *driver) Ping(ctx context.Context) error {
 	// Check if the database connection is valid
-	if p.db == nil {
+	if d.db == nil {
 		return errors.New(types.ErrorSessionClosed)
 	}
 
 	// Get the underlying *sql.DB from GORM
-	sqlDB, err := p.db.DB()
+	sqlDB, err := d.db.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get database connection: %w", err)
 	}
@@ -99,25 +99,25 @@ func (p *driver) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (p *driver) DropDatabase(_ context.Context) error {
+func (d *driver) DropDatabase(_ context.Context) error {
 	// Check if the database connection is valid
-	if p.db == nil {
+	if d.db == nil {
 		return errors.New(types.ErrorSessionClosed)
 	}
 
-	dbNameToDelete := p.dbName
+	dbNameToDelete := d.dbName
 
 	// In PostgresSQL, we cannot drop the currently connected database.
 	// We need to provide instructions on how to drop the database manually.
 
 	// Close the current connection
-	err := p.Close()
+	err := d.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close connection: %w", err)
 	}
 
 	// Set the driver's db to nil to prevent further use
-	p.db = nil
+	d.db = nil
 
 	// Return a special error with instructions
 	return fmt.Errorf(

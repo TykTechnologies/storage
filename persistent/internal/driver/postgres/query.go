@@ -12,9 +12,9 @@ import (
 	"time"
 )
 
-func (p *driver) Query(ctx context.Context, object model.DBObject, result interface{}, filter model.DBM) error {
+func (d *driver) Query(ctx context.Context, object model.DBObject, result interface{}, filter model.DBM) error {
 	// Check if the database connection is valid
-	tableName, err := p.validateDBAndTable(object)
+	tableName, err := d.validateDBAndTable(object)
 	if err != nil {
 		return err
 	}
@@ -25,8 +25,8 @@ func (p *driver) Query(ctx context.Context, object model.DBObject, result interf
 		return errors.New("result must be a pointer")
 	}
 
-	db := p.db.WithContext(ctx).Table(tableName)
-	db = p.translateQuery(db, filter, object)
+	db := d.db.WithContext(ctx).Table(tableName)
+	db = d.translateQuery(db, filter, object)
 
 	// Determine if result is a slice or a single object
 	resultElem := resultVal.Elem()
@@ -57,13 +57,13 @@ func (p *driver) Query(ctx context.Context, object model.DBObject, result interf
 	return nil
 }
 
-func (p *driver) Count(ctx context.Context, row model.DBObject, filters ...model.DBM) (count int, error error) {
-	tableName, err := p.validateDBAndTable(row)
+func (d *driver) Count(ctx context.Context, row model.DBObject, filters ...model.DBM) (count int, error error) {
+	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
 		return 0, err
 	}
 
-	db := p.db.WithContext(ctx).Table(tableName)
+	db := d.db.WithContext(ctx).Table(tableName)
 	// If we have a filter, use our translator function
 	if len(filters) == 1 {
 		// Add _count flag to the filter to ensure proper handling in translateQuery
@@ -73,7 +73,7 @@ func (p *driver) Count(ctx context.Context, row model.DBObject, filters ...model
 		}
 		countFilter["_count"] = true
 
-		db = p.translateQuery(db, countFilter, row)
+		db = d.translateQuery(db, countFilter, row)
 	}
 	var result int64
 	err = db.Count(&result).Error
@@ -83,8 +83,8 @@ func (p *driver) Count(ctx context.Context, row model.DBObject, filters ...model
 	return int(result), nil
 }
 
-func (p *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []model.DBM) ([]model.DBM, error) {
-	tableName, err := p.validateDBAndTable(row)
+func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []model.DBM) ([]model.DBM, error) {
+	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
 		return []model.DBM{}, err
 	}
@@ -103,7 +103,7 @@ func (p *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 	}
 
 	// Execute the query using GORM
-	rows, err := p.db.WithContext(ctx).Raw(sqlQuery, args...).Rows()
+	rows, err := d.db.WithContext(ctx).Raw(sqlQuery, args...).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute aggregation query: %w", err)
 	}
@@ -150,7 +150,7 @@ func (p *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 }
 
 // applyMongoUpdateOperators applies MongoDB-style update operators to a GORM DB instance
-func (p *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm.DB, error) {
+func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm.DB, error) {
 	if db == nil {
 		return nil, errors.New("nil database connection")
 	}
@@ -255,7 +255,7 @@ func (p *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 }
 
 // translateQuery converts MongoDB-style queries to GORM queries with sharding support
-func (p *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) *gorm.DB {
+func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) *gorm.DB {
 	if db == nil {
 		return nil
 	}
@@ -268,7 +268,7 @@ func (p *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) *g
 	var minShardDate, maxShardDate time.Time
 
 	// Check if table sharding is enabled (you might need to add this as a configuration option)
-	tableSharding := p.options != nil && p.TableSharding
+	tableSharding := d.options != nil && d.TableSharding
 
 	if !tableSharding {
 		useSharding = false
@@ -388,7 +388,7 @@ func (p *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) *g
 				table := baseTable + "_" + minShardDate.Add(time.Duration(i*24)*time.Hour).Format("20060102")
 
 				// Check if table exists
-				exists, _ := p.HasTable(context.Background(), table)
+				exists, _ := d.HasTable(context.Background(), table)
 				if !exists {
 					continue
 				}
