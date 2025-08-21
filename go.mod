@@ -1,6 +1,8 @@
 module github.com/TykTechnologies/storage
 
-go 1.18
+go 1.23
+
+toolchain go1.24.5
 
 require (
 	github.com/google/go-cmp v0.5.9
@@ -9,6 +11,8 @@ require (
 	github.com/stretchr/testify v1.8.1
 	go.mongodb.org/mongo-driver v1.13.1
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22
+	gorm.io/driver/postgres v1.5.11
+	gorm.io/gorm v1.30.0
 )
 
 require (
@@ -18,8 +22,8 @@ require (
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	gorm.io/driver/postgres v1.5.11 // indirect
-	gorm.io/gorm v1.30.0 // indirect
+	github.com/kr/text v0.2.0 // indirect
+	github.com/rogpeppe/go-internal v1.14.1 // indirect
 )
 
 require (
