@@ -3,14 +3,19 @@ run:
     - vendor
     - pkg/mod
 
-
+  skip-files:
+    - "github.com/jackc/puddle/v2"
+    -
 skip-dirs:
   - vendor
   - '.*puddle.*'
-  
+
 issues:
   # Show only new issues created since branching away from default branch on the remote
   new-from-rev: origin/main
+  exclude-use-default: false
+    exclude:
+      - "puddle"
 
 linters:
   enable:
