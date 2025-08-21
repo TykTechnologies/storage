@@ -1,3 +1,8 @@
+run:
+  skip-dirs:
+    - vendor
+    - pkg/mod
+
 issues:
   # Show only new issues created since branching away from default branch on the remote
   new-from-rev: origin/main

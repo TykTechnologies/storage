@@ -34,6 +34,7 @@ jobs:
         with:
           version: v1.55.2
           args: >-
+              run ./...
               --timeout=300s
               --max-issues-per-linter=0
               --max-same-issues=0
