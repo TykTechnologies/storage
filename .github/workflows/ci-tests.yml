@@ -66,6 +66,21 @@ jobs:
           - storagetype: persistent
             database: mongo
             version: 6.0
+          - storagetype: persistent
+            database: postgres
+            version: 16.10
+          - storagetype: persistent
+            database: postgres
+            version: 15.0
+          - storagetype: persistent
+            database: postgres
+            version: 14.11
+          - storagetype: persistent
+            database: postgres
+            version: 13.3
+          - storagetype: persistent
+            database: postgres
+            version: 12.22
           - storagetype: temporal
             database: redis
             version: 6.0.0
@@ -116,6 +131,10 @@ jobs:
       - if: ${{ matrix.database == 'mongo' }}
         name: Start MongoDB '${{ matrix.version }}'
         run: task -t bin/Taskfile-db.yml start-mongo MONGO_VERSION=${{ matrix.version }}
+
+      - if: ${{ matrix.database == 'postgres' }}
+        name: Start PostgresDB '${{ matrix.version }}'
+        run: task -t bin/Taskfile-db.yml start-postgres POSTGRES_VERSION=${{ matrix.version }}
 
       - if: ${{ matrix.database == 'redis' }}
         name: Start Redis '${{ matrix.version }}'

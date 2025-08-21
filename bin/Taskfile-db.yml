@@ -6,6 +6,12 @@ tasks:
       - echo "Starting MongoDB..."
       - docker run --name mongo -d -p 27017:27017 mongo:{{.MONGO_VERSION}}
 
+  start-postgres:
+    cmds:
+      - echo "Starting PostgreSQL..."
+      - docker run --name postgres -d -p 5432:5432 -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=secr3t -e POSTGRES_DB=tyk postgres:{{.POSTGRES_VERSION}}
+      - sleep 5 # wait for PostgreSQL to initialize
+
   start-redis-single:
     cmds:
       - echo "Starting Redis single instance..."
