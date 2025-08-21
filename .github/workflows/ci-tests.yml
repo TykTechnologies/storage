@@ -34,7 +34,6 @@ jobs:
         with:
           version: v1.55.2
           args: >-
-              --out-format checkstyle
               --timeout=300s
               --max-issues-per-linter=0
               --max-same-issues=0
