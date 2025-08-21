@@ -11,8 +11,8 @@ issues:
   # Show only new issues created since branching away from default branch on the remote
   new-from-rev: origin/main
   exclude-use-default: false
-    exclude:
-      - "puddle"
+  exclude:
+    - "puddle"
 
 linters:
   enable:
