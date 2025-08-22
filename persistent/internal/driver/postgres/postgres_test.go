@@ -1,5 +1,5 @@
-//go:build postgres || postgres14 || postgres13 || postgres12 || postgres11 || postgres10
-// +build postgres postgres14 postgres13 postgres12 postgres11 postgres10
+//go:build postgres || postgres14 || postgres13 || postgres12.22 || postgres11 || postgres10
+// +build postgres postgres14 postgres13 postgres12.22 postgres11 postgres10
 
 package postgres
 
