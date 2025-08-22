@@ -37,7 +37,7 @@ jobs:
           $(go env GOPATH)/bin/golangci-lint run --out-format checkstyle --timeout=300s --max-issues-per-linter=0 --max-same-issues=0 --issues-exit-code=0 --new-from-rev=origin/${{ github.base_ref }} ./... > golanglint.xml
       - uses: actions/upload-artifact@v4
         with:
-          name: golangcilint
+          name: golangcilint-${{ github.job }}-${{ github.run_attempt }}
           retention-days: 1
           path: |
             golanglint.xml
