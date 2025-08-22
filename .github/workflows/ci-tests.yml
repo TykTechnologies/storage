@@ -142,13 +142,15 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Download coverage artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: coverage
+          name: coverage-*
+          merge-multiple: true
       - name: Download golangcilint artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: golangcilint
+          name: golangcilint-*
+          merge-multiple: true
       - name: Check reports existence
         id: check_files
         uses: andstor/file-existence-action@v1
