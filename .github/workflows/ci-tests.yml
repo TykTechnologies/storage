@@ -125,11 +125,11 @@ jobs:
 
       - name: Debug artifact name
         run: |
-          echo "Artifact name: coverage-${{ github.job }}-${{ matrix.storagetype }}-${{ matrix.database }}-${{ matrix.version }}-${{ matrix.instancetype || 'default' }}"
+          echo "Artifact name: coverage-${{ github.run_id }}-${{ matrix.storagetype }}-${{ matrix.database }}-${{ matrix.version }}
 
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage-${{ github.job }}-${{ matrix.storagetype }}-${{ matrix.database }}-${{ matrix.version }}-${{ matrix.instancetype || 'default' }}"
+          name: coverage-${{ github.run_id }}-${{ matrix.storagetype }}-${{ matrix.database }}-${{ matrix.version }}
           retention-days: 1
           path: coverage/**/*.cov
 
