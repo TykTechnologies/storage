@@ -125,7 +125,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage
+          name: coverage-${{ github.job }}-${{ github.run_attempt }}
           retention-days: 1
           path: coverage/**/*.cov
 
