@@ -37,7 +37,7 @@ jobs:
           $(go env GOPATH)/bin/golangci-lint run --out-format checkstyle --timeout=300s --max-issues-per-linter=0 --max-same-issues=0 --issues-exit-code=0 --new-from-rev=origin/${{ github.base_ref }} ./... > golanglint.xml
       - uses: actions/upload-artifact@v4
         with:
-          name: golangcilint-${{ github.job }}-${{ github.run_attempt }}
+          name: golangcilint-${{ github.job }}-${{ github.run_attempt }}-${{ matrix.database }}-${{ matrix.version }}
           retention-days: 1
           path: |
             golanglint.xml
@@ -125,7 +125,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage-${{ github.job }}-${{ github.run_attempt }}
+          name: coverage-${{ github.job }}-${{ github.run_attempt }}-${{ matrix.database }}-${{ matrix.version }}
           retention-days: 1
           path: coverage/**/*.cov
 
