@@ -29,7 +29,7 @@ type lifeCycle struct {
 var _ types.StorageLifecycle = &lifeCycle{}
 
 const (
-	MongoPrefix    = "mongodb://"
+	MongoPrefixs   = "mongodb://"
 	MongoSRVPrefix = "mongodb+srv://"
 )
 
@@ -87,15 +87,15 @@ func parseURL(s string) (string, *urlInfo, error) {
 	var info *urlInfo
 	prefix := ""
 
-	if strings.HasPrefix(s, MongoPrefix) {
-		prefix = MongoPrefix
+	if strings.HasPrefix(s, MongoPrefixs) {
+		prefix = MongoPrefixs
 	} else if strings.HasPrefix(s, MongoSRVPrefix) {
 		prefix = MongoSRVPrefix
 	}
 
 	switch prefix {
-	case MongoPrefix:
-		s = strings.TrimPrefix(s, MongoPrefix)
+	case MongoPrefixs:
+		s = strings.TrimPrefix(s, MongoPrefixs)
 	case MongoSRVPrefix:
 		s = strings.TrimPrefix(s, MongoSRVPrefix)
 	default:
