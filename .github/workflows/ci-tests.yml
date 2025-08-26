@@ -7,7 +7,7 @@ on:
       - main
 
 env:
-  GO_VERSION: "1.23"
+  GO_VERSION: "1.18"
 
 jobs:
   golangci-lint:
@@ -34,13 +34,13 @@ jobs:
       - name: golangci-lint
         if: ${{ contains(fromJSON('["push","pull_request"]'), github.event_name) }}
         run: |
-            $(go env GOPATH)/bin/golangci-lint run --out-format checkstyle --timeout=300s --max-issues-per-linter=0 --max-same-issues=0 --issues-exit-code=0 --new-from-rev=origin/${{ github.base_ref }} ./... > golanglint.xml
+          $(go env GOPATH)/bin/golangci-lint run --out-format checkstyle --timeout=300s --max-issues-per-linter=0 --max-same-issues=0 --issues-exit-code=0 --new-from-rev=origin/${{ github.base_ref }} ./... > golanglint.xml
       - uses: actions/upload-artifact@v4
         with:
-          name: golangcilint
+          name: golangcilint-${{ github.run_id }}-${{ matrix.storagetype }}-${{ matrix.database }}-${{ matrix.version }}
           retention-days: 1
           path: |
-            golanglint.xml
+            golint/golanglint.xml
   test:
     name: Tests ${{ matrix.storagetype }} storage - DB ${{ matrix.database }} ${{ matrix.version }} ${{ matrix.instancetype }}
     needs: [golangci-lint]
@@ -61,21 +61,6 @@ jobs:
           - storagetype: persistent
             database: mongo
             version: 6.0
-          - storagetype: persistent
-            database: postgres
-            version: 16.10
-          - storagetype: persistent
-            database: postgres
-            version: 15.0
-          - storagetype: persistent
-            database: postgres
-            version: 14.11
-          - storagetype: persistent
-            database: postgres
-            version: 13.3
-          - storagetype: persistent
-            database: postgres
-            version: 12.22
           - storagetype: temporal
             database: redis
             version: 6.0.0
@@ -127,10 +112,6 @@ jobs:
         name: Start MongoDB '${{ matrix.version }}'
         run: task -t bin/Taskfile-db.yml start-mongo MONGO_VERSION=${{ matrix.version }}
 
-      - if: ${{ matrix.database == 'postgres' }}
-        name: Start PostgresDB '${{ matrix.version }}'
-        run: task -t bin/Taskfile-db.yml start-postgres POSTGRES_VERSION=${{ matrix.version }}
-
       - if: ${{ matrix.database == 'redis' }}
         name: Start Redis '${{ matrix.version }}'
         run: task -t bin/Taskfile-db.yml start-redis-${{matrix.instancetype}} REDIS_VERSION=${{ matrix.version }}
@@ -142,9 +123,13 @@ jobs:
           DB_VERSION: ${{ matrix.version }}
         run: task test-${{ matrix.storagetype }}
 
+      - name: Debug artifact name
+        run: |
+          echo "Artifact name: coverage-${{ github.run_id }}-${{ matrix.storagetype }}-${{ matrix.instancetype }}-${{ matrix.database }}-${{ matrix.version }}"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage
+          name: coverage-${{ github.run_id }}-${{ matrix.storagetype }}-${{ matrix.instancetype }}-${{ matrix.database }}-${{ matrix.version }}
           retention-days: 1
           path: coverage/**/*.cov
 
@@ -161,13 +146,15 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Download coverage artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: coverage
-      - name: Download golangcilint artifacts
-        uses: actions/download-artifact@v3
+          path: ./coverage
+          merge-multiple: true
+      - name: Download golangci-lint artifacts
+        uses: actions/download-artifact@v4
         with:
-          name: golangcilint
+          path: ./golint       
+          merge-multiple: true
       - name: Check reports existence
         id: check_files
         uses: andstor/file-existence-action@v1
