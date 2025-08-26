@@ -122,7 +122,6 @@ jobs:
           DB_SETUP: ${{ matrix.instancetype }}
           DB_VERSION: ${{ matrix.version }}
         run: task test-${{ matrix.storagetype }}
-
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-${{ github.run_id }}-${{ matrix.storagetype }}-${{ matrix.instancetype }}-${{ matrix.database }}-${{ matrix.version }}
