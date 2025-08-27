@@ -61,6 +61,21 @@ jobs:
           - storagetype: persistent
             database: mongo
             version: 6.0
+          - storagetype: persistent
+            database: postgres
+            version: 16.10
+          - storagetype: persistent
+            database: postgres
+            version: 15.0
+          - storagetype: persistent
+            database: postgres
+            version: 14.11
+          - storagetype: persistent
+            database: postgres
+            version: 13.3
+          - storagetype: persistent
+            database: postgres
+            version: 12.22
           - storagetype: temporal
             database: redis
             version: 6.0.0
