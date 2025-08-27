@@ -37,7 +37,7 @@ func setupTest(t *testing.T) (*driver, context.Context) {
 
 	// Use the same hardcoded values as in the Taskfile
 	connStr := "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable"
-	connStr = "host=localhost port=5432 user=postgres dbname=tyk password=secr3t sslmode=disable"
+	//connStr = "host=localhost port=5432 user=postgres dbname=tyk password=secr3t sslmode=disable"
 
 	opts := &types.ClientOpts{
 		ConnectionString: connStr,
