@@ -1,5 +1,5 @@
-//go:build postgres || postgres14 || postgres13 || postgres12.22 || postgres11 || postgres10
-// +build postgres postgres14 postgres13 postgres12.22 postgres11 postgres10
+//go:build postgres || postgres16.1 || postgres15 || postgres14.11 || postgres13.3 || postgres12.22
+// +build postgres postgres16.1 postgres15 postgres14.11 postgres13.3 postgres12.22
 
 package postgres
 
@@ -148,11 +148,12 @@ func TestDelete(t *testing.T) {
 
 func TestBulkUpdate(t *testing.T) {
 
+	var err error
 	driver, ctx := setupTest(t)
 	defer teardownTest(t, driver)
 
 	// Create test table
-	testItem := &TestItem{}
+	testItem := &TestObject{}
 	err = driver.Drop(ctx, testItem) // Clean up if table exists
 	if err != nil {
 		// Ignore error if table doesn't exist
@@ -185,15 +186,15 @@ func TestBulkUpdate(t *testing.T) {
 
 		// Update items
 		updatedItems := []model.DBObject{
-			&TestItem{ID: items[0].ID, Name: "Updated Item 1", Value: 100},
+			&TestObject{ID: items[0].ID, Name: "Updated Item 1", Value: 100},
 		}
 
 		err := driver.BulkUpdate(ctx, updatedItems)
 		assert.NoError(t, err)
 
 		// Verify updates
-		result1 := &TestItem{}
-		err = driver.Query(ctx, &TestItem{}, result1, model.DBM{"_id": items[0].ID})
+		result1 := &TestObject{}
+		err = driver.Query(ctx, &TestObject{}, result1, model.DBM{"_id": items[0].ID})
 		assert.NoError(t, err)
 		assert.Equal(t, "Updated Item 1", result1.Name)
 		assert.Equal(t, 100, result1.Value)
@@ -202,9 +203,9 @@ func TestBulkUpdate(t *testing.T) {
 	// Test case 3: BulkUpdate with filter
 	t.Run("UpdateWithFilter", func(t *testing.T) {
 		// Clean up previous test data
-		err := driver.Drop(ctx, &TestItem{})
+		err := driver.Drop(ctx, &TestObject{})
 		require.NoError(t, err)
-		err = driver.Migrate(ctx, []model.DBObject{&TestItem{}})
+		err = driver.Migrate(ctx, []model.DBObject{&TestObject{}})
 		require.NoError(t, err)
 
 		// Insert test items
@@ -234,7 +235,7 @@ func TestBulkUpdate(t *testing.T) {
 
 		// Verify Category A items were updated
 		var results []*TestItem
-		err = driver.Query(ctx, &TestItem{}, &results, model.DBM{"name": "Updated Category"})
+		err = driver.Query(ctx, &TestObject{}, &results, model.DBM{"name": "Updated Category"})
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(results))
 	})
@@ -245,7 +246,7 @@ func TestUpdateAll(t *testing.T) {
 	defer teardownTest(t, driver)
 
 	// Create test table
-	testItem := &TestItem{}
+	testItem := &TestObject{}
 	err := driver.Drop(ctx, testItem) // Clean up if table exists
 	if err != nil {
 		// Ignore error if table doesn't exist
@@ -258,7 +259,7 @@ func TestUpdateAll(t *testing.T) {
 	// Test case 1: UpdateAll with empty update (should be no-op)
 	t.Run("EmptyUpdate", func(t *testing.T) {
 		// Insert a test item
-		item := &TestItem{
+		item := &TestObject{
 			Name:      "Test Item",
 			Value:     10,
 			CreatedAt: time.Now(),
@@ -267,12 +268,12 @@ func TestUpdateAll(t *testing.T) {
 		require.NoError(t, err)
 
 		// Empty update should be a no-op
-		err = driver.UpdateAll(ctx, &TestItem{}, model.DBM{"_id": item.ID}, model.DBM{})
+		err = driver.UpdateAll(ctx, &TestObject{}, model.DBM{"_id": item.ID}, model.DBM{})
 		assert.NoError(t, err)
 
 		// Verify item is unchanged
-		result := &TestItem{}
-		err = driver.Query(ctx, &TestItem{}, result, model.DBM{"_id": item.ID})
+		result := &TestObject{}
+		err = driver.Query(ctx, &TestObject{}, result, model.DBM{"_id": item.ID})
 		assert.NoError(t, err)
 		assert.Equal(t, "Test Item", result.Name)
 		assert.Equal(t, 10, result.Value)
@@ -281,9 +282,9 @@ func TestUpdateAll(t *testing.T) {
 	// Test case 2: UpdateAll with $set operator
 	t.Run("UpdateWithSet", func(t *testing.T) {
 		// Clean up previous test data
-		err := driver.Drop(ctx, &TestItem{})
+		err := driver.Drop(ctx, &TestObject{})
 		require.NoError(t, err)
-		err = driver.Migrate(ctx, []model.DBObject{&TestItem{}})
+		err = driver.Migrate(ctx, []model.DBObject{&TestObject{}})
 		require.NoError(t, err)
 
 		// Insert test items
@@ -300,14 +301,14 @@ func TestUpdateAll(t *testing.T) {
 		}
 
 		// Update all Category A items
-		err = driver.UpdateAll(ctx, &TestItem{},
+		err = driver.UpdateAll(ctx, &TestObject{},
 			model.DBM{"name": "Category A"},
 			model.DBM{"$set": model.DBM{"name": "Updated Category", "value": 100}})
 		assert.NoError(t, err)
 
 		// Verify all Category A items were updated
 		var results []*TestItem
-		err = driver.Query(ctx, &TestItem{}, &results, model.DBM{"name": "Updated Category"})
+		err = driver.Query(ctx, &TestObject{}, &results, model.DBM{"name": "Updated Category"})
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(results))
 
@@ -318,7 +319,7 @@ func TestUpdateAll(t *testing.T) {
 
 		// Category B items should remain unchanged
 		var resultsB []*TestItem
-		err = driver.Query(ctx, &TestItem{}, &resultsB, model.DBM{"name": "Category B"})
+		err = driver.Query(ctx, &TestObject{}, &resultsB, model.DBM{"name": "Category B"})
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(resultsB))
 		assert.Equal(t, 30, resultsB[0].Value)
@@ -327,9 +328,9 @@ func TestUpdateAll(t *testing.T) {
 	// Test case 3: UpdateAll with $inc operator
 	t.Run("UpdateWithInc", func(t *testing.T) {
 		// Clean up previous test data
-		err := driver.Drop(ctx, &TestItem{})
+		err := driver.Drop(ctx, &TestObject{})
 		require.NoError(t, err)
-		err = driver.Migrate(ctx, []model.DBObject{&TestItem{}})
+		err = driver.Migrate(ctx, []model.DBObject{&TestObject{}})
 		require.NoError(t, err)
 
 		// Insert test items
@@ -345,14 +346,14 @@ func TestUpdateAll(t *testing.T) {
 		}
 
 		// Increment all values by 5
-		err = driver.UpdateAll(ctx, &TestItem{},
+		err = driver.UpdateAll(ctx, &TestObject{},
 			model.DBM{}, // Empty query to match all items
 			model.DBM{"$inc": model.DBM{"value": 5}})
 		assert.NoError(t, err)
 
 		// Verify all values were incremented
 		var results []*TestItem
-		err = driver.Query(ctx, &TestItem{}, &results, model.DBM{})
+		err = driver.Query(ctx, &TestObject{}, &results, model.DBM{})
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(results))
 
@@ -375,13 +376,13 @@ func TestUpdateAll(t *testing.T) {
 	// Test case 4: UpdateAll with multiple operators
 	t.Run("UpdateWithMultipleOperators", func(t *testing.T) {
 		// Clean up previous test data
-		err := driver.Drop(ctx, &TestItem{})
+		err := driver.Drop(ctx, &TestObject{})
 		require.NoError(t, err)
-		err = driver.Migrate(ctx, []model.DBObject{&TestItem{}})
+		err = driver.Migrate(ctx, []model.DBObject{&TestObject{}})
 		require.NoError(t, err)
 
 		// Insert test item
-		item := &TestItem{
+		item := &TestObject{
 			Name:      "Test Item",
 			Value:     10,
 			CreatedAt: time.Now(),
@@ -390,7 +391,7 @@ func TestUpdateAll(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update with multiple operators
-		err = driver.UpdateAll(ctx, &TestItem{},
+		err = driver.UpdateAll(ctx, &TestObject{},
 			model.DBM{"_id": item.ID},
 			model.DBM{
 				"$set": model.DBM{"name": "Updated Item"},
@@ -399,8 +400,8 @@ func TestUpdateAll(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Verify updates
-		result := &TestItem{}
-		err = driver.Query(ctx, &TestItem{}, result, model.DBM{"_id": item.ID})
+		result := &TestObject{}
+		err = driver.Query(ctx, &TestObject{}, result, model.DBM{"_id": item.ID})
 		assert.NoError(t, err)
 		assert.Equal(t, "Updated Item", result.Name)
 		assert.Equal(t, 25, result.Value) // 10 + 15
@@ -412,7 +413,7 @@ func TestUpsert(t *testing.T) {
 	defer teardownTest(t, driver)
 
 	// Create test table
-	testItem := &TestItem{}
+	testItem := &TestObject{}
 	err := driver.Drop(ctx, testItem) // Clean up if table exists
 	if err != nil {
 		// Ignore error if table doesn't exist
@@ -425,7 +426,7 @@ func TestUpsert(t *testing.T) {
 	// Test case 1: Upsert with existing document (update)
 	t.Run("UpsertExisting", func(t *testing.T) {
 		// Insert a test item
-		item := &TestItem{
+		item := &TestObject{
 			Name:      "Test Item",
 			Value:     10,
 			CreatedAt: time.Now(),
@@ -434,7 +435,7 @@ func TestUpsert(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create a row object to receive the result
-		resultItem := &TestItem{}
+		resultItem := &TestObject{}
 
 		// Perform upsert - should update the existing document
 		err = driver.Upsert(ctx, resultItem,
@@ -448,8 +449,8 @@ func TestUpsert(t *testing.T) {
 		assert.Equal(t, 20, resultItem.Value)
 
 		// Double-check by querying
-		queryResult := &TestItem{}
-		err = driver.Query(ctx, &TestItem{}, queryResult, model.DBM{"_id": item.ID})
+		queryResult := &TestObject{}
+		err = driver.Query(ctx, &TestObject{}, queryResult, model.DBM{"_id": item.ID})
 		assert.NoError(t, err)
 		assert.Equal(t, "Updated Item", queryResult.Name)
 		assert.Equal(t, 20, queryResult.Value)
@@ -458,13 +459,13 @@ func TestUpsert(t *testing.T) {
 	// Test case 2: Upsert with non-existing document (insert)
 	t.Run("UpsertNonExisting", func(t *testing.T) {
 		// Clean up previous test data
-		err := driver.Drop(ctx, &TestItem{})
+		err := driver.Drop(ctx, &TestObject{})
 		require.NoError(t, err)
-		err = driver.Migrate(ctx, []model.DBObject{&TestItem{}})
+		err = driver.Migrate(ctx, []model.DBObject{&TestObject{}})
 		require.NoError(t, err)
 
 		// Create a row object to receive the result
-		resultItem := &TestItem{}
+		resultItem := &TestObject{}
 
 		// Perform upsert with a query that won't match any document
 		err = driver.Upsert(ctx, resultItem,
@@ -479,7 +480,7 @@ func TestUpsert(t *testing.T) {
 
 		// Double-check by querying
 		var queryResults []*TestItem
-		err = driver.Query(ctx, &TestItem{}, &queryResults, model.DBM{})
+		err = driver.Query(ctx, &TestObject{}, &queryResults, model.DBM{})
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(queryResults))
 		assert.Equal(t, "New Item", queryResults[0].Name)
@@ -489,13 +490,13 @@ func TestUpsert(t *testing.T) {
 	// Test case 3: Upsert with direct update (no $set operator)
 	t.Run("UpsertDirectUpdate", func(t *testing.T) {
 		// Clean up previous test data
-		err := driver.Drop(ctx, &TestItem{})
+		err := driver.Drop(ctx, &TestObject{})
 		require.NoError(t, err)
-		err = driver.Migrate(ctx, []model.DBObject{&TestItem{}})
+		err = driver.Migrate(ctx, []model.DBObject{&TestObject{}})
 		require.NoError(t, err)
 
 		// Insert a test item
-		item := &TestItem{
+		item := &TestObject{
 			Name:      "Test Item",
 			Value:     10,
 			CreatedAt: time.Now(),
@@ -504,7 +505,7 @@ func TestUpsert(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create a row object to receive the result
-		resultItem := &TestItem{}
+		resultItem := &TestObject{}
 
 		// Perform upsert with direct update (no $set operator)
 		err = driver.Upsert(ctx, resultItem,
@@ -521,13 +522,13 @@ func TestUpsert(t *testing.T) {
 	// Test case 4: Upsert with ID in query but not in update
 	t.Run("UpsertPreserveID", func(t *testing.T) {
 		// Clean up previous test data
-		err := driver.Drop(ctx, &TestItem{})
+		err := driver.Drop(ctx, &TestObject{})
 		require.NoError(t, err)
-		err = driver.Migrate(ctx, []model.DBObject{&TestItem{}})
+		err = driver.Migrate(ctx, []model.DBObject{&TestObject{}})
 		require.NoError(t, err)
 
 		// Create a row object to receive the result
-		resultItem := &TestItem{}
+		resultItem := &TestObject{}
 
 		// Generate a specific ID to use in the query
 		specificID := model.NewObjectID()

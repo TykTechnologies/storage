@@ -1,5 +1,5 @@
-//go:build postgres || postgres14 || postgres13 || postgres12.22 || postgres11 || postgres10
-// +build postgres postgres14 postgres13 postgres12.22 postgres11 postgres10
+//go:build postgres || postgres16.1 || postgres15 || postgres14.11 || postgres13.3 || postgres12.22
+// +build postgres postgres16.1 postgres15 postgres14.11 postgres13.3 postgres12.22
 
 package postgres
 
@@ -15,7 +15,7 @@ func TestCreateIndex(t *testing.T) {
 	defer teardownTest(t, driver)
 
 	// Create test table
-	testItem := &TestItem{}
+	testItem := &TestObject{}
 	err := driver.Drop(ctx, testItem) // Clean up if table exists
 	if err != nil {
 		// Ignore error if table doesn't exist
@@ -128,7 +128,7 @@ func TestCreateIndex(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Try to insert a duplicate item (should fail due to unique constraint)
-		duplicateItem := &TestItem{
+		duplicateItem := &TestObject{
 			Name:      "Item 1", // This name already exists
 			Value:     100,
 			CreatedAt: time.Now(),
@@ -220,7 +220,7 @@ func TestGetIndexes(t *testing.T) {
 	defer teardownTest(t, driver)
 
 	// Create test table
-	testItem := &TestItem{}
+	testItem := &TestObject{}
 	err := driver.Drop(ctx, testItem) // Clean up if table exists
 	if err != nil {
 		// Ignore error if table doesn't exist
@@ -409,7 +409,7 @@ func TestCleanIndexes(t *testing.T) {
 	defer teardownTest(t, driver)
 
 	// Create test table
-	testItem := &TestItem{}
+	testItem := &TestObject{}
 	err := driver.Drop(ctx, testItem) // Clean up if table exists
 	if err != nil {
 		// Ignore error if table doesn't exist
@@ -500,7 +500,7 @@ func TestCleanIndexes(t *testing.T) {
 		require.NoError(t, err)
 
 		// Insert a test item to verify the unique constraint
-		item := &TestItem{
+		item := &TestObject{
 			Name:      "Unique Item",
 			Value:     10,
 			CreatedAt: time.Now(),
@@ -509,7 +509,7 @@ func TestCleanIndexes(t *testing.T) {
 		require.NoError(t, err)
 
 		// Attempt to insert a duplicate item (should fail due to unique constraint)
-		duplicateItem := &TestItem{
+		duplicateItem := &TestObject{
 			Name:      "Unique Item", // This name already exists
 			Value:     20,
 			CreatedAt: time.Now(),
@@ -582,7 +582,7 @@ func TestIndexExists(t *testing.T) {
 	defer teardownTest(t, driver)
 
 	// Create test table
-	testItem := &TestItem{}
+	testItem := &TestObject{}
 	err := driver.Drop(ctx, testItem) // Clean up if table exists
 	if err != nil {
 		// Ignore error if table doesn't exist
