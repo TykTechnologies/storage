@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+const connStr = "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable"
+
 type TestObject struct {
 	ID        model.ObjectID `json:"id" gorm:"primaryKey"`
 	Name      string         `json:"name"`
@@ -36,7 +38,6 @@ func setupTest(t *testing.T) (*driver, context.Context) {
 	ctx := context.Background()
 
 	// Use the same hardcoded values as in the Taskfile
-	connStr := "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable"
 	opts := &types.ClientOpts{
 		ConnectionString: connStr,
 		Type:             "postgres",
