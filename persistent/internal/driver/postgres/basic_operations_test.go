@@ -4,6 +4,7 @@
 package postgres
 
 import (
+	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -149,7 +150,7 @@ func TestBulkUpdate(t *testing.T) {
 
 	driver, ctx := setupTest(t)
 	defer teardownTest(t, driver)
-	
+
 	// Create test table
 	testItem := &TestItem{}
 	err = driver.Drop(ctx, testItem) // Clean up if table exists
