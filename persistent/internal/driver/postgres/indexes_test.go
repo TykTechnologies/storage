@@ -26,7 +26,7 @@ func TestCreateIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert some test data
-	items := []*TestItem{
+	items := []*TestObject{
 		{Name: "Item 1", Value: 10, CreatedAt: time.Now()},
 		{Name: "Item 2", Value: 20, CreatedAt: time.Now()},
 		{Name: "Item 3", Value: 30, CreatedAt: time.Now()},

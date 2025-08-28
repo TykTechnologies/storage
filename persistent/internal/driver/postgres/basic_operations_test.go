@@ -167,13 +167,13 @@ func TestBulkUpdate(t *testing.T) {
 	t.Run("EmptyObjects", func(t *testing.T) {
 		err := driver.BulkUpdate(ctx, []model.DBObject{})
 		assert.Error(t, err)
-		assert.Equal(t, types.ErrorEmptyRow, err.Error())
+		assert.Equal(t, sql.ErrNoRows, err.Error())
 	})
 
 	// Test case 2: BulkUpdate without filter (update by ID)
 	t.Run("UpdateByID", func(t *testing.T) {
 		// Insert test items
-		items := []*TestItem{
+		items := []*TestObject{
 			{Name: "Item 1", Value: 10, CreatedAt: time.Now()},
 			{Name: "Item 2", Value: 20, CreatedAt: time.Now()},
 		}
@@ -209,7 +209,7 @@ func TestBulkUpdate(t *testing.T) {
 		require.NoError(t, err)
 
 		// Insert test items
-		items := []*TestItem{
+		items := []*TestObject{
 			{Name: "Category A", Value: 10, CreatedAt: time.Now()},
 			{Name: "Category A", Value: 20, CreatedAt: time.Now()},
 			{Name: "Category B", Value: 30, CreatedAt: time.Now()},
@@ -222,7 +222,7 @@ func TestBulkUpdate(t *testing.T) {
 		}
 
 		// Update all Category A items
-		updateItems := []*TestItem{
+		updateItems := []*TestObject{
 			{Name: "Updated Category", Value: 100},
 		}
 		updateObjects := make([]model.DBObject, len(updateItems))
@@ -234,7 +234,7 @@ func TestBulkUpdate(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Verify Category A items were updated
-		var results []*TestItem
+		var results []*TestObject
 		err = driver.Query(ctx, &TestObject{}, &results, model.DBM{"name": "Updated Category"})
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(results))
@@ -288,7 +288,7 @@ func TestUpdateAll(t *testing.T) {
 		require.NoError(t, err)
 
 		// Insert test items
-		items := []*TestItem{
+		items := []*TestObject{
 			{Name: "Category A", Value: 10, CreatedAt: time.Now()},
 			{Name: "Category A", Value: 20, CreatedAt: time.Now()},
 			{Name: "Category B", Value: 30, CreatedAt: time.Now()},
@@ -307,7 +307,7 @@ func TestUpdateAll(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Verify all Category A items were updated
-		var results []*TestItem
+		var results []*TestObject
 		err = driver.Query(ctx, &TestObject{}, &results, model.DBM{"name": "Updated Category"})
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(results))
@@ -318,7 +318,7 @@ func TestUpdateAll(t *testing.T) {
 		}
 
 		// Category B items should remain unchanged
-		var resultsB []*TestItem
+		var resultsB []*TestObject
 		err = driver.Query(ctx, &TestObject{}, &resultsB, model.DBM{"name": "Category B"})
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(resultsB))
@@ -334,7 +334,7 @@ func TestUpdateAll(t *testing.T) {
 		require.NoError(t, err)
 
 		// Insert test items
-		items := []*TestItem{
+		items := []*TestObject{
 			{Name: "Item 1", Value: 10, CreatedAt: time.Now()},
 			{Name: "Item 2", Value: 20, CreatedAt: time.Now()},
 		}
@@ -352,13 +352,13 @@ func TestUpdateAll(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Verify all values were incremented
-		var results []*TestItem
+		var results []*TestObject
 		err = driver.Query(ctx, &TestObject{}, &results, model.DBM{})
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(results))
 
 		// Find items by name to verify their values
-		var item1, item2 *TestItem
+		var item1, item2 *TestObject
 		for _, result := range results {
 			if result.Name == "Item 1" {
 				item1 = result
@@ -469,7 +469,7 @@ func TestUpsert(t *testing.T) {
 
 		// Perform upsert with a query that won't match any document
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"name": "Non-Existent Item"},                        // Query that won't match
+			model.DBM{"name": "Non-Existent Item"}, // Query that won't match
 			model.DBM{"$set": model.DBM{"name": "New Item", "value": 30}}) // Data to insert
 		assert.NoError(t, err)
 
@@ -479,7 +479,7 @@ func TestUpsert(t *testing.T) {
 		assert.Equal(t, 30, resultItem.Value)
 
 		// Double-check by querying
-		var queryResults []*TestItem
+		var queryResults []*TestObject
 		err = driver.Query(ctx, &TestObject{}, &queryResults, model.DBM{})
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(queryResults))
@@ -509,7 +509,7 @@ func TestUpsert(t *testing.T) {
 
 		// Perform upsert with direct update (no $set operator)
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"_id": item.ID},                          // Query to find the document
+			model.DBM{"_id": item.ID}, // Query to find the document
 			model.DBM{"name": "Directly Updated", "value": 40}) // Direct update
 		assert.NoError(t, err)
 
@@ -535,7 +535,7 @@ func TestUpsert(t *testing.T) {
 
 		// Perform upsert with ID in query
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"_id": specificID},                                      // Query with specific ID
+			model.DBM{"_id": specificID}, // Query with specific ID
 			model.DBM{"$set": model.DBM{"name": "ID Preserved", "value": 50}}) // Update without ID
 		assert.NoError(t, err)
 
