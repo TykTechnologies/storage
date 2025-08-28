@@ -171,7 +171,7 @@ func TestCreateIndex(t *testing.T) {
 	// Test case 5: Create an index on a non-existent table
 	t.Run("NonExistentTable", func(t *testing.T) {
 		// Define a mock object with a non-existent table
-		nonExistentItem := &MockDBObject{TableNameValue: "non_existent_table"}
+		nonExistentItem := &TestObject{TableNameValue: "non_existent_table"}
 
 		// Define the index
 		index := model.Index{
@@ -352,7 +352,7 @@ func TestGetIndexes(t *testing.T) {
 	// Test case 5: Get indexes on a non-existent table
 	t.Run("NonExistentTable", func(t *testing.T) {
 		// Define a mock object with a non-existent table
-		nonExistentItem := &MockDBObject{TableNameValue: "non_existent_table"}
+		nonExistentItem := &TestObject{TableNameValue: "non_existent_table"}
 
 		// Attempt to get indexes
 		indexes, err := driver.GetIndexes(ctx, nonExistentItem)
@@ -478,7 +478,7 @@ func TestCleanIndexes(t *testing.T) {
 	// Test case 3: Clean indexes on a non-existent table
 	t.Run("NonExistentTable", func(t *testing.T) {
 		// Define a mock object with a non-existent table
-		nonExistentItem := &MockDBObject{TableNameValue: "non_existent_table"}
+		nonExistentItem := &TestObject{TableNameValue: "non_existent_table"}
 
 		// Attempt to clean indexes
 		err := driver.CleanIndexes(ctx, nonExistentItem)
@@ -679,7 +679,7 @@ func TestIndexExists(t *testing.T) {
 	// Test case 4: Check with a non-existent table
 	t.Run("NonExistentTable", func(t *testing.T) {
 		// Define a mock object with a non-existent table
-		nonExistentItem := &MockDBObject{TableNameValue: "non_existent_table"}
+		nonExistentItem := &TestObject{TableNameValue: "non_existent_table"}
 
 		// Try to create an index on a non-existent table
 		index := model.Index{

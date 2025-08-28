@@ -120,11 +120,11 @@ func TestValidateDBAndTable(t *testing.T) {
 	// Test case 1: Valid connection and table name
 	t.Run("ValidConnectionAndTable", func(t *testing.T) {
 		// Create a driver with a valid connection
-		driver, ctx := setupTest(t)
+		driver, _ := setupTest(t)
 		defer teardownTest(t, driver)
 
 		// Create a mock object with a valid table name
-		mockObj := &MockDBObject{TableNameValue: "valid_table"}
+		mockObj := &TestObject{TableNameValue: "valid_table"}
 
 		// Call validateDBAndTable
 		tableName, err := driver.validateDBAndTable(mockObj)
@@ -137,11 +137,11 @@ func TestValidateDBAndTable(t *testing.T) {
 	// Test case 2: Valid connection but empty table name
 	t.Run("EmptyTableName", func(t *testing.T) {
 		// Create a driver with a valid connection
-		driver, ctx := setupTest(t)
+		driver, _ := setupTest(t)
 		defer teardownTest(t, driver)
 
 		// Create a mock object with an empty table name
-		mockObj := &MockDBObject{TableNameValue: ""}
+		mockObj := &TestObject{TableNameValue: ""}
 
 		// Call validateDBAndTable
 		tableName, err := driver.validateDBAndTable(mockObj)
@@ -161,7 +161,7 @@ func TestValidateDBAndTable(t *testing.T) {
 		driver.Close()
 
 		// Create a mock object with a valid table name
-		mockObj := &MockDBObject{TableNameValue: "valid_table"}
+		mockObj := &TestObject{TableNameValue: "valid_table"}
 
 		// Call validateDBAndTable
 		tableName, err := driver.validateDBAndTable(mockObj)

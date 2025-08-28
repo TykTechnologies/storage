@@ -16,13 +16,17 @@ import (
 const connStr = "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable"
 
 type TestObject struct {
-	ID        model.ObjectID `json:"id" gorm:"primaryKey"`
-	Name      string         `json:"name"`
-	Value     int            `json:"value"`
-	CreatedAt time.Time      `json:"created_at"`
+	ID             model.ObjectID `json:"id" gorm:"primaryKey"`
+	Name           string         `json:"name"`
+	Value          int            `json:"value"`
+	CreatedAt      time.Time      `json:"created_at"`
+	TableNameValue string         `json:"table_name"`
 }
 
 func (t *TestObject) TableName() string {
+	if t.TableNameValue != "" {
+		return t.TableNameValue
+	}
 	return "test_objects"
 }
 
