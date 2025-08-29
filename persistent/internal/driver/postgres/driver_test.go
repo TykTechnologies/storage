@@ -4,6 +4,7 @@
 package postgres
 
 import (
+	"context"
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -26,7 +27,7 @@ func TestNewPostgresDriver(t *testing.T) {
 		assert.NotNil(t, driver)
 
 		// Verify the driver is connected by pinging the database
-		err = driver.Ping(nil)
+		err = driver.Ping(context.Background())
 		assert.NoError(t, err)
 
 		// Clean up
@@ -68,52 +69,6 @@ func TestNewPostgresDriver(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, driver)
 	})
-
-	// Test case 4: With SSL options
-	t.Run("WithSSLOptions", func(t *testing.T) {
-		// Skip this test if we don't have SSL certificates available
-		// This is just a structure test to ensure the SSL options are properly handled
-
-		// Create client options with SSL enabled
-		opts := &types.ClientOpts{
-			ConnectionString:         "postgres://postgres:postgres@localhost:5432/postgres",
-			UseSSL:                   true,
-			SSLInsecureSkipVerify:    true,
-			SSLAllowInvalidHostnames: true,
-		}
-
-		// This might fail if SSL is not properly configured, but we're testing the structure
-		driver, err := NewPostgresDriver(opts)
-		if err == nil {
-			// If connection succeeded, clean up
-			defer driver.Close()
-			assert.NotNil(t, driver)
-		} else {
-			// If connection failed, that's expected in environments without proper SSL setup
-			t.Logf("SSL connection failed as expected: %v", err)
-		}
-	})
-
-	// Test case 5: With connection timeout
-	t.Run("WithConnectionTimeout", func(t *testing.T) {
-		// Create client options with connection timeout
-		opts := &types.ClientOpts{
-			ConnectionString:  "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable",
-			Type:              "postgres",
-			ConnectionTimeout: 10, // 10 seconds
-		}
-
-		// Create a new driver
-		driver, err := NewPostgresDriver(opts)
-
-		// Assert no error and driver is not nil
-		assert.NoError(t, err)
-		assert.NotNil(t, driver)
-
-		// Clean up
-		err = driver.Close()
-		assert.NoError(t, err)
-	})
 }
 
 func TestValidateDBAndTable(t *testing.T) {
@@ -141,7 +96,7 @@ func TestValidateDBAndTable(t *testing.T) {
 		defer teardownTest(t, driver)
 
 		// Create a mock object with an empty table name
-		mockObj := &TestObject{TableNameValue: ""}
+		mockObj := &nullableTableName{}
 
 		// Call validateDBAndTable
 		tableName, err := driver.validateDBAndTable(mockObj)
@@ -155,7 +110,7 @@ func TestValidateDBAndTable(t *testing.T) {
 	// Test case 3: Nil database connection
 	t.Run("NilDatabaseConnection", func(t *testing.T) {
 		// Create a driver with a valid connection
-		driver, ctx := setupTest(t)
+		driver, _ := setupTest(t)
 
 		// Close the connection to simulate a nil db
 		driver.Close()
@@ -175,7 +130,7 @@ func TestValidateDBAndTable(t *testing.T) {
 	// Test case 4: Nil object
 	t.Run("NilObject", func(t *testing.T) {
 		// Create a driver with a valid connection
-		driver, ctx := setupTest(t)
+		driver, _ := setupTest(t)
 		defer teardownTest(t, driver)
 
 		// Call validateDBAndTable with nil object

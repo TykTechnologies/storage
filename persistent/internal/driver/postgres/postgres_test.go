@@ -13,14 +13,15 @@ import (
 	"time"
 )
 
-const connStr = "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable"
+// const connStr = "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable"
+const connStr = "host=localhost port=5432 user=postgres dbname=tyk password=secr3t sslmode=disable"
 
 type TestObject struct {
 	ID             model.ObjectID `json:"id" gorm:"primaryKey"`
 	Name           string         `json:"name"`
 	Value          int            `json:"value"`
 	CreatedAt      time.Time      `json:"created_at"`
-	TableNameValue string         `json:"table_name"`
+	TableNameValue string         `json:"-"`
 }
 
 func (t *TestObject) TableName() string {
@@ -36,6 +37,22 @@ func (t *TestObject) GetObjectID() model.ObjectID {
 
 func (t *TestObject) SetObjectID(id model.ObjectID) {
 	t.ID = id
+}
+
+type nullableTableName struct {
+	TestObject
+}
+
+func (n *nullableTableName) TableName() string {
+	return ""
+}
+
+func (n *nullableTableName) GetObjectID() model.ObjectID {
+	return n.TestObject.GetObjectID()
+}
+
+func (n *nullableTableName) SetObjectID(id model.ObjectID) {
+	n.TestObject.SetObjectID(id)
 }
 
 func setupTest(t *testing.T) (*driver, context.Context) {

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/TykTechnologies/storage/persistent/model"
@@ -38,7 +39,7 @@ func (d *driver) Query(ctx context.Context, object model.DBObject, result interf
 		err := db.First(result).Error
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return errors.New("no rows found")
+				return sql.ErrNoRows
 			}
 			return err
 		}
@@ -50,8 +51,8 @@ func (d *driver) Query(ctx context.Context, object model.DBObject, result interf
 		}
 
 		// Check if any records were found
-		if resultElem.Len() == 0 && !filter["_allowEmpty"].(bool) {
-			return errors.New("no rows found")
+		if resultElem.Len() == 0 {
+			return sql.ErrNoRows
 		}
 	}
 	return nil
@@ -150,13 +151,14 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 }
 
 // applyMongoUpdateOperators applies MongoDB-style update operators to a GORM DB instance
-func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm.DB, error) {
+func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm.DB, map[string]interface{}, error) {
 	if db == nil {
-		return nil, errors.New("nil database connection")
+		return nil, nil, errors.New("nil database connection")
 	}
 
 	// Make a copy of the DB to avoid modifying the original
 	result := db
+	updateMap := map[string]interface{}{}
 
 	// Process MongoDB update operators
 	for operator, fields := range update {
@@ -164,9 +166,13 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 		case "$set":
 			// $set operator: directly set field values
 			if setMap, ok := fields.(map[string]interface{}); ok && len(setMap) > 0 {
-				result = result.Updates(setMap)
-				if result.Error != nil {
-					return result, result.Error
+				for field, value := range setMap {
+					updateMap[field] = value
+				}
+			} else if setMap, ok := fields.(model.DBM); ok && len(setMap) > 0 {
+				// Handle model.DBM type which is common in the codebase
+				for field, value := range setMap {
+					updateMap[field] = value
 				}
 			}
 
@@ -174,11 +180,12 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 			// $inc operator: increment field values
 			if incMap, ok := fields.(map[string]interface{}); ok {
 				for field, value := range incMap {
-					expr := gorm.Expr(fmt.Sprintf("%s + ?", field), value)
-					result = result.UpdateColumn(field, expr)
-					if result.Error != nil {
-						return result, result.Error
-					}
+					// Store the expression in the update map
+					updateMap[field] = gorm.Expr(fmt.Sprintf("%s + ?", field), value)
+				}
+			} else if incMap, ok := fields.(model.DBM); ok {
+				for field, value := range incMap {
+					updateMap[field] = gorm.Expr(fmt.Sprintf("%s + ?", field), value)
 				}
 			}
 
@@ -186,11 +193,12 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 			// $mul operator: multiply field values
 			if mulMap, ok := fields.(map[string]interface{}); ok {
 				for field, value := range mulMap {
-					expr := gorm.Expr(fmt.Sprintf("%s * ?", field), value)
-					result = result.UpdateColumn(field, expr)
-					if result.Error != nil {
-						return result, result.Error
-					}
+					// Store the expression in the update map
+					updateMap[field] = gorm.Expr(fmt.Sprintf("%s * ?", field), value)
+				}
+			} else if mulMap, ok := fields.(model.DBM); ok {
+				for field, value := range mulMap {
+					updateMap[field] = gorm.Expr(fmt.Sprintf("%s * ?", field), value)
 				}
 			}
 
@@ -198,10 +206,11 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 			// $unset operator: set fields to NULL
 			if unsetMap, ok := fields.(map[string]interface{}); ok {
 				for field := range unsetMap {
-					result = result.UpdateColumn(field, nil)
-					if result.Error != nil {
-						return result, result.Error
-					}
+					updateMap[field] = nil
+				}
+			} else if unsetMap, ok := fields.(model.DBM); ok {
+				for field := range unsetMap {
+					updateMap[field] = nil
 				}
 			}
 
@@ -209,11 +218,11 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 			// $min operator: update field if new value is less than current value
 			if minMap, ok := fields.(map[string]interface{}); ok {
 				for field, value := range minMap {
-					expr := gorm.Expr(fmt.Sprintf("CASE WHEN ? < %s THEN ? ELSE %s END", field, field), value, value)
-					result = result.UpdateColumn(field, expr)
-					if result.Error != nil {
-						return result, result.Error
-					}
+					updateMap[field] = gorm.Expr(fmt.Sprintf("CASE WHEN ? < %s THEN ? ELSE %s END", field, field), value, value)
+				}
+			} else if minMap, ok := fields.(model.DBM); ok {
+				for field, value := range minMap {
+					updateMap[field] = gorm.Expr(fmt.Sprintf("CASE WHEN ? < %s THEN ? ELSE %s END", field, field), value, value)
 				}
 			}
 
@@ -221,11 +230,11 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 			// $max operator: update field if new value is greater than current value
 			if maxMap, ok := fields.(map[string]interface{}); ok {
 				for field, value := range maxMap {
-					expr := gorm.Expr(fmt.Sprintf("CASE WHEN ? > %s THEN ? ELSE %s END", field, field), value, value)
-					result = result.UpdateColumn(field, expr)
-					if result.Error != nil {
-						return result, result.Error
-					}
+					updateMap[field] = gorm.Expr(fmt.Sprintf("CASE WHEN ? > %s THEN ? ELSE %s END", field, field), value, value)
+				}
+			} else if maxMap, ok := fields.(model.DBM); ok {
+				for field, value := range maxMap {
+					updateMap[field] = gorm.Expr(fmt.Sprintf("CASE WHEN ? > %s THEN ? ELSE %s END", field, field), value, value)
 				}
 			}
 
@@ -233,25 +242,23 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 			// $currentDate operator: set fields to current date/time
 			if dateMap, ok := fields.(map[string]interface{}); ok {
 				for field := range dateMap {
-					result = result.UpdateColumn(field, gorm.Expr("CURRENT_TIMESTAMP"))
-					if result.Error != nil {
-						return result, result.Error
-					}
+					updateMap[field] = gorm.Expr("CURRENT_TIMESTAMP")
+				}
+			} else if dateMap, ok := fields.(model.DBM); ok {
+				for field := range dateMap {
+					updateMap[field] = gorm.Expr("CURRENT_TIMESTAMP")
 				}
 			}
 
 		default:
 			// If not an operator, treat as a direct field update
 			if !strings.HasPrefix(operator, "$") {
-				result = result.UpdateColumn(operator, fields)
-				if result.Error != nil {
-					return result, result.Error
-				}
+				updateMap[operator] = fields
 			}
 		}
 	}
 
-	return result, nil
+	return result, updateMap, nil
 }
 
 // translateQuery converts MongoDB-style queries to GORM queries with sharding support

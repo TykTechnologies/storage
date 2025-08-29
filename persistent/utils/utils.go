@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"database/sql"
 	"errors"
 	"time"
 
@@ -36,6 +37,10 @@ func IsErrNoRows(err error) bool {
 	}
 
 	if errors.Is(err, mgo.ErrNotFound) {
+		return true
+	}
+
+	if errors.Is(err, sql.ErrNoRows) {
 		return true
 	}
 

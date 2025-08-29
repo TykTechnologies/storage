@@ -4,7 +4,6 @@
 package postgres
 
 import (
-	"database/sql"
 	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -168,7 +167,6 @@ func TestBulkUpdate(t *testing.T) {
 	t.Run("EmptyObjects", func(t *testing.T) {
 		err := driver.BulkUpdate(ctx, []model.DBObject{})
 		assert.Error(t, err)
-		assert.Equal(t, sql.ErrNoRows, err.Error())
 	})
 
 	// Test case 2: BulkUpdate without filter (update by ID)
@@ -195,7 +193,7 @@ func TestBulkUpdate(t *testing.T) {
 
 		// Verify updates
 		result1 := &TestObject{}
-		err = driver.Query(ctx, &TestObject{}, result1, model.DBM{"_id": items[0].ID})
+		err = driver.Query(ctx, &TestObject{}, result1, model.DBM{"id": items[0].ID})
 		assert.NoError(t, err)
 		assert.Equal(t, "Updated Item 1", result1.Name)
 		assert.Equal(t, 100, result1.Value)
@@ -243,6 +241,7 @@ func TestBulkUpdate(t *testing.T) {
 }
 
 func TestUpdateAll(t *testing.T) {
+
 	driver, ctx := setupTest(t)
 	defer teardownTest(t, driver)
 
@@ -269,12 +268,12 @@ func TestUpdateAll(t *testing.T) {
 		require.NoError(t, err)
 
 		// Empty update should be a no-op
-		err = driver.UpdateAll(ctx, &TestObject{}, model.DBM{"_id": item.ID}, model.DBM{})
+		err = driver.UpdateAll(ctx, &TestObject{}, model.DBM{"id": item.ID}, model.DBM{})
 		assert.NoError(t, err)
 
 		// Verify item is unchanged
 		result := &TestObject{}
-		err = driver.Query(ctx, &TestObject{}, result, model.DBM{"_id": item.ID})
+		err = driver.Query(ctx, &TestObject{}, result, model.DBM{"id": item.ID})
 		assert.NoError(t, err)
 		assert.Equal(t, "Test Item", result.Name)
 		assert.Equal(t, 10, result.Value)
@@ -393,7 +392,7 @@ func TestUpdateAll(t *testing.T) {
 
 		// Update with multiple operators
 		err = driver.UpdateAll(ctx, &TestObject{},
-			model.DBM{"_id": item.ID},
+			model.DBM{"id": item.ID},
 			model.DBM{
 				"$set": model.DBM{"name": "Updated Item"},
 				"$inc": model.DBM{"value": 15},
@@ -402,7 +401,7 @@ func TestUpdateAll(t *testing.T) {
 
 		// Verify updates
 		result := &TestObject{}
-		err = driver.Query(ctx, &TestObject{}, result, model.DBM{"_id": item.ID})
+		err = driver.Query(ctx, &TestObject{}, result, model.DBM{"id": item.ID})
 		assert.NoError(t, err)
 		assert.Equal(t, "Updated Item", result.Name)
 		assert.Equal(t, 25, result.Value) // 10 + 15
@@ -440,7 +439,7 @@ func TestUpsert(t *testing.T) {
 
 		// Perform upsert - should update the existing document
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"_id": item.ID}, // Query to find the document
+			model.DBM{"id": item.ID}, // Query to find the document
 			model.DBM{"$set": model.DBM{"name": "Updated Item", "value": 20}}) // Update to apply
 		assert.NoError(t, err)
 
@@ -451,7 +450,7 @@ func TestUpsert(t *testing.T) {
 
 		// Double-check by querying
 		queryResult := &TestObject{}
-		err = driver.Query(ctx, &TestObject{}, queryResult, model.DBM{"_id": item.ID})
+		err = driver.Query(ctx, &TestObject{}, queryResult, model.DBM{"id": item.ID})
 		assert.NoError(t, err)
 		assert.Equal(t, "Updated Item", queryResult.Name)
 		assert.Equal(t, 20, queryResult.Value)
@@ -470,7 +469,7 @@ func TestUpsert(t *testing.T) {
 
 		// Perform upsert with a query that won't match any document
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"name": "Non-Existent Item"},                        // Query that won't match
+			model.DBM{"name": "Non-Existent Item"}, // Query that won't match
 			model.DBM{"$set": model.DBM{"name": "New Item", "value": 30}}) // Data to insert
 		assert.NoError(t, err)
 
@@ -510,7 +509,7 @@ func TestUpsert(t *testing.T) {
 
 		// Perform upsert with direct update (no $set operator)
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"_id": item.ID},                          // Query to find the document
+			model.DBM{"id": item.ID}, // Query to find the document
 			model.DBM{"name": "Directly Updated", "value": 40}) // Direct update
 		assert.NoError(t, err)
 
@@ -528,15 +527,16 @@ func TestUpsert(t *testing.T) {
 		err = driver.Migrate(ctx, []model.DBObject{&TestObject{}})
 		require.NoError(t, err)
 
-		// Create a row object to receive the result
-		resultItem := &TestObject{}
-
 		// Generate a specific ID to use in the query
 		specificID := model.NewObjectID()
 
+		// Create a row object to receive the result
+		resultItem := &TestObject{}
+		resultItem.SetObjectID(specificID)
+		
 		// Perform upsert with ID in query
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"_id": specificID},                                      // Query with specific ID
+			model.DBM{"id": specificID}, // Query with specific ID
 			model.DBM{"$set": model.DBM{"name": "ID Preserved", "value": 50}}) // Update without ID
 		assert.NoError(t, err)
 

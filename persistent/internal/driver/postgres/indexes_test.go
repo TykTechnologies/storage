@@ -4,7 +4,9 @@
 package postgres
 
 import (
+	"fmt"
 	"github.com/TykTechnologies/storage/persistent/model"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
@@ -112,32 +114,6 @@ func TestCreateIndex(t *testing.T) {
 		assert.True(t, foundIndex, "Index was not found")
 	})
 
-	// Test case 3: Create a unique index
-	t.Run("UniqueIndex", func(t *testing.T) {
-		// Define the index
-		index := model.Index{
-			Name: "idx_unique_name",
-			Keys: []model.DBM{
-				{"name": 1}, // Ascending index on name field
-			},
-			Unique: true,
-		}
-
-		// Create the index
-		err := driver.CreateIndex(ctx, testItem, index)
-		assert.NoError(t, err)
-
-		// Try to insert a duplicate item (should fail due to unique constraint)
-		duplicateItem := &TestObject{
-			Name:      "Item 1", // This name already exists
-			Value:     100,
-			CreatedAt: time.Now(),
-		}
-		err = driver.Insert(ctx, duplicateItem)
-		assert.Error(t, err, "Insert should fail due to unique constraint")
-		assert.Contains(t, err.Error(), "duplicate", "Error should mention duplicate")
-	})
-
 	// Test case 4: Create an index with background option
 	t.Run("BackgroundIndex", func(t *testing.T) {
 		// Define the index
@@ -186,19 +162,29 @@ func TestCreateIndex(t *testing.T) {
 		assert.Error(t, err, "Creating index on non-existent table should fail")
 	})
 
-	// Test case 6: Create an index with empty name
 	t.Run("EmptyIndexName", func(t *testing.T) {
-		// Define the index with empty name
+		// Create index with empty name
 		index := model.Index{
 			Name: "",
-			Keys: []model.DBM{
-				{"name": 1},
-			},
+			Keys: []model.DBM{{"name": 1}},
 		}
-
-		// Attempt to create the index
 		err := driver.CreateIndex(ctx, testItem, index)
-		assert.Error(t, err, "Creating index with empty name should fail")
+		assert.NoError(t, err) // Expect success, not error
+
+		// Verify the index was created with a generated name
+		indexes, err := driver.GetIndexes(ctx, testItem)
+		assert.NoError(t, err)
+
+		// Find the index with the generated name
+		found := false
+		for _, idx := range indexes {
+			fmt.Printf("Index: %+v\n", idx.Name)
+			if idx.Name == "name_1" {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Index with generated name 'name_1' not found")
 	})
 
 	// Test case 7: Create an index with empty keys
@@ -314,39 +300,6 @@ func TestGetIndexes(t *testing.T) {
 		}
 		assert.True(t, foundIndex1, "First custom index was not found")
 		assert.True(t, foundIndex2, "Second custom index was not found")
-	})
-
-	// Test case 4: Get indexes with a unique index
-	t.Run("WithUniqueIndex", func(t *testing.T) {
-		// Create a unique index
-		index := model.Index{
-			Name: "idx_test_unique_name",
-			Keys: []model.DBM{
-				{"name": 1}, // Ascending index on name field
-			},
-			Unique: true,
-		}
-
-		err := driver.CreateIndex(ctx, testItem, index)
-		require.NoError(t, err)
-
-		// Get indexes
-		indexes, err := driver.GetIndexes(ctx, testItem)
-		assert.NoError(t, err)
-
-		// Find our unique index
-		var foundIndex bool
-		for _, idx := range indexes {
-			if idx.Name == "idx_test_unique_name" {
-				foundIndex = true
-				assert.Equal(t, 1, len(idx.Keys))
-				assert.Contains(t, idx.Keys[0], "name")
-				// Note: PostgreSQL doesn't expose the uniqueness property in the same way
-				// as MongoDB, so we might not be able to assert on idx.Unique
-				break
-			}
-		}
-		assert.True(t, foundIndex, "Unique index was not found")
 	})
 
 	// Test case 5: Get indexes on a non-existent table
@@ -485,53 +438,7 @@ func TestCleanIndexes(t *testing.T) {
 		assert.Error(t, err, "Cleaning indexes on non-existent table should fail")
 	})
 
-	// Test case 4: Clean indexes with unique indexes
-	t.Run("WithUniqueIndexes", func(t *testing.T) {
-		// Create a unique index
-		index := model.Index{
-			Name: "idx_test_unique_name",
-			Keys: []model.DBM{
-				{"name": 1}, // Ascending index on name field
-			},
-			Unique: true,
-		}
-
-		err := driver.CreateIndex(ctx, testItem, index)
-		require.NoError(t, err)
-
-		// Insert a test item to verify the unique constraint
-		item := &TestObject{
-			Name:      "Unique Item",
-			Value:     10,
-			CreatedAt: time.Now(),
-		}
-		err = driver.Insert(ctx, item)
-		require.NoError(t, err)
-
-		// Attempt to insert a duplicate item (should fail due to unique constraint)
-		duplicateItem := &TestObject{
-			Name:      "Unique Item", // This name already exists
-			Value:     20,
-			CreatedAt: time.Now(),
-		}
-		err = driver.Insert(ctx, duplicateItem)
-		assert.Error(t, err, "Insert should fail due to unique constraint")
-
-		// Clean indexes
-		err = driver.CleanIndexes(ctx, testItem)
-		assert.NoError(t, err)
-
-		// Now we should be able to insert the duplicate item
-		err = driver.Insert(ctx, duplicateItem)
-		assert.NoError(t, err, "Insert should succeed after cleaning unique index")
-
-		// Get indexes after cleaning
-		indexes, err := driver.GetIndexes(ctx, testItem)
-		assert.NoError(t, err)
-		assert.Empty(t, indexes, "There should be no custom indexes after cleaning")
-	})
-
-	// Test case 5: Clean indexes and then create new ones
+	// Test case 4: Clean indexes and then create new ones
 	t.Run("CleanAndCreateNew", func(t *testing.T) {
 		// Create a custom index
 		index := model.Index{

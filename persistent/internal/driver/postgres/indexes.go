@@ -29,18 +29,80 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 		return errors.New(types.ErrorIndexEmpty)
 	}
 
+	// Check if TTL index is on a compound index (not allowed)
+	if index.IsTTLIndex && len(index.Keys) > 1 {
+		return errors.New(types.ErrorIndexComposedTTL)
+	}
+
+	// Generate index name if not provided
+	indexName := index.Name
+	if indexName == "" {
+		// For simple indexes with one field, use MongoDB's convention: field_1
+		if len(index.Keys) == 1 && len(index.Keys[0]) == 1 {
+			for field, direction := range index.Keys[0] {
+				dirStr := "1"
+				switch v := direction.(type) {
+				case int:
+					if v < 0 {
+						dirStr = "-1"
+					}
+				case int32:
+					if v < 0 {
+						dirStr = "-1"
+					}
+				case int64:
+					if v < 0 {
+						dirStr = "-1"
+					}
+				case float64:
+					if v < 0 {
+						dirStr = "-1"
+					}
+				case string:
+					dirStr = v
+				}
+				indexName = field + "_" + dirStr
+			}
+		} else {
+			// For compound indexes, join all fields
+			parts := []string{}
+			for _, key := range index.Keys {
+				for field, direction := range key {
+					dirStr := "1"
+					switch v := direction.(type) {
+					case int:
+						if v < 0 {
+							dirStr = "-1"
+						}
+					case int32:
+						if v < 0 {
+							dirStr = "-1"
+						}
+					case int64:
+						if v < 0 {
+							dirStr = "-1"
+						}
+					case float64:
+						if v < 0 {
+							dirStr = "-1"
+						}
+					case string:
+						dirStr = v
+					}
+					parts = append(parts, field+"_"+dirStr)
+				}
+			}
+			indexName = strings.Join(parts, "_")
+		}
+	}
+
 	// Check if the index already exists
-	exists, err := d.indexExists(ctx, tableName, index.Name)
+	exists, err := d.indexExists(ctx, tableName, indexName)
 	if err != nil {
 		return fmt.Errorf("failed to check if index exists: %w", err)
 	}
 	if exists {
-		// Index already exists, check if it has the same definition
 		return errors.New(types.ErrorIndexAlreadyExist)
-	}
-
-	if index.IsTTLIndex {
-		return errors.New(types.ErrorIndexTTLNotSupported)
 	}
 
 	indexType := "BTREE" // Default index type
@@ -49,16 +111,43 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 	// Process each key in the index
 	for _, key := range index.Keys {
 		for field, direction := range key {
-			// In MongoDB, 1 means ascending, -1 means descending
-			// In PostgresSQL, we use ASC or DESC
-			var order string
-			if direction == 1 {
-				order = "ASC"
-			} else if direction == -1 {
-				order = "DESC"
-			} else {
-				// Handle special index types
-				if field == "$text" {
+			// Map _id to id for PostgreSQL
+			if field == "_id" {
+				field = "id"
+			}
+
+			// Handle different types of direction values
+			switch v := direction.(type) {
+			case int:
+				if v < 0 {
+					indexFields = append(indexFields, fmt.Sprintf("%s DESC", field))
+				} else {
+					indexFields = append(indexFields, fmt.Sprintf("%s ASC", field))
+				}
+			case int32:
+				if v < 0 {
+					indexFields = append(indexFields, fmt.Sprintf("%s DESC", field))
+				} else {
+					indexFields = append(indexFields, fmt.Sprintf("%s ASC", field))
+				}
+			case int64:
+				if v < 0 {
+					indexFields = append(indexFields, fmt.Sprintf("%s DESC", field))
+				} else {
+					indexFields = append(indexFields, fmt.Sprintf("%s ASC", field))
+				}
+			case float64:
+				if v < 0 {
+					indexFields = append(indexFields, fmt.Sprintf("%s DESC", field))
+				} else {
+					indexFields = append(indexFields, fmt.Sprintf("%s ASC", field))
+				}
+			case string:
+				if v == "2dsphere" {
+					// PostgreSQL equivalent of MongoDB's 2dsphere is a GiST index
+					indexType = "GIST"
+					indexFields = append(indexFields, field)
+				} else if field == "$text" {
 					// MongoDB text index - PostgresSQL equivalent is GIN index with tsvector
 					indexType = "GIN"
 					// The actual field is in the nested map
@@ -67,19 +156,21 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 							indexFields = append(indexFields, fmt.Sprintf("to_tsvector('english', %s)", textField))
 						}
 					}
-					continue
 				} else {
-					order = "ASC"
+					// Default to ASC for other string values
+					indexFields = append(indexFields, fmt.Sprintf("%s ASC", field))
 				}
+			default:
+				// Default to ASC for unknown types
+				indexFields = append(indexFields, fmt.Sprintf("%s ASC", field))
 			}
-			indexFields = append(indexFields, fmt.Sprintf("%s %s", field, order))
 		}
 	}
 
 	// Build the CREATE INDEX statement
 	createIndexSQL := fmt.Sprintf(
 		"CREATE INDEX %s ON %s USING %s (%s)",
-		index.Name,
+		indexName,
 		tableName,
 		indexType,
 		strings.Join(indexFields, ", "),
@@ -96,6 +187,36 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 		return fmt.Errorf("failed to create index: %w", err)
 	}
 
+	// Store TTL information in a metadata table if it's a TTL index
+	if index.IsTTLIndex {
+		// Create metadata table if it doesn't exist
+		metadataTableSQL := `
+			CREATE TABLE IF NOT EXISTS index_metadata (
+				table_name TEXT NOT NULL,
+				index_name TEXT NOT NULL,
+				is_ttl BOOLEAN NOT NULL DEFAULT FALSE,
+				ttl_seconds INTEGER,
+				PRIMARY KEY (table_name, index_name)
+			)
+		`
+		err = d.db.WithContext(ctx).Exec(metadataTableSQL).Error
+		if err != nil {
+			return fmt.Errorf("failed to create metadata table: %w", err)
+		}
+
+		// Store TTL information
+		metadataSQL := `
+			INSERT INTO index_metadata (table_name, index_name, is_ttl, ttl_seconds)
+			VALUES (?, ?, TRUE, ?)
+			ON CONFLICT (table_name, index_name) DO UPDATE
+			SET is_ttl = TRUE, ttl_seconds = EXCLUDED.ttl_seconds
+		`
+		err = d.db.WithContext(ctx).Exec(metadataSQL, tableName, indexName, index.TTL).Error
+		if err != nil {
+			return fmt.Errorf("failed to store TTL metadata: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -105,6 +226,13 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
 		return nil, err
 	}
 
+	exists, err := d.tableExists(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, errors.New(types.ErrorCollectionNotFound)
+	}
 	// Query to get index information from PostgresSQL system catalogs
 	query := `
         SELECT
@@ -171,10 +299,27 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
 	return indexes, nil
 }
 
+func (d *driver) tableExists(ctx context.Context, tableName string) (bool, error) {
+	var exists bool
+	err := d.db.WithContext(ctx).Raw("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = ?)", tableName).Scan(&exists).Error
+	if err != nil {
+		return false, fmt.Errorf("failed to check if table exists: %w", err)
+	}
+	return exists, nil
+}
+
 func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
 		return err
+	}
+
+	exists, err := d.tableExists(ctx, tableName)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return errors.New(types.ErrorCollectionNotFound)
 	}
 
 	// Query to get all indexes for the table, excluding primary key and unique constraints
