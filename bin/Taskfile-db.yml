@@ -10,7 +10,6 @@ tasks:
     cmds:
       - echo "Starting PostgreSQL..."
       - docker run --name postgres -d -p 5432:5432 -e POSTGRES_USER=testuser -e POSTGRES_PASSWORD=testpass -e POSTGRES_DB=testdb postgres:{{.POSTGRES_VERSION}}
-      - sleep 5 # wait for PostgreSQL to initialize
 
   start-redis-single:
     cmds:

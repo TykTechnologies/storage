@@ -46,7 +46,6 @@ func TestNewPersistentStorage(t *testing.T) {
 func connStrFor(driver string) string {
 	switch driver {
 	case Postgres:
-		//return "host=localhost port=5432 user=postgres dbname=tyk password=secr3t sslmode=disable"
 		return "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable"
 	default: // Mongo
 		return "mongodb://localhost:27017/test"

@@ -15,8 +15,6 @@ import (
 
 const connStr = "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable"
 
-// const connStr = "host=localhost port=5432 user=postgres dbname=tyk password=secr3t sslmode=disable"
-
 type TestObject struct {
 	ID             model.ObjectID `json:"id" gorm:"primaryKey"`
 	Name           string         `json:"name"`
