@@ -12,4 +12,7 @@ const (
 	ErrorSessionClosed             = "session closed"
 	ErrorRowOptDiffLenght          = "only one options per row is allowed"
 	ErrorCollectionNotFound        = "collection not found"
+	ErrorIndexTTLNotSupported      = "TTL indexes are not supported"
+	ErrorEmptyTableName            = "table name cannot be empty"
+	ErrorEmptyQuery                = "empty query"
 )

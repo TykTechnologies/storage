@@ -2,6 +2,7 @@ package persistent
 
 import (
 	"errors"
+	"github.com/TykTechnologies/storage/persistent/internal/driver/postgres"
 
 	"github.com/TykTechnologies/storage/persistent/internal/driver/mongo"
 
@@ -13,6 +14,7 @@ import (
 const (
 	OfficialMongo string = "mongo-go"
 	Mgo           string = "mgo"
+	Postgres      string = "postgres"
 )
 
 type (
@@ -28,6 +30,8 @@ func NewPersistentStorage(opts *ClientOpts) (types.PersistentStorage, error) {
 		return mongo.NewMongoDriver(&clientOpts)
 	case Mgo:
 		return mgo.NewMgoDriver(&clientOpts)
+	case Postgres:
+		return postgres.NewPostgresDriver(&clientOpts)
 	default:
 		return nil, errors.New("invalid driver")
 	}
