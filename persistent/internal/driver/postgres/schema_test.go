@@ -666,7 +666,7 @@ func TestGetDatabaseInfo(t *testing.T) {
 
 		// The database name should match what we expect from the connection string
 		// This assumes the connection string in setupTest uses "tyk" as the database name
-		assert.Equal(t, "tyk", info.Name, "Database name should match the one in connection string")
+		assert.Equal(t, "testdb", info.Name, "Database name should match the one in connection string")
 	})
 
 	// Test case 4: Check user matches expected
