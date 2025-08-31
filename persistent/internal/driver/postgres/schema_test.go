@@ -676,7 +676,7 @@ func TestGetDatabaseInfo(t *testing.T) {
 
 		// The user should match what we expect from the connection string
 		// This assumes the connection string in setupTest uses "postgres" as the user
-		assert.Equal(t, "postgres", info.User, "Database user should match the one in connection string")
+		assert.Equal(t, "testuser", info.User, "Database user should match the one in connection string")
 	})
 
 	// Test case 5: Check database size

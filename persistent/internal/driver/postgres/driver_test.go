@@ -7,15 +7,25 @@ import (
 	"context"
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
+
+func getConnStr() string {
+	dbDSN := connStr
+	// Check for postgres_test_dsn environment variable
+	if dsn := os.Getenv("postgres_test_dsn"); dsn != "" {
+		dbDSN = dsn
+	}
+	return dbDSN
+}
 
 func TestNewPostgresDriver(t *testing.T) {
 	// Test case 1: Successful connection
 	t.Run("SuccessfulConnection", func(t *testing.T) {
 		// Create client options with valid connection string
 		opts := &types.ClientOpts{
-			ConnectionString: connStr,
+			ConnectionString: getConnStr(),
 			Type:             "postgres",
 		}
 
