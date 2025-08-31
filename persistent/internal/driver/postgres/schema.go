@@ -9,7 +9,6 @@ import (
 	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/TykTechnologies/storage/persistent/utils"
 	"gorm.io/gorm"
-	"regexp"
 	"strconv"
 	"time"
 )
@@ -82,6 +81,11 @@ func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
 	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
 		return nil, err
+	}
+
+	exist, err := d.HasTable(ctx, row.TableName())
+	if !exist || err != nil {
+		return nil, fmt.Errorf("table %s not found", tableName)
 	}
 
 	// Initialize the result map
@@ -326,12 +330,6 @@ func (d *driver) Drop(ctx context.Context, object model.DBObject) error {
 		return err
 	}
 
-	// Validate table name to prevent SQL injection
-	validTableName := regexp.MustCompile(`^[a-zA-Z0-9_]+$`).MatchString(tableName)
-	if !validTableName {
-		return fmt.Errorf("invalid table name: %s", tableName)
-	}
-
 	err = d.db.WithContext(ctx).Migrator().DropTable(tableName)
 	if err != nil {
 		return fmt.Errorf("failed to drop table %s: %w", tableName, err)
@@ -361,6 +359,9 @@ func (d *driver) Migrate(ctx context.Context, objects []model.DBObject, options 
 	// Process each object
 	for _, obj := range objects {
 		// Get the table name
+		if obj == nil {
+			return errors.New(types.ErrorNilObject)
+		}
 		tableName := obj.TableName()
 		if tableName == "" {
 			return errors.New(types.ErrorEmptyTableName)

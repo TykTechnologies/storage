@@ -57,6 +57,12 @@ func (n *nullableTableName) SetObjectID(id model.ObjectID) {
 func setupTest(t *testing.T) (*driver, context.Context) {
 	ctx := context.Background()
 
+	dbDSN := connStr
+	// Check for postgres_test_dsn environment variable
+	if dsn := os.Getenv("postgres_test_dsn"); dsn != "" {
+		dbDSN = dsn
+	}
+
 	// Use the same hardcoded values as in the Taskfile
 	opts := &types.ClientOpts{
 		ConnectionString: connStr,

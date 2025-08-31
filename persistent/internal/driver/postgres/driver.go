@@ -33,6 +33,9 @@ func (d *driver) validateDBAndTable(object model.DBObject) (string, error) {
 		return "", errors.New(types.ErrorSessionClosed)
 	}
 
+	if object == nil {
+		return "", errors.New(types.ErrorNilObject)
+	}
 	// Get the table name from the DBObject
 	tableName := object.TableName()
 	if tableName == "" {

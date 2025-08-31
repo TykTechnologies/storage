@@ -15,4 +15,5 @@ const (
 	ErrorIndexTTLNotSupported      = "TTL indexes are not supported"
 	ErrorEmptyTableName            = "table name cannot be empty"
 	ErrorEmptyQuery                = "empty query"
+	ErrorNilObject                 = "object cannot be nil"
 )

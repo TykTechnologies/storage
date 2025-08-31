@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"database/sql"
 	"errors"
 	"testing"
 
@@ -22,6 +23,11 @@ func TestIsErrNoRows(t *testing.T) {
 		{
 			name:  "mongo error",
 			input: mongo.ErrNoDocuments,
+			want:  true,
+		},
+		{
+			name:  "sql error",
+			input: sql.ErrNoRows,
 			want:  true,
 		},
 		{

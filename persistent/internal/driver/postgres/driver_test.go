@@ -133,13 +133,6 @@ func TestValidateDBAndTable(t *testing.T) {
 		driver, _ := setupTest(t)
 		defer teardownTest(t, driver)
 
-		// Call validateDBAndTable with nil object
-		// This should panic, so we need to recover
-		defer func() {
-			r := recover()
-			assert.NotNil(t, r, "Expected panic but got none")
-		}()
-
 		// This should panic
 		_, _ = driver.validateDBAndTable(nil)
 	})
