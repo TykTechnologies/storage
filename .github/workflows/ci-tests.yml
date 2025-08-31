@@ -145,7 +145,7 @@ jobs:
         with:
           name: coverage-${{ github.run_id }}-${{ matrix.storagetype }}-${{ matrix.instancetype }}-${{ matrix.database }}-${{ matrix.version }}
           retention-days: 1
-          path: coverage/**/*.cov
+          path: coverage/
 
   sonar-cloud-analysis:
     runs-on: ubuntu-latest
@@ -162,8 +162,13 @@ jobs:
       - name: Download coverage artifacts
         uses: actions/download-artifact@v4
         with:
-          path: ./coverage
+          path: ./downloaded-coverage
           merge-multiple: true
+      - name: Merge coverage files
+        run: |
+          mkdir -p ./coverage
+          # Find all .cov files and merge them into a single file
+          find ./downloaded-coverage -name "*.cov" -exec cat {} \; > ./coverage/merged-coverage.out
       - name: Download golangci-lint artifacts
         uses: actions/download-artifact@v4
         with:
@@ -198,7 +203,7 @@ jobs:
             -Dsonar.exclusions=**/mocks/*.go,**/tempmocks/*.go
             -Dsonar.test.inclusions=**/*_test.go
             -Dsonar.tests=.
-            -Dsonar.go.coverage.reportPaths=merged-coverage.cov
+            -Dsonar.go.coverage.reportPaths=./coverage/merged-coverage.out
             -Dsonar.go.golangci-lint.reportPaths=golanglint.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
