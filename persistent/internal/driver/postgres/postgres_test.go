@@ -9,6 +9,7 @@ import (
 	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"os"
 	"testing"
 	"time"
 )
@@ -65,7 +66,7 @@ func setupTest(t *testing.T) (*driver, context.Context) {
 
 	// Use the same hardcoded values as in the Taskfile
 	opts := &types.ClientOpts{
-		ConnectionString: connStr,
+		ConnectionString: dbDSN,
 		Type:             "postgres",
 	}
 
