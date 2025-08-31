@@ -167,8 +167,8 @@ jobs:
       - name: Merge coverage files
         run: |
           mkdir -p ./coverage
-          # Find all .cov files and merge them into a single file
-          find ./downloaded-coverage -name "*.cov" -exec cat {} \; > ./coverage/merged-coverage.out
+          echo "mode: set" > ./coverage/merged-coverage.out
+          find ./downloaded-coverage -name "*.cov" -type f -print0 | xargs -0 cat | grep -v "^mode:" >> ./coverage/merged-coverage.out
       - name: Download golangci-lint artifacts
         uses: actions/download-artifact@v4
         with:
