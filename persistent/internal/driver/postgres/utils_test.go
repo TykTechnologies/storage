@@ -4,7 +4,6 @@
 package postgres
 
 import (
-	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -239,27 +238,4 @@ func TestGetCollectionName(t *testing.T) {
 			t.Errorf("Expected collection name 'pointer_table_name', got '%s'", name)
 		}
 	})
-}
-
-type TestObject struct {
-	ID             model.ObjectID `json:"id" gorm:"primaryKey"`
-	Name           string         `json:"name"`
-	Value          int            `json:"value"`
-	CreatedAt      time.Time      `json:"created_at"`
-	TableNameValue string         `json:"-"`
-}
-
-func (t *TestObject) TableName() string {
-	if t.TableNameValue != "" {
-		return t.TableNameValue
-	}
-	return "test_objects"
-}
-
-func (t *TestObject) GetObjectID() model.ObjectID {
-	return t.ID
-}
-
-func (t *TestObject) SetObjectID(id model.ObjectID) {
-	t.ID = id
 }
