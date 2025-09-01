@@ -143,7 +143,7 @@ jobs:
         run: task test-${{ matrix.storagetype }}
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage-${{ github.run_id }}-${{ matrix.storagetype }}-${{ matrix.instancetype }}-${{ matrix.database }}-${{ matrix.version }}
+          name: coverage-${{ github.run_id }}-${{ matrix.storagetype }}-${{ matrix.instancetype }}-${{ matrix.database }}-${{ matrix.version }}.cov
           retention-days: 1
           path: coverage/
 
@@ -164,11 +164,6 @@ jobs:
         with:
           path: ./downloaded-coverage
           merge-multiple: true
-      - name: Merge coverage files
-        run: |
-          mkdir -p ./coverage
-          echo "mode: set" > ./coverage/merged-coverage.out
-          find ./downloaded-coverage -name "*.cov" -type f -print0 | xargs -0 cat | grep -v "^mode:" >> ./coverage/merged-coverage.out
       - name: Download golangci-lint artifacts
         uses: actions/download-artifact@v4
         with:
@@ -190,6 +185,8 @@ jobs:
         uses: arduino/setup-task@v1
         with:
           version: 3
+      - name: merge reports
+        run: task merge-coverage
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@master
         with:
@@ -201,7 +198,7 @@ jobs:
             -Dsonar.exclusions=**/mocks/*.go,**/tempmocks/*.go
             -Dsonar.test.inclusions=**/*_test.go
             -Dsonar.tests=.
-            -Dsonar.go.coverage.reportPaths=./coverage/merged-coverage.out
+            -Dsonar.go.coverage.reportPaths=merged-coverage.cov
             -Dsonar.go.golangci-lint.reportPaths=golanglint.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
