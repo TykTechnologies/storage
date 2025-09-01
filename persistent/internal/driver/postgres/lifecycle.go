@@ -84,6 +84,10 @@ func (d *driver) Ping(ctx context.Context) error {
 		return errors.New(types.ErrorSessionClosed)
 	}
 
+	if ctx == nil {
+		return errors.New(types.ErrorNilContext)
+	}
+
 	// Get the underlying *sql.DB from GORM
 	sqlDB, err := d.db.DB()
 	if err != nil {

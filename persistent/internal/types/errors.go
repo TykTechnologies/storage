@@ -16,4 +16,5 @@ const (
 	ErrorEmptyTableName            = "table name cannot be empty"
 	ErrorEmptyQuery                = "empty query"
 	ErrorNilObject                 = "object cannot be nil"
+	ErrorNilContext                = "context cannot be nil"
 )

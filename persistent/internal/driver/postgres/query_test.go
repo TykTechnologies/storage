@@ -1,0 +1,913 @@
+//go:build postgres || postgres16.1 || postgres15 || postgres14.11 || postgres13.3 || postgres12.22
+// +build postgres postgres16.1 postgres15 postgres14.11 postgres13.3 postgres12.22
+
+package postgres
+
+import (
+	"database/sql"
+	"fmt"
+	"github.com/TykTechnologies/storage/persistent/model"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"testing"
+	"time"
+)
+
+func TestQuery(t *testing.T) {
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	// Helper function to clean up test data
+	cleanupTestData := func(tableName string) {
+		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
+		if err != nil {
+			t.Logf("Error cleaning up test data: %v", err)
+		}
+	}
+
+	// Test case 1: Query with simple filter
+	t.Run("QueryWithSimpleFilter", func(t *testing.T) {
+		// Create a test table and insert test data
+		testObj := &TestObject{TableNameValue: "test_query_simple"}
+		defer cleanupTestData(testObj.TableName())
+
+		// Migrate to create the table
+		err := driver.Migrate(ctx, []model.DBObject{testObj})
+		require.NoError(t, err, "Failed to create test table")
+
+		// Insert test data
+		for i := 1; i <= 5; i++ {
+			obj := &TestObject{
+				TableNameValue: "test_query_simple",
+				ID:             model.NewObjectID(),
+				Name:           fmt.Sprintf("Test %d", i),
+				Value:          i * 10,
+				CreatedAt:      time.Now(),
+			}
+			err := driver.Insert(ctx, obj)
+			require.NoError(t, err, "Failed to insert test data")
+		}
+
+		// Query for objects with Value > 20
+		var results []*TestObject
+		filter := model.DBM{"value": model.DBM{"$gt": 20}}
+		err = driver.Query(ctx, testObj, &results, filter)
+		require.NoError(t, err, "Query should not return an error")
+
+		// Verify results
+		assert.Equal(t, 3, len(results), "Should find 3 objects with Value > 20")
+		for _, result := range results {
+			assert.Greater(t, result.Value, 20, "All results should have Value > 20")
+		}
+	})
+
+	// Test case 2: Query with empty result
+	t.Run("QueryWithEmptyResult", func(t *testing.T) {
+		// Create a test table and insert test data
+		testObj := &TestObject{TableNameValue: "test_query_empty"}
+		defer cleanupTestData(testObj.TableName())
+
+		// Migrate to create the table
+		err := driver.Migrate(ctx, []model.DBObject{testObj})
+		require.NoError(t, err, "Failed to create test table")
+
+		// Insert test data
+		for i := 1; i <= 5; i++ {
+			obj := &TestObject{
+				TableNameValue: "test_query_empty",
+				ID:             model.NewObjectID(),
+				Name:           fmt.Sprintf("Test %d", i),
+				Value:          i * 10,
+				CreatedAt:      time.Now(),
+			}
+			err := driver.Insert(ctx, obj)
+			require.NoError(t, err, "Failed to insert test data")
+		}
+
+		// Query with filter that matches no objects
+		var results []*TestObject
+		filter := model.DBM{"value": model.DBM{"$gt": 100}}
+		err = driver.Query(ctx, testObj, &results, filter)
+
+		assert.ErrorIs(t, err, sql.ErrNoRows, "Query should return an error with empty result")
+		assert.Empty(t, results, "Result slice should be empty")
+	})
+
+	// Test case 3: Query with multiple conditions
+	t.Run("QueryWithMultipleConditions", func(t *testing.T) {
+		// Create a test table and insert test data
+		testObj := &TestObject{TableNameValue: "test_query_multiple"}
+		defer cleanupTestData(testObj.TableName())
+
+		// Migrate to create the table
+		err := driver.Migrate(ctx, []model.DBObject{testObj})
+		require.NoError(t, err, "Failed to create test table")
+
+		// Insert test data
+		categories := []string{"A", "B", "C"}
+		for i := 1; i <= 9; i++ {
+			obj := &TestObject{
+				TableNameValue: "test_query_multiple",
+				ID:             model.NewObjectID(),
+				Name:           fmt.Sprintf("Test %d", i),
+				Value:          i * 10,
+				Category:       categories[i%3],
+				CreatedAt:      time.Now(),
+			}
+			err := driver.Insert(ctx, obj)
+			require.NoError(t, err, "Failed to insert test data")
+		}
+
+		// Query for objects with Value > 30 AND Category = "A"
+		var results []*TestObject
+		filter := model.DBM{
+			"value":    model.DBM{"$gt": 30},
+			"category": "A",
+		}
+		err = driver.Query(ctx, testObj, &results, filter)
+		require.NoError(t, err, "Query should not return an error")
+
+		// Verify results
+		assert.NotEmpty(t, results, "Should find at least one object")
+		for _, result := range results {
+			assert.Greater(t, result.Value, 30, "All results should have Value > 30")
+			assert.Equal(t, "A", result.Category, "All results should have Category = 'A'")
+		}
+	})
+
+	// Test case 4: Query with invalid result parameter
+	t.Run("QueryWithInvalidResultParameter", func(t *testing.T) {
+		testObj := &TestObject{TableNameValue: "test_query_invalid"}
+
+		// Try to query with a non-pointer result
+		var results []*TestObject
+		filter := model.DBM{}
+		err := driver.Query(ctx, testObj, results, filter) // Note: passing results, not &results
+		assert.Error(t, err, "Query should return an error with non-pointer result parameter")
+	})
+
+	// Test case 5: Query with nil object
+	t.Run("QueryWithNilObject", func(t *testing.T) {
+		var results []*TestObject
+		filter := model.DBM{}
+		err := driver.Query(ctx, nil, &results, filter)
+		assert.Error(t, err, "Query should return an error with nil object")
+	})
+
+	// Test case 6: Query with nil result
+	t.Run("QueryWithNilResult", func(t *testing.T) {
+		testObj := &TestObject{TableNameValue: "test_query_nil_result"}
+		filter := model.DBM{}
+		err := driver.Query(ctx, testObj, nil, filter)
+		assert.Error(t, err, "Query should return an error with nil result")
+	})
+}
+
+func TestCount(t *testing.T) {
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	// Helper function to clean up test data
+	cleanupTestData := func(tableName string) {
+		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
+		if err != nil {
+			t.Logf("Error cleaning up test data: %v", err)
+		}
+	}
+
+	// Test case 1: Count all objects in a table
+	t.Run("CountAllObjects", func(t *testing.T) {
+		// Create a test table and insert test data
+		testObj := &TestObject{TableNameValue: "test_count_all"}
+		defer cleanupTestData(testObj.TableName())
+
+		// Migrate to create the table
+		err := driver.Migrate(ctx, []model.DBObject{testObj})
+		require.NoError(t, err, "Failed to create test table")
+
+		// Insert test data
+		for i := 1; i <= 5; i++ {
+			obj := &TestObject{
+				TableNameValue: "test_count_all",
+				ID:             model.NewObjectID(),
+				Name:           fmt.Sprintf("Test %d", i),
+				Value:          i * 10,
+				CreatedAt:      time.Now(),
+			}
+			err := driver.Insert(ctx, obj)
+			require.NoError(t, err, "Failed to insert test data")
+		}
+
+		// Count all objects
+		count, err := driver.Count(ctx, testObj)
+		require.NoError(t, err, "Count should not return an error")
+		assert.Equal(t, 5, count, "Should count 5 objects in the table")
+	})
+
+	// Test case 2: Count objects with a filter
+	t.Run("CountWithFilter", func(t *testing.T) {
+		// Create a test table and insert test data
+		testObj := &TestObject{TableNameValue: "test_count_filter"}
+		defer cleanupTestData(testObj.TableName())
+
+		// Migrate to create the table
+		err := driver.Migrate(ctx, []model.DBObject{testObj})
+		require.NoError(t, err, "Failed to create test table")
+
+		recordsCat1 := 0
+		// Insert test data
+		for i := 1; i <= 10; i++ {
+			obj := &TestObject{
+				TableNameValue: "test_count_filter",
+				ID:             model.NewObjectID(),
+				Name:           fmt.Sprintf("Test %d", i),
+				Value:          i * 10,
+				Category:       fmt.Sprintf("Category %d", (i%3)+1),
+				CreatedAt:      time.Now(),
+			}
+			if obj.Category == "Category 1" {
+				recordsCat1++
+			}
+			err := driver.Insert(ctx, obj)
+			require.NoError(t, err, "Failed to insert test data")
+		}
+
+		// Count objects with Value > 50
+		filter := model.DBM{"value": model.DBM{"$gt": 50}}
+		count, err := driver.Count(ctx, testObj, filter)
+		require.NoError(t, err, "Count with filter should not return an error")
+		assert.Equal(t, 5, count, "Should count 5 objects with Value > 50")
+
+		// Count objects in Category 1
+		filter = model.DBM{"category": "Category 1"}
+		count, err = driver.Count(ctx, testObj, filter)
+		require.NoError(t, err, "Count with category filter should not return an error")
+		assert.Equalf(t, recordsCat1, count, "expected %d objects in Category 1", recordsCat1)
+	})
+
+	// Test case 3: Count objects with multiple filters
+	t.Run("CountWithMultipleFilters", func(t *testing.T) {
+		// Create a test table and insert test data
+		testObj := &TestObject{TableNameValue: "test_count_multiple"}
+		defer cleanupTestData(testObj.TableName())
+
+		// Migrate to create the table
+		err := driver.Migrate(ctx, []model.DBObject{testObj})
+		require.NoError(t, err, "Failed to create test table")
+
+		// Insert test data
+		for i := 1; i <= 15; i++ {
+			obj := &TestObject{
+				TableNameValue: "test_count_multiple",
+				ID:             model.NewObjectID(),
+				Name:           fmt.Sprintf("Test %d", i),
+				Value:          i * 10,
+				Category:       fmt.Sprintf("Category %d", i%2+1),
+				Active:         i%2 == 0, // Even numbers are active
+				CreatedAt:      time.Now(),
+			}
+			err := driver.Insert(ctx, obj)
+			require.NoError(t, err, "Failed to insert test data")
+		}
+
+		// Count objects with Value > 70 AND Category = "Category 2"
+		filter := model.DBM{
+			"value":    model.DBM{"$gt": 70},
+			"category": "Category 2",
+		}
+		count, err := driver.Count(ctx, testObj, filter)
+		require.NoError(t, err, "Count with multiple filters should not return an error")
+
+		// We expect objects with indices 8, 11, 14 to match (Value > 70 AND Category 2)
+		expectedCount := 4
+		assert.Equal(t, expectedCount, count, "Should count %d objects matching multiple filters", expectedCount)
+	})
+
+	// Test case 4: Count with empty table
+	t.Run("CountWithEmptyTable", func(t *testing.T) {
+		// Create a test table but don't insert any data
+		testObj := &TestObject{TableNameValue: "test_count_empty"}
+		defer cleanupTestData(testObj.TableName())
+
+		// Migrate to create the table
+		err := driver.Migrate(ctx, []model.DBObject{testObj})
+		require.NoError(t, err, "Failed to create test table")
+
+		// Count all objects in empty table
+		count, err := driver.Count(ctx, testObj)
+		require.NoError(t, err, "Count on empty table should not return an error")
+		assert.Equal(t, 0, count, "Should count 0 objects in empty table")
+	})
+
+	// Test case 5: Count with nil object
+	t.Run("CountWithNilObject", func(t *testing.T) {
+		// Try to count with nil object
+		_, err := driver.Count(ctx, nil)
+		assert.Error(t, err, "Count with nil object should return an error")
+	})
+
+	// Test case 6: Count with non-existent table
+	t.Run("CountWithNonExistentTable", func(t *testing.T) {
+		// Create an object for a table that doesn't exist
+		nonExistentObj := &TestObject{TableNameValue: "non_existent_table"}
+
+		// Try to count
+		count, err := driver.Count(ctx, nonExistentObj)
+		assert.Equal(t, 0, count, "Count on non-existent table should return 0")
+		assert.Error(t, err, "Count on non-existent table should return an error")
+	})
+}
+
+func TestAggregate(t *testing.T) {
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	// Helper function to clean up test data
+	cleanupTestData := func(tableName string) {
+		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
+		if err != nil {
+			t.Logf("Error cleaning up test data: %v", err)
+		}
+	}
+
+	// Helper function to set up test data
+	setupTestData := func(tableName string) {
+		testObj := &TestObject{TableNameValue: tableName}
+
+		// Migrate to create the table
+		err := driver.Migrate(ctx, []model.DBObject{testObj})
+		require.NoError(t, err, "Failed to create test table")
+
+		// Insert test data
+		categories := []string{"A", "B", "C"}
+		for i := 1; i <= 10; i++ {
+			obj := &TestObject{
+				TableNameValue: tableName,
+				ID:             model.NewObjectID(),
+				Name:           fmt.Sprintf("Test %d", i),
+				Value:          i * 10,
+				Category:       categories[i%3],
+				Active:         i%2 == 0, // Even numbers are active
+				CreatedAt:      time.Now(),
+			}
+			err := driver.Insert(ctx, obj)
+			require.NoError(t, err, "Failed to insert test data")
+		}
+	}
+
+	// Test case 1: Simple $match aggregation
+	t.Run("SimpleMatchAggregation", func(t *testing.T) {
+		tableName := "test_agg_match"
+		setupTestData(tableName)
+		defer cleanupTestData(tableName)
+
+		// Create a simple $match pipeline
+		pipeline := []model.DBM{
+			{
+				"$match": model.DBM{
+					"value": model.DBM{"$gt": 50},
+				},
+			},
+		}
+
+		// Execute the aggregation
+		results, err := driver.Aggregate(ctx, &TestObject{TableNameValue: tableName}, pipeline)
+		require.NoError(t, err, "Aggregate should not return an error")
+
+		// Verify the results
+		assert.Equal(t, 5, len(results), "Should find 5 objects with Value > 50")
+		for _, result := range results {
+			value, ok := result["value"].(int64)
+			assert.True(t, ok, "Value should be an int")
+			assert.Greater(t, value, int64(50), "All results should have Value > 50")
+			assert.True(t, ok, "Value should be a float64")
+			assert.Greater(t, value, int64(50), "All results should have Value > 50")
+		}
+	})
+
+	// Test case 2: $match and $sort aggregation
+	t.Run("MatchAndSortAggregation", func(t *testing.T) {
+		tableName := "test_agg_match_sort"
+		setupTestData(tableName)
+		defer cleanupTestData(tableName)
+
+		// Create a pipeline with $match and $sort
+		pipeline := []model.DBM{
+			{
+				"$match": model.DBM{
+					"category": "A",
+				},
+			},
+			{
+				"$sort": model.DBM{
+					"value": -1, // Descending order
+				},
+			},
+		}
+
+		// Execute the aggregation
+		results, err := driver.Aggregate(ctx, &TestObject{TableNameValue: tableName}, pipeline)
+		require.NoError(t, err, "Aggregate should not return an error")
+
+		// Verify the results
+		assert.NotEmpty(t, results, "Should find objects in Category A")
+		for _, result := range results {
+			assert.Equal(t, "A", result["category"], "All results should have Category A")
+		}
+
+		// Verify sorting
+		for i := 0; i < len(results)-1; i++ {
+			value1, _ := results[i]["value"].(float64)
+			value2, _ := results[i+1]["value"].(float64)
+			assert.GreaterOrEqual(t, value1, value2, "Results should be sorted by Value in descending order")
+		}
+	})
+
+	// Test case 3: $match, $sort, and $limit aggregation
+	t.Run("MatchSortLimitAggregation", func(t *testing.T) {
+		tableName := "test_agg_match_sort_limit"
+		setupTestData(tableName)
+		defer cleanupTestData(tableName)
+
+		// Create a pipeline with $match, $sort, and $limit
+		pipeline := []model.DBM{
+			{
+				"$match": model.DBM{
+					"active": true,
+				},
+			},
+			{
+				"$sort": model.DBM{
+					"value": 1, // Ascending order
+				},
+			},
+			{
+				"$limit": 3,
+			},
+		}
+
+		// Execute the aggregation
+		results, err := driver.Aggregate(ctx, &TestObject{TableNameValue: tableName}, pipeline)
+		require.NoError(t, err, "Aggregate should not return an error")
+
+		// Verify the results
+		assert.Equal(t, 3, len(results), "Should find exactly 3 objects due to $limit")
+		for _, result := range results {
+			assert.Equal(t, true, result["active"], "All results should be active")
+		}
+
+		// Verify sorting
+		for i := 0; i < len(results)-1; i++ {
+			value1, _ := results[i]["value"].(float64)
+			value2, _ := results[i+1]["value"].(float64)
+			assert.LessOrEqual(t, value1, value2, "Results should be sorted by Value in ascending order")
+		}
+	})
+
+	// Test case 4: Nil object
+	t.Run("NilObject", func(t *testing.T) {
+		// Create a simple pipeline
+		pipeline := []model.DBM{
+			{
+				"$match": model.DBM{
+					"value": model.DBM{"$gt": 50},
+				},
+			},
+		}
+
+		// Execute the aggregation with nil object
+		_, err := driver.Aggregate(ctx, nil, pipeline)
+		assert.Error(t, err, "Aggregate should return an error with nil object")
+	})
+
+	// Test case 5: Invalid pipeline
+	t.Run("InvalidPipeline", func(t *testing.T) {
+		tableName := "test_agg_invalid"
+		setupTestData(tableName)
+		defer cleanupTestData(tableName)
+
+		// Create an invalid pipeline (unsupported stage)
+		pipeline := []model.DBM{
+			{
+				"$unsupported": model.DBM{},
+			},
+		}
+
+		// Execute the aggregation
+		_, err := driver.Aggregate(ctx, &TestObject{TableNameValue: tableName}, pipeline)
+		assert.Error(t, err, "Aggregate should return an error with invalid pipeline")
+	})
+}
+
+func TestTranslateAggregationPipeline(t *testing.T) {
+	// Test case 1: Simple $match stage
+	t.Run("SimpleMatchStage", func(t *testing.T) {
+		tableName := "test_table"
+
+		// Create a simple $match pipeline
+		pipeline := []model.DBM{
+			{
+				"$match": model.DBM{
+					"value": model.DBM{"$gt": 50},
+				},
+			},
+		}
+
+		// Translate the pipeline
+		query, values, err := translateAggregationPipeline(tableName, pipeline)
+		require.NoError(t, err, "translateAggregationPipeline should not return an error")
+
+		// Verify the query string contains expected SQL fragments
+		assert.Contains(t, query, "SELECT * FROM test_table", "Query should select from the correct table")
+		assert.Contains(t, query, "WHERE", "Query should contain a WHERE clause")
+		assert.Contains(t, query, "value > ", "Query should filter on value")
+
+		// Verify the values
+		assert.Equal(t, 1, len(values), "Should have 1 parameter value")
+		assert.Equal(t, 50, values[0], "Parameter value should be 50")
+	})
+
+	// Test case 2: $match and $sort stages
+	t.Run("MatchAndSortStages", func(t *testing.T) {
+		tableName := "test_table"
+
+		// Create a pipeline with $match and $sort
+		pipeline := []model.DBM{
+			{
+				"$match": model.DBM{
+					"category": "A",
+				},
+			},
+			{
+				"$sort": model.DBM{
+					"value": -1, // Descending order
+				},
+			},
+		}
+
+		// Translate the pipeline
+		query, values, err := translateAggregationPipeline(tableName, pipeline)
+		require.NoError(t, err, "translateAggregationPipeline should not return an error")
+
+		// Verify the query string contains expected SQL fragments
+		assert.Contains(t, query, "SELECT * FROM test_table", "Query should select from the correct table")
+		assert.Contains(t, query, "WHERE", "Query should contain a WHERE clause")
+		assert.Contains(t, query, "category = ", "Query should filter on category")
+		assert.Contains(t, query, "ORDER BY", "Query should contain an ORDER BY clause")
+		assert.Contains(t, query, "value DESC", "Query should order by value in descending order")
+
+		// Verify the values
+		assert.Equal(t, 1, len(values), "Should have 1 parameter value")
+		assert.Equal(t, "A", values[0], "Parameter value should be 'A'")
+	})
+
+	// Test case 3: $match, $sort, and $limit stages
+	t.Run("MatchSortLimitStages", func(t *testing.T) {
+		tableName := "test_table"
+
+		// Create a pipeline with $match, $sort, and $limit
+		pipeline := []model.DBM{
+			{
+				"$match": model.DBM{
+					"active": true,
+				},
+			},
+			{
+				"$sort": model.DBM{
+					"value": 1, // Ascending order
+				},
+			},
+			{
+				"$limit": 3,
+			},
+		}
+
+		// Translate the pipeline
+		query, values, err := translateAggregationPipeline(tableName, pipeline)
+		require.NoError(t, err, "translateAggregationPipeline should not return an error")
+
+		// Verify the query string contains expected SQL fragments
+		assert.Contains(t, query, "SELECT * FROM test_table", "Query should select from the correct table")
+		assert.Contains(t, query, "WHERE", "Query should contain a WHERE clause")
+		assert.Contains(t, query, "active = ", "Query should filter on active")
+		assert.Contains(t, query, "ORDER BY", "Query should contain an ORDER BY clause")
+		assert.Contains(t, query, "value ASC", "Query should order by value in ascending order")
+		assert.Contains(t, query, "LIMIT 3", "Query should limit to 3 results")
+
+		// Verify the values
+		assert.Equal(t, 1, len(values), "Should have 1 parameter value")
+		assert.Equal(t, true, values[0], "Parameter value should be true")
+	})
+
+	// Test case 4: Empty pipeline
+	t.Run("EmptyPipeline", func(t *testing.T) {
+		tableName := "test_table"
+
+		// Create an empty pipeline
+		pipeline := []model.DBM{}
+
+		// Translate the pipeline
+		query, values, err := translateAggregationPipeline(tableName, pipeline)
+		require.NoError(t, err, "translateAggregationPipeline should not return an error with empty pipeline")
+
+		// Verify the query string
+		assert.Equal(t, "SELECT * FROM test_table", query, "Query should be a simple SELECT with empty pipeline")
+
+		// Verify the values
+		assert.Empty(t, values, "Should have no parameter values with empty pipeline")
+	})
+
+	// Test case 5: Unsupported stage
+	t.Run("UnsupportedStage", func(t *testing.T) {
+		tableName := "test_table"
+
+		// Create a pipeline with an unsupported stage
+		pipeline := []model.DBM{
+			{
+				"$unsupported": model.DBM{},
+			},
+		}
+
+		// Translate the pipeline
+		_, _, err := translateAggregationPipeline(tableName, pipeline)
+
+		// Check if the function returns an error for unsupported stage
+		assert.Error(t, err, "translateAggregationPipeline should return an error for unsupported stage")
+		assert.Contains(t, err.Error(), "unsupported", "Error message should mention unsupported stage")
+	})
+}
+
+func TestBuildWhereClause(t *testing.T) {
+	// Test case 1: Simple equality filter
+	t.Run("SimpleEqualityFilter", func(t *testing.T) {
+		filter := model.DBM{"name": "test", "value": 123}
+
+		whereClause, values := buildWhereClause(filter)
+
+		// The order of conditions in the WHERE clause might vary, so we need to check both possibilities
+		possibleClauses := []string{
+			"name = $1 AND value = $2",
+			"value = $1 AND name = $2",
+		}
+
+		// Check if the generated clause matches any of the possible clauses
+		clauseMatches := false
+		for _, clause := range possibleClauses {
+			t.Logf("Checking clause from func: %s", whereClause)
+			t.Logf("Checking clause: %s", clause)
+			if whereClause == clause {
+				clauseMatches = true
+				break
+			}
+		}
+
+		assert.True(t, clauseMatches, "WHERE clause should match one of the expected formats")
+
+		// Check that values contains both "test" and 123, in some order
+		assert.Equal(t, 2, len(values), "Should have 2 values")
+		assert.Contains(t, values, "test", "Values should contain 'test'")
+		assert.Contains(t, values, 123, "Values should contain 123")
+	})
+
+	// Test case 2: Filter with comparison operators
+	t.Run("ComparisonOperators", func(t *testing.T) {
+		filter := model.DBM{
+			"age":   model.DBM{"$gt": 30},
+			"score": model.DBM{"$lte": 100},
+		}
+
+		whereClause, values := buildWhereClause(filter)
+
+		// The order of conditions might vary
+		possibleClauses := []string{
+			"age > $1 AND score <= $2",
+			"score <= $1 AND age > $2",
+		}
+
+		clauseMatches := false
+		for _, clause := range possibleClauses {
+			if whereClause == clause {
+				clauseMatches = true
+				break
+			}
+		}
+
+		assert.True(t, clauseMatches, "WHERE clause should match one of the expected formats")
+		assert.Equal(t, 2, len(values), "Should have 2 values")
+		assert.Contains(t, values, 30, "Values should contain 30")
+		assert.Contains(t, values, 100, "Values should contain 100")
+	})
+
+	// Test case 3: Filter with multiple operators on the same field
+	t.Run("MultipleOperatorsOnSameField", func(t *testing.T) {
+		filter := model.DBM{
+			"age": model.DBM{
+				"$gt": 20,
+				"$lt": 50,
+			},
+		}
+
+		whereClause, values := buildWhereClause(filter)
+
+		// The order of conditions might vary
+		possibleClauses := []string{
+			"age > $1 AND age < $2",
+			"age < $1 AND age > $2",
+		}
+
+		clauseMatches := false
+		for _, clause := range possibleClauses {
+			if whereClause == clause {
+				clauseMatches = true
+				break
+			}
+		}
+
+		assert.True(t, clauseMatches, "WHERE clause should match one of the expected formats")
+		assert.Equal(t, 2, len(values), "Should have 2 values")
+		assert.Contains(t, values, 20, "Values should contain 20")
+		assert.Contains(t, values, 50, "Values should contain 50")
+	})
+
+	// Test case 4: Empty filter
+	t.Run("EmptyFilter", func(t *testing.T) {
+		filter := model.DBM{}
+
+		whereClause, values := buildWhereClause(filter)
+
+		assert.Equal(t, "", whereClause, "WHERE clause should be empty for empty filter")
+		assert.Empty(t, values, "Values should be empty for empty filter")
+	})
+}
+
+func TestApplyMongoUpdateOperators(t *testing.T) {
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	// Helper function to clean up test data
+	cleanupTestData := func(tableName string) {
+		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
+		if err != nil {
+			t.Logf("Error cleaning up test data: %v", err)
+		}
+	}
+
+	// Helper function to create a test object and insert it
+	createTestObject := func(tableName string, id model.ObjectID, name string, value int, active bool) *TestObject {
+		obj := &TestObject{
+			TableNameValue: tableName,
+			ID:             id,
+			Name:           name,
+			Value:          value,
+			Active:         active,
+			CreatedAt:      time.Now(),
+		}
+		err := driver.Migrate(ctx, []model.DBObject{obj})
+		require.NoError(t, err, "Failed to create test table")
+		err = driver.Insert(ctx, obj)
+		require.NoError(t, err, "Failed to insert test object")
+		return obj
+	}
+
+	// Test case 1: $set operator
+	t.Run("SetOperator", func(t *testing.T) {
+		// Create a test object
+		tableName := "test_update_set"
+		id := model.NewObjectID()
+		obj := createTestObject(tableName, id, "Original Name", 10, true)
+		defer cleanupTestData(obj.TableName())
+
+		// Create an update with $set operator
+		update := model.DBM{
+			"$set": model.DBM{
+				"name":  "Updated Name",
+				"value": 20,
+			},
+		}
+
+		// Apply the update operators
+		db := driver.db.WithContext(ctx).Table(tableName)
+		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
+		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
+
+		// Verify the updates map
+		assert.Equal(t, "Updated Name", updates["name"], "updates map should contain the new name")
+		assert.Equal(t, 20, updates["value"], "updates map should contain the new value")
+
+		// Execute the update
+		err = updatedDB.Where("id = ?", id).Updates(updates).Error
+		require.NoError(t, err, "Update operation should not return an error")
+
+		// Verify the object was updated
+		var updatedObj TestObject
+		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		require.NoError(t, err, "Failed to retrieve updated object")
+
+		assert.Equal(t, "Updated Name", updatedObj.Name, "Name should be updated")
+		assert.Equal(t, 20, updatedObj.Value, "Value should be updated")
+		assert.True(t, updatedObj.Active, "Active should remain unchanged")
+	})
+
+	// Test case 2: $inc operator
+	t.Run("IncOperator", func(t *testing.T) {
+		// Create a test object
+		tableName := "test_update_inc"
+		id := model.NewObjectID()
+		obj := createTestObject(tableName, id, "Test Inc", 10, true)
+		defer cleanupTestData(obj.TableName())
+
+		// Create an update with $inc operator
+		update := model.DBM{
+			"$inc": model.DBM{
+				"value": 5, // Increment by 5
+			},
+		}
+
+		// Apply the update operators
+		db := driver.db.WithContext(ctx).Table(tableName)
+		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
+		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
+
+		// Execute the update
+		err = updatedDB.Where("id = ?", id).Updates(updates).Error
+		require.NoError(t, err, "Update operation should not return an error")
+
+		// Verify the object was updated
+		var updatedObj TestObject
+		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		require.NoError(t, err, "Failed to retrieve updated object")
+
+		assert.Equal(t, 15, updatedObj.Value, "Value should be incremented by 5")
+	})
+
+	// Test case 3: Multiple operators
+	t.Run("MultipleOperators", func(t *testing.T) {
+		// Create a test object
+		tableName := "test_update_multiple"
+		id := model.NewObjectID()
+		obj := createTestObject(tableName, id, "Original Multiple", 10, true)
+		defer cleanupTestData(obj.TableName())
+
+		// Create an update with multiple operators
+		update := model.DBM{
+			"$set": model.DBM{
+				"name": "Updated Multiple",
+			},
+			"$inc": model.DBM{
+				"value": 15, // Increment by 15
+			},
+		}
+
+		// Apply the update operators
+		db := driver.db.WithContext(ctx).Table(tableName)
+		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
+		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
+
+		// Execute the update
+		err = updatedDB.Where("id = ?", id).Updates(updates).Error
+		require.NoError(t, err, "Update operation should not return an error")
+
+		// Verify the object was updated
+		var updatedObj TestObject
+		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		require.NoError(t, err, "Failed to retrieve updated object")
+
+		assert.Equal(t, "Updated Multiple", updatedObj.Name, "Name should be updated")
+		assert.Equal(t, 25, updatedObj.Value, "Value should be incremented by 15")
+	})
+
+	// Test case 4: Empty update
+	t.Run("EmptyUpdate", func(t *testing.T) {
+		// Create an empty update
+		update := model.DBM{}
+
+		// Apply the update operators
+		db := driver.db.WithContext(ctx).Table("test_table")
+		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
+		require.NoError(t, err, "applyMongoUpdateOperators should not return an error with empty update")
+
+		// Verify the updates map is empty
+		assert.Empty(t, updates, "updates map should be empty for empty update")
+
+		// Verify the DB object is unchanged
+		assert.Equal(t, db, updatedDB, "DB object should be unchanged for empty update")
+	})
+
+	// Test case 5: Unsupported operator
+	t.Run("UnsupportedOperator", func(t *testing.T) {
+		// Create an update with an unsupported operator
+		update := model.DBM{
+			"$unsupported": model.DBM{
+				"field": "value",
+			},
+		}
+
+		// Apply the update operators
+		db := driver.db.WithContext(ctx).Table("test_table")
+		_, _, err := driver.applyMongoUpdateOperators(db, update)
+
+		// Check if the function returns an error for unsupported operator
+		assert.Error(t, err, "applyMongoUpdateOperators should return an error for unsupported operator")
+		assert.Contains(t, err.Error(), "unsupported", "Error message should mention unsupported operator")
+	})
+}

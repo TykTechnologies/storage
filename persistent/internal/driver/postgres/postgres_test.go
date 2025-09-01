@@ -19,7 +19,9 @@ type TestObject struct {
 	ID             model.ObjectID `json:"id" gorm:"primaryKey"`
 	Name           string         `json:"name"`
 	Value          int            `json:"value"`
+	Active         bool           `json:"active"`
 	CreatedAt      time.Time      `json:"created_at"`
+	Category       string         `json:"category"`
 	TableNameValue string         `json:"-"`
 }
 
