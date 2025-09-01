@@ -589,7 +589,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 								argStr = fieldName
 							} else {
 								// For literals, add as a parameter
-								argStr = fmt.Sprintf("$%d", argIndex)
+								argStr = fmt.Sprintf("?")
 								args = append(args, funcArg)
 								argIndex++
 							}
@@ -764,23 +764,23 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 			for op, opVal := range val {
 				switch op {
 				case "$gt":
-					conditions = append(conditions, fmt.Sprintf("%s > $%d", k, i))
+					conditions = append(conditions, fmt.Sprintf("%s > ?", k))
 					values = append(values, opVal)
 					i++
 				case "$gte":
-					conditions = append(conditions, fmt.Sprintf("%s >= $%d", k, i))
+					conditions = append(conditions, fmt.Sprintf("%s >= ?", k))
 					values = append(values, opVal)
 					i++
 				case "$lt":
-					conditions = append(conditions, fmt.Sprintf("%s < $%d", k, i))
+					conditions = append(conditions, fmt.Sprintf("%s < ?", k))
 					values = append(values, opVal)
 					i++
 				case "$lte":
-					conditions = append(conditions, fmt.Sprintf("%s <= $%d", k, i))
+					conditions = append(conditions, fmt.Sprintf("%s <= ?", k))
 					values = append(values, opVal)
 					i++
 				case "$ne":
-					conditions = append(conditions, fmt.Sprintf("%s <> $%d", k, i))
+					conditions = append(conditions, fmt.Sprintf("%s <> ?", k))
 					values = append(values, opVal)
 					i++
 				case "$in":
@@ -792,7 +792,7 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 					}
 					placeholders := make([]string, len(inValues))
 					for j := range inValues {
-						placeholders[j] = fmt.Sprintf("$%d", i)
+						placeholders[j] = fmt.Sprintf("?")
 						values = append(values, inValues[j])
 						i++
 					}
@@ -804,7 +804,7 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 			}
 		default:
 			// Handle direct equality
-			conditions = append(conditions, fmt.Sprintf("%s = $%d", k, i))
+			conditions = append(conditions, fmt.Sprintf("%s = ?", k))
 			values = append(values, v)
 			i++
 		}

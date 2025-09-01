@@ -252,7 +252,7 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
             JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
             JOIN pg_am am ON am.oid = i.relam
         WHERE
-            t.relname = $1
+            t.relname = ?
             AND NOT ix.indisprimary  -- Exclude primary keys
         ORDER BY
             i.relname, a.attnum
@@ -332,7 +332,7 @@ func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
             JOIN pg_class t ON t.oid = ix.indrelid
             LEFT JOIN pg_constraint c ON c.conindid = ix.indexrelid
         WHERE
-            t.relname = $1
+            t.relname = ?
             AND c.contype IS NULL  -- Exclude indexes that are part of constraints
             AND NOT ix.indisprimary  -- Exclude primary key indexes
         ORDER BY
@@ -341,7 +341,7 @@ func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 
 	var indexNames []string
 	// Execute the query
-	err = d.db.WithContext(ctx).Raw(query, tableName).Pluck("index_name", &indexNames).Error
+	err = d.db.WithContext(ctx).Raw(query, tableName).Scan(&indexNames).Error
 	if err != nil {
 		return fmt.Errorf("failed to query indexes: %w", err)
 	}
@@ -384,8 +384,8 @@ func (d *driver) indexExists(ctx context.Context, tableName, indexName string) (
         SELECT EXISTS (
             SELECT 1 
             FROM pg_indexes 
-            WHERE tablename = $1 
-            AND indexname = $2
+            WHERE tablename = ?
+            AND indexname = ?
         )
     `
 

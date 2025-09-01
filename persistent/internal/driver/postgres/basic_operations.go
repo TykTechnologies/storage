@@ -115,10 +115,14 @@ func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 	}
 
 	// Execute the UPDATE operation
-	result := tx.Updates(data)
+	result := tx.Save(object)
 	if result.Error != nil {
 		return result.Error
 	}
+	/*result := tx.Updates(data)
+	if result.Error != nil {
+		return result.Error
+	}*/
 
 	// Check if any rows were affected
 	if result.RowsAffected == 0 {
@@ -469,7 +473,7 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 
 	// Save the original ID to ensure it's preserved
 	originalID := row.GetObjectID()
-	
+
 	updateDB := tx.Table(tableName)
 	updateDB = d.translateQuery(updateDB, query, row)
 

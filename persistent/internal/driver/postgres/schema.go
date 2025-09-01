@@ -283,8 +283,8 @@ func (d *driver) GetTables(ctx context.Context) ([]string, error) {
 		return []string{}, errors.New(types.ErrorSessionClosed)
 	}
 
-	// Use GORM's Migrator interface to get all tables
-	tables, err := d.db.WithContext(ctx).Migrator().GetTables()
+	var tables []string
+	err := d.db.Raw(`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`).Scan(&tables).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tables: %w", err)
 	}

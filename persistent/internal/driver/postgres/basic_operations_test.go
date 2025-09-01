@@ -47,6 +47,7 @@ func TestUpdate(t *testing.T) {
 
 	obj.Name = "Updated Name"
 	obj.Value = 100
+	
 	err = driver.Update(ctx, obj)
 	assert.NoError(t, err)
 
@@ -533,7 +534,7 @@ func TestUpsert(t *testing.T) {
 		// Create a row object to receive the result
 		resultItem := &TestObject{}
 		resultItem.SetObjectID(specificID)
-		
+
 		// Perform upsert with ID in query
 		err = driver.Upsert(ctx, resultItem,
 			model.DBM{"id": specificID}, // Query with specific ID

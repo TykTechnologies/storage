@@ -11,13 +11,20 @@ require (
 	github.com/stretchr/testify v1.8.1
 	go.mongodb.org/mongo-driver v1.13.1
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22
-	gorm.io/driver/postgres v1.6.0
+	gorm.io/driver/postgres v1.2.0
 	gorm.io/gorm v1.30.1
 )
 
 require (
+	github.com/helloeave/json v1.15.3 // indirect
+	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
+	github.com/jackc/pgconn v1.10.0 // indirect
+	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgproto3/v2 v2.1.1 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/pgtype v1.8.1 // indirect
+	github.com/jackc/pgx/v4 v4.13.0 // indirect
 	github.com/jackc/pgx/v5 v5.6.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
@@ -45,3 +52,5 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace gorm.io/gorm => github.com/TykTechnologies/gorm v1.20.7-0.20210910090358-06148e82dc85

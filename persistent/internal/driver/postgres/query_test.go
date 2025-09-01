@@ -646,8 +646,8 @@ func TestBuildWhereClause(t *testing.T) {
 
 		// The order of conditions in the WHERE clause might vary, so we need to check both possibilities
 		possibleClauses := []string{
-			"name = $1 AND value = $2",
-			"value = $1 AND name = $2",
+			"name = ? AND value = ?",
+			"value = ? AND name = ?",
 		}
 
 		// Check if the generated clause matches any of the possible clauses
@@ -680,8 +680,8 @@ func TestBuildWhereClause(t *testing.T) {
 
 		// The order of conditions might vary
 		possibleClauses := []string{
-			"age > $1 AND score <= $2",
-			"score <= $1 AND age > $2",
+			"age > ? AND score <= ?",
+			"score <= ? AND age > ?",
 		}
 
 		clauseMatches := false
@@ -711,8 +711,8 @@ func TestBuildWhereClause(t *testing.T) {
 
 		// The order of conditions might vary
 		possibleClauses := []string{
-			"age > $1 AND age < $2",
-			"age < $1 AND age > $2",
+			"age > ? AND age < ?",
+			"age < ? AND age > ?",
 		}
 
 		clauseMatches := false
