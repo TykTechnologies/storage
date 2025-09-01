@@ -21,6 +21,9 @@ type lifeCycle struct {
 }
 
 func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
+	if opts == nil {
+		return errors.New("nil opts")
+	}
 	connStr := opts.ConnectionString
 	if opts.UseSSL {
 		connStr += " sslmode=require"
@@ -40,6 +43,7 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 	var err error
 	l.db, err = gorm.Open(postgres.Open(connStr), &gorm.Config{})
 	if err != nil {
+		l.db = nil
 		return err
 	}
 
@@ -62,7 +66,12 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 		}
 	}
 
-	return l.sqlDB.Ping()
+	err = l.sqlDB.Ping()
+	if err != nil {
+		l.db = nil
+		return err
+	}
+	return nil
 }
 
 func (l *lifeCycle) Close() error {

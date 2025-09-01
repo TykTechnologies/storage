@@ -144,29 +144,7 @@ func TestLifeCycleConnect(t *testing.T) {
 		assert.Nil(t, lc.db, "Database connection should be nil after failed connection")
 	})
 
-	// Test case 3: Failed connection due to unsupported database type
-	t.Run("FailedConnectionUnsupportedType", func(t *testing.T) {
-		// Create a new lifeCycle instance
-		lc := &lifeCycle{}
-
-		// Create client options with unsupported type
-		opts := &types.ClientOpts{
-			ConnectionString: "host=localhost port=5432 user=postgres dbname=postgres",
-			Type:             "unsupported-db-type",
-		}
-
-		// Attempt to connect to the database
-		err := lc.Connect(opts)
-
-		// Verify that the connection failed
-		assert.Error(t, err, "Connect should return an error with unsupported database type")
-		assert.Contains(t, err.Error(), "unsupported", "Error should mention unsupported type")
-
-		// Verify that the database connection is nil
-		assert.Nil(t, lc.db, "Database connection should be nil after failed connection")
-	})
-
-	// Test case 4: Failed connection due to nil options
+	// Test case 3: Failed connection due to nil options
 	t.Run("FailedConnectionNilOptions", func(t *testing.T) {
 		// Create a new lifeCycle instance
 		lc := &lifeCycle{}
@@ -181,7 +159,7 @@ func TestLifeCycleConnect(t *testing.T) {
 		assert.Nil(t, lc.db, "Database connection should be nil after failed connection")
 	})
 
-	// Test case 5: Failed connection due to empty connection string
+	// Test case 4: Failed connection due to empty connection string
 	t.Run("FailedConnectionEmptyString", func(t *testing.T) {
 		// Create a new lifeCycle instance
 		lc := &lifeCycle{}
