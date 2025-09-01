@@ -113,7 +113,7 @@ func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
             pg_stat_user_tables
             JOIN pg_class ON pg_class.relname = pg_stat_user_tables.relname
         WHERE
-            pg_stat_user_tables.relname = $1
+            pg_stat_user_tables.relname = ?
     `
 	var basicStats BasicStats
 
@@ -174,7 +174,7 @@ func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
         FROM
             pg_stat_user_indexes
         WHERE
-            relname = $1
+            relname = ?
     `
 
 	var indexStatsRows []IndexStats
