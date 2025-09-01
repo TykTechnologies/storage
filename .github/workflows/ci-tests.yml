@@ -190,8 +190,6 @@ jobs:
         uses: arduino/setup-task@v1
         with:
           version: 3
-      - name: merge reports
-        run: task merge-coverage
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@master
         with:

@@ -87,3 +87,124 @@ func TestPing(t *testing.T) {
 		assert.Contains(t, err.Error(), "context", "Error should mention context issue")
 	})
 }
+
+func TestLifeCycleConnect(t *testing.T) {
+	// Test case 1: Successful connection
+	t.Run("SuccessfulConnection", func(t *testing.T) {
+		// Create a new lifeCycle instance
+		lc := &lifeCycle{}
+
+		// Create valid client options
+		// Using environment variable for connection string if available
+		connStr := os.Getenv("POSTGRES_TEST_DSN")
+		if connStr == "" {
+			connStr = getConnStr()
+		}
+
+		opts := &types.ClientOpts{
+			ConnectionString: connStr,
+			Type:             "postgres",
+		}
+
+		// Connect to the database
+		err := lc.Connect(opts)
+
+		// Verify that the connection was successful
+		assert.NoError(t, err, "Connect should not return an error with valid options")
+
+		// Verify that the connection is established
+		assert.NotNil(t, lc.db, "Database connection should not be nil after successful connection")
+
+		// Verify that the connection works by pinging the database
+		ctx := context.Background()
+		err = lc.db.WithContext(ctx).Exec("SELECT 1").Error
+		assert.NoError(t, err, "Should be able to execute a simple query after connection")
+
+		// Clean up
+		if lc.db != nil {
+			sqlDB, err := lc.db.DB()
+			if err == nil {
+				sqlDB.Close()
+			}
+		}
+	})
+
+	// Test case 2: Failed connection due to invalid connection string
+	t.Run("FailedConnectionInvalidString", func(t *testing.T) {
+		// Create a new lifeCycle instance
+		lc := &lifeCycle{}
+
+		// Create invalid client options
+		opts := &types.ClientOpts{
+			ConnectionString: "host=nonexistent-host port=5432 user=invalid dbname=nonexistent",
+			Type:             "postgres",
+		}
+
+		// Attempt to connect to the database
+		err := lc.Connect(opts)
+
+		// Verify that the connection failed
+		assert.Error(t, err, "Connect should return an error with invalid connection string")
+
+		// Verify that the database connection is nil
+		assert.Nil(t, lc.db, "Database connection should be nil after failed connection")
+	})
+
+	// Test case 3: Failed connection due to unsupported database type
+	t.Run("FailedConnectionUnsupportedType", func(t *testing.T) {
+		// Create a new lifeCycle instance
+		lc := &lifeCycle{}
+
+		// Create client options with unsupported type
+		opts := &types.ClientOpts{
+			ConnectionString: "host=localhost port=5432 user=postgres dbname=postgres",
+			Type:             "unsupported-db-type",
+		}
+
+		// Attempt to connect to the database
+		err := lc.Connect(opts)
+
+		// Verify that the connection failed
+		assert.Error(t, err, "Connect should return an error with unsupported database type")
+		assert.Contains(t, err.Error(), "unsupported", "Error should mention unsupported type")
+
+		// Verify that the database connection is nil
+		assert.Nil(t, lc.db, "Database connection should be nil after failed connection")
+	})
+
+	// Test case 4: Failed connection due to nil options
+	t.Run("FailedConnectionNilOptions", func(t *testing.T) {
+		// Create a new lifeCycle instance
+		lc := &lifeCycle{}
+
+		// Attempt to connect to the database with nil options
+		err := lc.Connect(nil)
+
+		// Verify that the connection failed
+		assert.Error(t, err, "Connect should return an error with nil options")
+
+		// Verify that the database connection is nil
+		assert.Nil(t, lc.db, "Database connection should be nil after failed connection")
+	})
+
+	// Test case 5: Failed connection due to empty connection string
+	t.Run("FailedConnectionEmptyString", func(t *testing.T) {
+		// Create a new lifeCycle instance
+		lc := &lifeCycle{}
+
+		// Create client options with empty connection string
+		opts := &types.ClientOpts{
+			ConnectionString: "",
+			Type:             "postgres",
+		}
+
+		// Attempt to connect to the database
+		err := lc.Connect(opts)
+
+		// Verify that the connection failed
+		assert.Error(t, err, "Connect should return an error with empty connection string")
+
+		// Verify that the database connection is nil
+		assert.Nil(t, lc.db, "Database connection should be nil after failed connection")
+	})
+}
