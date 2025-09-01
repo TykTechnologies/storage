@@ -95,22 +95,6 @@ func getCollectionName(result interface{}) (string, bool) {
 		}
 	}
 
-	// If we have a TableNameValue field, use that
-	if resultType.Kind() == reflect.Ptr && resultValue.Elem().Kind() == reflect.Struct {
-		// For pointer to struct, check the struct it points to
-		elemValue := resultValue.Elem()
-		tableNameField := elemValue.FieldByName("TableNameValue")
-		if tableNameField.IsValid() && tableNameField.Kind() == reflect.String && tableNameField.String() != "" {
-			return tableNameField.String(), true
-		}
-	} else if resultType.Kind() == reflect.Struct {
-		// For struct value, check directly
-		tableNameField := resultValue.FieldByName("TableNameValue")
-		if tableNameField.IsValid() && tableNameField.Kind() == reflect.String && tableNameField.String() != "" {
-			return tableNameField.String(), true
-		}
-	}
-
 	// No collection name found
 	return "", false
 }
