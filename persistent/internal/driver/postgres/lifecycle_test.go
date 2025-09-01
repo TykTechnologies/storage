@@ -5,6 +5,7 @@ package postgres
 
 import (
 	"context"
+	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/utils"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -94,15 +95,8 @@ func TestLifeCycleConnect(t *testing.T) {
 		// Create a new lifeCycle instance
 		lc := &lifeCycle{}
 
-		// Create valid client options
-		// Using environment variable for connection string if available
-		connStr := os.Getenv("POSTGRES_TEST_DSN")
-		if connStr == "" {
-			connStr = getConnStr()
-		}
-
 		opts := &types.ClientOpts{
-			ConnectionString: connStr,
+			ConnectionString: getConnStr(),
 			Type:             "postgres",
 		}
 
