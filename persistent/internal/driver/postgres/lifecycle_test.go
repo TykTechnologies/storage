@@ -87,6 +87,21 @@ func TestPing(t *testing.T) {
 		assert.Error(t, err, "Ping should return an error when the context is nil")
 		assert.Contains(t, err.Error(), "context", "Error should mention context issue")
 	})
+
+	t.Run("Ping with closed connection", func(t *testing.T) {
+		// Create a driver instance
+		driver, ctx := setupTest(t)
+
+		// Explicitly close the session to make d.db nil
+		err := driver.Close()
+		assert.NoError(t, err, "Failed to close the driver session")
+
+		// Now attempt to ping with the closed session
+		err = driver.Ping(ctx)
+
+		// Verify that the correct error is returned
+		assert.Error(t, err, "Ping should return an error when session is closed")
+	})
 }
 
 func TestLifeCycleConnect(t *testing.T) {
@@ -97,7 +112,7 @@ func TestLifeCycleConnect(t *testing.T) {
 
 		opts := &types.ClientOpts{
 			ConnectionString: getConnStr(),
-			Type:             "postgres",
+			Type:             "postgresDBType",
 		}
 
 		// Connect to the database
@@ -178,5 +193,22 @@ func TestLifeCycleConnect(t *testing.T) {
 
 		// Verify that the database connection is nil
 		assert.Nil(t, lc.db, "Database connection should be nil after failed connection")
+	})
+}
+
+func TestDropDatabase(t *testing.T) {
+	t.Run("connection is nil", func(t *testing.T) {
+		driver, _ := setupTest(t)
+		driver.Close()
+		err := driver.DropDatabase(context.Background())
+		assert.Error(t, err)
+	})
+
+	t.Run("postgres no drop", func(t *testing.T) {
+		driver, _ := setupTest(t)
+
+		err := driver.DropDatabase(context.Background())
+		assert.Nil(t, driver.db)
+		assert.Error(t, err)
 	})
 }

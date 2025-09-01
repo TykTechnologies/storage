@@ -772,7 +772,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 	// Test case 1: $set operator
 	t.Run("SetOperator", func(t *testing.T) {
 		// Create a test object
-		tableName := "test_update_set"
+		tableName := "test_update"
 		id := model.NewObjectID()
 		obj := createTestObject(tableName, id, "Original Name", 10, true)
 		defer cleanupTestData(obj.TableName())
@@ -811,7 +811,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 	// Test case 2: $inc operator
 	t.Run("IncOperator", func(t *testing.T) {
 		// Create a test object
-		tableName := "test_update_inc"
+		tableName := "test_update"
 		id := model.NewObjectID()
 		obj := createTestObject(tableName, id, "Test Inc", 10, true)
 		defer cleanupTestData(obj.TableName())
@@ -843,7 +843,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 	// Test case 3: Multiple operators
 	t.Run("MultipleOperators", func(t *testing.T) {
 		// Create a test object
-		tableName := "test_update_multiple"
+		tableName := "test_update"
 		id := model.NewObjectID()
 		obj := createTestObject(tableName, id, "Original Multiple", 10, true)
 		defer cleanupTestData(obj.TableName())
@@ -891,6 +891,164 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 
 		// Verify the DB object is unchanged
 		assert.Equal(t, db, updatedDB, "DB object should be unchanged for empty update")
+	})
+
+	t.Run("MultOperator", func(t *testing.T) {
+		// Create a test object
+		tableName := "test_update"
+		id := model.NewObjectID()
+		obj := createTestObject(tableName, id, "Test Inc", 10, true)
+		defer cleanupTestData(obj.TableName())
+
+		// Create an update with $mult operator
+		update := model.DBM{
+			"$mul": model.DBM{
+				"value": 3, // multiply by 3
+			},
+		}
+
+		// Apply the update operators
+		db := driver.db.WithContext(ctx).Table(tableName)
+		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
+		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
+
+		// Execute the update
+		err = updatedDB.Where("id = ?", id).Updates(updates).Error
+		require.NoError(t, err, "Update operation should not return an error")
+
+		// Verify the object was updated
+		var updatedObj TestObject
+		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		require.NoError(t, err, "Failed to retrieve updated object")
+
+		assert.Equal(t, 30, updatedObj.Value, "Value should be multiplied by 3")
+	})
+
+	t.Run("MinOperator", func(t *testing.T) {
+		// Create a test object
+		tableName := "test_update"
+		id := model.NewObjectID()
+		obj := createTestObject(tableName, id, "Test Inc", 10, true)
+		defer cleanupTestData(obj.TableName())
+
+		// Create an update with $min operator
+		update := model.DBM{
+			"$min": model.DBM{
+				"value": 3, // check min val
+			},
+		}
+
+		// Apply the update operators
+		db := driver.db.WithContext(ctx).Table(tableName)
+		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
+		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
+
+		// Execute the update
+		err = updatedDB.Where("id = ?", id).Updates(updates).Error
+		require.NoError(t, err, "Update operation should not return an error")
+
+		// Verify the object was updated
+		var updatedObj TestObject
+		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		require.NoError(t, err, "Failed to retrieve updated object")
+
+		assert.Equal(t, 3, updatedObj.Value, "Value should be 3")
+	})
+
+	t.Run("MaxOperator", func(t *testing.T) {
+		// Create a test object
+		tableName := "test_update"
+		id := model.NewObjectID()
+		obj := createTestObject(tableName, id, "Test Inc", 10, true)
+		defer cleanupTestData(obj.TableName())
+
+		// Create an update with $min operator
+		update := model.DBM{
+			"$max": model.DBM{
+				"value": 300, // set max value
+			},
+		}
+
+		// Apply the update operators
+		db := driver.db.WithContext(ctx).Table(tableName)
+		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
+		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
+
+		// Execute the update
+		err = updatedDB.Where("id = ?", id).Updates(updates).Error
+		require.NoError(t, err, "Update operation should not return an error")
+
+		// Verify the object was updated
+		var updatedObj TestObject
+		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		require.NoError(t, err, "Failed to retrieve updated object")
+
+		assert.Equal(t, 300, updatedObj.Value, "Value should be 300")
+	})
+
+	t.Run("UnsetOperator", func(t *testing.T) {
+		// Create and insert a test object
+		tableName := "test_update"
+		id := model.NewObjectID()
+		obj := createTestObject(tableName, id, "Test Inc", 10, true)
+		defer cleanupTestData(obj.TableName())
+
+		// Create an update with $unset operator using model.DBM
+		dbmMap := model.DBM{
+			"name": 1, // The value doesn't matter for $unset, only the field name is used
+		}
+
+		update := model.DBM{
+			"$unset": dbmMap, // Using model.DBM directly
+		}
+
+		// Apply the update operators
+		db := driver.db.WithContext(ctx).Table(tableName)
+		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
+		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
+
+		// Execute the update
+		err = updatedDB.Where("id = ?", id).Updates(updates).Error
+		require.NoError(t, err, "Update operation should not return an error")
+
+		// Verify the object was updated
+		var updatedObj TestObject
+		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		require.NoError(t, err, "Failed to retrieve updated object")
+
+		assert.Equal(t, "", updatedObj.Name, "Name should be empty")
+	})
+
+	t.Run("CurrentDate", func(t *testing.T) {
+		// Create and insert a test object
+		tableName := "test_update"
+		pastTime := time.Now().Add(-24 * time.Hour)
+		id := model.NewObjectID()
+		obj := createTestObject(tableName, id, "Test Inc", 10, true)
+		defer cleanupTestData(obj.TableName())
+
+		dbmMap := model.DBM{
+			"created_at": true,
+		}
+
+		update := model.DBM{
+			"$currentDate": dbmMap, // Using model.DBM directly
+		}
+
+		// Apply the update operators
+		db := driver.db.WithContext(ctx).Table(tableName)
+		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
+		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
+
+		// Execute the update
+		err = updatedDB.Where("id = ?", id).Updates(updates).Error
+		require.NoError(t, err, "Update operation should not return an error")
+
+		// Verify the object was updated
+		var updatedObj TestObject
+		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		require.NoError(t, err, "Failed to retrieve updated object")
+		assert.True(t, updatedObj.CreatedAt.After(pastTime), "CreatedAt should be updated to a newer time")
 	})
 
 	// Test case 5: Unsupported operator

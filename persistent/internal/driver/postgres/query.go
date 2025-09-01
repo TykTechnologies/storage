@@ -171,11 +171,7 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 		switch operator {
 		case "$set":
 			// $set operator: directly set field values
-			if setMap, ok := fields.(map[string]interface{}); ok && len(setMap) > 0 {
-				for field, value := range setMap {
-					updateMap[field] = value
-				}
-			} else if setMap, ok := fields.(model.DBM); ok && len(setMap) > 0 {
+			if setMap, ok := fields.(model.DBM); ok && len(setMap) > 0 {
 				// Handle model.DBM type which is common in the codebase
 				for field, value := range setMap {
 					updateMap[field] = value
@@ -184,12 +180,7 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 
 		case "$inc":
 			// $inc operator: increment field values
-			if incMap, ok := fields.(map[string]interface{}); ok {
-				for field, value := range incMap {
-					// Store the expression in the update map
-					updateMap[field] = gorm.Expr(fmt.Sprintf("%s + ?", field), value)
-				}
-			} else if incMap, ok := fields.(model.DBM); ok {
+			if incMap, ok := fields.(model.DBM); ok {
 				for field, value := range incMap {
 					updateMap[field] = gorm.Expr(fmt.Sprintf("%s + ?", field), value)
 				}
@@ -197,12 +188,7 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 
 		case "$mul":
 			// $mul operator: multiply field values
-			if mulMap, ok := fields.(map[string]interface{}); ok {
-				for field, value := range mulMap {
-					// Store the expression in the update map
-					updateMap[field] = gorm.Expr(fmt.Sprintf("%s * ?", field), value)
-				}
-			} else if mulMap, ok := fields.(model.DBM); ok {
+			if mulMap, ok := fields.(model.DBM); ok {
 				for field, value := range mulMap {
 					updateMap[field] = gorm.Expr(fmt.Sprintf("%s * ?", field), value)
 				}
@@ -210,11 +196,7 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 
 		case "$unset":
 			// $unset operator: set fields to NULL
-			if unsetMap, ok := fields.(map[string]interface{}); ok {
-				for field := range unsetMap {
-					updateMap[field] = nil
-				}
-			} else if unsetMap, ok := fields.(model.DBM); ok {
+			if unsetMap, ok := fields.(model.DBM); ok {
 				for field := range unsetMap {
 					updateMap[field] = nil
 				}
@@ -222,11 +204,7 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 
 		case "$min":
 			// $min operator: update field if new value is less than current value
-			if minMap, ok := fields.(map[string]interface{}); ok {
-				for field, value := range minMap {
-					updateMap[field] = gorm.Expr(fmt.Sprintf("CASE WHEN ? < %s THEN ? ELSE %s END", field, field), value, value)
-				}
-			} else if minMap, ok := fields.(model.DBM); ok {
+			if minMap, ok := fields.(model.DBM); ok {
 				for field, value := range minMap {
 					updateMap[field] = gorm.Expr(fmt.Sprintf("CASE WHEN ? < %s THEN ? ELSE %s END", field, field), value, value)
 				}
@@ -234,11 +212,7 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 
 		case "$max":
 			// $max operator: update field if new value is greater than current value
-			if maxMap, ok := fields.(map[string]interface{}); ok {
-				for field, value := range maxMap {
-					updateMap[field] = gorm.Expr(fmt.Sprintf("CASE WHEN ? > %s THEN ? ELSE %s END", field, field), value, value)
-				}
-			} else if maxMap, ok := fields.(model.DBM); ok {
+			if maxMap, ok := fields.(model.DBM); ok {
 				for field, value := range maxMap {
 					updateMap[field] = gorm.Expr(fmt.Sprintf("CASE WHEN ? > %s THEN ? ELSE %s END", field, field), value, value)
 				}
@@ -246,11 +220,7 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 
 		case "$currentDate":
 			// $currentDate operator: set fields to current date/time
-			if dateMap, ok := fields.(map[string]interface{}); ok {
-				for field := range dateMap {
-					updateMap[field] = gorm.Expr("CURRENT_TIMESTAMP")
-				}
-			} else if dateMap, ok := fields.(model.DBM); ok {
+			if dateMap, ok := fields.(model.DBM); ok {
 				for field := range dateMap {
 					updateMap[field] = gorm.Expr("CURRENT_TIMESTAMP")
 				}
