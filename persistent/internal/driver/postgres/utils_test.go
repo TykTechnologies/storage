@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+type ValueReceiver struct{}
+
+func (ValueReceiver) TableName() string {
+	return "value_receiver_table"
+}
+
 func TestObjectToMap(t *testing.T) {
 	// Test case 1: Convert a simple struct to map
 	t.Run("ConvertSimpleStruct", func(t *testing.T) {
@@ -164,6 +170,21 @@ func TestObjectToMap(t *testing.T) {
 		result, _ := objectToMap(nil)
 		assert.Empty(t, result, "Result should be empty for nil value")
 	})
+
+	// Test case 7: Convert a struct with unsupported types (Marshal should fail)
+	t.Run("MarshalFailsOnUnsupportedType", func(t *testing.T) {
+		type BadStruct struct {
+			Ch chan int `json:"ch"`
+		}
+
+		obj := BadStruct{
+			Ch: make(chan int),
+		}
+
+		result, err := objectToMap(obj)
+		assert.Error(t, err, "Converting a struct with unsupported types should return an error")
+		assert.Nil(t, result, "Result should be nil when Marshal fails")
+	})
 }
 
 func TestGetCollectionName(t *testing.T) {
@@ -236,6 +257,34 @@ func TestGetCollectionName(t *testing.T) {
 		}
 		if name != "pointer_table_name" {
 			t.Errorf("Expected collection name 'pointer_table_name', got '%s'", name)
+		}
+	})
+
+	// Test case 5: Pointer to struct with value-receiver TableName
+	t.Run("PointerToStructWithValueReceiver", func(t *testing.T) {
+		obj := &ValueReceiver{} // pointer to a type that defines TableName on value receiver
+
+		name, ok := getCollectionName(obj)
+		if !ok {
+			t.Error("Expected to get collection name from pointer to value-receiver type, but got ok=false")
+		}
+		if name != "value_receiver_table" {
+			t.Errorf("Expected collection name 'value_receiver_table', got '%s'", name)
+		}
+	})
+
+	t.Run("PointerToStructWithCollectionField", func(t *testing.T) {
+		type CollectionStruct struct {
+			Collection string
+		}
+		obj := &CollectionStruct{Collection: "collection_from_field"}
+
+		name, ok := getCollectionName(obj)
+		if !ok {
+			t.Error("Expected to get collection name from Collection field, but got ok=false")
+		}
+		if name != "collection_from_field" {
+			t.Errorf("Expected collection name 'collection_from_field', got '%s'", name)
 		}
 	})
 }
