@@ -20,81 +20,42 @@ func objectToMap(obj interface{}) (map[string]interface{}, error) {
 
 // Helper function to get collection name from a struct type
 func getCollectionName(result interface{}) (string, bool) {
-	// Check if result is nil
 	if result == nil {
 		return "", false
 	}
 
-	// Get the value and type using reflection
-	resultValue := reflect.ValueOf(result)
-	resultType := resultValue.Type()
+	val := reflect.ValueOf(result)
 
-	// First, try to call TableName() method regardless of whether it's a pointer or value
-	// This handles both value receivers and pointer receivers
-	tableNameMethod := resultValue.MethodByName("TableName")
-	if tableNameMethod.IsValid() && tableNameMethod.Type().NumIn() == 0 && tableNameMethod.Type().NumOut() == 1 && tableNameMethod.Type().Out(0).Kind() == reflect.String {
-		returnValues := tableNameMethod.Call(nil)
-		return returnValues[0].String(), true
+	// unwrap pointer(s)
+	for val.Kind() == reflect.Ptr && !val.IsNil() {
+		val = val.Elem()
 	}
 
-	// If the object is not a pointer but has a pointer method, try that
-	if resultType.Kind() != reflect.Ptr {
-		// Create a pointer to the value and check if it has TableName method
-		ptrValue := reflect.New(resultType)
-		ptrValue.Elem().Set(resultValue)
+	// helper: try method by name
+	tryMethod := func(v reflect.Value, name string) (string, bool) {
+		m := v.MethodByName(name)
+		if !m.IsValid() || m.Type().NumIn() != 0 || m.Type().NumOut() != 1 || m.Type().Out(0).Kind() != reflect.String {
+			return "", false
+		}
+		return m.Call(nil)[0].String(), true
+	}
 
-		tableNameMethod := ptrValue.MethodByName("TableName")
-		if tableNameMethod.IsValid() && tableNameMethod.Type().NumIn() == 0 && tableNameMethod.Type().NumOut() == 1 && tableNameMethod.Type().Out(0).Kind() == reflect.String {
-			returnValues := tableNameMethod.Call(nil)
-			return returnValues[0].String(), true
+	// try methods in order
+	for _, method := range []string{"TableName", "CollectionName", "GetCollection"} {
+		if name, ok := tryMethod(reflect.ValueOf(result), method); ok {
+			return name, true
+		}
+		if name, ok := tryMethod(val, method); ok {
+			return name, true
 		}
 	}
 
-	// If the object is a pointer, also check the value it points to
-	if resultType.Kind() == reflect.Ptr {
-		// Get the element the pointer points to
-		elemValue := resultValue.Elem()
-		if elemValue.IsValid() {
-			// Check if the element has a TableName method
-			tableNameMethod := elemValue.MethodByName("TableName")
-			if tableNameMethod.IsValid() && tableNameMethod.Type().NumIn() == 0 && tableNameMethod.Type().NumOut() == 1 && tableNameMethod.Type().Out(0).Kind() == reflect.String {
-				returnValues := tableNameMethod.Call(nil)
-				return returnValues[0].String(), true
-			}
+	// check for "Collection" field in struct
+	if val.Kind() == reflect.Struct {
+		if f := val.FieldByName("Collection"); f.IsValid() && f.Kind() == reflect.String {
+			return f.String(), true
 		}
 	}
 
-	// Check for other methods that might provide a collection name
-	// Try CollectionName method
-	collNameMethod := resultValue.MethodByName("CollectionName")
-	if collNameMethod.IsValid() && collNameMethod.Type().NumIn() == 0 && collNameMethod.Type().NumOut() == 1 && collNameMethod.Type().Out(0).Kind() == reflect.String {
-		returnValues := collNameMethod.Call(nil)
-		return returnValues[0].String(), true
-	}
-
-	// Try GetCollection method
-	getCollMethod := resultValue.MethodByName("GetCollection")
-	if getCollMethod.IsValid() && getCollMethod.Type().NumIn() == 0 && getCollMethod.Type().NumOut() == 1 && getCollMethod.Type().Out(0).Kind() == reflect.String {
-		returnValues := getCollMethod.Call(nil)
-		return returnValues[0].String(), true
-	}
-
-	// If we have a struct, check for a Collection field
-	if resultType.Kind() == reflect.Ptr && resultValue.Elem().Kind() == reflect.Struct {
-		// For pointer to struct, check the struct it points to
-		elemValue := resultValue.Elem()
-		collField := elemValue.FieldByName("Collection")
-		if collField.IsValid() && collField.Kind() == reflect.String {
-			return collField.String(), true
-		}
-	} else if resultType.Kind() == reflect.Struct {
-		// For struct value, check directly
-		collField := resultValue.FieldByName("Collection")
-		if collField.IsValid() && collField.Kind() == reflect.String {
-			return collField.String(), true
-		}
-	}
-
-	// No collection name found
 	return "", false
 }

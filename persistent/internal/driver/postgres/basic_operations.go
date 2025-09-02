@@ -195,7 +195,9 @@ func (d *driver) insertDataIntoTempTable(tx *gorm.DB, tempTableName string, obje
 			idValue = fmt.Sprintf("%v", id)
 		} else if id := obj.GetObjectID(); id != "" {
 			idValue = id.Hex()
-		} else {
+		}
+
+		if idValue == "" {
 			continue // Skip objects without ID
 		}
 
@@ -205,11 +207,8 @@ func (d *driver) insertDataIntoTempTable(tx *gorm.DB, tempTableName string, obje
 		}
 
 		for field := range fields {
-			if val, ok := data[field]; ok {
-				insertData[field] = val
-			} else {
-				insertData[field] = nil
-			}
+			val, _ := data[field] // ignore ok, always assign
+			insertData[field] = val
 		}
 
 		// Insert into temporary table
@@ -528,13 +527,16 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 		}
 
 		// Apply update fields to the new row
-		if setMap, ok := update["$set"].(map[string]interface{}); ok {
-			for k, v := range setMap {
-				setField(newRow, k, v)
-			}
-		} else if setMap, ok := update["$set"].(model.DBM); ok {
-			for k, v := range setMap {
-				setField(newRow, k, v)
+		if raw, ok := update["$set"]; ok {
+			switch setMap := raw.(type) {
+			case map[string]interface{}:
+				for k, v := range setMap {
+					setField(newRow, k, v)
+				}
+			case model.DBM:
+				for k, v := range setMap {
+					setField(newRow, k, v)
+				}
 			}
 		}
 
