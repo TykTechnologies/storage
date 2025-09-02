@@ -47,7 +47,7 @@ func TestUpdate(t *testing.T) {
 
 	obj.Name = "Updated Name"
 	obj.Value = 100
-	
+
 	err = driver.Update(ctx, obj)
 	assert.NoError(t, err)
 
@@ -80,6 +80,8 @@ func TestDelete(t *testing.T) {
 	assert.Equal(t, obj.Name, result.Name)
 	assert.Equal(t, obj.Value, result.Value)
 
+	err = driver.Delete(ctx, obj, model.DBM{"id": obj.GetObjectID()}, model.DBM{"name": "the-name"})
+	assert.Error(t, err, "Delete operation errors on multiple filters")
 	// 2. Delete the object
 	err = driver.Delete(ctx, obj)
 	assert.NoError(t, err, "Delete operation should succeed")
