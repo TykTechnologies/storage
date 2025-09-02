@@ -6,6 +6,7 @@ package postgres
 import (
 	"database/sql"
 	"fmt"
+	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1504,4 +1505,92 @@ func TestTranslateQuery(t *testing.T) {
 
 		assert.Equal(t, int64(2), count, "Count should return expected number")
 	})
+}
+
+func TestTranslateQueryWithShardingEnabled(t *testing.T) {
+	// Setup test database connection
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	// Enable sharding
+	driver.TableSharding = true
+	driver.options = &types.ClientOpts{}
+
+	// Base table name
+	baseTableName := "test_objects"
+
+	// Create date range for sharding
+	now := time.Now()
+	startDate := now.Add(-3 * 24 * time.Hour) // 3 days ago
+	endDate := now                            // Today
+
+	// Create sharded tables for each day in the range
+	for i := 0; i <= 3; i++ {
+		date := startDate.Add(time.Duration(i*24) * time.Hour)
+		shardTableName := baseTableName + "_" + date.Format("20060102")
+
+		// Create the sharded table
+		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf(`
+            CREATE TABLE IF NOT EXISTS %s (
+                id TEXT PRIMARY KEY,
+                name TEXT,
+                value INTEGER,
+                category TEXT,
+                created_at TIMESTAMP
+            )
+        `, shardTableName)).Error
+		require.NoError(t, err, "Failed to create sharded table")
+
+		// Insert test data into the sharded table
+		for j := 1; j <= 3; j++ {
+			id := model.NewObjectID()
+			err := driver.db.WithContext(ctx).Exec(fmt.Sprintf(`
+                INSERT INTO %s (id, name, value, category, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            `, shardTableName), id.Hex(), fmt.Sprintf("Shard %d-%d", i, j), j*10,
+				fmt.Sprintf("Category %d", j), date).Error
+			require.NoError(t, err, "Failed to insert test data")
+		}
+	}
+
+	// Create a query with date sharding
+	query := model.DBM{
+		"_date_sharding": "created_at",
+		"created_at": model.DBM{
+			"$gte": startDate,
+			"$lte": endDate,
+		},
+		"category": "Category 1",
+	}
+
+	// Create a base DB query
+	db := driver.db.WithContext(ctx).Table(baseTableName)
+
+	// Apply the translateQuery function
+	testObj := &TestObject{}
+	translatedDB := driver.translateQuery(db, query, testObj)
+
+	// Execute the query and check the result count
+	var results []TestObject
+	err := translatedDB.Find(&results).Error
+	require.NoError(t, err, "Query execution should not fail")
+
+	// We should have 4 results (one from each day's shard for Category 1)
+	assert.Equal(t, 4, len(results), "Query should return data from all shards")
+
+	// Verify the results are from different shards
+	dateMap := make(map[string]bool)
+	for _, result := range results {
+		dateStr := result.CreatedAt.Format("2006-01-02")
+		dateMap[dateStr] = true
+	}
+	assert.Equal(t, 4, len(dateMap), "Results should come from 4 different dates/shards")
+
+	// Clean up the sharded tables
+	for i := 0; i <= 3; i++ {
+		date := startDate.Add(time.Duration(i*24) * time.Hour)
+		shardTableName := baseTableName + "_" + date.Format("20060102")
+		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", shardTableName)).Error
+		require.NoError(t, err, "Failed to drop sharded table")
+	}
 }
