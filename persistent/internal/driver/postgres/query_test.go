@@ -637,6 +637,192 @@ func TestTranslateAggregationPipeline(t *testing.T) {
 	})
 }
 
+func TestTranslateAggregationPipelineGroup(t *testing.T) {
+	// Define test cases
+	testCases := []struct {
+		name             string
+		tableName        string
+		pipeline         []model.DBM
+		expectedParts    []string // Parts that must be in the query
+		expectedNotParts []string // Parts that must not be in the query
+		expectedArgCount int      // Number of expected arguments
+		expectedArgs     []interface{}
+		expectedError    bool
+	}{
+		{
+			name:      "Group by Single Field",
+			tableName: "test_table",
+			pipeline: []model.DBM{
+				{
+					"$group": model.DBM{
+						"_id": "$category",
+						"count": model.DBM{
+							"$sum": 1,
+						},
+					},
+				},
+			},
+			expectedParts: []string{
+				"SELECT", "category", "SUM(*) AS count", "FROM test_table", "GROUP BY category",
+			},
+			expectedArgCount: 0,
+			expectedError:    false,
+		},
+		{
+			name:      "Group by Multiple Fields",
+			tableName: "test_table",
+			pipeline: []model.DBM{
+				{
+					"$group": model.DBM{
+						"_id": model.DBM{
+							"category": "$category",
+							"status":   "$status",
+						},
+						"total": model.DBM{
+							"$sum": "$amount",
+						},
+						"avg_value": model.DBM{
+							"$avg": "$value",
+						},
+					},
+				},
+			},
+			expectedParts: []string{
+				"SELECT", "category", "status", "SUM(amount) AS total", "AVG(value) AS avg_value",
+				"FROM test_table", "GROUP BY",
+			},
+			expectedArgCount: 0,
+			expectedError:    false,
+		},
+		{
+			name:      "Group with Multiple Aggregation Functions",
+			tableName: "test_table",
+			pipeline: []model.DBM{
+				{
+					"$group": model.DBM{
+						"_id": "$category",
+						"count": model.DBM{
+							"$sum": 1,
+						},
+						"total": model.DBM{
+							"$sum": "$amount",
+						},
+						"min_value": model.DBM{
+							"$min": "$value",
+						},
+						"max_value": model.DBM{
+							"$max": "$value",
+						},
+						"avg_value": model.DBM{
+							"$avg": "$value",
+						},
+					},
+				},
+			},
+			expectedParts: []string{
+				"SELECT", "category", "SUM(*) AS count", "SUM(amount) AS total",
+				"MIN(value) AS min_value", "MAX(value) AS max_value", "AVG(value) AS avg_value",
+				"FROM test_table", "GROUP BY category",
+			},
+			expectedArgCount: 0,
+			expectedError:    false,
+		},
+		{
+			name:      "Group All Documents (null _id)",
+			tableName: "test_table",
+			pipeline: []model.DBM{
+				{
+					"$group": model.DBM{
+						"_id": nil,
+						"total_count": model.DBM{
+							"$sum": 1,
+						},
+						"grand_total": model.DBM{
+							"$sum": "$amount",
+						},
+					},
+				},
+			},
+			expectedParts: []string{
+				"SELECT", "SUM(*) AS total_count", "SUM(amount) AS grand_total", "FROM test_table",
+			},
+			expectedNotParts: []string{
+				"GROUP BY", // Should not have GROUP BY for null _id
+			},
+			expectedArgCount: 0,
+			expectedError:    false,
+		},
+		{
+			name:      "Complex Pipeline with Match, Group, and Sort",
+			tableName: "test_table",
+			pipeline: []model.DBM{
+				{
+					"$match": model.DBM{
+						"status": "active",
+					},
+				},
+				{
+					"$group": model.DBM{
+						"_id": "$category",
+						"count": model.DBM{
+							"$sum": 1,
+						},
+						"total": model.DBM{
+							"$sum": "$amount",
+						},
+					},
+				},
+				{
+					"$sort": model.DBM{
+						"total": -1,
+					},
+				},
+			},
+			expectedParts: []string{
+				"SELECT", "category", "SUM(*) AS count", "SUM(amount) AS total",
+				"FROM test_table", "WHERE status = ?", "GROUP BY category", "ORDER BY total DESC",
+			},
+			expectedArgCount: 1,
+			expectedArgs:     []interface{}{"active"},
+			expectedError:    false,
+		},
+	}
+
+	// Run test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			query, args, err := translateAggregationPipeline(tc.tableName, tc.pipeline)
+
+			if tc.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+
+				// Check that all expected parts are in the query
+				for _, part := range tc.expectedParts {
+					assert.Contains(t, query, part, "Query should contain: %s", part)
+				}
+
+				// Check that all parts that should not be in the query are indeed not there
+				for _, part := range tc.expectedNotParts {
+					assert.NotContains(t, query, part, "Query should not contain: %s", part)
+				}
+
+				// Check argument count
+				assert.Equal(t, tc.expectedArgCount, len(args), "Argument count should match")
+
+				// Check specific argument values if provided
+				for i, expectedArg := range tc.expectedArgs {
+					assert.Equal(t, expectedArg, args[i], "Argument at index %d should match", i)
+				}
+
+				// Print the actual query for debugging
+				t.Logf("Generated query: %s", query)
+			}
+		})
+	}
+}
+
 func TestBuildWhereClause(t *testing.T) {
 	// Test case 1: Simple equality filter
 	t.Run("SimpleEqualityFilter", func(t *testing.T) {
@@ -743,6 +929,7 @@ func TestBuildWhereClause(t *testing.T) {
 func TestApplyMongoUpdateOperators(t *testing.T) {
 	driver, ctx := setupTest(t)
 	defer teardownTest(t, driver)
+	tableName := "test_update"
 
 	// Helper function to clean up test data
 	cleanupTestData := func(tableName string) {
@@ -769,10 +956,19 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		return obj
 	}
 
-	// Test case 1: $set operator
+	t.Run("nil database", func(t *testing.T) {
+		update := model.DBM{
+			"$set": model.DBM{
+				"field": "value",
+			},
+		}
+
+		_, _, err := driver.applyMongoUpdateOperators(nil, update)
+		assert.Error(t, err, "applyMongoUpdateOperators should return an error with nil database")
+	})
 	t.Run("SetOperator", func(t *testing.T) {
 		// Create a test object
-		tableName := "test_update"
+
 		id := model.NewObjectID()
 		obj := createTestObject(tableName, id, "Original Name", 10, true)
 		defer cleanupTestData(obj.TableName())
@@ -808,10 +1004,8 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		assert.True(t, updatedObj.Active, "Active should remain unchanged")
 	})
 
-	// Test case 2: $inc operator
 	t.Run("IncOperator", func(t *testing.T) {
 		// Create a test object
-		tableName := "test_update"
 		id := model.NewObjectID()
 		obj := createTestObject(tableName, id, "Test Inc", 10, true)
 		defer cleanupTestData(obj.TableName())
@@ -840,10 +1034,8 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		assert.Equal(t, 15, updatedObj.Value, "Value should be incremented by 5")
 	})
 
-	// Test case 3: Multiple operators
 	t.Run("MultipleOperators", func(t *testing.T) {
 		// Create a test object
-		tableName := "test_update"
 		id := model.NewObjectID()
 		obj := createTestObject(tableName, id, "Original Multiple", 10, true)
 		defer cleanupTestData(obj.TableName())
@@ -876,7 +1068,6 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		assert.Equal(t, 25, updatedObj.Value, "Value should be incremented by 15")
 	})
 
-	// Test case 4: Empty update
 	t.Run("EmptyUpdate", func(t *testing.T) {
 		// Create an empty update
 		update := model.DBM{}
@@ -895,7 +1086,6 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 
 	t.Run("MultOperator", func(t *testing.T) {
 		// Create a test object
-		tableName := "test_update"
 		id := model.NewObjectID()
 		obj := createTestObject(tableName, id, "Test Inc", 10, true)
 		defer cleanupTestData(obj.TableName())
@@ -926,7 +1116,6 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 
 	t.Run("MinOperator", func(t *testing.T) {
 		// Create a test object
-		tableName := "test_update"
 		id := model.NewObjectID()
 		obj := createTestObject(tableName, id, "Test Inc", 10, true)
 		defer cleanupTestData(obj.TableName())
@@ -957,7 +1146,6 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 
 	t.Run("MaxOperator", func(t *testing.T) {
 		// Create a test object
-		tableName := "test_update"
 		id := model.NewObjectID()
 		obj := createTestObject(tableName, id, "Test Inc", 10, true)
 		defer cleanupTestData(obj.TableName())
@@ -988,7 +1176,6 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 
 	t.Run("UnsetOperator", func(t *testing.T) {
 		// Create and insert a test object
-		tableName := "test_update"
 		id := model.NewObjectID()
 		obj := createTestObject(tableName, id, "Test Inc", 10, true)
 		defer cleanupTestData(obj.TableName())
@@ -1021,7 +1208,6 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 
 	t.Run("CurrentDate", func(t *testing.T) {
 		// Create and insert a test object
-		tableName := "test_update"
 		pastTime := time.Now().Add(-24 * time.Hour)
 		id := model.NewObjectID()
 		obj := createTestObject(tableName, id, "Test Inc", 10, true)
@@ -1051,7 +1237,6 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		assert.True(t, updatedObj.CreatedAt.After(pastTime), "CreatedAt should be updated to a newer time")
 	})
 
-	// Test case 5: Unsupported operator
 	t.Run("UnsupportedOperator", func(t *testing.T) {
 		// Create an update with an unsupported operator
 		update := model.DBM{
