@@ -40,27 +40,7 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 		// For simple indexes with one field, use MongoDB's convention: field_1
 		if len(index.Keys) == 1 && len(index.Keys[0]) == 1 {
 			for field, direction := range index.Keys[0] {
-				dirStr := "1"
-				switch v := direction.(type) {
-				case int:
-					if v < 0 {
-						dirStr = "-1"
-					}
-				case int32:
-					if v < 0 {
-						dirStr = "-1"
-					}
-				case int64:
-					if v < 0 {
-						dirStr = "-1"
-					}
-				case float64:
-					if v < 0 {
-						dirStr = "-1"
-					}
-				case string:
-					dirStr = v
-				}
+				dirStr := getDirectionString(direction)
 				indexName = field + "_" + dirStr
 			}
 		} else {
@@ -68,31 +48,13 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 			parts := []string{}
 			for _, key := range index.Keys {
 				for field, direction := range key {
-					dirStr := "1"
-					switch v := direction.(type) {
-					case int:
-						if v < 0 {
-							dirStr = "-1"
-						}
-					case int32:
-						if v < 0 {
-							dirStr = "-1"
-						}
-					case int64:
-						if v < 0 {
-							dirStr = "-1"
-						}
-					case float64:
-						if v < 0 {
-							dirStr = "-1"
-						}
-					case string:
-						dirStr = v
-					}
+					dirStr := getDirectionString(direction)
 					parts = append(parts, field+"_"+dirStr)
 				}
 			}
+
 			indexName = strings.Join(parts, "_")
+			fmt.Println("\nIndexName:\n", indexName)
 		}
 	}
 
@@ -203,6 +165,29 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 	}
 
 	return nil
+}
+
+// Helper function to get direction string
+func getDirectionString(direction interface{}) string {
+	switch v := direction.(type) {
+	case int:
+		if v < 0 {
+			return "desc"
+		}
+	case int32:
+		if v < 0 {
+			return "desc"
+		}
+	case int64:
+		if v < 0 {
+			return "desc"
+		}
+	case string:
+		return v
+	default:
+		// unknown type: default to "1"
+	}
+	return "asc"
 }
 
 func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.Index, error) {

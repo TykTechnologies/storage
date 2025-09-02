@@ -816,9 +816,6 @@ func TestTranslateAggregationPipelineGroup(t *testing.T) {
 				for i, expectedArg := range tc.expectedArgs {
 					assert.Equal(t, expectedArg, args[i], "Argument at index %d should match", i)
 				}
-
-				// Print the actual query for debugging
-				t.Logf("Generated query: %s", query)
 			}
 		})
 	}
@@ -840,8 +837,6 @@ func TestBuildWhereClause(t *testing.T) {
 		// Check if the generated clause matches any of the possible clauses
 		clauseMatches := false
 		for _, clause := range possibleClauses {
-			t.Logf("Checking clause from func: %s", whereClause)
-			t.Logf("Checking clause: %s", clause)
 			if whereClause == clause {
 				clauseMatches = true
 				break

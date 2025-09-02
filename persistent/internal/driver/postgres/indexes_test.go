@@ -110,10 +110,10 @@ func TestCreateIndex(t *testing.T) {
 	})
 
 	// Test case 2: Create a compound index on multiple fields
-	t.Run("CompoundIndex", func(t *testing.T) {
+	t.Run("CompoundIndexWithName", func(t *testing.T) {
 		// Define the index
 		index := model.Index{
-			Name: "idx_name_value",
+			Name: "idx_compound_name",
 			Keys: []model.DBM{
 				{"name": 1},   // Ascending index on name field
 				{"value": -1}, // Descending index on value field
@@ -131,7 +131,50 @@ func TestCreateIndex(t *testing.T) {
 		// Find our index in the list
 		var foundIndex bool
 		for _, idx := range indexes {
-			if idx.Name == "idx_name_value" {
+			if idx.Name == index.Name {
+				foundIndex = true
+				assert.Equal(t, 2, len(idx.Keys))
+
+				// Check that both fields are in the index
+				var hasName, hasValue bool
+				for _, key := range idx.Keys {
+					if _, ok := key["name"]; ok {
+						hasName = true
+					}
+					if _, ok := key["value"]; ok {
+						hasValue = true
+					}
+				}
+				assert.True(t, hasName, "Index should include 'name' field")
+				assert.True(t, hasValue, "Index should include 'value' field")
+				break
+			}
+		}
+		assert.True(t, foundIndex, "Index was not found")
+	})
+
+	t.Run("CompoundIndexWithoutName", func(t *testing.T) {
+		// Define the index
+		index := model.Index{
+			Name: "",
+			Keys: []model.DBM{
+				{"name": 1},   // Ascending index on name field
+				{"value": -1}, // Descending index on value field
+			},
+		}
+
+		// Create the index
+		err := driver.CreateIndex(ctx, testItem, index)
+		assert.NoError(t, err)
+
+		// Verify the index was created
+		indexes, err := driver.GetIndexes(ctx, testItem)
+		assert.NoError(t, err)
+
+		// Find our index in the list
+		var foundIndex bool
+		for _, idx := range indexes {
+			if idx.Name == "name_asc_value_desc" {
 				foundIndex = true
 				assert.Equal(t, 2, len(idx.Keys))
 
@@ -266,8 +309,7 @@ func TestCreateIndex(t *testing.T) {
 		// Find the index with the generated name
 		found := false
 		for _, idx := range indexes {
-			fmt.Printf("Index: %+v\n", idx.Name)
-			if idx.Name == "name_1" {
+			if idx.Name == "name_asc" {
 				found = true
 				break
 			}
