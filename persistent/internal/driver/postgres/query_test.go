@@ -1480,9 +1480,6 @@ func TestTranslateQuery(t *testing.T) {
 			require.NoError(t, err, "Query execution should not fail")
 
 			assert.Equal(t, tc.expectedCount, len(results), "Query should return expected number of results")
-
-			// For debugging
-			t.Logf("Results: %d", len(results))
 		})
 	}
 

@@ -78,6 +78,37 @@ func TestCreateIndex(t *testing.T) {
 		assert.True(t, foundIndex, "Index was not found")
 	})
 
+	// Test case 1: Create a simple index on a single field
+	t.Run("SimpleIndexDefaultType", func(t *testing.T) {
+		// Define the index
+		index := model.Index{
+			Name: "idx_text_name",
+			Keys: []model.DBM{
+				{"name": float64(1)}, // Ascending index on name field
+			},
+		}
+
+		// Create the index
+		err := driver.CreateIndex(ctx, testItem, index)
+		assert.NoError(t, err)
+
+		// Verify the index was created
+		indexes, err := driver.GetIndexes(ctx, testItem)
+		assert.NoError(t, err)
+
+		// Find our index in the list
+		var foundIndex bool
+		for _, idx := range indexes {
+			if idx.Name == "idx_name" {
+				foundIndex = true
+				assert.Equal(t, 1, len(idx.Keys))
+				assert.Contains(t, idx.Keys[0], "name")
+				break
+			}
+		}
+		assert.True(t, foundIndex, "Index was not found")
+	})
+
 	// Test case 2: Create a compound index on multiple fields
 	t.Run("CompoundIndex", func(t *testing.T) {
 		// Define the index

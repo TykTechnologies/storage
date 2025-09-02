@@ -118,44 +118,29 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 
 			// Handle different types of direction values
 			switch v := direction.(type) {
-			case int:
-				if v < 0 {
-					indexFields = append(indexFields, fmt.Sprintf("%s DESC", field))
-				} else {
-					indexFields = append(indexFields, fmt.Sprintf("%s ASC", field))
+			case int, int32, int64:
+				// Get sort direction based on sign
+				sortDir := "ASC"
+				switch val := v.(type) {
+				case int:
+					if val < 0 {
+						sortDir = "DESC"
+					}
+				case int32:
+					if val < 0 {
+						sortDir = "DESC"
+					}
+				case int64:
+					if val < 0 {
+						sortDir = "DESC"
+					}
 				}
-			case int32:
-				if v < 0 {
-					indexFields = append(indexFields, fmt.Sprintf("%s DESC", field))
-				} else {
-					indexFields = append(indexFields, fmt.Sprintf("%s ASC", field))
-				}
-			case int64:
-				if v < 0 {
-					indexFields = append(indexFields, fmt.Sprintf("%s DESC", field))
-				} else {
-					indexFields = append(indexFields, fmt.Sprintf("%s ASC", field))
-				}
-			case float64:
-				if v < 0 {
-					indexFields = append(indexFields, fmt.Sprintf("%s DESC", field))
-				} else {
-					indexFields = append(indexFields, fmt.Sprintf("%s ASC", field))
-				}
+				indexFields = append(indexFields, fmt.Sprintf("%s %s", field, sortDir))
 			case string:
 				if v == "2dsphere" {
 					// PostgreSQL equivalent of MongoDB's 2dsphere is a GiST index
 					indexType = "GIST"
 					indexFields = append(indexFields, field)
-				} else if field == "$text" {
-					// MongoDB text index - PostgresSQL equivalent is GIN index with tsvector
-					indexType = "GIN"
-					// The actual field is in the nested map
-					if textFields, ok := direction.(map[string]interface{}); ok {
-						for textField := range textFields {
-							indexFields = append(indexFields, fmt.Sprintf("to_tsvector('english', %s)", textField))
-						}
-					}
 				} else {
 					// Default to ASC for other string values
 					indexFields = append(indexFields, fmt.Sprintf("%s ASC", field))
