@@ -189,6 +189,12 @@ func TestGetTables(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
+	t.Run("nil connection", func(t *testing.T) {
+		driver.db = nil
+		tables, err := driver.GetTables(ctx)
+		assert.Error(t, err)
+		assert.Len(t, tables, 0)
+	})
 	// Clean up the test tables
 	cleanupTestTables(t, driver, ctx)
 }
@@ -342,6 +348,13 @@ func TestDropTable(t *testing.T) {
 			assert.NoError(t, err)
 			assert.False(t, exists, "Table "+name+" should not exist after being dropped")
 		}
+	})
+
+	t.Run("Nil connection", func(t *testing.T) {
+		driver.db = nil
+		rows, err := driver.DropTable(ctx, "test_drop_table")
+		assert.Error(t, err)
+		assert.Equal(t, 0, rows)
 	})
 }
 
@@ -623,6 +636,16 @@ func TestMigrate(t *testing.T) {
 		exists, err := driver.HasTable(ctx, testObj.TableName())
 		assert.NoError(t, err)
 		assert.True(t, exists, "Table should exist after migration with options")
+	})
+
+	t.Run("Nil connection", func(t *testing.T) {
+		testObj := &TestObject{TableNameValue: "test_migrate"}
+		defer cleanupTables([]model.DBObject{testObj})
+		driver.db = nil
+
+		// Migrate the table
+		err := driver.Migrate(ctx, []model.DBObject{testObj})
+		assert.Error(t, err)
 	})
 }
 
