@@ -1254,3 +1254,254 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		assert.Contains(t, err.Error(), "unsupported", "Error message should mention unsupported operator")
 	})
 }
+
+// TestTranslateQuery tests the translateQuery function with various MongoDB-style query operators
+func TestTranslateQuery(t *testing.T) {
+	// Setup test database connection
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	// Ensure the test table exists
+	tableName := "test_objects"
+	err := driver.db.WithContext(ctx).AutoMigrate(&TestObject{})
+	require.NoError(t, err, "Failed to create test table")
+
+	// Clean up any existing data
+	err = driver.db.WithContext(ctx).Exec("DELETE FROM " + tableName).Error
+	require.NoError(t, err, "Failed to clean up test table")
+
+	// Create test data
+	id1 := model.NewObjectID()
+	id2 := model.NewObjectID()
+	id3 := model.NewObjectID()
+
+	testData := []TestObject{
+		{
+			ID:        id1,
+			Name:      "Test 1",
+			Value:     10,
+			Category:  "A",
+			CreatedAt: time.Now().Add(-48 * time.Hour),
+		},
+		{
+			ID:        id2,
+			Name:      "Test 2",
+			Value:     20,
+			Category:  "B",
+			CreatedAt: time.Now().Add(-24 * time.Hour),
+		},
+		{
+			ID:        id3,
+			Name:      "Test 3",
+			Value:     30,
+			Category:  "A",
+			CreatedAt: time.Now(),
+		},
+	}
+
+	// Insert test data
+	for _, obj := range testData {
+		err := driver.db.WithContext(ctx).Table(tableName).Create(&obj).Error
+		require.NoError(t, err, "Failed to insert test data")
+	}
+
+	// Define test cases
+	type testCase struct {
+		name          string
+		query         model.DBM
+		expectedCount int
+	}
+
+	testCases := []testCase{
+		{
+			name: "Simple Equality",
+			query: model.DBM{
+				"category": "A",
+			},
+			expectedCount: 2,
+		},
+		{
+			name: "Multiple Equality Conditions",
+			query: model.DBM{
+				"category": "A",
+				"value":    10,
+			},
+			expectedCount: 1,
+		},
+		{
+			name: "ObjectID Equality",
+			query: model.DBM{
+				"id": id1,
+			},
+			expectedCount: 1,
+		},
+		{
+			name: "OR Operator",
+			query: model.DBM{
+				"$or": []model.DBM{
+					{"category": "A"},
+					{"value": 20},
+				},
+			},
+			expectedCount: 3,
+		},
+		{
+			name: "Not Equal Operator",
+			query: model.DBM{
+				"category": model.DBM{
+					"$ne": "A",
+				},
+			},
+			expectedCount: 1,
+		},
+		{
+			name: "Greater Than Operator",
+			query: model.DBM{
+				"value": model.DBM{
+					"$gt": 10,
+				},
+			},
+			expectedCount: 2,
+		},
+		{
+			name: "Greater Than or Equal Operator",
+			query: model.DBM{
+				"value": model.DBM{
+					"$gte": 20,
+				},
+			},
+			expectedCount: 2,
+		},
+		{
+			name: "Less Than Operator",
+			query: model.DBM{
+				"value": model.DBM{
+					"$lt": 30,
+				},
+			},
+			expectedCount: 2,
+		},
+		{
+			name: "Less Than or Equal Operator",
+			query: model.DBM{
+				"value": model.DBM{
+					"$lte": 20,
+				},
+			},
+			expectedCount: 2,
+		},
+		{
+			name: "IN Operator",
+			query: model.DBM{
+				"value": model.DBM{
+					"$in": []int{10, 30},
+				},
+			},
+			expectedCount: 2,
+		},
+		{
+			name: "Case Insensitive Equality",
+			query: model.DBM{
+				"name": model.DBM{
+					"$i": "test 1",
+				},
+			},
+			expectedCount: 1,
+		},
+		{
+			name: "Text Search",
+			query: model.DBM{
+				"name": model.DBM{
+					"$text": "test",
+				},
+			},
+			expectedCount: 3,
+		},
+		{
+			name: "Limit",
+			query: model.DBM{
+				"category": "A",
+				"_limit":   1,
+			},
+			expectedCount: 1,
+		},
+		{
+			name: "Offset",
+			query: model.DBM{
+				"category": "A",
+				"_offset":  1,
+			},
+			expectedCount: 1,
+		},
+		{
+			name: "Sort Ascending",
+			query: model.DBM{
+				"category": "A",
+				"_sort":    "value",
+			},
+			expectedCount: 2,
+		},
+		{
+			name: "Sort Descending",
+			query: model.DBM{
+				"category": "A",
+				"_sort":    "-value",
+			},
+			expectedCount: 2,
+		},
+		{
+			name: "Complex Query",
+			query: model.DBM{
+				"category": "A",
+				"value": model.DBM{
+					"$gte": 10,
+					"$lte": 30,
+				},
+				"_sort":  "-value",
+				"_limit": 1,
+			},
+			expectedCount: 1,
+		},
+	}
+
+	// Run test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a base DB query
+			db := driver.db.WithContext(ctx).Table(tableName)
+
+			// Apply the translateQuery function
+			translatedDB := driver.translateQuery(db, tc.query, &TestObject{})
+
+			// Execute the query and check the result count
+			var results []TestObject
+			err := translatedDB.Find(&results).Error
+			require.NoError(t, err, "Query execution should not fail")
+
+			assert.Equal(t, tc.expectedCount, len(results), "Query should return expected number of results")
+
+			// For debugging
+			t.Logf("Results: %d", len(results))
+		})
+	}
+
+	// Test count flag separately
+	t.Run("Count", func(t *testing.T) {
+		// Create a base DB query
+		db := driver.db.WithContext(ctx).Table(tableName)
+
+		// Apply the translateQuery function with count flag
+		query := model.DBM{
+			"category": "A",
+			"_count":   true,
+		}
+		translatedDB := driver.translateQuery(db, query, &TestObject{})
+
+		// Execute the query and check the count
+		var count int64
+		err := translatedDB.Count(&count).Error
+		require.NoError(t, err, "Count query should not fail")
+
+		assert.Equal(t, int64(2), count, "Count should return expected number")
+	})
+}
