@@ -132,9 +132,13 @@ Each component provides a set of interfaces that abstract the underlying storage
 ## Supported Storage Systems
 
 ### Persistent Storage
-- MongoDB (Official Driver)
-- MongoDB (mgo Driver)
-- PostgreSQL
+The following storage types are supported through the Type field in ClientOpts:
+
+| Constant                 | Value      | Description                  |
+|--------------------------|------------|------------------------------|
+| persistent.OfficialMongo | "mongo-go" | Official mongoDB Go driver   |
+| persistent.Mgo           | "mgo"      | Legacy mgo MongoDB driver    |
+| persistent.Postgres      | "postgres" | PostgreSQL via GORM          |
 
 ### Temporal Storage
 - Redis v9
