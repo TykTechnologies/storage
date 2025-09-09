@@ -164,3 +164,11 @@ type Message interface {
 	// - an empty string, returning an error
 	Payload() (string, error)
 }
+
+type RateLimit interface {
+	// SetRollingWindow sets the rolling window for a key with a per second rate limit
+	SetRollingWindow(ctx context.Context, now time.Time, keyName string, per int64,
+		valueOverride string, pipeline bool) ([]string, error)
+	// GetRollingWindow gets the rolling window for a key with a per second rate limit
+	GetRollingWindow(ctx context.Context, now time.Time, keyName string, per int64, pipeline bool) ([]string, error)
+}
