@@ -34,6 +34,7 @@ It includes typical database operations and healthcheck functionalities to verif
 
 ### Persistent storage example
 
+#### Using MongoDB
 ```
 package main
 
@@ -52,6 +53,40 @@ func main() {
         Database:         "mydb",
     }
     
+    storage, err := persistent.NewPersistentStorage(opts)
+    if err != nil {
+        log.Fatalf("Failed to create storage: %v", err)
+    }
+    
+    // Check connection
+    if err := storage.Ping(context.Background()); err != nil {
+        log.Fatalf("Failed to ping database: %v", err)
+    }
+    
+    // Use the storage for database operations
+    // ...
+}
+```
+#### Using Postgres
+
+```
+package main
+
+import (
+"context"
+"log"
+
+    "github.com/TykTechnologies/storage/persistent"
+)
+
+func main() {
+// Create a new persistent storage client for PostgreSQL
+opts := &persistent.ClientOpts{
+ConnectionString: "postgres://username:password@localhost:5432/dbname?sslmode=disable",
+Type:             persistent.Postgres,
+Database:         "mydb",
+}
+
     storage, err := persistent.NewPersistentStorage(opts)
     if err != nil {
         log.Fatalf("Failed to create storage: %v", err)
