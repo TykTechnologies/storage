@@ -73,19 +73,18 @@ func main() {
 package main
 
 import (
-"context"
-"log"
-
+    "context"
+    "log"
     "github.com/TykTechnologies/storage/persistent"
 )
 
 func main() {
-// Create a new persistent storage client for PostgreSQL
-opts := &persistent.ClientOpts{
-ConnectionString: "postgres://username:password@localhost:5432/dbname?sslmode=disable",
-Type:             persistent.Postgres,
-Database:         "mydb",
-}
+    // Create a new persistent storage client for PostgreSQL
+    opts := &persistent.ClientOpts{
+        ConnectionString: "postgres://username:password@localhost:5432/dbname?sslmode=disable",
+        Type:             persistent.Postgres,
+        Database:         "mydb",
+    }
 
     storage, err := persistent.NewPersistentStorage(opts)
     if err != nil {
