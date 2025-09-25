@@ -54,7 +54,6 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 			}
 
 			indexName = strings.Join(parts, "_")
-			fmt.Println("\nIndexName:\n", indexName)
 		}
 	}
 

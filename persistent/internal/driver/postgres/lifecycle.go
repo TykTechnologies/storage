@@ -25,11 +25,15 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 		return errors.New("nil opts")
 	}
 	connStr := opts.ConnectionString
+
 	if opts.UseSSL {
-		connStr += " sslmode=require"
+		// Decide sslmode
+		mode := "verify-full" // safest default
 		if opts.SSLInsecureSkipVerify {
-			connStr += " sslmode=require sslrootcert=verify-ca"
+			mode = "require" // encrypted but no verification
 		}
+		connStr += fmt.Sprintf(" sslmode=%s", mode)
+
 		if opts.SSLCAFile != "" {
 			connStr += fmt.Sprintf(" sslrootcert=%s", opts.SSLCAFile)
 		}
