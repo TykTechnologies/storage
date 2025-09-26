@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/model"
+	"github.com/lib/pq"
+	"regexp"
 	"strings"
 )
 
@@ -16,6 +18,13 @@ type IndexRow struct {
 	IndexType  string
 	Direction  int
 	Comment    *string // Using pointer for nullable string
+}
+
+func sanitizeIdentifier(s string) (string, error) {
+	if matched := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`).MatchString(s); !matched {
+		return "", fmt.Errorf("invalid identifier: %s", s)
+	}
+	return pq.QuoteIdentifier(s), nil // use pq or pgx quoting
 }
 
 // CreateIndex creates a database index on the specified table for the given fields.
@@ -71,6 +80,9 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 	indexType := "BTREE" // Default index type
 	var indexFields []string
 
+	safeTable, err := sanitizeIdentifier(tableName)
+	safeIndex, err := sanitizeIdentifier(indexName)
+	safeFields := []string{}
 	// Process each key in the index
 	for _, key := range index.Keys {
 		for field, direction := range key {
@@ -115,13 +127,22 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 		}
 	}
 
+	for _, f := range indexFields {
+		parts := strings.Split(f, " ")
+		col, err := sanitizeIdentifier(parts[0])
+		if err != nil {
+			return err
+		}
+		safeFields = append(safeFields, col+" "+parts[1])
+	}
+
 	// Build the CREATE INDEX statement
 	createIndexSQL := fmt.Sprintf(
 		"CREATE INDEX %s ON %s USING %s (%s)",
-		indexName,
-		tableName,
+		safeIndex,
+		safeTable,
 		indexType,
-		strings.Join(indexFields, ", "),
+		strings.Join(safeFields, ", "),
 	)
 
 	// Add CONCURRENTLY if background is true
