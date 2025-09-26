@@ -14,20 +14,45 @@ import (
 )
 
 func (d *driver) Insert(ctx context.Context, objects ...model.DBObject) error {
-	// Check if the database connection is valid
 	if d.db == nil {
 		return errors.New(types.ErrorSessionClosed)
 	}
+	if len(objects) == 0 {
+		return nil
+	}
+
+	// Group objects by table + concrete type
+	typeKey := func(obj model.DBObject) string {
+		return fmt.Sprintf("%s|%T", obj.TableName(), obj)
+	}
+	batches := make(map[string][]model.DBObject)
 
 	for _, obj := range objects {
-		// Generate a new ID if not set
 		if obj.GetObjectID() == "" {
 			obj.SetObjectID(model.NewObjectID())
 		}
+		key := typeKey(obj)
+		batches[key] = append(batches[key], obj)
+	}
 
-		result := d.db.WithContext(ctx).Table(obj.TableName()).Create(obj)
-		if result.Error != nil {
-			return result.Error
+	// Insert each homogeneous batch
+	for _, objs := range batches {
+		if len(objs) == 0 {
+			continue
+		}
+
+		// reflect to build []T where T is the concrete type
+		first := objs[0]
+		sliceType := reflect.SliceOf(reflect.TypeOf(first)) // []*MyStruct
+		sliceValue := reflect.MakeSlice(sliceType, 0, len(objs))
+
+		for _, obj := range objs {
+			sliceValue = reflect.Append(sliceValue, reflect.ValueOf(obj))
+		}
+
+		tableName := objs[0].TableName()
+		if err := d.db.WithContext(ctx).Table(tableName).Create(sliceValue.Interface()).Error; err != nil {
+			return err
 		}
 	}
 	return nil
@@ -433,11 +458,16 @@ func (d *driver) UpdateAll(ctx context.Context, row model.DBObject, query, updat
 	return tx.Commit().Error
 }
 
-func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update model.DBM) error {
+func (d *driver) Upsert1(ctx context.Context, row model.DBObject, query, update model.DBM) error {
 	// Check if the database connection is valid
 	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
 		return err
+	}
+
+	// ensure ID
+	if row.GetObjectID() == "" {
+		row.SetObjectID(model.NewObjectID())
 	}
 
 	// Start a transaction
@@ -542,6 +572,108 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 	return tx.Commit().Error
 }
 
+func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update model.DBM) error {
+	// Validate DB + table
+	tableName, err := d.validateDBAndTable(row)
+	if err != nil {
+		return err
+	}
+
+	tx := d.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
+
+	originalID := row.GetObjectID()
+
+	// Apply query
+	updateDB := tx.Table(tableName)
+	updateDB = d.translateQuery(updateDB, query, row)
+
+	// Translate Mongo-style update operators
+	_, updateMap, err := d.applyMongoUpdateOperators(updateDB, update)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Attempt update
+	result := updateDB.Updates(updateMap)
+	if result.Error != nil {
+		tx.Rollback()
+		return result.Error
+	}
+
+	if result.RowsAffected > 0 {
+		// Existing row updated → fetch updated values
+		fetchDB := tx.Table(tableName)
+		fetchDB = d.translateQuery(fetchDB, query, row)
+		err = fetchDB.First(row).Error
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+		if originalID != "" {
+			row.SetObjectID(originalID)
+		}
+		return tx.Commit().Error
+	}
+
+	// -------------------
+	// Insert path
+	// -------------------
+
+	// Ensure ID
+	if originalID != "" {
+		row.SetObjectID(originalID)
+	} else if qid, ok := query["id"]; ok {
+		if sid, ok2 := qid.(string); ok2 && sid != "" {
+			row.SetObjectID(model.ObjectIDHex(sid))
+
+		}
+	}
+	if row.GetObjectID() == "" {
+		row.SetObjectID(model.NewObjectID())
+	}
+
+	// New instance of row type
+	newRow := reflect.New(reflect.TypeOf(row).Elem()).Interface().(model.DBObject)
+	newRow.SetObjectID(row.GetObjectID())
+
+	// Apply query fields to newRow
+	for k, v := range query {
+		if !strings.HasPrefix(k, "_") && k != "$or" {
+			setField(newRow, k, v)
+		}
+	}
+
+	// Apply update fields to newRow
+	applySetOperatorToObject(newRow, update)
+
+	// Insert
+	result = tx.Table(tableName).Create(newRow)
+	if result.Error != nil {
+		tx.Rollback()
+		return result.Error
+	}
+
+	// Copy values into caller row
+	copyStructValues(newRow, row)
+
+	// Preserve original ID if given
+	if originalID != "" {
+		row.SetObjectID(originalID)
+	}
+
+	return tx.Commit().Error
+}
+
 // Helper function to set a field in a struct using reflection
 func setField(obj interface{}, name string, value interface{}) {
 	structValue := reflect.ValueOf(obj)
@@ -599,6 +731,22 @@ func copyStructValues(src, dst interface{}) {
 				dstField.Set(srcField)
 			} else if srcField.Type().ConvertibleTo(dstField.Type()) {
 				dstField.Set(srcField.Convert(dstField.Type()))
+			}
+		}
+	}
+}
+
+// helper: apply $set contents of update to object
+func applySetOperatorToObject(obj model.DBObject, update model.DBM) {
+	if raw, ok := update["$set"]; ok {
+		switch setMap := raw.(type) {
+		case map[string]interface{}:
+			for k, v := range setMap {
+				setField(obj, k, v)
+			}
+		case model.DBM:
+			for k, v := range setMap {
+				setField(obj, k, v)
 			}
 		}
 	}
