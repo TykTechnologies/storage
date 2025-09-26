@@ -1467,11 +1467,12 @@ func TestTranslateQuery(t *testing.T) {
 			db := driver.db.WithContext(ctx).Table(tableName)
 
 			// Apply the translateQuery function
-			translatedDB := driver.translateQuery(db, tc.query, &TestObject{})
+			translatedDB, err := driver.translateQuery(db, tc.query, &TestObject{})
+			require.NoError(t, err, "translateQuery should not return an error")
 
 			// Execute the query and check the result count
 			var results []TestObject
-			err := translatedDB.Find(&results).Error
+			err = translatedDB.Find(&results).Error
 			require.NoError(t, err, "Query execution should not fail")
 
 			assert.Equal(t, tc.expectedCount, len(results), "Query should return expected number of results")
@@ -1488,11 +1489,12 @@ func TestTranslateQuery(t *testing.T) {
 			"category": "A",
 			"_count":   true,
 		}
-		translatedDB := driver.translateQuery(db, query, &TestObject{})
+		translatedDB, err := driver.translateQuery(db, query, &TestObject{})
+		require.NoError(t, err, "translateQuery should not return an error")
 
 		// Execute the query and check the count
 		var count int64
-		err := translatedDB.Count(&count).Error
+		err = translatedDB.Count(&count).Error
 		require.NoError(t, err, "Count query should not fail")
 
 		assert.Equal(t, int64(2), count, "Count should return expected number")
@@ -1560,11 +1562,12 @@ func TestTranslateQueryWithShardingEnabled(t *testing.T) {
 
 	// Apply the translateQuery function
 	testObj := &TestObject{}
-	translatedDB := driver.translateQuery(db, query, testObj)
+	translatedDB, err := driver.translateQuery(db, query, testObj)
+	require.NoError(t, err, "translateQuery should not return an error")
 
 	// Execute the query and check the result count
 	var results []TestObject
-	err := translatedDB.Find(&results).Error
+	err = translatedDB.Find(&results).Error
 	require.NoError(t, err, "Query execution should not fail")
 
 	// We should have 4 results (one from each day's shard for Category 1)

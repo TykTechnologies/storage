@@ -774,3 +774,31 @@ func TestIndexExists(t *testing.T) {
 		}
 	})
 }
+
+func TestSanitizeIdentifier(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantError bool
+		want      string
+	}{
+		{"valid simple", "tableName", false, `"tableName"`},
+		{"valid with underscore", "my_table_123", false, `"my_table_123"`},
+		{"invalid starting digit", "1table", true, ""},
+		{"invalid special char", "table$", true, ""},
+		{"empty string", "", true, ""},
+		{"valid capital letters", "MyTable", false, `"MyTable"`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := sanitizeIdentifier(tt.input)
+			if tt.wantError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.want, got)
+			}
+		})
+	}
+}

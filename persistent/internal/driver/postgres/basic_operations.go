@@ -77,7 +77,10 @@ func (d *driver) Delete(ctx context.Context, object model.DBObject, filters ...m
 	db := d.db.WithContext(ctx).Table(tableName)
 	// If we have a filter, use our translator function
 	if len(filters) == 1 {
-		db = d.translateQuery(db, filters[0], object)
+		db, err = d.translateQuery(db, filters[0], object)
+		if err != nil {
+			return err
+		}
 	} else {
 		// If no filter is provided, use the object's ID as the filter
 		id := object.GetObjectID()
@@ -118,7 +121,10 @@ func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 
 	// Apply filters
 	if len(filters) == 1 {
-		tx = d.translateQuery(tx, filters[0], object)
+		tx, err = d.translateQuery(tx, filters[0], object)
+		if err != nil {
+			return err
+		}
 	} else {
 		id := object.GetObjectID()
 		if id != "" {
@@ -343,7 +349,11 @@ func (d *driver) UpdateAll(ctx context.Context, row model.DBObject, query, updat
 	}
 
 	if hasFilter {
-		db = d.translateQuery(db, query, row)
+		db, err = d.translateQuery(db, query, row)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
 	} else {
 		// Empty query means update all documents
 		// Use a session that allows global updates
@@ -401,7 +411,11 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 
 	// Apply query
 	updateDB := tx.Table(tableName)
-	updateDB = d.translateQuery(updateDB, query, row)
+	updateDB, err = d.translateQuery(updateDB, query, row)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
 
 	// Translate Mongo-style update operators
 	_, updateMap, err := d.applyMongoUpdateOperators(updateDB, update)
@@ -420,7 +434,11 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 	if result.RowsAffected > 0 {
 		// Existing row updated → fetch updated values
 		fetchDB := tx.Table(tableName)
-		fetchDB = d.translateQuery(fetchDB, query, row)
+		fetchDB, err = d.translateQuery(fetchDB, query, row)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
 		err = fetchDB.First(row).Error
 		if err != nil {
 			tx.Rollback()

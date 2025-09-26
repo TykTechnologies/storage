@@ -30,7 +30,10 @@ func (d *driver) Query(ctx context.Context, object model.DBObject, result interf
 	}
 
 	db := d.db.WithContext(ctx).Table(tableName)
-	db = d.translateQuery(db, filter, object)
+	db, err = d.translateQuery(db, filter, object)
+	if err != nil {
+		return err
+	}
 
 	// Determine if result is a slice or a single object
 	resultElem := resultVal.Elem()
@@ -84,7 +87,10 @@ func (d *driver) Count(ctx context.Context, row model.DBObject, filters ...model
 		}
 		countFilter["_count"] = true
 
-		db = d.translateQuery(db, countFilter, row)
+		db, err = d.translateQuery(db, countFilter, row)
+		if err != nil {
+			return 0, err
+		}
 	}
 	var result int64
 	err = db.Count(&result).Error
@@ -246,9 +252,9 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 }
 
 // translateQuery converts MongoDB-style queries to GORM queries with sharding support
-func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) *gorm.DB {
+func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*gorm.DB, error) {
 	if db == nil {
-		return nil
+		return nil, errors.New("nil database connection")
 	}
 
 	where := map[string]interface{}{}
@@ -372,7 +378,7 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) *g
 	if useSharding {
 		if minShardDate.IsZero() || maxShardDate.IsZero() {
 			// Sharding requires both gte and lte date dimensions
-			return nil
+			return nil, errors.New("date sharding requires both gte and lte date dimensions")
 		}
 
 		baseTable := ""
@@ -428,7 +434,7 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) *g
 		db = db.Order(order)
 	}
 
-	return db
+	return db, nil
 }
 
 func translateAggregationPipeline(tableName string, pipeline []model.DBM) (string, []interface{}, error) {
