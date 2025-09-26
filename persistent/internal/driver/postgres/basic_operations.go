@@ -119,10 +119,6 @@ func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 	if result.Error != nil {
 		return result.Error
 	}
-	/*result := tx.Updates(data)
-	if result.Error != nil {
-		return result.Error
-	}*/
 
 	// Check if any rows were affected
 	if result.RowsAffected == 0 {
@@ -181,42 +177,68 @@ func (d *driver) createTempTableWithMatchingTypes(tx *gorm.DB, tableName string,
 
 // insertDataIntoTempTable inserts data from objects into the temporary table
 func (d *driver) insertDataIntoTempTable(tx *gorm.DB, tempTableName string, objects []model.DBObject, fields map[string]bool) error {
-	for _, obj := range objects {
-		data, err := objectToMap(obj)
-		if err != nil {
-			return err
-		}
-
-		// Get the ID
-		var idValue string
-		if id, ok := data["_id"]; ok {
-			idValue = fmt.Sprintf("%v", id)
-		} else if id, ok := data["id"]; ok {
-			idValue = fmt.Sprintf("%v", id)
-		} else if id := obj.GetObjectID(); id != "" {
-			idValue = id.Hex()
-		}
-
-		if idValue == "" {
-			continue // Skip objects without ID
-		}
-
-		// Prepare data for insertion
-		insertData := map[string]interface{}{
-			"id": idValue,
-		}
-
+	if len(objects) > 0 {
+		// Build column list
+		columns := []string{"id"}
 		for field := range fields {
-			val, _ := data[field] // ignore ok, always assign
-			insertData[field] = val
+			columns = append(columns, field)
 		}
 
-		// Insert into temporary table
-		if err := tx.Table(tempTableName).Create(insertData).Error; err != nil {
+		// Start building the INSERT statement
+		insertSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES ",
+			tempTableName, strings.Join(columns, ", "))
+
+		// Build value placeholders and args
+		placeholders := make([]string, 0, len(objects))
+		valueArgs := make([]interface{}, 0, len(objects)*(len(columns)))
+
+		for _, obj := range objects {
+			data, err := objectToMap(obj)
+			if err != nil {
+				return err
+			}
+
+			// Get the ID
+			var idValue string
+			if id, ok := data["_id"]; ok {
+				idValue = fmt.Sprintf("%v", id)
+			} else if id, ok := data["id"]; ok {
+				idValue = fmt.Sprintf("%v", id)
+			} else if id := obj.GetObjectID(); id != "" {
+				idValue = id.Hex()
+			}
+
+			if idValue == "" {
+				continue // Skip objects without ID
+			}
+
+			// Create placeholders for this row
+			rowPlaceholders := make([]string, 0, len(columns))
+			rowPlaceholders = append(rowPlaceholders, "?")
+			valueArgs = append(valueArgs, idValue)
+
+			for _, field := range columns[1:] { // Skip ID column
+				rowPlaceholders = append(rowPlaceholders, "?")
+				val, ok := data[field]
+				if !ok {
+					val = nil
+				}
+				valueArgs = append(valueArgs, val)
+			}
+
+			placeholders = append(placeholders,
+				fmt.Sprintf("(%s)", strings.Join(rowPlaceholders, ", ")))
+
+		}
+
+		// Complete the INSERT statement
+		insertSQL += strings.Join(placeholders, ", ")
+
+		// Execute the bulk insert
+		if err := tx.Exec(insertSQL, valueArgs...).Error; err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -229,16 +251,13 @@ This is useful for batch updates where multiple records need to be updated based
 for updating a collection of specific records with different values.
 */
 func (d *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filters ...model.DBM) error {
-	// Check if the database connection is valid
+	// Basic validation
 	if d.db == nil {
 		return errors.New(types.ErrorSessionClosed)
 	}
-
-	// Check if we have objects to update
 	if len(objects) == 0 {
 		return errors.New(types.ErrorEmptyRow)
 	}
-	// Check if we have multiple filters
 	if len(filters) > 1 {
 		return errors.New(types.ErrorMultipleDBM)
 	}
@@ -257,118 +276,83 @@ func (d *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filte
 		}
 	}()
 
-	/*
-	   If a filter is provided, use it for all objects
-	   When a filter is provided, we'll use GORM's transaction and raw SQL
-	   capabilities to implement the temporary table approach for efficiency.
-	*/
+	// Get the table name
+	tableName := objects[0].TableName()
+	if tableName == "" {
+		tx.Rollback()
+		return errors.New(types.ErrorEmptyTableName)
+	}
+
+	// For filter-based updates, we only need the first object's values
+	// For ID-based updates, we'll process each object separately
 	if len(filters) == 1 {
-		if len(objects) == 0 {
-			return errors.New(types.ErrorEmptyRow)
-		}
-
-		tableName := objects[0].TableName()
-		if tableName == "" {
-			return errors.New(types.ErrorEmptyTableName)
-		}
-
-		// Get all field names from all objects
-		allFields := make(map[string]bool)
-		for _, obj := range objects {
-			data, err := objectToMap(obj)
-			if err != nil {
-				tx.Rollback()
-				return err
-			}
-
-			for k := range data {
-				if k != "_id" && k != "id" {
-					allFields[k] = true
-				}
-			}
-		}
-		tempTableName, err := d.createTempTableWithMatchingTypes(tx, tableName, allFields)
+		// Extract update values from the first object
+		updateData, err := objectToMap(objects[0])
 		if err != nil {
 			tx.Rollback()
 			return err
 		}
 
-		// Insert data into the temporary table
-		if err := d.insertDataIntoTempTable(tx, tempTableName, objects, allFields); err != nil {
+		// Remove ID fields from update data
+		delete(updateData, "_id")
+		delete(updateData, "id")
+
+		if len(updateData) == 0 {
 			tx.Rollback()
-			return err
+			return nil // Nothing to update
 		}
 
-		// Build the UPDATE statement using the temporary table
-		updateSQL := fmt.Sprintf("UPDATE %s SET ", tableName)
-		setClauses := make([]string, 0, len(allFields))
-		whereArgs := make([]interface{}, 0)
-		for field := range allFields {
-			data, _ := objectToMap(objects[0])
-			if val, ok := data[field]; ok {
-				// Use parameter placeholders for values
-				setClauses = append(setClauses, fmt.Sprintf("%s = ?", field))
-				whereArgs = append(whereArgs, val)
-			}
-		}
-
-		updateSQL += strings.Join(setClauses, ", ")
-		//updateSQL += fmt.Sprintf(" FROM %s AS temp WHERE %s.id = temp.id", tempTableName, tableName)
-		// Add the WHERE clause for the filter
-		whereConditions := []string{}
+		// Build the query with the filter
+		query := tx.Table(tableName)
 		filter := filters[0]
 
 		for k, v := range filter {
 			if !strings.HasPrefix(k, "_") && k != "$or" { // Skip special keys
-				whereConditions = append(whereConditions, fmt.Sprintf("%s = ?", k))
-				whereArgs = append(whereArgs, v)
+				query = query.Where(k+" = ?", v)
 			}
 		}
 
-		if len(whereConditions) > 0 {
-			updateSQL += " WHERE " + strings.Join(whereConditions, " AND ")
-
-			// Execute the update with the filter
-			if err := tx.Exec(updateSQL, whereArgs...).Error; err != nil {
-				tx.Rollback()
-				return err
-			}
-		}
-		// Drop the temporary table before committing
-		if err := tx.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tempTableName)).Error; err != nil {
+		// Execute the update directly
+		result := query.Updates(updateData)
+		if result.Error != nil {
 			tx.Rollback()
-			return err
+			return result.Error
 		}
 	} else {
+		// No filter provided, update each object by ID
 		for _, obj := range objects {
-			// Convert object to map
-			data, err := objectToMap(obj)
-			if err != nil {
-				tx.Rollback()
-				return err
-			}
-
-			// Get the table name
-			tableName := obj.TableName()
-
-			// Remove ID fields from update data
-			delete(data, "_id")
-			delete(data, "id")
-
-			if len(data) == 0 {
-				continue // Nothing to update
-			}
-
-			// Get the object ID for the WHERE clause
+			// Get the object ID
 			id := obj.GetObjectID()
 			if id == "" {
 				continue // Skip objects without ID
 			}
 
-			// Update using GORM
-			if err := tx.Table(tableName).Where("id = ?", id.Hex()).Updates(data).Error; err != nil {
+			// Extract update values
+			updateData, err := objectToMap(obj)
+			if err != nil {
 				tx.Rollback()
 				return err
+			}
+
+			// Remove ID fields from update data
+			delete(updateData, "_id")
+			delete(updateData, "id")
+
+			if len(updateData) == 0 {
+				continue // Nothing to update
+			}
+
+			// Update by ID
+			result := tx.Table(tableName).Where("id = ?", id.Hex()).Updates(updateData)
+			if result.Error != nil {
+				tx.Rollback()
+				return result.Error
+			}
+
+			// Check if any rows were affected
+			if result.RowsAffected == 0 {
+				tx.Rollback()
+				return sql.ErrNoRows
 			}
 		}
 	}
