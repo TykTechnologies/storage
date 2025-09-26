@@ -104,33 +104,16 @@ func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 		return err
 	}
 
-	// Check if we have multiple filters
 	if len(filters) > 1 {
 		return errors.New(types.ErrorMultipleDBM)
 	}
 
-	// Convert DBObject to map for updating
-	data, err := objectToMap(object)
-	if err != nil {
-		return err
-	}
-
-	// Remove the ID field from the update data if it exists
-	// as we typically don't want to update the primary key
-	delete(data, "_id")
-	delete(data, "id")
-
-	if len(data) == 0 {
-		return nil
-	}
-
-	// Start building the query with the table name
 	tx := d.db.WithContext(ctx).Table(tableName)
-	// If we have a filter, use our translator function
+
+	// Apply filters
 	if len(filters) == 1 {
 		tx = d.translateQuery(tx, filters[0], object)
 	} else {
-		// If no filter is provided, use the object's ID as the filter
 		id := object.GetObjectID()
 		if id != "" {
 			tx = tx.Where("id = ?", id.Hex())
@@ -139,17 +122,14 @@ func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 		}
 	}
 
-	// Execute the UPDATE operation
+	// Save replaces all fields with the object’s values
 	result := tx.Save(object)
 	if result.Error != nil {
 		return result.Error
 	}
-
-	// Check if any rows were affected
 	if result.RowsAffected == 0 {
 		return sql.ErrNoRows
 	}
-
 	return nil
 }
 
