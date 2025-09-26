@@ -371,7 +371,8 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) *g
 	// Handle sharding
 	if useSharding {
 		if minShardDate.IsZero() || maxShardDate.IsZero() {
-			panic("Sharding requires both gte and lte date dimensions")
+			// Sharding requires both gte and lte date dimensions
+			return nil
 		}
 
 		baseTable := ""
