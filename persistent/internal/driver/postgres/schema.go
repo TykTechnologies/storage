@@ -63,6 +63,8 @@ type BasicInfo struct {
 	MaxConnections string
 }
 
+// HasTable checks if a table with the given name exists in the database.
+// Returns true if the table exists, otherwise false with any error encountered.
 func (d *driver) HasTable(ctx context.Context, tableName string) (bool, error) {
 	// Check if the database connection is valid
 	if d.db == nil {
@@ -77,6 +79,8 @@ func (d *driver) HasTable(ctx context.Context, tableName string) (bool, error) {
 	return d.db.Migrator().HasTable(tableName), nil
 }
 
+// DBTableStats returns statistics for the given table.
+// Provides details like row count, size, and other metadata as a map.
 func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DBM, error) {
 	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
@@ -278,6 +282,8 @@ func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
 	return stats, nil
 }
 
+// GetTables retrieves the list of all table names in the current database.
+// Returns a slice of table names or an error if the query fails.
 func (d *driver) GetTables(ctx context.Context) ([]string, error) {
 	if d.db == nil {
 		return []string{}, errors.New(types.ErrorSessionClosed)
@@ -292,6 +298,8 @@ func (d *driver) GetTables(ctx context.Context) ([]string, error) {
 	return tables, nil
 }
 
+// DropTable removes a table by its name.
+// Returns the number of tables dropped and any error encountered.
 func (d *driver) DropTable(ctx context.Context, name string) (int, error) {
 	if d.db == nil {
 		return 0, errors.New(types.ErrorSessionClosed)
@@ -323,6 +331,8 @@ func (d *driver) DropTable(ctx context.Context, name string) (int, error) {
 	return int(rowCount), nil
 }
 
+// Drop removes the table associated with the given object.
+// Permanently deletes its schema and all stored data.
 func (d *driver) Drop(ctx context.Context, object model.DBObject) error {
 	// Check if the database connection is valid
 	tableName, err := d.validateDBAndTable(object)
@@ -338,6 +348,8 @@ func (d *driver) Drop(ctx context.Context, object model.DBObject) error {
 	return nil
 }
 
+// Migrate applies schema changes for the given objects.
+// Ensures tables and indexes are created or updated based on the models.
 func (d *driver) Migrate(ctx context.Context, objects []model.DBObject, options ...model.DBM) error {
 	// Check if the database connection is valid
 	if d.db == nil {
@@ -406,6 +418,8 @@ func (d *driver) Migrate(ctx context.Context, objects []model.DBObject, options 
 	return nil
 }
 
+// GetDatabaseInfo returns metadata about the connected database.
+// Provides details such as type, version, and connection information.
 func (d *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
 	if d.db == nil {
 		return utils.Info{}, errors.New(types.ErrorSessionClosed)

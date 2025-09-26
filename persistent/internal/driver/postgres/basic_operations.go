@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+// Insert adds one or more objects into the database in a single batch operation.
+// Returns an error if the input is empty or the insert fails.
 func (d *driver) Insert(ctx context.Context, objects ...model.DBObject) error {
 	if d.db == nil {
 		return errors.New(types.ErrorSessionClosed)
@@ -58,6 +60,8 @@ func (d *driver) Insert(ctx context.Context, objects ...model.DBObject) error {
 	return nil
 }
 
+// Delete removes the specified object from the database using either the provided filter
+// or the object's ID. Returns an error if no rows are affected.
 func (d *driver) Delete(ctx context.Context, object model.DBObject, filters ...model.DBM) error {
 	tableName, err := d.validateDBAndTable(object)
 	if err != nil {
@@ -98,6 +102,8 @@ func (d *driver) Delete(ctx context.Context, object model.DBObject, filters ...m
 	return nil
 }
 
+// Update applies changes from the given object to the database, using either the provided filter
+// or the object's ID. Excludes ID fields and returns an error if no rows are affected.
 func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...model.DBM) error {
 	tableName, err := d.validateDBAndTable(object)
 	if err != nil {
@@ -178,73 +184,6 @@ func (d *driver) createTempTableWithMatchingTypes(tx *gorm.DB, tableName string,
 	}
 
 	return tempTableName, nil
-}
-
-// insertDataIntoTempTable inserts data from objects into the temporary table
-func (d *driver) insertDataIntoTempTable(tx *gorm.DB, tempTableName string, objects []model.DBObject, fields map[string]bool) error {
-	if len(objects) > 0 {
-		// Build column list
-		columns := []string{"id"}
-		for field := range fields {
-			columns = append(columns, field)
-		}
-
-		// Start building the INSERT statement
-		insertSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES ",
-			tempTableName, strings.Join(columns, ", "))
-
-		// Build value placeholders and args
-		placeholders := make([]string, 0, len(objects))
-		valueArgs := make([]interface{}, 0, len(objects)*(len(columns)))
-
-		for _, obj := range objects {
-			data, err := objectToMap(obj)
-			if err != nil {
-				return err
-			}
-
-			// Get the ID
-			var idValue string
-			if id, ok := data["_id"]; ok {
-				idValue = fmt.Sprintf("%v", id)
-			} else if id, ok := data["id"]; ok {
-				idValue = fmt.Sprintf("%v", id)
-			} else if id := obj.GetObjectID(); id != "" {
-				idValue = id.Hex()
-			}
-
-			if idValue == "" {
-				continue // Skip objects without ID
-			}
-
-			// Create placeholders for this row
-			rowPlaceholders := make([]string, 0, len(columns))
-			rowPlaceholders = append(rowPlaceholders, "?")
-			valueArgs = append(valueArgs, idValue)
-
-			for _, field := range columns[1:] { // Skip ID column
-				rowPlaceholders = append(rowPlaceholders, "?")
-				val, ok := data[field]
-				if !ok {
-					val = nil
-				}
-				valueArgs = append(valueArgs, val)
-			}
-
-			placeholders = append(placeholders,
-				fmt.Sprintf("(%s)", strings.Join(rowPlaceholders, ", ")))
-
-		}
-
-		// Complete the INSERT statement
-		insertSQL += strings.Join(placeholders, ", ")
-
-		// Execute the bulk insert
-		if err := tx.Exec(insertSQL, valueArgs...).Error; err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 /*
@@ -366,6 +305,8 @@ func (d *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filte
 	return tx.Commit().Error
 }
 
+// UpdateAll updates all rows in the database matching the given query with the provided update values.
+// Returns an error if the operation fails or the inputs are invalid.
 func (d *driver) UpdateAll(ctx context.Context, row model.DBObject, query, update model.DBM) error {
 	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
@@ -435,120 +376,6 @@ func (d *driver) UpdateAll(ctx context.Context, row model.DBObject, query, updat
 	}
 
 	// Commit the transaction
-	return tx.Commit().Error
-}
-
-func (d *driver) Upsert1(ctx context.Context, row model.DBObject, query, update model.DBM) error {
-	// Check if the database connection is valid
-	tableName, err := d.validateDBAndTable(row)
-	if err != nil {
-		return err
-	}
-
-	// ensure ID
-	if row.GetObjectID() == "" {
-		row.SetObjectID(model.NewObjectID())
-	}
-
-	// Start a transaction
-	tx := d.db.WithContext(ctx).Begin()
-	if tx.Error != nil {
-		return tx.Error
-	}
-
-	// Ensure the transaction is rolled back if there's an error
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			panic(r) // re-throw panic after rollback
-		}
-	}()
-
-	// Save the original ID to ensure it's preserved
-	originalID := row.GetObjectID()
-
-	updateDB := tx.Table(tableName)
-	updateDB = d.translateQuery(updateDB, query, row)
-
-	// Get the update map from MongoDB operators
-	_, updateMap, err := d.applyMongoUpdateOperators(updateDB, update)
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	// Execute the update
-	result := updateDB.Updates(updateMap)
-	if result.Error != nil {
-		tx.Rollback()
-		return result.Error
-	}
-
-	// Check if any rows were affected
-	if result.RowsAffected > 0 {
-		// Update succeeded, fetch the updated document
-		fetchDB := tx.Table(tableName)
-		fetchDB = d.translateQuery(fetchDB, query, row)
-		err = fetchDB.First(row).Error
-		if err != nil {
-			tx.Rollback()
-			return err
-		}
-
-		// Ensure the original ID is preserved
-		if originalID != "" {
-			row.SetObjectID(originalID)
-		}
-	} else {
-		// No rows were affected, perform an insert
-		// Use the original ID if provided
-		if originalID != "" {
-			row.SetObjectID(originalID)
-		} else {
-			// Generate a new ID if not provided
-			row.SetObjectID(model.NewObjectID())
-		}
-
-		// Create a new instance of the same type as row
-		newRow := reflect.New(reflect.TypeOf(row).Elem()).Interface().(model.DBObject)
-		newRow.SetObjectID(row.GetObjectID())
-
-		// Apply query fields to the new row
-		for k, v := range query {
-			if !strings.HasPrefix(k, "_") && k != "$or" { // Skip special keys
-				setField(newRow, k, v)
-			}
-		}
-
-		// Apply update fields to the new row
-		if raw, ok := update["$set"]; ok {
-			switch setMap := raw.(type) {
-			case map[string]interface{}:
-				for k, v := range setMap {
-					setField(newRow, k, v)
-				}
-			case model.DBM:
-				for k, v := range setMap {
-					setField(newRow, k, v)
-				}
-			}
-		}
-
-		// Insert the new row
-		result := tx.Table(tableName).Create(newRow)
-		if result.Error != nil {
-			tx.Rollback()
-			return result.Error
-		}
-
-		// Copy values from newRow to row
-		copyStructValues(newRow, row)
-		// Ensure the original ID is preserved
-		if originalID != "" {
-			row.SetObjectID(originalID)
-		}
-
-	}
 	return tx.Commit().Error
 }
 

@@ -21,6 +21,8 @@ type lifeCycle struct {
 	sqlDB            *sql.DB
 }
 
+// Connect initializes a new database connection using the provided client options.
+// Returns an error if the connection cannot be established.
 func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 	if opts == nil {
 		return errors.New("nil opts")
@@ -110,6 +112,8 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 	return nil
 }
 
+// Close terminates the active database connection.
+// Returns an error if the connection cannot be closed properly.
 func (l *lifeCycle) Close() error {
 	err := l.sqlDB.Close()
 	if err != nil {
@@ -119,10 +123,14 @@ func (l *lifeCycle) Close() error {
 	return nil
 }
 
+// DBType returns the type of database managed by this lifecycle.
+// Useful for distinguishing between supported database backends.
 func (l *lifeCycle) DBType() utils.DBType {
 	return utils.PostgresDB
 }
 
+// Ping checks the health of the database connection.
+// Returns an error if the database is unreachable or not responding.
 func (d *driver) Ping(ctx context.Context) error {
 	// Check if the database connection is valid
 	if d.db == nil {
@@ -148,6 +156,8 @@ func (d *driver) Ping(ctx context.Context) error {
 	return nil
 }
 
+// DropDatabase removes the connected database entirely.
+// Returns an error if the operation fails.
 func (d *driver) DropDatabase(_ context.Context) error {
 	// Check if the database connection is valid
 	if d.db == nil {

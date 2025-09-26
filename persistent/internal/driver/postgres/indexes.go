@@ -18,6 +18,8 @@ type IndexRow struct {
 	Comment    *string // Using pointer for nullable string
 }
 
+// CreateIndex creates a database index on the specified table for the given fields.
+// Returns an error if index creation fails.
 func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index model.Index) error {
 	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
@@ -189,6 +191,8 @@ func getDirectionString(direction interface{}) string {
 	return "asc"
 }
 
+// GetIndexes retrieves all indexes defined on the table of the given DBObject.
+// Returns a slice of indexes or an error if the operation fails.
 func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.Index, error) {
 	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
@@ -277,6 +281,8 @@ func (d *driver) tableExists(ctx context.Context, tableName string) (bool, error
 	return exists, nil
 }
 
+// CleanIndexes removes all non-primary indexes from the table of the given DBObject.
+// Returns an error if the cleanup operation fails.
 func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 	tableName, err := d.validateDBAndTable(row)
 	if err != nil {

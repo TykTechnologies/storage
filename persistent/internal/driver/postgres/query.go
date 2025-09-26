@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+// Query retrieves records from the database matching the given filter into result.
+// Returns an error if the query fails or the result cannot be populated.
 func (d *driver) Query(ctx context.Context, object model.DBObject, result interface{}, filter model.DBM) error {
 	// Check if the database connection is valid
 	tableName, err := d.validateDBAndTable(object)
@@ -59,6 +61,8 @@ func (d *driver) Query(ctx context.Context, object model.DBObject, result interf
 	return nil
 }
 
+// Count returns the number of records in the table matching the provided filters.
+// Returns an error if the count operation fails.
 func (d *driver) Count(ctx context.Context, row model.DBObject, filters ...model.DBM) (count int, error error) {
 	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
@@ -90,6 +94,8 @@ func (d *driver) Count(ctx context.Context, row model.DBObject, filters ...model
 	return int(result), nil
 }
 
+// Aggregate executes an aggregation pipeline on the specified table.
+// Returns the resulting documents or an error if the operation fails.
 func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []model.DBM) ([]model.DBM, error) {
 	tableName, err := d.validateDBAndTable(row)
 	if err != nil {

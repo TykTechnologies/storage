@@ -15,6 +15,8 @@ type driver struct {
 	TableSharding bool
 }
 
+// NewPostgresDriver initializes a new PostgreSQL driver with the given client options.
+// Returns the driver instance or an error if the connection setup fails.
 func NewPostgresDriver(opts *types.ClientOpts) (*driver, error) {
 	lc := &lifeCycle{}
 
