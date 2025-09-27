@@ -111,21 +111,22 @@ func TestLifeCycleConnect(t *testing.T) {
 		lc := &lifeCycle{}
 
 		testCases := []struct {
-			name string
+			name          string
 			connectionStr string
 		}{
 			{
-				name: "standard connection string",
-				connectionStr: getconnStr() ,,
+				name:          "standard connection string",
+				connectionStr: getConnStr(),
 			},
 			{
-				name: "connection string as URL",
+				name:          "connection string as URL",
 				connectionStr: connStrAsURL,
 			},
 		}
 
-		for tc := range testCases{
+		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
+
 				opts := &types.ClientOpts{
 					ConnectionString: tc.connectionStr,
 					Type:             "postgresDBType",
