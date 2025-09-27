@@ -110,32 +110,50 @@ func TestLifeCycleConnect(t *testing.T) {
 		// Create a new lifeCycle instance
 		lc := &lifeCycle{}
 
-		opts := &types.ClientOpts{
-			ConnectionString: getConnStr(),
-			Type:             "postgresDBType",
+		testCases := []struct {
+			name string
+			connectionStr string
+		}{
+			{
+				name: "standard connection string",
+				connectionStr: getconnStr() ,,
+			},
+			{
+				name: "connection string as URL",
+				connectionStr: connStrAsURL,
+			},
 		}
 
-		// Connect to the database
-		err := lc.Connect(opts)
+		for tc := range testCases{
+			t.Run(tc.name, func(t *testing.T) {
+				opts := &types.ClientOpts{
+					ConnectionString: tc.connectionStr,
+					Type:             "postgresDBType",
+				}
 
-		// Verify that the connection was successful
-		assert.NoError(t, err, "Connect should not return an error with valid options")
+				// Connect to the database
+				err := lc.Connect(opts)
+				// Verify that the connection was successful
+				assert.NoError(t, err, "Connect should not return an error with valid options")
 
-		// Verify that the connection is established
-		assert.NotNil(t, lc.db, "Database connection should not be nil after successful connection")
+				// Verify that the connection is established
+				assert.NotNil(t, lc.db, "Database connection should not be nil after successful connection")
 
-		// Verify that the connection works by pinging the database
-		ctx := context.Background()
-		err = lc.db.WithContext(ctx).Exec("SELECT 1").Error
-		assert.NoError(t, err, "Should be able to execute a simple query after connection")
+				// Verify that the connection works by pinging the database
+				ctx := context.Background()
+				err = lc.db.WithContext(ctx).Exec("SELECT 1").Error
+				assert.NoError(t, err, "Should be able to execute a simple query after connection")
 
-		// Clean up
-		if lc.db != nil {
-			sqlDB, err := lc.db.DB()
-			if err == nil {
-				sqlDB.Close()
-			}
+				// Clean up
+				if lc.db != nil {
+					sqlDB, err := lc.db.DB()
+					if err == nil {
+						sqlDB.Close()
+					}
+				}
+			})
 		}
+
 	})
 
 	// Test case 2: Failed connection due to invalid connection string

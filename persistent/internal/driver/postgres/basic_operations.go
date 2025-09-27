@@ -80,15 +80,10 @@ func (d *driver) Delete(ctx context.Context, object model.DBObject, filters ...m
 		if err != nil {
 			return err
 		}
-	} else {
+	} else if object.GetObjectID() != "" {
 		// If no filter is provided, use the object's ID as the filter
 		id := object.GetObjectID()
-		if id != "" {
-			db = db.Where("id = ?", id.Hex())
-		} else {
-			// No filter and no ID, nothing to delete
-			return nil
-		}
+		db = db.Where("id = ?", id.Hex())
 	}
 	// Execute the DELETE operation
 	result := db.Delete(object)
