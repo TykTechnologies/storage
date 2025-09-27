@@ -8,7 +8,6 @@ import (
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/model"
 	"gorm.io/gorm"
-	"math"
 	"reflect"
 	"strings"
 	"time"
@@ -390,19 +389,59 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 		}
 
 		if baseTable != "" {
+			// Get all tables that match the pattern in a single query
+			tablePattern := baseTable + "_%"
+
+			// Query to get all tables matching the pattern
+			query := `
+				SELECT tablename 
+				FROM pg_tables 
+				WHERE schemaname = 'public' 
+				AND tablename LIKE ?
+        	`
+
+			rows, err := d.db.Raw(query, tablePattern).Rows()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get sharded tables: %w", err)
+			}
+			defer rows.Close()
+
+			// Collect matching tables
+			var matchingTables []string
+			for rows.Next() {
+				var tableName string
+				if err := rows.Scan(&tableName); err != nil {
+					return nil, fmt.Errorf("failed to scan table name: %w", err)
+				}
+				matchingTables = append(matchingTables, tableName)
+			}
+			if err := rows.Err(); err != nil {
+				return nil, fmt.Errorf("error iterating table names: %w", err)
+			}
+
+			// Filter tables that fall within the date range
 			allTablesSQL := []string{}
-			days := int(math.Ceil(maxShardDate.Sub(minShardDate).Hours() / 24))
+			dateFormat := "20060102"
+			minDateStr := minShardDate.Format(dateFormat)
+			maxDateStr := maxShardDate.Format(dateFormat)
 
-			for i := 0; i <= days; i++ {
-				table := baseTable + "_" + minShardDate.Add(time.Duration(i*24)*time.Hour).Format("20060102")
-
-				// Check if table exists
-				exists, _ := d.HasTable(context.Background(), table)
-				if !exists {
-					continue
+			for _, tableName := range matchingTables {
+				// Extract date suffix from table name
+				if len(tableName) <= len(baseTable)+1 {
+					continue // Skip if table name is too short
 				}
 
-				allTablesSQL = append(allTablesSQL, "SELECT * FROM "+table)
+				dateSuffix := tableName[len(baseTable)+1:] // +1 for the underscore
+
+				// Validate that the suffix is a date in the expected format
+				if len(dateSuffix) != 8 {
+					continue // Not a date suffix
+				}
+
+				// Check if the date is within our range
+				if dateSuffix >= minDateStr && dateSuffix <= maxDateStr {
+					allTablesSQL = append(allTablesSQL, "SELECT * FROM "+tableName)
+				}
 			}
 
 			if len(allTablesSQL) > 0 {
