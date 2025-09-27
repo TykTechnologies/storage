@@ -10,7 +10,6 @@ import (
 	"gorm.io/gorm"
 	"reflect"
 	"strings"
-	"time"
 )
 
 // Insert adds one or more objects into the database in a single batch operation.
@@ -143,53 +142,6 @@ func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 		return sql.ErrNoRows
 	}
 	return nil
-}
-
-// createTempTableWithMatchingTypes creates a temporary table with the same column types as the main table
-func (d *driver) createTempTableWithMatchingTypes(tx *gorm.DB, tableName string, fields map[string]bool) (string, error) {
-	// Generate a unique temporary table name
-	tempTableName := fmt.Sprintf("temp_bulk_update_%v", time.Now().UnixNano())
-
-	// Query the database schema to get column types
-	var columnInfo []struct {
-		ColumnName string `gorm:"column:column_name"`
-		DataType   string `gorm:"column:data_type"`
-	}
-
-	schemaQuery := `
-        SELECT column_name, data_type 
-        FROM information_schema.columns 
-        WHERE table_name = ? AND column_name != 'id'
-    `
-
-	if err := tx.Raw(schemaQuery, tableName).Scan(&columnInfo).Error; err != nil {
-		return "", fmt.Errorf("failed to get column types: %w", err)
-	}
-
-	// Create a map of column names to their data types
-	columnTypes := make(map[string]string)
-	for _, col := range columnInfo {
-		columnTypes[col.ColumnName] = col.DataType
-	}
-
-	// Build CREATE TEMPORARY TABLE statement with matching column types
-	createTempTableSQL := fmt.Sprintf("CREATE TEMPORARY TABLE %s (id TEXT PRIMARY KEY", tempTableName)
-	for field := range fields {
-		dataType, exists := columnTypes[field]
-		if !exists {
-			// If we don't have type info, default to TEXT
-			dataType = "TEXT"
-		}
-		createTempTableSQL += fmt.Sprintf(", %s %s", field, dataType)
-	}
-	createTempTableSQL += ")"
-
-	// Create the temporary table using GORM's Exec
-	if err := tx.Exec(createTempTableSQL).Error; err != nil {
-		return "", err
-	}
-
-	return tempTableName, nil
 }
 
 /*
