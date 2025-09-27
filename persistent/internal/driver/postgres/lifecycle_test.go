@@ -107,8 +107,6 @@ func TestPing(t *testing.T) {
 func TestLifeCycleConnect(t *testing.T) {
 	// Test case 1: Successful connection
 	t.Run("SuccessfulConnection", func(t *testing.T) {
-		// Create a new lifeCycle instance
-		lc := &lifeCycle{}
 
 		testCases := []struct {
 			name          string
@@ -126,7 +124,8 @@ func TestLifeCycleConnect(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-
+				// Create a new lifeCycle instance
+				lc := &lifeCycle{}
 				opts := &types.ClientOpts{
 					ConnectionString: tc.connectionStr,
 					Type:             "postgresDBType",

@@ -27,46 +27,21 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 	if opts == nil {
 		return errors.New("nil opts")
 	}
-	// Start with whatever user provided (could be DSN or connection URL)
-	connStr := strings.TrimSpace(opts.ConnectionString)
 
-	// Build parameter list to append (keeps original string intact)
-	params := []string{}
-
-	if opts.UseSSL {
-		// Decide sslmode
-		mode := "verify-full" // safest default
-		if opts.SSLInsecureSkipVerify {
-			mode = "require" // encrypted but no verification
-		}
-
-		params = append(params, fmt.Sprintf("sslmode=%s", mode))
-
-		if opts.SSLCAFile != "" {
-			params = append(params, fmt.Sprintf("sslrootcert=%s", opts.SSLCAFile))
-		}
-		if opts.SSLPEMKeyfile != "" {
-			params = append(params, fmt.Sprintf("sslcert=%s", opts.SSLPEMKeyfile))
-		}
-	} else {
-		params = append(params, "sslmode=disable")
+	// Use the connection string exactly as provided
+	dsn := strings.TrimSpace(opts.ConnectionString)
+	if dsn == "" {
+		return errors.New("empty connection string")
 	}
 
-	if len(params) > 0 {
-		if connStr != "" {
-			connStr = connStr + " " + strings.Join(params, " ")
-		} else {
-			connStr = strings.Join(params, " ")
-		}
-	}
-
-	var err error
-	db, err := gorm.Open(postgres.Open(connStr), &gorm.Config{})
+	// Open GORM with PostgreSQL driver
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return fmt.Errorf("gorm open: %w", err)
 	}
 	l.db = db
 
+	// Get underlying sql.DB
 	sqlDB, err := db.DB()
 	if err != nil {
 		l.db = nil
@@ -74,16 +49,16 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 	}
 	l.sqlDB = sqlDB
 
-	// Set connection timeout
+	// Set connection lifetime if provided
 	if opts.ConnectionTimeout > 0 {
 		l.sqlDB.SetConnMaxLifetime(time.Duration(opts.ConnectionTimeout) * time.Second)
 	}
 
+	// Ping to verify connection
 	pingTimeout := 5 * time.Second
 	if opts.ConnectionTimeout > 0 {
 		pingTimeout = time.Duration(opts.ConnectionTimeout) * time.Second
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer cancel()
 	if err := l.sqlDB.PingContext(ctx); err != nil {
@@ -91,21 +66,18 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 		return fmt.Errorf("ping db: %w", err)
 	}
 
-	// Extract database name. Handle both DSN form (dbname=...) and URL form (postgres://host/dbname)
-	// DSN search
-	for _, part := range strings.Fields(connStr) {
-		if strings.HasPrefix(part, "dbname=") {
-			l.dbName = strings.TrimPrefix(part, "dbname=")
-			break
+	// Extract database name (supports both DSN and URL formats)
+	if parts := strings.Fields(dsn); len(parts) > 0 {
+		for _, part := range parts {
+			if strings.HasPrefix(part, "dbname=") {
+				l.dbName = strings.TrimPrefix(part, "dbname=")
+				break
+			}
 		}
 	}
-
-	// If not found, try parsing URL
-	if l.dbName == "" {
-		if strings.HasPrefix(opts.ConnectionString, "postgres://") || strings.HasPrefix(opts.ConnectionString, "postgresql://") {
-			if u, err := url.Parse(opts.ConnectionString); err == nil {
-				l.dbName = strings.TrimPrefix(u.Path, "/")
-			}
+	if l.dbName == "" && (strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://")) {
+		if u, err := url.Parse(dsn); err == nil {
+			l.dbName = strings.TrimPrefix(u.Path, "/")
 		}
 	}
 
