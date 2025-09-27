@@ -30,9 +30,15 @@ func sanitizeIdentifier(s string) (string, error) {
 // CreateIndex creates a database index on the specified table for the given fields.
 // Returns an error if index creation fails.
 func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index model.Index) error {
+	// Validate table
 	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
 		return err
+	}
+
+	tableName, err = sanitizeIdentifier(tableName)
+	if err != nil {
+		return fmt.Errorf("invalid table name: %w", err)
 	}
 
 	// Validate index
@@ -40,7 +46,6 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 		return errors.New(types.ErrorIndexEmpty)
 	}
 
-	// Check if TTL index is on a compound index (not allowed)
 	if index.IsTTLIndex && len(index.Keys) > 1 {
 		return errors.New(types.ErrorIndexComposedTTL)
 	}
@@ -48,53 +53,37 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 	// Generate index name if not provided
 	indexName := index.Name
 	if indexName == "" {
-		// For simple indexes with one field, use MongoDB's convention: field_1
-		if len(index.Keys) == 1 && len(index.Keys[0]) == 1 {
-			for field, direction := range index.Keys[0] {
+		parts := []string{}
+		for _, key := range index.Keys {
+			for field, direction := range key {
 				dirStr := getDirectionString(direction)
-				indexName = field + "_" + dirStr
+				parts = append(parts, field+"_"+dirStr)
 			}
-		} else {
-			// For compound indexes, join all fields
-			parts := []string{}
-			for _, key := range index.Keys {
-				for field, direction := range key {
-					dirStr := getDirectionString(direction)
-					parts = append(parts, field+"_"+dirStr)
-				}
-			}
-
-			indexName = strings.Join(parts, "_")
 		}
+		indexName = strings.Join(parts, "_")
 	}
 
-	// Check if the index already exists
-	exists, err := d.indexExists(ctx, tableName, indexName)
+	indexName, err = sanitizeIdentifier(indexName)
 	if err != nil {
-		return fmt.Errorf("failed to check if index exists: %w", err)
-	}
-	if exists {
-		return errors.New(types.ErrorIndexAlreadyExist)
+		return fmt.Errorf("invalid index name: %w", err)
 	}
 
-	indexType := "BTREE" // Default index type
+	// Build column list safely
 	var indexFields []string
+	indexType := "BTREE"
 
-	safeTable, err := sanitizeIdentifier(tableName)
-	safeIndex, err := sanitizeIdentifier(indexName)
-	safeFields := []string{}
-	// Process each key in the index
 	for _, key := range index.Keys {
 		for field, direction := range key {
-			// Map _id to id for PostgreSQL
 			if field == "_id" {
 				field = "id"
 			}
+			col, err := sanitizeIdentifier(field)
+			if err != nil {
+				return fmt.Errorf("invalid column name: %w", err)
+			}
 
-			// Handle different types of direction values
 			switch v := direction.(type) {
 			case int, int32, int64:
-				// Get sort direction based on sign
 				sortDir := "ASC"
 				switch val := v.(type) {
 				case int:
@@ -110,56 +99,49 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 						sortDir = "DESC"
 					}
 				}
-				indexFields = append(indexFields, fmt.Sprintf("%s %s", field, sortDir))
+				indexFields = append(indexFields, fmt.Sprintf("%s %s", col, sortDir))
 			case string:
 				if v == "2dsphere" {
-					// PostgreSQL equivalent of MongoDB's 2dsphere is a GiST index
 					indexType = "GIST"
-					indexFields = append(indexFields, field)
+					indexFields = append(indexFields, col)
 				} else {
-					// Default to ASC for other string values
-					indexFields = append(indexFields, fmt.Sprintf("%s ASC", field))
+					indexFields = append(indexFields, fmt.Sprintf("%s ASC", col))
 				}
 			default:
-				// Default to ASC for unknown types
-				indexFields = append(indexFields, fmt.Sprintf("%s ASC", field))
+				indexFields = append(indexFields, fmt.Sprintf("%s ASC", col))
 			}
 		}
 	}
 
-	for _, f := range indexFields {
-		parts := strings.Split(f, " ")
-		col, err := sanitizeIdentifier(parts[0])
-		if err != nil {
-			return err
-		}
-		safeFields = append(safeFields, col+" "+parts[1])
+	// Check if the index already exists
+	exists, err := d.indexExists(ctx, tableName, indexName)
+	if err != nil {
+		return fmt.Errorf("failed to check index existence: %w", err)
+	}
+	if exists {
+		return errors.New(types.ErrorIndexAlreadyExist)
 	}
 
-	// Build the CREATE INDEX statement
-	createIndexSQL := fmt.Sprintf(
+	// Build CREATE INDEX statement
+	createSQL := fmt.Sprintf(
 		"CREATE INDEX %s ON %s USING %s (%s)",
-		safeIndex,
-		safeTable,
+		indexName,
+		tableName,
 		indexType,
-		strings.Join(safeFields, ", "),
+		strings.Join(indexFields, ", "),
 	)
 
-	// Add CONCURRENTLY if background is true
 	if index.Background {
-		createIndexSQL = strings.Replace(createIndexSQL, "CREATE INDEX", "CREATE INDEX CONCURRENTLY", 1)
+		createSQL = strings.Replace(createSQL, "CREATE INDEX", "CREATE INDEX CONCURRENTLY", 1)
 	}
 
-	// Execute the statement
-	err = d.db.WithContext(ctx).Exec(createIndexSQL).Error
-	if err != nil {
+	if err := d.db.WithContext(ctx).Exec(createSQL).Error; err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
 
-	// Store TTL information in a metadata table if it's a TTL index
+	// Store TTL metadata
 	if index.IsTTLIndex {
-		// Create metadata table if it doesn't exist
-		metadataTableSQL := `
+		metadataSQL := `
 			CREATE TABLE IF NOT EXISTS index_metadata (
 				table_name TEXT NOT NULL,
 				index_name TEXT NOT NULL,
@@ -168,20 +150,17 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 				PRIMARY KEY (table_name, index_name)
 			)
 		`
-		err = d.db.WithContext(ctx).Exec(metadataTableSQL).Error
-		if err != nil {
+		if err := d.db.WithContext(ctx).Exec(metadataSQL).Error; err != nil {
 			return fmt.Errorf("failed to create metadata table: %w", err)
 		}
 
-		// Store TTL information
-		metadataSQL := `
+		ttlSQL := `
 			INSERT INTO index_metadata (table_name, index_name, is_ttl, ttl_seconds)
 			VALUES (?, ?, TRUE, ?)
 			ON CONFLICT (table_name, index_name) DO UPDATE
 			SET is_ttl = TRUE, ttl_seconds = EXCLUDED.ttl_seconds
 		`
-		err = d.db.WithContext(ctx).Exec(metadataSQL, tableName, indexName, index.TTL).Error
-		if err != nil {
+		if err := d.db.WithContext(ctx).Exec(ttlSQL, tableName, indexName, index.TTL).Error; err != nil {
 			return fmt.Errorf("failed to store TTL metadata: %w", err)
 		}
 	}
