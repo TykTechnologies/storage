@@ -409,7 +409,9 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 
 	originalID := row.GetObjectID()
 
-	// Apply query
+	// -------------------
+	// Attempt update
+	// -------------------
 	updateDB := tx.Table(tableName)
 	updateDB, err = d.translateQuery(updateDB, query, row)
 	if err != nil {
@@ -417,14 +419,12 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 		return err
 	}
 
-	// Translate Mongo-style update operators
 	_, updateMap, err := d.applyMongoUpdateOperators(updateDB, update)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 
-	// Attempt update
 	result := updateDB.Updates(updateMap)
 	if result.Error != nil {
 		tx.Rollback()
@@ -432,18 +432,11 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 	}
 
 	if result.RowsAffected > 0 {
-		// Existing row updated → fetch updated values
-		fetchDB := tx.Table(tableName)
-		fetchDB, err = d.translateQuery(fetchDB, query, row)
-		if err != nil {
+		if err := d.fetchUpdatedRow(tx, tableName, query, row); err != nil {
 			tx.Rollback()
 			return err
 		}
-		err = fetchDB.First(row).Error
-		if err != nil {
-			tx.Rollback()
-			return err
-		}
+		// Preserve original ID
 		if originalID != "" {
 			row.SetObjectID(originalID)
 		}
@@ -453,8 +446,70 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 	// -------------------
 	// Insert path
 	// -------------------
+	ensureID(originalID, row, query)
 
-	// Ensure ID
+	// Create a new instance for insertion
+	newRow := cloneDBObject(row)
+
+	// Merge query fields into newRow
+	mergeQueryFields(newRow, query)
+
+	// Apply update fields to newRow
+	applySetOperatorToObject(newRow, update)
+
+	// Insert
+	if err := tx.Table(tableName).Create(newRow).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Copy back values to caller row
+	copyStructValues(newRow, row)
+
+	// Preserve original ID
+	if originalID != "" {
+		row.SetObjectID(originalID)
+	}
+
+	return tx.Commit().Error
+}
+
+func (d *driver) fetchUpdatedRow(tx *gorm.DB, table string, query model.DBM, row model.DBObject) error {
+	db := tx.Table(table)
+	db, err := d.translateQuery(db, query, row)
+	if err != nil {
+		return err
+	}
+	return db.First(row).Error
+}
+
+func ensureID(originalID model.ObjectID, row model.DBObject, query model.DBM) {
+	if originalID != "" {
+		row.SetObjectID(originalID)
+	} else if idVal, ok := query["id"].(string); ok && idVal != "" {
+		row.SetObjectID(model.ObjectIDHex(idVal))
+	}
+	if row.GetObjectID() == "" {
+		row.SetObjectID(model.NewObjectID())
+	}
+}
+
+func cloneDBObject(row model.DBObject) model.DBObject {
+	newRow := reflect.New(reflect.TypeOf(row).Elem()).Interface().(model.DBObject)
+	newRow.SetObjectID(row.GetObjectID())
+	return newRow
+}
+
+func mergeQueryFields(row model.DBObject, query model.DBM) {
+	for k, v := range query {
+		if strings.HasPrefix(k, "_") || k == "$or" {
+			continue
+		}
+		setField(row, k, v) // keeps reflection logic isolated
+	}
+}
+
+func (d *driver) ensureID(originalID model.ObjectID, row model.DBObject, query model.DBM) {
 	if originalID != "" {
 		row.SetObjectID(originalID)
 	} else if qid, ok := query["id"]; ok {
@@ -463,40 +518,6 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 
 		}
 	}
-	if row.GetObjectID() == "" {
-		row.SetObjectID(model.NewObjectID())
-	}
-
-	// New instance of row type
-	newRow := reflect.New(reflect.TypeOf(row).Elem()).Interface().(model.DBObject)
-	newRow.SetObjectID(row.GetObjectID())
-
-	// Apply query fields to newRow
-	for k, v := range query {
-		if !strings.HasPrefix(k, "_") && k != "$or" {
-			setField(newRow, k, v)
-		}
-	}
-
-	// Apply update fields to newRow
-	applySetOperatorToObject(newRow, update)
-
-	// Insert
-	result = tx.Table(tableName).Create(newRow)
-	if result.Error != nil {
-		tx.Rollback()
-		return result.Error
-	}
-
-	// Copy values into caller row
-	copyStructValues(newRow, row)
-
-	// Preserve original ID if given
-	if originalID != "" {
-		row.SetObjectID(originalID)
-	}
-
-	return tx.Commit().Error
 }
 
 // Helper function to set a field in a struct using reflection
