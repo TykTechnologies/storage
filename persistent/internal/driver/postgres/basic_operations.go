@@ -430,17 +430,6 @@ func (d *driver) fetchUpdatedRow(tx *gorm.DB, table string, query model.DBM, row
 	return db.First(row).Error
 }
 
-func (d *driver) ensureID(originalID model.ObjectID, row model.DBObject, query model.DBM) {
-	if originalID != "" {
-		row.SetObjectID(originalID)
-	} else if qid, ok := query["id"]; ok {
-		if sid, ok2 := qid.(string); ok2 && sid != "" {
-			row.SetObjectID(model.ObjectIDHex(sid))
-
-		}
-	}
-}
-
 // Helper function to set a field in a struct using reflection
 func setField(obj interface{}, name string, value interface{}) {
 	structValue := reflect.ValueOf(obj)

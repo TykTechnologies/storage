@@ -11,6 +11,8 @@ import (
 	"strings"
 )
 
+var sanitizerRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+
 type IndexRow struct {
 	IndexName  string
 	ColumnName string
@@ -367,7 +369,7 @@ func (d *driver) indexExists(ctx context.Context, tableName, indexName string) (
 }
 
 func sanitizeIdentifier(s string) (string, error) {
-	if matched := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`).MatchString(s); !matched {
+	if matched := sanitizerRegex.MatchString(s); !matched {
 		return "", fmt.Errorf("invalid identifier: %s", s)
 	}
 	return pq.QuoteIdentifier(s), nil // use pq or pgx quoting
