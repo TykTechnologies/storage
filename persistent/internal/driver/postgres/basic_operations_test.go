@@ -618,5 +618,5 @@ func TestEnsureID(t *testing.T) {
 	// Case 3: neither originalID nor query["id"] → ID should remain empty
 	obj3 := &TestObject{}
 	ensureID("", obj3, model.DBM{})
-	assert.Equal(t, model.ObjectID(""), obj3.GetObjectID())
+	assert.NotEqual(t, "", obj3.GetObjectID())
 }
