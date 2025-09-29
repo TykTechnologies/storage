@@ -303,7 +303,7 @@ func (d *driver) GetTables(ctx context.Context) ([]string, error) {
 // DropTable removes a table by its name.
 // Returns the number of tables dropped and any error encountered.
 func (d *driver) DropTable(ctx context.Context, name string) (int, error) {
-	db := d.readDB
+	db := d.writeDB
 	if db == nil {
 		return 0, errors.New(types.ErrorSessionClosed)
 	}

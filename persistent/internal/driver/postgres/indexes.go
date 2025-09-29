@@ -161,6 +161,29 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 	return nil
 }
 
+// Helper function to get direction string
+func getDirectionString(direction interface{}) string {
+	switch v := direction.(type) {
+	case int:
+		if v < 0 {
+			return "desc"
+		}
+	case int32:
+		if v < 0 {
+			return "desc"
+		}
+	case int64:
+		if v < 0 {
+			return "desc"
+		}
+	case string:
+		return v
+	default:
+		// unknown type: default to "1"
+	}
+	return "asc"
+}
+
 // GetIndexes retrieves all indexes defined on the table of the given DBObject.
 // Returns a slice of indexes or an error if the operation fails.
 func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.Index, error) {
@@ -341,29 +364,6 @@ func (d *driver) indexExists(ctx context.Context, tableName, indexName string) (
 	}
 
 	return exists, nil
-}
-
-// Helper function to get direction string
-func getDirectionString(direction interface{}) string {
-	switch v := direction.(type) {
-	case int:
-		if v < 0 {
-			return "desc"
-		}
-	case int32:
-		if v < 0 {
-			return "desc"
-		}
-	case int64:
-		if v < 0 {
-			return "desc"
-		}
-	case string:
-		return v
-	default:
-		// unknown type: default to "1"
-	}
-	return "asc"
 }
 
 func sanitizeIdentifier(s string) (string, error) {

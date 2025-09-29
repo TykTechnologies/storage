@@ -1186,7 +1186,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		}
 
 		// Apply the update operators
-		db := driver.readDB.WithContext(ctx).Table(tableName)
+		db := driver.writeDB.WithContext(ctx).Table(tableName)
 		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
 		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
 

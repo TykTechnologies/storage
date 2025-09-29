@@ -121,7 +121,7 @@ func (l *lifeCycle) closeWriteConnection() error {
 	if l.writeSQLDB != nil {
 		err := l.writeSQLDB.Close()
 		if err != nil {
-			return err
+			return errors.New("failed to close write connection")
 		}
 		l.writeDB = nil
 		l.writeSQLDB = nil
@@ -148,26 +148,34 @@ func (l *lifeCycle) extractDBName(dsn string) {
 // Close terminates the active database connection.
 // Returns an error if the connection cannot be closed properly.
 func (l *lifeCycle) Close() error {
-	var writeErr, readErr error
+	var err error
+	connectionClosed := false
 
 	// Close write connection
+	// Close write connection
 	if l.writeSQLDB != nil {
-		writeErr = l.writeSQLDB.Close()
+		err = l.writeSQLDB.Close()
+		connectionClosed = true
 		l.writeDB = nil
 		l.writeSQLDB = nil
 	}
 
-	// Close read connection (only if different from the write connection)
-	if l.readSQLDB != nil && l.readSQLDB != l.writeSQLDB {
-		readErr = l.readSQLDB.Close()
-		l.readDB = nil
-		l.readSQLDB = nil
+	// Only close read connection if it's different from write connection
+	// or if we haven't closed any connection yet
+	if l.readSQLDB != nil && (!connectionClosed || l.readSQLDB != l.writeSQLDB) {
+		readErr := l.readSQLDB.Close()
+		// If we didn't have an error from closing write connection,
+		// use the error from closing read connection
+		if err == nil {
+			err = readErr
+		}
 	}
 
-	if writeErr != nil {
-		return writeErr
-	}
-	return readErr
+	// Always nil the read pointers
+	l.readDB = nil
+	l.readSQLDB = nil
+
+	return err
 }
 
 // DBType returns the type of database managed by this lifecycle.
