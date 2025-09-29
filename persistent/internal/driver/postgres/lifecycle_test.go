@@ -226,7 +226,7 @@ func TestDropDatabase(t *testing.T) {
 		driver, _ := setupTest(t)
 
 		err := driver.DropDatabase(context.Background())
-		assert.Nil(t, driver.db)
+		assert.Nil(t, driver.writeDB)
 		assert.Error(t, err)
 	})
 }

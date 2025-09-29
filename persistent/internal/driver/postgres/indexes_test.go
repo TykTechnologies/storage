@@ -1,6 +1,3 @@
-//go:build postgres || postgres16.1 || postgres15 || postgres14.11 || postgres13.3 || postgres12.22
-// +build postgres postgres16.1 postgres15 postgres14.11 postgres13.3 postgres12.22
-
 package postgres
 
 import (
@@ -18,7 +15,7 @@ func TestCreateIndex(t *testing.T) {
 
 	// Helper function to clean up test data
 	cleanupTestData := func(tableName string) {
-		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName)).Error
+		err := driver.writeDB.WithContext(ctx).Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName)).Error
 		if err != nil {
 			t.Logf("Error cleaning up test data: %v", err)
 		}
