@@ -18,6 +18,9 @@ type ClientOpts struct {
 	// ConnectionString is the expression used to connect to a storage db server.
 	// It contains parameters such as username, hostname, password and port
 	ConnectionString string
+	// ReadConnectionString If empty, will use ConnectionString for reads
+	// useful for SQL connectors
+	ReadConnectionString string
 	// UseSSL is SSL connection is required to connect
 	UseSSL bool
 	// This setting allows the use of self-signed certificates when connecting to an encrypted storage database.

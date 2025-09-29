@@ -92,7 +92,7 @@ func TestPing(t *testing.T) {
 		// Create a driver instance
 		driver, ctx := setupTest(t)
 
-		// Explicitly close the session to make d.db nil
+		// Explicitly close the session to make d.writeDB nil
 		err := driver.Close()
 		assert.NoError(t, err, "Failed to close the driver session")
 
@@ -137,16 +137,16 @@ func TestLifeCycleConnect(t *testing.T) {
 				assert.NoError(t, err, "Connect should not return an error with valid options")
 
 				// Verify that the connection is established
-				assert.NotNil(t, lc.db, "Database connection should not be nil after successful connection")
+				assert.NotNil(t, lc.writeDB, "Database connection should not be nil after successful connection")
 
 				// Verify that the connection works by pinging the database
 				ctx := context.Background()
-				err = lc.db.WithContext(ctx).Exec("SELECT 1").Error
+				err = lc.writeDB.WithContext(ctx).Exec("SELECT 1").Error
 				assert.NoError(t, err, "Should be able to execute a simple query after connection")
 
 				// Clean up
-				if lc.db != nil {
-					sqlDB, err := lc.db.DB()
+				if lc.writeDB != nil {
+					sqlDB, err := lc.writeDB.DB()
 					if err == nil {
 						sqlDB.Close()
 					}
@@ -174,7 +174,7 @@ func TestLifeCycleConnect(t *testing.T) {
 		assert.Error(t, err, "Connect should return an error with invalid connection string")
 
 		// Verify that the database connection is nil
-		assert.Nil(t, lc.db, "Database connection should be nil after failed connection")
+		assert.Nil(t, lc.writeDB, "Database connection should be nil after failed connection")
 	})
 
 	// Test case 3: Failed connection due to nil options
@@ -189,7 +189,7 @@ func TestLifeCycleConnect(t *testing.T) {
 		assert.Error(t, err, "Connect should return an error with nil options")
 
 		// Verify that the database connection is nil
-		assert.Nil(t, lc.db, "Database connection should be nil after failed connection")
+		assert.Nil(t, lc.writeDB, "Database connection should be nil after failed connection")
 	})
 
 	// Test case 4: Failed connection due to empty connection string
@@ -210,7 +210,7 @@ func TestLifeCycleConnect(t *testing.T) {
 		assert.Error(t, err, "Connect should return an error with empty connection string")
 
 		// Verify that the database connection is nil
-		assert.Nil(t, lc.db, "Database connection should be nil after failed connection")
+		assert.Nil(t, lc.writeDB, "Database connection should be nil after failed connection")
 	})
 }
 

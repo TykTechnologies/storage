@@ -14,7 +14,9 @@ import (
 )
 
 const connStr = "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable"
-const connStrAsURL = "postgres://testuser:testpass@localhost:5432/testdb"
+
+// const connStrAsURL = "postgres://testuser:testpass@localhost:5432/testdb"
+const connStrAsURL = "postgres://postgres:secr3t@localhost:5432/tyk"
 
 type TestObject struct {
 	ID             model.ObjectID `json:"id" gorm:"primaryKey"`

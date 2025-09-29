@@ -20,13 +20,6 @@ type IndexRow struct {
 	Comment    *string // Using pointer for nullable string
 }
 
-func sanitizeIdentifier(s string) (string, error) {
-	if matched := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`).MatchString(s); !matched {
-		return "", fmt.Errorf("invalid identifier: %s", s)
-	}
-	return pq.QuoteIdentifier(s), nil // use pq or pgx quoting
-}
-
 // CreateIndex creates a database index on the specified table for the given fields.
 // Returns an error if index creation fails.
 func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index model.Index) error {
@@ -135,7 +128,7 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 		createSQL = strings.Replace(createSQL, "CREATE INDEX", "CREATE INDEX CONCURRENTLY", 1)
 	}
 
-	if err := d.db.WithContext(ctx).Exec(createSQL).Error; err != nil {
+	if err := d.writeDB.WithContext(ctx).Exec(createSQL).Error; err != nil {
 		return fmt.Errorf("failed to create index: %w", err)
 	}
 
@@ -150,7 +143,7 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 				PRIMARY KEY (table_name, index_name)
 			)
 		`
-		if err := d.db.WithContext(ctx).Exec(metadataSQL).Error; err != nil {
+		if err := d.writeDB.WithContext(ctx).Exec(metadataSQL).Error; err != nil {
 			return fmt.Errorf("failed to create metadata table: %w", err)
 		}
 
@@ -160,35 +153,12 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 			ON CONFLICT (table_name, index_name) DO UPDATE
 			SET is_ttl = TRUE, ttl_seconds = EXCLUDED.ttl_seconds
 		`
-		if err := d.db.WithContext(ctx).Exec(ttlSQL, tableName, indexName, index.TTL).Error; err != nil {
+		if err := d.writeDB.WithContext(ctx).Exec(ttlSQL, tableName, indexName, index.TTL).Error; err != nil {
 			return fmt.Errorf("failed to store TTL metadata: %w", err)
 		}
 	}
 
 	return nil
-}
-
-// Helper function to get direction string
-func getDirectionString(direction interface{}) string {
-	switch v := direction.(type) {
-	case int:
-		if v < 0 {
-			return "desc"
-		}
-	case int32:
-		if v < 0 {
-			return "desc"
-		}
-	case int64:
-		if v < 0 {
-			return "desc"
-		}
-	case string:
-		return v
-	default:
-		// unknown type: default to "1"
-	}
-	return "asc"
 }
 
 // GetIndexes retrieves all indexes defined on the table of the given DBObject.
@@ -232,7 +202,7 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
     `
 
 	var rows []IndexRow
-	err = d.db.WithContext(ctx).Raw(query, tableName).Scan(&rows).Error
+	err = d.readDB.WithContext(ctx).Raw(query, tableName).Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to query indexes: %w", err)
 	}
@@ -274,7 +244,7 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
 
 func (d *driver) tableExists(ctx context.Context, tableName string) (bool, error) {
 	var exists bool
-	err := d.db.WithContext(ctx).Raw("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = ?)", tableName).Scan(&exists).Error
+	err := d.readDB.WithContext(ctx).Raw("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = ?)", tableName).Scan(&exists).Error
 	if err != nil {
 		return false, fmt.Errorf("failed to check if table exists: %w", err)
 	}
@@ -316,7 +286,7 @@ func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 
 	var indexNames []string
 	// Execute the query
-	err = d.db.WithContext(ctx).Raw(query, tableName).Scan(&indexNames).Error
+	err = d.writeDB.WithContext(ctx).Raw(query, tableName).Scan(&indexNames).Error
 	if err != nil {
 		return fmt.Errorf("failed to query indexes: %w", err)
 	}
@@ -326,7 +296,7 @@ func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 	}
 
 	// Start a transaction
-	tx := d.db.WithContext(ctx).Begin()
+	tx := d.writeDB.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -365,10 +335,40 @@ func (d *driver) indexExists(ctx context.Context, tableName, indexName string) (
     `
 
 	var exists bool
-	err := d.db.WithContext(ctx).Raw(query, tableName, indexName).Scan(&exists).Error
+	err := d.readDB.WithContext(ctx).Raw(query, tableName, indexName).Scan(&exists).Error
 	if err != nil {
 		return false, err
 	}
 
 	return exists, nil
+}
+
+// Helper function to get direction string
+func getDirectionString(direction interface{}) string {
+	switch v := direction.(type) {
+	case int:
+		if v < 0 {
+			return "desc"
+		}
+	case int32:
+		if v < 0 {
+			return "desc"
+		}
+	case int64:
+		if v < 0 {
+			return "desc"
+		}
+	case string:
+		return v
+	default:
+		// unknown type: default to "1"
+	}
+	return "asc"
+}
+
+func sanitizeIdentifier(s string) (string, error) {
+	if matched := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`).MatchString(s); !matched {
+		return "", fmt.Errorf("invalid identifier: %s", s)
+	}
+	return pq.QuoteIdentifier(s), nil // use pq or pgx quoting
 }

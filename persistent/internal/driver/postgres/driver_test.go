@@ -122,7 +122,7 @@ func TestValidateDBAndTable(t *testing.T) {
 		// Create a driver with a valid connection
 		driver, _ := setupTest(t)
 
-		// Close the connection to simulate a nil db
+		// Close the connection to simulate a nil writeDB
 		driver.Close()
 
 		// Create a mock object with a valid table name

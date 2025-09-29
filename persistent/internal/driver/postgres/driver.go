@@ -31,7 +31,7 @@ func NewPostgresDriver(opts *types.ClientOpts) (*driver, error) {
 
 func (d *driver) validateDBAndTable(object model.DBObject) (string, error) {
 	// Check if the database connection is valid
-	if d.db == nil {
+	if d.writeDB == nil || d.readDB == nil {
 		return "", errors.New(types.ErrorSessionClosed)
 	}
 
