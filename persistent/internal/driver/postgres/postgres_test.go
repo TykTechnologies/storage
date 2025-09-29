@@ -1,3 +1,6 @@
+//go:build postgres || postgres16.1 || postgres15 || postgres14.11 || postgres13.3 || postgres12.22
+// +build postgres postgres16.1 postgres15 postgres14.11 postgres13.3 postgres12.22
+
 package postgres
 
 import (
@@ -11,9 +14,7 @@ import (
 )
 
 const connStr = "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable"
-
-// const connStrAsURL = "postgres://testuser:testpass@localhost:5432/testdb"
-const connStrAsURL = "postgres://postgres:secr3t@localhost:5432/tyk"
+const connStrAsURL = "postgres://testuser:testpass@localhost:5432/testdb"
 
 type TestObject struct {
 	ID             model.ObjectID `json:"id" gorm:"primaryKey"`
