@@ -23,35 +23,22 @@ type lifeCycle struct {
 	readSQLDB  *sql.DB
 }
 
-func standardizePgDSN(dsn string) (string, error) {
-	// Use the connection string exactly as provided
-	connString := strings.TrimSpace(dsn)
-	if dsn == "" {
-		return "", errors.New("empty connection string")
-	}
-
-	return connString, nil
-}
-
-func (l *lifeCycle) establishConnection(connStr string, opts *types.ClientOpts, isWrite bool) error {
-	dsn, err := standardizePgDSN(connStr)
-	if err != nil {
-		return err
-	}
-
-	// Add SSL parameters
-	dsn = l.addSSLParams(dsn, opts)
+func (l *lifeCycle) establishConnection(dsn string, opts *types.ClientOpts) (*gorm.DB, *sql.DB, error) {
+	// Create dialect from DSN
+	dialect := postgres.New(postgres.Config{
+		DSN: dsn,
+	})
 
 	// Open connection
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(dialect, &gorm.Config{})
 	if err != nil {
-		return fmt.Errorf("gorm open: %w", err)
+		return nil, nil, fmt.Errorf("failed to open connection: %w", err)
 	}
 
 	// Get underlying SQL DB
 	sqlDB, err := db.DB()
 	if err != nil {
-		return fmt.Errorf("getting sql.DB: %w", err)
+		return nil, nil, fmt.Errorf("failed to get sql.DB: %w", err)
 	}
 
 	// Configure connection
@@ -59,7 +46,7 @@ func (l *lifeCycle) establishConnection(connStr string, opts *types.ClientOpts, 
 		sqlDB.SetConnMaxLifetime(time.Duration(opts.ConnectionTimeout) * time.Second)
 	}
 
-	// Ping to verify connection
+	// Ping database to verify connection
 	pingTimeout := 5 * time.Second
 	if opts.ConnectionTimeout > 0 {
 		pingTimeout = time.Duration(opts.ConnectionTimeout) * time.Second
@@ -68,22 +55,14 @@ func (l *lifeCycle) establishConnection(connStr string, opts *types.ClientOpts, 
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer cancel()
 	if err := sqlDB.PingContext(ctx); err != nil {
-		return fmt.Errorf("ping failed: %w", err)
+		err := sqlDB.Close()
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, nil, fmt.Errorf("database ping failed: %w", err)
 	}
 
-	// Store connection based on type
-	if isWrite {
-		l.writeDB = db
-		l.writeSQLDB = sqlDB
-
-		// Extract database name (only needed once)
-		l.extractDBName(dsn)
-	} else {
-		l.readDB = db
-		l.readSQLDB = sqlDB
-	}
-
-	return nil
+	return db, sqlDB, nil
 }
 
 // Connect initializes a new database connection using the provided client options.
@@ -93,32 +72,48 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 		return errors.New("nil opts")
 	}
 
-	// Establish write connection
-	if err := l.establishConnection(opts.ConnectionString, opts, true); err != nil {
-		return fmt.Errorf("write connection failed: %w", err)
+	writeDSN := opts.ConnectionString
+	readDSN := opts.ReadConnectionString
+
+	// Validate connection strings
+	if writeDSN == "" {
+		return errors.New("write connection string is required")
 	}
 
-	// Determine read connection string
-	readConnStr := opts.ReadConnectionString
-	if readConnStr == "" {
-		// If no separate read connection, use write connection for reads
+	// If no separate read connection specified, use the write connection for reads
+	if readDSN == "" {
+		readDSN = writeDSN
+	}
+
+	// Establish write connection
+	var err error
+	l.writeDB, l.writeSQLDB, err = l.establishConnection(writeDSN, opts)
+	if err != nil {
+		return fmt.Errorf("failed to establish write connection: %w", err)
+	}
+
+	// Extract database name from the write connection
+	l.extractDBName(writeDSN)
+
+	// Handle read connection
+	if readDSN == writeDSN {
+		// Use write connection for reads if they're the same
 		l.readDB = l.writeDB
 		l.readSQLDB = l.writeSQLDB
 	} else {
 		// Establish separate read connection
-		if readErr := l.establishConnection(readConnStr, opts, false); readErr != nil {
-
-			// Try to close the write connection, but don't lose the original error
-			if closeErr := l.closeWriteConnection(); closeErr != nil {
-				// Combine both errors in the message
-				return fmt.Errorf("read connection failed: %w; additionally, failed to close write connection: %v", readErr, closeErr)
+		l.readDB, l.readSQLDB, err = l.establishConnection(readDSN, opts)
+		if err != nil {
+			// Clean up write connection
+			err := l.writeSQLDB.Close()
+			if err != nil {
+				return err
 			}
-
-			// If write connection closed successfully, return the original error
-			return fmt.Errorf("read connection failed: %w", readErr)
+			l.writeDB = nil
+			l.writeSQLDB = nil
+			return fmt.Errorf("failed to establish read connection: %w", err)
 		}
 	}
-
 	return nil
 }
 
@@ -150,39 +145,6 @@ func (l *lifeCycle) extractDBName(dsn string) {
 	}
 }
 
-// Helper to add SSL parameters
-func (l *lifeCycle) addSSLParams(dsn string, opts *types.ClientOpts) string {
-	params := []string{}
-
-	if opts.UseSSL {
-		mode := "verify-full"
-		if opts.SSLInsecureSkipVerify {
-			mode = "require"
-		}
-
-		params = append(params, fmt.Sprintf("sslmode=%s", mode))
-
-		if opts.SSLCAFile != "" {
-			params = append(params, fmt.Sprintf("sslrootcert=%s", opts.SSLCAFile))
-		}
-		if opts.SSLPEMKeyfile != "" {
-			params = append(params, fmt.Sprintf("sslcert=%s", opts.SSLPEMKeyfile))
-		}
-	} else {
-		params = append(params, "sslmode=disable")
-	}
-
-	if len(params) > 0 {
-		if dsn != "" {
-			dsn = dsn + " " + strings.Join(params, " ")
-		} else {
-			dsn = strings.Join(params, " ")
-		}
-	}
-
-	return dsn
-}
-
 // Close terminates the active database connection.
 // Returns an error if the connection cannot be closed properly.
 func (l *lifeCycle) Close() error {
@@ -195,7 +157,7 @@ func (l *lifeCycle) Close() error {
 		l.writeSQLDB = nil
 	}
 
-	// Close read connection (only if different from write)
+	// Close read connection (only if different from the write connection)
 	if l.readSQLDB != nil && l.readSQLDB != l.writeSQLDB {
 		readErr = l.readSQLDB.Close()
 		l.readDB = nil
