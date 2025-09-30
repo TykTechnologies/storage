@@ -72,21 +72,13 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 		return errors.New("nil opts")
 	}
 
-	writeDSN := opts.ConnectionString
-	readDSN := opts.ReadConnectionString
-
-	// Validate connection strings
-	if writeDSN == "" {
-		return errors.New("write connection string is required")
-	}
-
-	// If no separate read connection specified, use the write connection for reads
-	if readDSN == "" {
-		readDSN = writeDSN
+	// Validate and normalize connection strings
+	writeDSN, readDSN, err := validateAndNormalizeDSNs(opts.ConnectionString, opts.ReadConnectionString)
+	if err != nil {
+		return err
 	}
 
 	// Establish write connection
-	var err error
 	l.writeDB, l.writeSQLDB, err = l.establishConnection(writeDSN, opts)
 	if err != nil {
 		return fmt.Errorf("failed to establish write connection: %w", err)
@@ -252,6 +244,22 @@ func (d *driver) DropDatabase(_ context.Context) error {
 			"To drop the database '%s', connect to another database (like 'postgres') "+
 			"and execute: DROP DATABASE %s; ",
 		dbNameToDelete, dbNameToDelete)
+}
+
+// validateAndNormalizeDSNs validates connection strings and applies fallback logic.
+// It returns the normalized write and read DSNs, or an error if validation fails.
+func validateAndNormalizeDSNs(writeConnStr, readConnStr string) (string, string, error) {
+	// Validate write connection string
+	if writeConnStr == "" {
+		return "", "", errors.New("write connection string is required")
+	}
+
+	// If no separate read connection specified, use the write connection for reads
+	if readConnStr == "" {
+		readConnStr = writeConnStr
+	}
+
+	return writeConnStr, readConnStr, nil
 }
 
 var _ types.StorageLifecycle = &lifeCycle{}

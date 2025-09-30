@@ -230,3 +230,43 @@ func TestDropDatabase(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestValidateAndNormalizeDSNs(t *testing.T) {
+	// Test case 1: Both write and read DSNs provided
+	writeDSN := "host=primary.db.example.com dbname=testdb user=writer"
+	readDSN := "host=replica.db.example.com dbname=testdb user=reader"
+
+	w, r, err := validateAndNormalizeDSNs(writeDSN, readDSN)
+	assert.NoError(t, err)
+	assert.Equal(t, writeDSN, w)
+	assert.Equal(t, readDSN, r)
+
+	// Test case 2: Only write DSN provided
+	writeDSN = "host=primary.db.example.com dbname=testdb user=writer"
+	readDSN = ""
+
+	w, r, err = validateAndNormalizeDSNs(writeDSN, readDSN)
+	assert.NoError(t, err)
+	assert.Equal(t, writeDSN, w)
+	assert.Equal(t, writeDSN, r, "Read DSN should fall back to write DSN when not provided")
+
+	// Test case 3: No write DSN provided (error case)
+	writeDSN = ""
+	readDSN = "host=replica.db.example.com dbname=testdb user=reader"
+
+	w, r, err = validateAndNormalizeDSNs(writeDSN, readDSN)
+	assert.Error(t, err)
+	assert.Equal(t, "", w)
+	assert.Equal(t, "", r)
+	assert.Contains(t, err.Error(), "write connection string is required")
+
+	// Test case 4: Both DSNs empty (error case)
+	writeDSN = ""
+	readDSN = ""
+
+	w, r, err = validateAndNormalizeDSNs(writeDSN, readDSN)
+	assert.Error(t, err)
+	assert.Equal(t, "", w)
+	assert.Equal(t, "", r)
+	assert.Contains(t, err.Error(), "write connection string is required")
+}
