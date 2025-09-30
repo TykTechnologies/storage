@@ -26,19 +26,19 @@ type TestObject struct {
 	TableNameValue string         `json:"-"`
 }
 
-func (t *TestObject) TableName() string {
-	if t.TableNameValue != "" {
-		return t.TableNameValue
+func (to *TestObject) TableName() string {
+	if to.TableNameValue != "" {
+		return to.TableNameValue
 	}
 	return "test_objects"
 }
 
-func (t *TestObject) GetObjectID() model.ObjectID {
-	return t.ID
+func (to *TestObject) GetObjectID() model.ObjectID {
+	return to.ID
 }
 
-func (t *TestObject) SetObjectID(id model.ObjectID) {
-	t.ID = id
+func (to *TestObject) SetObjectID(id model.ObjectID) {
+	to.ID = id
 }
 
 type nullableTableName struct {
