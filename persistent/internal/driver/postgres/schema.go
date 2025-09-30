@@ -306,7 +306,7 @@ func (d *driver) GetTables(ctx context.Context) ([]string, error) {
 func (d *driver) DropTable(ctx context.Context, name string) (int, error) {
 	writeDB := d.writeDB
 	readDB := d.readDB
-	if db == nil {
+	if writeDB == nil || readDB == nil {
 		return 0, errors.New(types.ErrorSessionClosed)
 	}
 
