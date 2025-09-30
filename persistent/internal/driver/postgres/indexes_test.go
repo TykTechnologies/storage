@@ -18,7 +18,7 @@ func TestCreateIndex(t *testing.T) {
 
 	// Helper function to clean up test data
 	cleanupTestData := func(tableName string) {
-		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName)).Error
+		err := driver.writeDB.WithContext(ctx).Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName)).Error
 		if err != nil {
 			t.Logf("Error cleaning up test data: %v", err)
 		}

@@ -15,10 +15,54 @@ import (
 )
 
 type lifeCycle struct {
-	db               *gorm.DB
-	connectionString string
-	dbName           string
-	sqlDB            *sql.DB
+	writeDB *gorm.DB
+	readDB  *gorm.DB
+
+	dbName     string
+	writeSQLDB *sql.DB
+	readSQLDB  *sql.DB
+}
+
+func (l *lifeCycle) establishConnection(dsn string, opts *types.ClientOpts) (*gorm.DB, *sql.DB, error) {
+	// Create dialect from DSN
+	dialect := postgres.New(postgres.Config{
+		DSN: dsn,
+	})
+
+	// Open connection
+	db, err := gorm.Open(dialect, &gorm.Config{})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to open connection: %w", err)
+	}
+
+	// Get underlying SQL DB
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get sql.DB: %w", err)
+	}
+
+	// Configure connection
+	if opts.ConnectionTimeout > 0 {
+		sqlDB.SetConnMaxLifetime(time.Duration(opts.ConnectionTimeout) * time.Second)
+	}
+
+	// Ping database to verify connection
+	pingTimeout := 5 * time.Second
+	if opts.ConnectionTimeout > 0 {
+		pingTimeout = time.Duration(opts.ConnectionTimeout) * time.Second
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
+	defer cancel()
+	if err := sqlDB.PingContext(ctx); err != nil {
+		err := sqlDB.Close()
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, nil, fmt.Errorf("database ping failed: %w", err)
+	}
+
+	return db, sqlDB, nil
 }
 
 // Connect initializes a new database connection using the provided client options.
@@ -28,45 +72,56 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 		return errors.New("nil opts")
 	}
 
-	// Use the connection string exactly as provided
-	dsn := strings.TrimSpace(opts.ConnectionString)
-	if dsn == "" {
-		return errors.New("empty connection string")
-	}
-
-	// Open GORM with PostgreSQL driver
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	// Validate and normalize connection strings
+	writeDSN, readDSN, err := validateAndNormalizeDSNs(opts.ConnectionString, opts.ReadConnectionString)
 	if err != nil {
-		return fmt.Errorf("gorm open: %w", err)
+		return err
 	}
-	l.db = db
 
-	// Get underlying sql.DB
-	sqlDB, err := db.DB()
+	// Establish write connection
+	l.writeDB, l.writeSQLDB, err = l.establishConnection(writeDSN, opts)
 	if err != nil {
-		l.db = nil
-		return fmt.Errorf("getting sql.DB: %w", err)
-	}
-	l.sqlDB = sqlDB
-
-	// Set connection lifetime if provided
-	if opts.ConnectionTimeout > 0 {
-		l.sqlDB.SetConnMaxLifetime(time.Duration(opts.ConnectionTimeout) * time.Second)
+		return fmt.Errorf("failed to establish write connection: %w", err)
 	}
 
-	// Ping to verify connection
-	pingTimeout := 5 * time.Second
-	if opts.ConnectionTimeout > 0 {
-		pingTimeout = time.Duration(opts.ConnectionTimeout) * time.Second
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
-	defer cancel()
-	if err := l.sqlDB.PingContext(ctx); err != nil {
-		l.db = nil
-		return fmt.Errorf("ping db: %w", err)
-	}
+	// Extract database name from the write connection
+	l.extractDBName(writeDSN)
 
-	// Extract database name (supports both DSN and URL formats)
+	// Handle read connection
+	if readDSN == writeDSN {
+		// Use write connection for reads if they're the same
+		l.readDB = l.writeDB
+		l.readSQLDB = l.writeSQLDB
+	} else {
+		// Establish separate read connection
+		l.readDB, l.readSQLDB, err = l.establishConnection(readDSN, opts)
+		if err != nil {
+			// Clean up write connection
+			err := l.writeSQLDB.Close()
+			if err != nil {
+				return errors.New("failed to close write database")
+			}
+			l.writeDB = nil
+			l.writeSQLDB = nil
+			return errors.New("failed to establish read connection")
+		}
+	}
+	return nil
+}
+
+func (l *lifeCycle) closeWriteConnection() error {
+	if l.writeSQLDB != nil {
+		err := l.writeSQLDB.Close()
+		if err != nil {
+			return errors.New("failed to close write connection")
+		}
+		l.writeDB = nil
+		l.writeSQLDB = nil
+	}
+	return nil
+}
+
+func (l *lifeCycle) extractDBName(dsn string) {
 	if parts := strings.Fields(dsn); len(parts) > 0 {
 		for _, part := range parts {
 			if strings.HasPrefix(part, "dbname=") {
@@ -80,19 +135,39 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 			l.dbName = strings.TrimPrefix(u.Path, "/")
 		}
 	}
-
-	return nil
 }
 
 // Close terminates the active database connection.
 // Returns an error if the connection cannot be closed properly.
 func (l *lifeCycle) Close() error {
-	err := l.sqlDB.Close()
-	if err != nil {
-		return err
+	var err error
+	connectionClosed := false
+
+	// Close write connection
+	// Close write connection
+	if l.writeSQLDB != nil {
+		err = l.writeSQLDB.Close()
+		connectionClosed = true
+		l.writeDB = nil
+		l.writeSQLDB = nil
 	}
-	l.db = nil
-	return nil
+
+	// Only close read connection if it's different from write connection
+	// or if we haven't closed any connection yet
+	if l.readSQLDB != nil && (!connectionClosed || l.readSQLDB != l.writeSQLDB) {
+		readErr := l.readSQLDB.Close()
+		// If we didn't have an error from closing write connection,
+		// use the error from closing read connection
+		if err == nil {
+			err = readErr
+		}
+	}
+
+	// Always nil the read pointers
+	l.readDB = nil
+	l.readSQLDB = nil
+
+	return err
 }
 
 // DBType returns the type of database managed by this lifecycle.
@@ -104,8 +179,8 @@ func (l *lifeCycle) DBType() utils.DBType {
 // Ping checks the health of the database connection.
 // Returns an error if the database is unreachable or not responding.
 func (d *driver) Ping(ctx context.Context) error {
-	// Check if the database connection is valid
-	if d.db == nil {
+	// Check if connections exist
+	if d.writeDB == nil || d.readDB == nil {
 		return errors.New(types.ErrorSessionClosed)
 	}
 
@@ -113,16 +188,29 @@ func (d *driver) Ping(ctx context.Context) error {
 		return errors.New(types.ErrorNilContext)
 	}
 
-	// Get the underlying *sql.DB from GORM
-	sqlDB, err := d.db.DB()
+	// Ping write connection
+	writeSQLDB, err := d.writeDB.DB()
 	if err != nil {
-		return fmt.Errorf("failed to get database connection: %w", err)
+		return fmt.Errorf("failed to get write database connection: %w", err)
 	}
 
-	// Use the standard library's PingContext method
-	err = sqlDB.PingContext(ctx)
+	if err := writeSQLDB.PingContext(ctx); err != nil {
+		return fmt.Errorf("write database ping failed: %w", err)
+	}
+
+	// If read and write are the same connection, we're done
+	if d.readDB == d.writeDB {
+		return nil
+	}
+
+	// Ping read connection
+	readSQLDB, err := d.readDB.DB()
 	if err != nil {
-		return fmt.Errorf("failed to ping database: %w", err)
+		return fmt.Errorf("failed to get read database connection: %w", err)
+	}
+
+	if err := readSQLDB.PingContext(ctx); err != nil {
+		return fmt.Errorf("read database ping failed: %w", err)
 	}
 
 	return nil
@@ -132,7 +220,7 @@ func (d *driver) Ping(ctx context.Context) error {
 // Returns an error if the operation fails.
 func (d *driver) DropDatabase(_ context.Context) error {
 	// Check if the database connection is valid
-	if d.db == nil {
+	if d.writeDB == nil {
 		return errors.New(types.ErrorSessionClosed)
 	}
 
@@ -147,8 +235,8 @@ func (d *driver) DropDatabase(_ context.Context) error {
 		return fmt.Errorf("failed to close connection: %w", err)
 	}
 
-	// Set the driver's db to nil to prevent further use
-	d.db = nil
+	// Set the driver's writeDB to nil to prevent further use
+	d.writeDB = nil
 
 	// Return a special error with instructions
 	return fmt.Errorf(
@@ -156,6 +244,22 @@ func (d *driver) DropDatabase(_ context.Context) error {
 			"To drop the database '%s', connect to another database (like 'postgres') "+
 			"and execute: DROP DATABASE %s; ",
 		dbNameToDelete, dbNameToDelete)
+}
+
+// validateAndNormalizeDSNs validates connection strings and applies fallback logic.
+// It returns the normalized write and read DSNs, or an error if validation fails.
+func validateAndNormalizeDSNs(writeConnStr, readConnStr string) (string, string, error) {
+	// Validate write connection string
+	if writeConnStr == "" {
+		return "", "", errors.New("write connection string is required")
+	}
+
+	// If no separate read connection specified, use the write connection for reads
+	if readConnStr == "" {
+		readConnStr = writeConnStr
+	}
+
+	return writeConnStr, readConnStr, nil
 }
 
 var _ types.StorageLifecycle = &lifeCycle{}

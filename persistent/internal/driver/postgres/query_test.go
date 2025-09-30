@@ -20,7 +20,7 @@ func TestQuery(t *testing.T) {
 
 	// Helper function to clean up test data
 	cleanupTestData := func(tableName string) {
-		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
+		err := driver.writeDB.WithContext(ctx).Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
 		if err != nil {
 			t.Logf("Error cleaning up test data: %v", err)
 		}
@@ -170,7 +170,7 @@ func TestCount(t *testing.T) {
 
 	// Helper function to clean up test data
 	cleanupTestData := func(tableName string) {
-		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
+		err := driver.writeDB.WithContext(ctx).Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
 		if err != nil {
 			t.Logf("Error cleaning up test data: %v", err)
 		}
@@ -325,7 +325,7 @@ func TestAggregate(t *testing.T) {
 
 	// Helper function to clean up test data
 	cleanupTestData := func(tableName string) {
-		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
+		err := driver.writeDB.WithContext(ctx).Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
 		if err != nil {
 			t.Logf("Error cleaning up test data: %v", err)
 		}
@@ -929,7 +929,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 
 	// Helper function to clean up test data
 	cleanupTestData := func(tableName string) {
-		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
+		err := driver.writeDB.WithContext(ctx).Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
 		if err != nil {
 			t.Logf("Error cleaning up test data: %v", err)
 		}
@@ -978,7 +978,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		}
 
 		// Apply the update operators
-		db := driver.db.WithContext(ctx).Table(tableName)
+		db := driver.writeDB.WithContext(ctx).Table(tableName)
 		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
 		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
 
@@ -992,7 +992,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 
 		// Verify the object was updated
 		var updatedObj TestObject
-		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		err = driver.readDB.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
 		require.NoError(t, err, "Failed to retrieve updated object")
 
 		assert.Equal(t, "Updated Name", updatedObj.Name, "Name should be updated")
@@ -1014,7 +1014,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		}
 
 		// Apply the update operators
-		db := driver.db.WithContext(ctx).Table(tableName)
+		db := driver.writeDB.WithContext(ctx).Table(tableName)
 		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
 		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
 
@@ -1024,7 +1024,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 
 		// Verify the object was updated
 		var updatedObj TestObject
-		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		err = driver.readDB.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
 		require.NoError(t, err, "Failed to retrieve updated object")
 
 		assert.Equal(t, 15, updatedObj.Value, "Value should be incremented by 5")
@@ -1047,7 +1047,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		}
 
 		// Apply the update operators
-		db := driver.db.WithContext(ctx).Table(tableName)
+		db := driver.writeDB.WithContext(ctx).Table(tableName)
 		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
 		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
 
@@ -1057,7 +1057,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 
 		// Verify the object was updated
 		var updatedObj TestObject
-		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		err = driver.readDB.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
 		require.NoError(t, err, "Failed to retrieve updated object")
 
 		assert.Equal(t, "Updated Multiple", updatedObj.Name, "Name should be updated")
@@ -1069,7 +1069,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		update := model.DBM{}
 
 		// Apply the update operators
-		db := driver.db.WithContext(ctx).Table("test_table")
+		db := driver.writeDB.WithContext(ctx).Table("test_table")
 		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
 		require.NoError(t, err, "applyMongoUpdateOperators should not return an error with empty update")
 
@@ -1094,7 +1094,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		}
 
 		// Apply the update operators
-		db := driver.db.WithContext(ctx).Table(tableName)
+		db := driver.writeDB.WithContext(ctx).Table(tableName)
 		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
 		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
 
@@ -1104,7 +1104,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 
 		// Verify the object was updated
 		var updatedObj TestObject
-		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		err = driver.readDB.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
 		require.NoError(t, err, "Failed to retrieve updated object")
 
 		assert.Equal(t, 30, updatedObj.Value, "Value should be multiplied by 3")
@@ -1124,7 +1124,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		}
 
 		// Apply the update operators
-		db := driver.db.WithContext(ctx).Table(tableName)
+		db := driver.writeDB.WithContext(ctx).Table(tableName)
 		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
 		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
 
@@ -1134,7 +1134,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 
 		// Verify the object was updated
 		var updatedObj TestObject
-		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		err = driver.readDB.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
 		require.NoError(t, err, "Failed to retrieve updated object")
 
 		assert.Equal(t, 3, updatedObj.Value, "Value should be 3")
@@ -1154,7 +1154,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		}
 
 		// Apply the update operators
-		db := driver.db.WithContext(ctx).Table(tableName)
+		db := driver.writeDB.WithContext(ctx).Table(tableName)
 		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
 		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
 
@@ -1164,7 +1164,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 
 		// Verify the object was updated
 		var updatedObj TestObject
-		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		err = driver.readDB.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
 		require.NoError(t, err, "Failed to retrieve updated object")
 
 		assert.Equal(t, 300, updatedObj.Value, "Value should be 300")
@@ -1186,7 +1186,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		}
 
 		// Apply the update operators
-		db := driver.db.WithContext(ctx).Table(tableName)
+		db := driver.writeDB.WithContext(ctx).Table(tableName)
 		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
 		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
 
@@ -1196,7 +1196,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 
 		// Verify the object was updated
 		var updatedObj TestObject
-		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		err = driver.readDB.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
 		require.NoError(t, err, "Failed to retrieve updated object")
 
 		assert.Equal(t, "", updatedObj.Name, "Name should be empty")
@@ -1218,7 +1218,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		}
 
 		// Apply the update operators
-		db := driver.db.WithContext(ctx).Table(tableName)
+		db := driver.writeDB.WithContext(ctx).Table(tableName)
 		updatedDB, updates, err := driver.applyMongoUpdateOperators(db, update)
 		require.NoError(t, err, "applyMongoUpdateOperators should not return an error")
 
@@ -1228,7 +1228,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 
 		// Verify the object was updated
 		var updatedObj TestObject
-		err = driver.db.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
+		err = driver.readDB.WithContext(ctx).Table(tableName).Where("id = ?", id).First(&updatedObj).Error
 		require.NoError(t, err, "Failed to retrieve updated object")
 		assert.True(t, updatedObj.CreatedAt.After(pastTime), "CreatedAt should be updated to a newer time")
 	})
@@ -1242,7 +1242,7 @@ func TestApplyMongoUpdateOperators(t *testing.T) {
 		}
 
 		// Apply the update operators
-		db := driver.db.WithContext(ctx).Table("test_table")
+		db := driver.writeDB.WithContext(ctx).Table("test_table")
 		_, _, err := driver.applyMongoUpdateOperators(db, update)
 
 		// Check if the function returns an error for unsupported operator
@@ -1259,11 +1259,11 @@ func TestTranslateQuery(t *testing.T) {
 
 	// Ensure the test table exists
 	tableName := "test_objects"
-	err := driver.db.WithContext(ctx).AutoMigrate(&TestObject{})
+	err := driver.writeDB.WithContext(ctx).AutoMigrate(&TestObject{})
 	require.NoError(t, err, "Failed to create test table")
 
 	// Clean up any existing data
-	err = driver.db.WithContext(ctx).Exec("DELETE FROM " + tableName).Error
+	err = driver.writeDB.WithContext(ctx).Exec("DELETE FROM " + tableName).Error
 	require.NoError(t, err, "Failed to clean up test table")
 
 	// Create test data
@@ -1297,7 +1297,7 @@ func TestTranslateQuery(t *testing.T) {
 
 	// Insert test data
 	for _, obj := range testData {
-		err := driver.db.WithContext(ctx).Table(tableName).Create(&obj).Error
+		err := driver.writeDB.WithContext(ctx).Table(tableName).Create(&obj).Error
 		require.NoError(t, err, "Failed to insert test data")
 	}
 
@@ -1464,7 +1464,7 @@ func TestTranslateQuery(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a base DB query
-			db := driver.db.WithContext(ctx).Table(tableName)
+			db := driver.readDB.WithContext(ctx).Table(tableName)
 
 			// Apply the translateQuery function
 			translatedDB, err := driver.translateQuery(db, tc.query, &TestObject{})
@@ -1482,7 +1482,7 @@ func TestTranslateQuery(t *testing.T) {
 	// Test count flag separately
 	t.Run("Count", func(t *testing.T) {
 		// Create a base DB query
-		db := driver.db.WithContext(ctx).Table(tableName)
+		db := driver.readDB.WithContext(ctx).Table(tableName)
 
 		// Apply the translateQuery function with count flag
 		query := model.DBM{
@@ -1524,7 +1524,7 @@ func TestTranslateQueryWithShardingEnabled(t *testing.T) {
 		shardTableName := baseTableName + "_" + date.Format("20060102")
 
 		// Create the sharded table
-		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf(`
+		err := driver.writeDB.WithContext(ctx).Exec(fmt.Sprintf(`
             CREATE TABLE IF NOT EXISTS %s (
                 id TEXT PRIMARY KEY,
                 name TEXT,
@@ -1538,7 +1538,7 @@ func TestTranslateQueryWithShardingEnabled(t *testing.T) {
 		// Insert test data into the sharded table
 		for j := 1; j <= 3; j++ {
 			id := model.NewObjectID()
-			err := driver.db.WithContext(ctx).Exec(fmt.Sprintf(`
+			err := driver.writeDB.WithContext(ctx).Exec(fmt.Sprintf(`
                 INSERT INTO %s (id, name, value, category, created_at)
                 VALUES (?, ?, ?, ?, ?)
             `, shardTableName), id.Hex(), fmt.Sprintf("Shard %d-%d", i, j), j*10,
@@ -1558,7 +1558,7 @@ func TestTranslateQueryWithShardingEnabled(t *testing.T) {
 	}
 
 	// Create a base DB query
-	db := driver.db.WithContext(ctx).Table(baseTableName)
+	db := driver.readDB.WithContext(ctx).Table(baseTableName)
 
 	// Apply the translateQuery function
 	testObj := &TestObject{}
@@ -1585,7 +1585,7 @@ func TestTranslateQueryWithShardingEnabled(t *testing.T) {
 	for i := 0; i <= 3; i++ {
 		date := startDate.Add(time.Duration(i*24) * time.Hour)
 		shardTableName := baseTableName + "_" + date.Format("20060102")
-		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", shardTableName)).Error
+		err := driver.writeDB.WithContext(ctx).Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", shardTableName)).Error
 		require.NoError(t, err, "Failed to drop sharded table")
 	}
 }

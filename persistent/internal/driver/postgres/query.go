@@ -28,7 +28,7 @@ func (d *driver) Query(ctx context.Context, object model.DBObject, result interf
 		return errors.New("result must be a pointer")
 	}
 
-	db := d.db.WithContext(ctx).Table(tableName)
+	db := d.readDB.WithContext(ctx).Table(tableName)
 	db, err = d.translateQuery(db, filter, object)
 	if err != nil {
 		return err
@@ -76,7 +76,7 @@ func (d *driver) Count(ctx context.Context, row model.DBObject, filters ...model
 		return 0, errors.New(types.ErrorCollectionNotFound)
 	}
 
-	db := d.db.WithContext(ctx).Table(tableName)
+	db := d.readDB.WithContext(ctx).Table(tableName)
 	// If we have a filter, use our translator function
 	if len(filters) == 1 {
 		// Add _count flag to the filter to ensure proper handling in translateQuery
@@ -121,7 +121,7 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 	}
 
 	// Execute the query using GORM
-	rows, err := d.db.WithContext(ctx).Raw(sqlQuery, args...).Rows()
+	rows, err := d.readDB.WithContext(ctx).Raw(sqlQuery, args...).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute aggregation query: %w", err)
 	}
@@ -400,7 +400,7 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 				AND tablename LIKE ?
         	`
 
-			rows, err := d.db.Raw(query, tablePattern).Rows()
+			rows, err := d.readDB.Raw(query, tablePattern).Rows()
 			if err != nil {
 				return nil, fmt.Errorf("failed to get sharded tables: %w", err)
 			}

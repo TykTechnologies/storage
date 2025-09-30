@@ -4,7 +4,9 @@
 package postgres
 
 import (
+	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 )
@@ -287,4 +289,75 @@ func TestGetCollectionName(t *testing.T) {
 			t.Errorf("Expected collection name 'collection_from_field', got '%s'", name)
 		}
 	})
+}
+
+func TestCloneDBObject(t *testing.T) {
+	original := &TestObject{
+		Name:      "Original",
+		Value:     42,
+		CreatedAt: time.Now(),
+	}
+	original.SetObjectID(model.NewObjectID())
+
+	clone := cloneDBObject(original)
+
+	// Ensure it's a different pointer
+	assert.NotSame(t, original, clone)
+
+	// Ensure it has the same ID
+	assert.Equal(t, original.GetObjectID(), clone.GetObjectID())
+
+	// Ensure other fields are zeroed (because cloneDBObject only copies ID)
+	cloneObj, ok := clone.(*TestObject)
+	require.True(t, ok)
+
+	assert.Equal(t, "", cloneObj.Name)
+	assert.Equal(t, 0, cloneObj.Value)
+	assert.WithinDuration(t, time.Time{}, cloneObj.CreatedAt, time.Second)
+}
+
+func TestMergeQueryFields(t *testing.T) {
+	obj := &TestObject{
+		Name:      "Initial",
+		Value:     10,
+		CreatedAt: time.Now(),
+	}
+
+	query := model.DBM{
+		"name":        "Updated Name",
+		"value":       42,
+		"_limit":      100,           // should be ignored
+		"$or":         []model.DBM{}, // should be ignored
+		"extra_field": "Extra",       // will only work if TestObject has this field; otherwise ignored
+	}
+
+	mergeQueryFields(obj, query)
+
+	// Check that allowed fields were updated
+	assert.Equal(t, "Updated Name", obj.Name)
+	assert.Equal(t, 42, obj.Value)
+
+}
+
+func TestEnsureID(t *testing.T) {
+	driver, _ := setupTest(t)
+	defer teardownTest(t, driver)
+
+	// Case 1: originalID is provided → should preserve it
+	obj1 := &TestObject{}
+	origID := model.NewObjectID()
+	ensureID(origID, obj1, model.DBM{})
+	ensureID(origID, obj1, model.DBM{})
+	assert.Equal(t, origID, obj1.GetObjectID())
+
+	// Case 2: originalID is empty, but the query contains "id"
+	obj2 := &TestObject{}
+	queryID := model.NewObjectID()
+	ensureID("", obj2, model.DBM{"id": queryID.Hex()})
+	assert.Equal(t, queryID, obj2.GetObjectID())
+
+	// Case 3: neither originalID nor query["id"] → a new ID is generated
+	obj3 := &TestObject{}
+	ensureID("", obj3, model.DBM{})
+	assert.NotEqual(t, "", obj3.GetObjectID())
 }

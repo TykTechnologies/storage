@@ -82,7 +82,7 @@ func TestHasTable(t *testing.T) {
 		// If not, you may need to modify or remove this test
 
 		// Create a schema if it doesn't exist
-		err := driver.db.WithContext(ctx).Exec("CREATE SCHEMA IF NOT EXISTS test_schema").Error
+		err := driver.writeDB.WithContext(ctx).Exec("CREATE SCHEMA IF NOT EXISTS test_schema").Error
 		require.NoError(t, err)
 
 		schemaItem := &TestObject{TableNameValue: "test_schema.schema_table"}
@@ -106,7 +106,7 @@ func TestHasTable(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Drop the schema
-		err = driver.db.WithContext(ctx).Exec("DROP SCHEMA IF EXISTS test_schema CASCADE").Error
+		err = driver.writeDB.WithContext(ctx).Exec("DROP SCHEMA IF EXISTS test_schema CASCADE").Error
 		assert.NoError(t, err)
 	})
 }
@@ -190,7 +190,8 @@ func TestGetTables(t *testing.T) {
 	})
 
 	t.Run("nil connection", func(t *testing.T) {
-		driver.db = nil
+		driver.writeDB = nil
+		driver.readDB = nil
 		tables, err := driver.GetTables(ctx)
 		assert.Error(t, err)
 		assert.Len(t, tables, 0)
@@ -261,7 +262,7 @@ func TestDropTable(t *testing.T) {
 	// Test case 4: Drop a table in a different schema
 	t.Run("DropTableInDifferentSchema", func(t *testing.T) {
 		// Create a test schema
-		err := driver.db.WithContext(ctx).Exec("CREATE SCHEMA IF NOT EXISTS test_schema").Error
+		err := driver.writeDB.WithContext(ctx).Exec("CREATE SCHEMA IF NOT EXISTS test_schema").Error
 		require.NoError(t, err, "Failed to create test schema")
 
 		// Create a test table in the schema
@@ -284,7 +285,7 @@ func TestDropTable(t *testing.T) {
 		assert.False(t, exists, "Table in schema should not exist after being dropped")
 
 		// Drop the schema
-		err = driver.db.WithContext(ctx).Exec("DROP SCHEMA IF EXISTS test_schema CASCADE").Error
+		err = driver.writeDB.WithContext(ctx).Exec("DROP SCHEMA IF EXISTS test_schema CASCADE").Error
 		assert.NoError(t, err, "Failed to drop test schema")
 	})
 
@@ -351,7 +352,8 @@ func TestDropTable(t *testing.T) {
 	})
 
 	t.Run("Nil connection", func(t *testing.T) {
-		driver.db = nil
+		driver.writeDB = nil
+		driver.readDB = nil
 		rows, err := driver.DropTable(ctx, "test_drop_table")
 		assert.Error(t, err)
 		assert.Equal(t, 0, rows)
@@ -463,7 +465,7 @@ func TestDrop(t *testing.T) {
 	// Test case 7: Drop a table in a different schema
 	t.Run("DropTableInDifferentSchema", func(t *testing.T) {
 		// Create a test schema
-		err := driver.db.WithContext(ctx).Exec("CREATE SCHEMA IF NOT EXISTS test_schema").Error
+		err := driver.writeDB.WithContext(ctx).Exec("CREATE SCHEMA IF NOT EXISTS test_schema").Error
 		require.NoError(t, err, "Failed to create test schema")
 
 		// Create a test table in the schema
@@ -486,7 +488,7 @@ func TestDrop(t *testing.T) {
 		assert.False(t, exists, "Table in schema should not exist after being dropped")
 
 		// Drop the schema
-		err = driver.db.WithContext(ctx).Exec("DROP SCHEMA IF EXISTS test_schema CASCADE").Error
+		err = driver.writeDB.WithContext(ctx).Exec("DROP SCHEMA IF EXISTS test_schema CASCADE").Error
 		assert.NoError(t, err, "Failed to drop test schema")
 	})
 }
@@ -641,7 +643,8 @@ func TestMigrate(t *testing.T) {
 	t.Run("Nil connection", func(t *testing.T) {
 		testObj := &TestObject{TableNameValue: "test_migrate"}
 		defer cleanupTables([]model.DBObject{testObj})
-		driver.db = nil
+		driver.writeDB = nil
+		driver.readDB = nil
 
 		// Migrate the table
 		err := driver.Migrate(ctx, []model.DBObject{testObj})

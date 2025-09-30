@@ -15,7 +15,7 @@ import (
 // Insert adds one or more objects into the database in a single batch operation.
 // Returns an error if the input is empty or the insert fails.
 func (d *driver) Insert(ctx context.Context, objects ...model.DBObject) error {
-	if d.db == nil {
+	if d.writeDB == nil {
 		return errors.New(types.ErrorSessionClosed)
 	}
 	if len(objects) == 0 {
@@ -52,7 +52,7 @@ func (d *driver) Insert(ctx context.Context, objects ...model.DBObject) error {
 		}
 
 		tableName := objs[0].TableName()
-		if err := d.db.WithContext(ctx).Table(tableName).Create(sliceValue.Interface()).Error; err != nil {
+		if err := d.writeDB.WithContext(ctx).Table(tableName).Create(sliceValue.Interface()).Error; err != nil {
 			return err
 		}
 	}
@@ -73,7 +73,7 @@ func (d *driver) Delete(ctx context.Context, object model.DBObject, filters ...m
 	}
 
 	// Start building the query with the table name
-	db := d.db.WithContext(ctx).Table(tableName)
+	db := d.writeDB.WithContext(ctx).Table(tableName)
 	// If we have a filter, use our translator function
 	if len(filters) == 1 {
 		db, err = d.translateQuery(db, filters[0], object)
@@ -111,7 +111,7 @@ func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 		return errors.New(types.ErrorMultipleDBM)
 	}
 
-	tx := d.db.WithContext(ctx).Table(tableName)
+	tx := d.writeDB.WithContext(ctx).Table(tableName)
 
 	// Apply filters
 	if len(filters) == 1 {
@@ -149,7 +149,7 @@ for updating a collection of specific records with different values.
 */
 func (d *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filters ...model.DBM) error {
 	// Basic validation
-	if d.db == nil {
+	if d.writeDB == nil {
 		return errors.New(types.ErrorSessionClosed)
 	}
 	if len(objects) == 0 {
@@ -160,7 +160,7 @@ func (d *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filte
 	}
 
 	// Start a transaction
-	tx := d.db.WithContext(ctx).Begin()
+	tx := d.writeDB.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		return tx.Error
 	}
@@ -272,7 +272,7 @@ func (d *driver) UpdateAll(ctx context.Context, row model.DBObject, query, updat
 	}
 
 	// Start a transaction
-	tx := d.db.WithContext(ctx).Begin()
+	tx := d.writeDB.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		return tx.Error
 	}
@@ -284,7 +284,7 @@ func (d *driver) UpdateAll(ctx context.Context, row model.DBObject, query, updat
 			panic(r) // re-throw panic after rollback
 		}
 	}()
-	db := d.db.WithContext(ctx).Table(tableName)
+	db := d.writeDB.WithContext(ctx).Table(tableName)
 
 	// Check if query is empty
 	hasFilter := false
@@ -343,7 +343,7 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 		return err
 	}
 
-	tx := d.db.WithContext(ctx).Begin()
+	tx := d.writeDB.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		return tx.Error
 	}
@@ -428,43 +428,6 @@ func (d *driver) fetchUpdatedRow(tx *gorm.DB, table string, query model.DBM, row
 		return err
 	}
 	return db.First(row).Error
-}
-
-func ensureID(originalID model.ObjectID, row model.DBObject, query model.DBM) {
-	if originalID != "" {
-		row.SetObjectID(originalID)
-	} else if idVal, ok := query["id"].(string); ok && idVal != "" {
-		row.SetObjectID(model.ObjectIDHex(idVal))
-	}
-	if row.GetObjectID() == "" {
-		row.SetObjectID(model.NewObjectID())
-	}
-}
-
-func cloneDBObject(row model.DBObject) model.DBObject {
-	newRow := reflect.New(reflect.TypeOf(row).Elem()).Interface().(model.DBObject)
-	newRow.SetObjectID(row.GetObjectID())
-	return newRow
-}
-
-func mergeQueryFields(row model.DBObject, query model.DBM) {
-	for k, v := range query {
-		if strings.HasPrefix(k, "_") || k == "$or" {
-			continue
-		}
-		setField(row, k, v) // keeps reflection logic isolated
-	}
-}
-
-func (d *driver) ensureID(originalID model.ObjectID, row model.DBObject, query model.DBM) {
-	if originalID != "" {
-		row.SetObjectID(originalID)
-	} else if qid, ok := query["id"]; ok {
-		if sid, ok2 := qid.(string); ok2 && sid != "" {
-			row.SetObjectID(model.ObjectIDHex(sid))
-
-		}
-	}
 }
 
 // Helper function to set a field in a struct using reflection

@@ -18,6 +18,25 @@ type ClientOpts struct {
 	// ConnectionString is the expression used to connect to a storage db server.
 	// It contains parameters such as username, hostname, password and port
 	ConnectionString string
+	// ReadConnectionString specifies the connection string for read operations.
+	// This enables read/write separation, allowing read queries to be directed to
+	// read replicas while write operations use the primary database specified by ConnectionString.
+	//
+	// If ReadConnectionString is empty, the system will use ConnectionString for both
+	// read and write operations, effectively using a single database connection.
+	//
+	// Read/write separation is particularly useful for:
+	//   - Scaling read-heavy workloads by distributing reads across replicas
+	//   - Reducing load on the primary database
+	//   - Improving read performance by connecting to geographically closer replicas
+	//   - Implementing high availability patterns
+	//
+	// Example usage:
+	//   opts := &ClientOpts{
+	//     ConnectionString:     "host=primary.db.example.com dbname=mydb user=writer",
+	//     ReadConnectionString: "host=replica.db.example.com dbname=mydb user=reader",
+	//   }
+	ReadConnectionString string
 	// UseSSL is SSL connection is required to connect
 	UseSSL bool
 	// This setting allows the use of self-signed certificates when connecting to an encrypted storage database.
