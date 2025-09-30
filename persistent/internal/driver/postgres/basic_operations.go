@@ -507,29 +507,3 @@ func applySetOperatorToObject(obj model.DBObject, update model.DBM) {
 		}
 	}
 }
-
-func ensureID(originalID model.ObjectID, row model.DBObject, query model.DBM) {
-	if originalID != "" {
-		row.SetObjectID(originalID)
-	} else if idVal, ok := query["id"].(string); ok && idVal != "" {
-		row.SetObjectID(model.ObjectIDHex(idVal))
-	}
-	if row.GetObjectID() == "" {
-		row.SetObjectID(model.NewObjectID())
-	}
-}
-
-func cloneDBObject(row model.DBObject) model.DBObject {
-	newRow := reflect.New(reflect.TypeOf(row).Elem()).Interface().(model.DBObject)
-	newRow.SetObjectID(row.GetObjectID())
-	return newRow
-}
-
-func mergeQueryFields(row model.DBObject, query model.DBM) {
-	for k, v := range query {
-		if strings.HasPrefix(k, "_") || k == "$or" {
-			continue
-		}
-		setField(row, k, v) // keeps reflection logic isolated
-	}
-}

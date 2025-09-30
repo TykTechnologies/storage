@@ -107,11 +107,11 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 			// Clean up write connection
 			err := l.writeSQLDB.Close()
 			if err != nil {
-				return err
+				return errors.New("failed to close write database")
 			}
 			l.writeDB = nil
 			l.writeSQLDB = nil
-			return fmt.Errorf("failed to establish read connection: %w", err)
+			return errors.New("failed to establish read connection")
 		}
 	}
 	return nil
