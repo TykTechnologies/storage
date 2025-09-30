@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/TykTechnologies/portal/config/db"
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/TykTechnologies/storage/persistent/utils"
@@ -83,6 +84,7 @@ func (d *driver) HasTable(ctx context.Context, tableName string) (bool, error) {
 // DBTableStats returns statistics for the given table.
 // Provides details like row count, size, and other metadata as a map.
 func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DBM, error) {
+	db := d.readDB
 	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
 		return nil, err
@@ -122,7 +124,7 @@ func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
     `
 	var basicStats BasicStats
 
-	err = d.readDB.WithContext(ctx).Raw(basicStatsQuery, tableName).Scan(&basicStats).Error
+	err = db.WithContext(ctx).Raw(basicStatsQuery, tableName).Scan(&basicStats).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("table %s not found", tableName)
@@ -183,7 +185,7 @@ func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
     `
 
 	var indexStatsRows []IndexStats
-	err = d.readDB.WithContext(ctx).Raw(indexStatsQuery, tableName).Scan(&indexStatsRows).Error
+	err = db.WithContext(ctx).Raw(indexStatsQuery, tableName).Scan(&indexStatsRows).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get index statistics: %w", err)
 	}
@@ -232,7 +234,7 @@ func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
     `
 
 	var columnStatsRows []ColumnStats
-	err = d.readDB.WithContext(ctx).Raw(columnStatsQuery, tableName, tableName).Scan(&columnStatsRows).Error
+	err = db.WithContext(ctx).Raw(columnStatsQuery, tableName, tableName).Scan(&columnStatsRows).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get column statistics: %w", err)
 	}
@@ -303,7 +305,8 @@ func (d *driver) GetTables(ctx context.Context) ([]string, error) {
 // DropTable removes a table by its name.
 // Returns the number of tables dropped and any error encountered.
 func (d *driver) DropTable(ctx context.Context, name string) (int, error) {
-	db := d.writeDB
+	writeDB := d.writeDB
+	readDB := d.readDB
 	if db == nil {
 		return 0, errors.New(types.ErrorSessionClosed)
 	}
@@ -322,12 +325,12 @@ func (d *driver) DropTable(ctx context.Context, name string) (int, error) {
 	// This is to return the number of affected rows
 	var rowCount int64
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", name)
-	err = db.WithContext(ctx).Raw(countQuery).Scan(&rowCount).Error
+	err = readDB.WithContext(ctx).Raw(countQuery).Scan(&rowCount).Error
 	if err != nil {
 		return 0, err
 	}
 
-	err = db.Migrator().DropTable(ctx, name)
+	err = writeDB.Migrator().DropTable(ctx, name)
 	if err != nil {
 		return 0, fmt.Errorf("failed to drop table %s: %w", name, err)
 	}
@@ -337,13 +340,14 @@ func (d *driver) DropTable(ctx context.Context, name string) (int, error) {
 // Drop removes the table associated with the given object.
 // Permanently deletes its schema and all stored data.
 func (d *driver) Drop(ctx context.Context, object model.DBObject) error {
+	db := d.writeDB
 	// Check if the database connection is valid
 	tableName, err := d.validateDBAndTable(object)
 	if err != nil {
 		return err
 	}
 
-	err = d.writeDB.WithContext(ctx).Migrator().DropTable(tableName)
+	err = db.WithContext(ctx).Migrator().DropTable(tableName)
 	if err != nil {
 		return fmt.Errorf("failed to drop table %s: %w", tableName, err)
 	}
@@ -370,7 +374,7 @@ func (d *driver) Migrate(ctx context.Context, objects []model.DBObject, options 
 	}
 
 	// Use GORM's context
-	db := d.writeDB.WithContext(ctx)
+	writeDB := d.writeDB.WithContext(ctx)
 	// Process each object
 	for _, obj := range objects {
 		// Get the table name
@@ -383,12 +387,12 @@ func (d *driver) Migrate(ctx context.Context, objects []model.DBObject, options 
 		}
 
 		// Check if the table already exists
-		tableExists := db.Migrator().HasTable(tableName)
+		tableExists := writeDB.Migrator().HasTable(tableName)
 		if tableExists {
 			continue // Skip if table already exists
 		}
 
-		err := db.Table(tableName).AutoMigrate(obj)
+		err := writeDB.Table(tableName).AutoMigrate(obj)
 		if err != nil {
 			return fmt.Errorf("failed to migrate table %s: %w", tableName, err)
 		}
@@ -424,8 +428,8 @@ func (d *driver) Migrate(ctx context.Context, objects []model.DBObject, options 
 // GetDatabaseInfo returns metadata about the connected database.
 // Provides details such as type, version, and connection information.
 func (d *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
-	db := d.readDB
-	if db == nil {
+	readDB := d.readDB
+	if readDB == nil {
 		return utils.Info{}, errors.New(types.ErrorSessionClosed)
 	}
 
@@ -445,7 +449,7 @@ func (d *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
             current_setting('max_connections') AS max_connections
     `
 	var basicInfo BasicInfo
-	err := db.WithContext(ctx).Raw(basicInfoQuery).Scan(&basicInfo).Error
+	err := readDB.WithContext(ctx).Raw(basicInfoQuery).Scan(&basicInfo).Error
 	if err != nil {
 		return utils.Info{}, fmt.Errorf("failed to get database info: %w", err)
 	}
@@ -474,7 +478,7 @@ func (d *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
     `
 
 	var connectionCount int
-	err = db.WithContext(ctx).Raw(connectionCountQuery).Scan(&connectionCount).Error
+	err = readDB.WithContext(ctx).Raw(connectionCountQuery).Scan(&connectionCount).Error
 	if err == nil {
 		info.CurrentConnections = connectionCount
 	}
@@ -491,7 +495,7 @@ func (d *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
     `
 
 	var tableCount int
-	err = db.WithContext(ctx).Raw(tableCountQuery).Scan(&tableCount).Error
+	err = readDB.WithContext(ctx).Raw(tableCountQuery).Scan(&tableCount).Error
 	if err == nil {
 		info.TableCount = tableCount
 	}

@@ -356,7 +356,7 @@ func TestEnsureID(t *testing.T) {
 	ensureID("", obj2, model.DBM{"id": queryID.Hex()})
 	assert.Equal(t, queryID, obj2.GetObjectID())
 
-	// Case 3: neither originalID nor query["id"] → ID should remain empty
+	// Case 3: neither originalID nor query["id"] → a new ID is generated
 	obj3 := &TestObject{}
 	ensureID("", obj3, model.DBM{})
 	assert.NotEqual(t, "", obj3.GetObjectID())
