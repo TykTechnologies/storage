@@ -246,7 +246,7 @@ func TestShouldReconnect(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := ShouldReconnect(tc.err)
+			result := MongoShouldReconnect(tc.err)
 			assert.Equal(t, tc.shouldReconnect, result,
 				"ShouldReconnect() = %v, want %v for error: %v", result, tc.shouldReconnect, tc.err)
 		})

@@ -38,14 +38,6 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	var err error
 	var client *mongo.Client
 
-	// Make sure we close any existing connection pool before creating a new one
-	if lc.client != nil {
-		if closeErr := lc.Close(); closeErr != nil {
-			// Log this error but continue with the new connection attempt
-			helper.ErrPrint(closeErr)
-		}
-	}
-
 	url, cs, err := parseURL(opts.ConnectionString)
 	if err != nil {
 		return err
@@ -65,9 +57,22 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 		return err
 	}
 
+	oldClient := lc.client
+
 	lc.connectionString = opts.ConnectionString
 	lc.database = cs.db
 	lc.client = client
+
+	// Make sure the old connection pool is closed if exists
+	if oldClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if disconnectErr := oldClient.Disconnect(ctx); disconnectErr != nil {
+			// Log this error but continue with the new connection attempt
+			helper.ErrPrint(disconnectErr)
+		}
+	}
 
 	return lc.client.Ping(context.Background(), nil)
 }

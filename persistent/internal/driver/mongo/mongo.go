@@ -230,7 +230,7 @@ func (d *mongoDriver) handleStoreError(err error) error {
 		return nil
 	}
 
-	if helper.ShouldReconnect(err) {
+	if helper.MongoShouldReconnect(err) {
 		if connErr := d.Connect(d.options); connErr != nil {
 			return errors.New(types.ErrorReconnecting + ": " + connErr.Error() + " after error: " + err.Error())
 		}

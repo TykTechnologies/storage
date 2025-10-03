@@ -28,8 +28,8 @@ func IsCosmosDB(connectionString string) bool {
 		strings.Contains(connectionString, "AccountKey=")
 }
 
-// shouldReconnect checks if the error is a network error or a server error that requires reconnection
-func ShouldReconnect(err error) bool {
+// MongoShouldReconnect checks if the error is a network error or a server error that requires reconnection
+func MongoShouldReconnect(err error) bool {
 	if mongo.IsNetworkError(err) {
 		return true
 	}
