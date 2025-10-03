@@ -38,6 +38,13 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	var err error
 	var client *mongo.Client
 
+	// Make sure we close any existing connection pool before creating a new one
+	if lc.client != nil {
+		if err = lc.Close(); err != nil {
+			return err
+		}
+	}
+
 	url, cs, err := parseURL(opts.ConnectionString)
 	if err != nil {
 		return err
@@ -215,7 +222,13 @@ func extractDatabase(s string, info *urlInfo) (string, error) {
 // Close finish the session.
 func (lc *lifeCycle) Close() error {
 	if lc.client != nil {
-		return lc.client.Disconnect(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		err := lc.client.Disconnect(ctx)
+		lc.client = nil
+
+		return err
 	}
 
 	return errors.New("closing a no connected database")
