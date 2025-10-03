@@ -307,7 +307,7 @@ func (d *mongoDriver) GetIndexes(ctx context.Context, row model.DBObject) ([]mod
 	for _, thisIndex := range indexesSpec {
 		bsonKeys := bson.D{}
 
-		if errUnmarshal := bson.Unmarshal(thisIndex.KeysDocument, &bsonKeys); err != nil {
+		if errUnmarshal := bson.Unmarshal(thisIndex.KeysDocument, &bsonKeys); errUnmarshal != nil {
 			return indexes, errUnmarshal
 		}
 
