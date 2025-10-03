@@ -40,8 +40,9 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 
 	// Make sure we close any existing connection pool before creating a new one
 	if lc.client != nil {
-		if err = lc.Close(); err != nil {
-			return err
+		if closeErr := lc.Close(); closeErr != nil {
+			// Log this error but continue with the new connection attempt
+			helper.ErrPrint(closeErr)
 		}
 	}
 
@@ -225,10 +226,7 @@ func (lc *lifeCycle) Close() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		err := lc.client.Disconnect(ctx)
-		lc.client = nil
-
-		return err
+		return lc.client.Disconnect(ctx)
 	}
 
 	return errors.New("closing a no connected database")

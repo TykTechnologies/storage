@@ -230,11 +230,7 @@ func (d *mongoDriver) handleStoreError(err error) error {
 		return nil
 	}
 
-	// Check for a mongo.ServerError or any of its underlying wrapped errors
-	var serverErr mongo.ServerError
-	// Check if the error is a network error
-	if mongo.IsNetworkError(err) || errors.As(err, &serverErr) {
-		// Reconnect to the MongoDB instance
+	if helper.ShouldReconnect(err) {
 		if connErr := d.Connect(d.options); connErr != nil {
 			return errors.New(types.ErrorReconnecting + ": " + connErr.Error() + " after error: " + err.Error())
 		}
