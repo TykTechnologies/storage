@@ -57,24 +57,30 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 		return err
 	}
 
+	// Bail out and clean up if the connection is not actually alive
+	if err = client.Ping(context.Background(), nil); err != nil {
+		// Disconnect error is swallowed since it's the ping error that matters here.
+		// This is synchronous to make sure we clean up before erroring out.
+		_ = client.Disconnect(context.Background())
+		return err
+	}
+
 	oldClient := lc.client
 
 	lc.connectionString = opts.ConnectionString
 	lc.database = cs.db
 	lc.client = client
 
-	// Make sure the old connection pool is closed if exists
+	// Make sure the old connection pool is closed if exists, but don't block the function on it
 	if oldClient != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		if disconnectErr := oldClient.Disconnect(ctx); disconnectErr != nil {
-			// Log this error but continue with the new connection attempt
-			helper.ErrPrint(disconnectErr)
-		}
+		go func(c *mongo.Client) {
+			if disconnectErr := oldClient.Disconnect(context.Background()); disconnectErr != nil {
+				helper.ErrPrint(disconnectErr)
+			}
+		}(oldClient)
 	}
 
-	return lc.client.Ping(context.Background(), nil)
+	return nil
 }
 
 type urlInfo struct {
@@ -228,10 +234,7 @@ func extractDatabase(s string, info *urlInfo) (string, error) {
 // Close finish the session.
 func (lc *lifeCycle) Close() error {
 	if lc.client != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		return lc.client.Disconnect(ctx)
+		return lc.client.Disconnect(context.Background())
 	}
 
 	return errors.New("closing a no connected database")
