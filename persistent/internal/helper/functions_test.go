@@ -63,7 +63,7 @@ func TestIsCosmosDB(t *testing.T) {
 	}
 }
 
-func TestShouldReconnect(t *testing.T) {
+func TestMongoShouldReconnect(t *testing.T) {
 	testCases := []struct {
 		name            string
 		err             error

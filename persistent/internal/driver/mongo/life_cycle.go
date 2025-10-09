@@ -29,8 +29,9 @@ type lifeCycle struct {
 var _ types.StorageLifecycle = &lifeCycle{}
 
 const (
-	MongoPrefix    = "mongodb://"
-	MongoSRVPrefix = "mongodb+srv://"
+	MongoPrefix            = "mongodb://"
+	MongoSRVPrefix         = "mongodb+srv://"
+	MongoDisconnectTimeout = 20 * time.Second
 )
 
 // Connect connects to the mongo database given the ClientOpts.
@@ -59,9 +60,12 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 
 	// Bail out and clean up if the connection is not actually alive
 	if err = client.Ping(context.Background(), nil); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), MongoDisconnectTimeout)
+		defer cancel()
+
 		// Disconnect error is swallowed since it's the ping error that matters here.
 		// This is synchronous to make sure we clean up before erroring out.
-		_ = client.Disconnect(context.Background())
+		_ = client.Disconnect(ctx)
 		return err
 	}
 
@@ -74,7 +78,10 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	// Make sure the old connection pool is closed if exists, but don't block the function on it
 	if oldClient != nil {
 		go func(c *mongo.Client) {
-			if disconnectErr := c.Disconnect(context.Background()); disconnectErr != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), MongoDisconnectTimeout)
+			defer cancel()
+
+			if disconnectErr := c.Disconnect(ctx); disconnectErr != nil {
 				helper.ErrPrint(disconnectErr)
 			}
 		}(oldClient)
@@ -234,7 +241,10 @@ func extractDatabase(s string, info *urlInfo) (string, error) {
 // Close finish the session.
 func (lc *lifeCycle) Close() error {
 	if lc.client != nil {
-		return lc.client.Disconnect(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), MongoDisconnectTimeout)
+		defer cancel()
+
+		return lc.client.Disconnect(ctx)
 	}
 
 	return errors.New("closing a no connected database")
