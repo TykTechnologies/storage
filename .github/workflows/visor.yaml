@@ -20,6 +20,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # Add this step to set up the Go environment
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21' # Or the version specified in go.mod
+
+      # Add this step to download Go module dependencies
+      - name: Download Go dependencies
+        run: go mod download
+        
       - uses: probelabs/visor@main
         with:
           app-id: ${{ secrets.PROBE_APP_ID }}
