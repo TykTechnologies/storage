@@ -74,7 +74,7 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	// Make sure the old connection pool is closed if exists, but don't block the function on it
 	if oldClient != nil {
 		go func(c *mongo.Client) {
-			if disconnectErr := oldClient.Disconnect(context.Background()); disconnectErr != nil {
+			if disconnectErr := c.Disconnect(context.Background()); disconnectErr != nil {
 				helper.ErrPrint(disconnectErr)
 			}
 		}(oldClient)
