@@ -39,7 +39,7 @@ tasks:
     desc: "Merge coverage files into a single file"
     cmds:
       - |
-        gocovmerge $(find . -name '*.cov') > merged-coverage.cov
+        gocovmerge $(find ./downloaded-coverage -name '*.cov' -size +0c) > merged-coverage.cov
 
   test-persistent:
     desc: "Run tests for persistent storage with specified database"

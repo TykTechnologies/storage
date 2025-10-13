@@ -8,17 +8,28 @@ import (
 )
 
 func TestNewPersistentStorage(t *testing.T) {
-	testCases := []string{Mgo, OfficialMongo, "unvalid"}
+	var testCases []string
 
-	// This is a hack to skip the tests for MongoDB 6 and 7
-	if os.Getenv("DB_VERSION") == "6" || os.Getenv("DB_VERSION") == "7" {
-		testCases = []string{OfficialMongo, "unvalid"}
+	switch os.Getenv("DB") {
+	case "mongo":
+		testCases = []string{Mgo, OfficialMongo, "unvalid"}
+
+		// skip problematic versions
+		if os.Getenv("DB_VERSION") == "6" || os.Getenv("DB_VERSION") == "7" {
+			testCases = []string{OfficialMongo, "unvalid"}
+		}
+
+	case "postgres":
+		testCases = []string{Postgres, "unvalid"}
+
+	default:
+		t.Skip("DB_TYPE not set, skipping TestNewPersistentStorage")
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc, func(t *testing.T) {
 			_, err := NewPersistentStorage(&ClientOpts{
-				ConnectionString: "mongodb://localhost:27017/test",
+				ConnectionString: connStrFor(tc),
 				UseSSL:           false,
 				Type:             tc,
 			})
@@ -29,5 +40,18 @@ func TestNewPersistentStorage(t *testing.T) {
 				assert.Nil(t, err)
 			}
 		})
+	}
+}
+
+func connStrFor(driver string) string {
+	switch driver {
+	case Postgres:
+		// Check for postgres_test_dsn environment variable
+		if dsn := os.Getenv("postgres_test_dsn"); dsn != "" {
+			return dsn
+		}
+		return "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable"
+	default: // Mongo
+		return "mongodb://localhost:27017/test"
 	}
 }
