@@ -230,11 +230,7 @@ func (d *mongoDriver) handleStoreError(err error) error {
 		return nil
 	}
 
-	// Check for a mongo.ServerError or any of its underlying wrapped errors
-	var serverErr mongo.ServerError
-	// Check if the error is a network error
-	if mongo.IsNetworkError(err) || errors.As(err, &serverErr) {
-		// Reconnect to the MongoDB instance
+	if helper.MongoShouldReconnect(err) {
 		if connErr := d.Connect(d.options); connErr != nil {
 			return errors.New(types.ErrorReconnecting + ": " + connErr.Error() + " after error: " + err.Error())
 		}
@@ -307,7 +303,7 @@ func (d *mongoDriver) GetIndexes(ctx context.Context, row model.DBObject) ([]mod
 	for _, thisIndex := range indexesSpec {
 		bsonKeys := bson.D{}
 
-		if errUnmarshal := bson.Unmarshal(thisIndex.KeysDocument, &bsonKeys); err != nil {
+		if errUnmarshal := bson.Unmarshal(thisIndex.KeysDocument, &bsonKeys); errUnmarshal != nil {
 			return indexes, errUnmarshal
 		}
 

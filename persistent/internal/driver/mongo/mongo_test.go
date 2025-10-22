@@ -1118,85 +1118,77 @@ func TestDeleteWithQuery(t *testing.T) {
 func TestHandleStoreError(t *testing.T) {
 	defer cleanDB(t)
 
-	// Define a slice of test cases
-	testCases := []struct {
-		name              string
-		inputErr          error
-		expectedReconnect bool
-	}{
-		{
-			name:              "no error",
-			inputErr:          nil,
-			expectedReconnect: false,
-		},
-		{
-			name: "server error",
-			inputErr: mongo.CommandError{
-				Message: "server error",
-			},
-			expectedReconnect: true,
-		},
-		{
-			name: "network error",
-			inputErr: mongo.CommandError{
-				Message: "network error",
-				Labels: []string{
-					"NetworkError",
-				},
-			},
-			expectedReconnect: true,
-		},
-		{
-			name:              "ErrNilDocument error",
-			inputErr:          mongo.ErrNilDocument,
-			expectedReconnect: false,
-		},
-		{
-			name:              "ErrNonStringIndexName error",
-			inputErr:          mongo.ErrNonStringIndexName,
-			expectedReconnect: false,
-		},
-		{
-			name:              "ErrNoDocuments error",
-			inputErr:          mongo.ErrNoDocuments,
-			expectedReconnect: false,
-		},
-		{
-			name:              "ErrClientDisconnected error",
-			inputErr:          mongo.ErrClientDisconnected,
-			expectedReconnect: false,
-		},
-		{
-			name:              "BulkWrite exception",
-			inputErr:          mongo.BulkWriteException{},
-			expectedReconnect: true,
-		},
+	assertNoReconnect := func(t *testing.T, d *mongoDriver, originalClient *mongo.Client, inputErr, returnedErr error) {
+		t.Helper()
+		assert.Equal(t, inputErr, returnedErr, "should return the original error")
+		assert.Equal(t, originalClient, d.client, "should NOT have reconnected")
 	}
 
-	// Run each test case as a subtest
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Call the function with the input error
-			// Set up a mock driver
-			d, _ := prepareEnvironment(t)
-			defer d.Close()
-
-			sess := d.client
-
-			err := d.handleStoreError(tc.inputErr)
-			if tc.inputErr == nil {
-				assert.Nil(t, err)
-			} else {
-				assert.NotNil(t, err)
-			}
-
-			if tc.expectedReconnect {
-				assert.NotEqual(t, sess, d.client)
-			} else {
-				assert.Equal(t, sess, d.client)
-			}
-		})
+	assertReconnected := func(t *testing.T, d *mongoDriver, originalClient *mongo.Client, inputErr, returnedErr error) {
+		t.Helper()
+		assert.Equal(t, inputErr, returnedErr, "should return the original error")
+		assert.NotEqual(t, originalClient, d.client, "should have reconnected")
+		assert.NotNil(t, d.client, "new client should be valid")
 	}
+
+	t.Run("returns nil when error is nil", func(t *testing.T) {
+		d, _ := prepareEnvironment(t)
+		defer d.Close()
+
+		err := d.handleStoreError(nil)
+		assert.Nil(t, err)
+	})
+
+	t.Run("returns error without reconnecting for non-reconnectable error", func(t *testing.T) {
+		d, _ := prepareEnvironment(t)
+		defer d.Close()
+
+		originalClient := d.client
+		nonReconnectableErr := mongo.ErrNoDocuments
+
+		err := d.handleStoreError(nonReconnectableErr)
+
+		assertNoReconnect(t, d, originalClient, nonReconnectableErr, err)
+	})
+
+	t.Run("reconnects and returns original error for reconnectable error when connection succeeds", func(t *testing.T) {
+		d, _ := prepareEnvironment(t)
+		defer d.Close()
+
+		originalClient := d.client
+		reconnectableErr := mongo.CommandError{
+			Code:    189, // PrimarySteppedDown
+			Message: "primary stepped down",
+		}
+
+		err := d.handleStoreError(reconnectableErr)
+
+		assertReconnected(t, d, originalClient, reconnectableErr, err)
+	})
+
+	t.Run("returns reconnection error when reconnection fails", func(t *testing.T) {
+		d, _ := prepareEnvironment(t)
+		defer d.Close()
+
+		reconnectableErr := mongo.CommandError{
+			Code:    189, // PrimarySteppedDown
+			Message: "primary stepped down",
+		}
+		originalClient := d.client
+
+		// Force reconnection failure with invalid connection string
+		d.options = &types.ClientOpts{
+			ConnectionString: "mongodb://invalid-host:99999/test",
+			UseSSL:           false,
+		}
+
+		err := d.handleStoreError(reconnectableErr)
+
+		assert.NotNil(t, err)
+		assert.Contains(t, err.Error(), types.ErrorReconnecting)
+		assert.Contains(t, err.Error(), "primary stepped down")
+		assert.Equal(t, originalClient, d.client, "client should remain unchanged when reconnection fails")
+	})
 }
 
 func TestIndexes(t *testing.T) {
