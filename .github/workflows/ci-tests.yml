@@ -173,10 +173,13 @@ jobs:
           git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
 
           go install github.com/wadey/gocovmerge@latest
-      - name: Install Task
-        uses: arduino/setup-task@v1
+      - name: Setup CI Tooling
+        uses: shrink/actions-docker-extract@v3
         with:
-          version: 3
+          image: tykio/ci-tools:latest
+          path: /usr/local/bin/task
+          destination: /usr/local/task
+
       - name: merge reports
         run: task merge-coverage
       - name: SonarCloud Scan
