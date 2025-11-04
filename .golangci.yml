@@ -1,8 +1,10 @@
 version: "2"
 output:
   formats:
-    colored-line-number: stdout
-    checkstyle: golanglint.xml
+    colored-line-number:
+      path: stdout
+    checkstyle:
+      path: golanglint.xml
 linters:
   enable:
     - dupl
