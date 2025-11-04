@@ -37,8 +37,7 @@ jobs:
         with:
           name: golangcilint-${{ github.run_id }}-${{ matrix.storagetype }}-${{ matrix.database }}-${{ matrix.version }}
           retention-days: 1
-          path: |
-            golint/golanglint.xml
+          path: golanglint.xml
   test:
     name: Tests ${{ matrix.storagetype }} storage - DB ${{ matrix.database }} ${{ matrix.version }} ${{ matrix.instancetype }}
     needs: [golangci-lint]
@@ -151,7 +150,8 @@ jobs:
       - name: Download golangci-lint artifacts
         uses: actions/download-artifact@v4
         with:
-          path: ./golint       
+          path: .
+          pattern: golangcilint-*
           merge-multiple: true
       - name: Check reports existence
         id: check_files
