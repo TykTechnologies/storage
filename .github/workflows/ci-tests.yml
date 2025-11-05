@@ -178,7 +178,7 @@ jobs:
         with:
           image: tykio/ci-tools:latest
           path: /usr/local/bin/task
-          destination: /usr/local/task
+          destination: /usr/local/
 
       - name: merge reports
         run: task merge-coverage
