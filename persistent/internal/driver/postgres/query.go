@@ -648,7 +648,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 									}
 
 									concatStmt := fmt.Sprintf("CONCAT(%s)", strings.Join(concatParts, ", "))
-									projectParts = append(projectParts, concatStmt, field))
+									projectParts = append(projectParts, concatStmt, field)
 								} else {
 									return "", nil, errors.New("$concat value must be an array")
 								}
