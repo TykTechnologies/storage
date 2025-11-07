@@ -17,7 +17,6 @@ import (
 // Query retrieves records from the database matching the given filter into result.
 // Returns an error if the query fails or the result cannot be populated.
 func (d *driver) Query(ctx context.Context, object model.DBObject, result interface{}, filter model.DBM) error {
-	// Check if the database connection is valid
 	tableName, err := d.validateDBAndTable(object)
 	if err != nil {
 		return err
@@ -35,11 +34,9 @@ func (d *driver) Query(ctx context.Context, object model.DBObject, result interf
 		return err
 	}
 
-	// Determine if result is a slice or a single object
 	resultElem := resultVal.Elem()
 	isSingle := resultElem.Kind() != reflect.Slice
 
-	// Execute the query based on the result type
 	if isSingle {
 		// For a single object, use First
 		err := db.First(result).Error
@@ -61,6 +58,7 @@ func (d *driver) Query(ctx context.Context, object model.DBObject, result interf
 			return sql.ErrNoRows
 		}
 	}
+
 	return nil
 }
 
@@ -78,9 +76,9 @@ func (d *driver) Count(ctx context.Context, row model.DBObject, filters ...model
 	}
 
 	db := d.db.WithContext(ctx).Table(tableName)
+
 	// If we have a filter, use our translator function
 	if len(filters) == 1 {
-		// Add _count flag to the filter to ensure proper handling in translateQuery
 		countFilter := make(model.DBM)
 		for k, v := range filters[0] {
 			countFilter[k] = v
@@ -92,11 +90,13 @@ func (d *driver) Count(ctx context.Context, row model.DBObject, filters ...model
 			return 0, err
 		}
 	}
+
 	var result int64
 	err = db.Count(&result).Error
 	if err != nil {
 		return 0, error
 	}
+
 	return int(result), nil
 }
 
@@ -113,9 +113,6 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 		return nil, errors.New("empty aggregation pipeline")
 	}
 
-	// Translate MongoDB aggregation pipeline to SQL
-	// Assuming translateAggregationPipeline is a helper function that converts
-	// MongoDB-style aggregation pipelines to SQL queries and parameters
 	sqlQuery, args, err := translateAggregationPipeline(tableName, pipeline)
 	if err != nil {
 		return nil, fmt.Errorf("failed to translate aggregation pipeline: %w", err)
@@ -126,6 +123,7 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute aggregation query: %w", err)
 	}
+
 	defer rows.Close()
 
 	// Get column names
@@ -134,11 +132,9 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 		return nil, fmt.Errorf("failed to get columns: %w", err)
 	}
 
-	// Process the results
 	results := []model.DBM{}
 
 	for rows.Next() {
-		// Create a slice of interface{} to hold the values
 		values := make([]interface{}, len(columns))
 		for i := range values {
 			values[i] = new(interface{})
@@ -150,8 +146,8 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
-		// Create a DBM for the row
 		rowMap := model.DBM{}
+
 		// Set values in the map
 		for i, col := range columns {
 			val := *(values[i].(*interface{}))
@@ -160,6 +156,7 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 
 		results = append(results, rowMap)
 	}
+
 	// Check for errors during iteration
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating rows: %w", err)
@@ -174,7 +171,6 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 		return nil, nil, errors.New("nil database connection")
 	}
 
-	// Make a copy of the DB to avoid modifying the original
 	result := db
 	updateMap := map[string]interface{}{}
 
@@ -260,11 +256,9 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 	where := map[string]interface{}{}
 	order := ""
 
-	// Sharding support
 	shardField, useSharding := q["_date_sharding"].(string)
 	var minShardDate, maxShardDate time.Time
 
-	// Check if table sharding is enabled (you might need to add this as a configuration option)
 	tableSharding := d.options != nil && d.TableSharding
 
 	if !tableSharding {
@@ -319,27 +313,32 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 					if useSharding && k == shardField {
 						minShardDate = nv.(time.Time)
 					}
+
 				case "$gte":
 					db = db.Where(fmt.Sprintf("%v >= ?", k), nv)
 
 					if useSharding && k == shardField {
 						minShardDate = nv.(time.Time)
 					}
+
 				case "$lt":
 					db = db.Where(fmt.Sprintf("%v < ?", k), nv)
 
 					if useSharding && k == shardField {
 						maxShardDate = nv.(time.Time)
 					}
+
 				case "$lte":
 					db = db.Where(fmt.Sprintf("%v <= ?", k), nv)
 
 					if useSharding && k == shardField {
 						maxShardDate = nv.(time.Time)
 					}
+
 				case "$in":
 					inArr := []string{}
 					s := reflect.ValueOf(nv)
+
 					for i := 0; i < s.Len(); i++ {
 						current := s.Index(i).Interface()
 						if def, ok := current.(model.ObjectID); ok {
@@ -349,10 +348,12 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 						}
 					}
 					db = db.Where(fmt.Sprintf("%v IN ?", k), inArr)
+
 				case "$i":
 					if nv.(string) != "" {
 						db = db.Where(fmt.Sprintf("LOWER(%v) = ?", k), strings.ToLower(nv.(string)))
 					}
+
 				case "$text":
 					if nv.(string) != "" {
 						db = db.Where(fmt.Sprintf("LOWER(%s) like ?", k), "%"+strings.ToLower(nv.(string))+"%")
@@ -368,13 +369,11 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 
 	db = db.Where(where)
 
-	// Handle count
 	_, counter := q["_count"].(bool)
 	if counter {
 		db = db.Select("count(1) as cnt")
 	}
 
-	// Handle sharding
 	if useSharding {
 		if minShardDate.IsZero() || maxShardDate.IsZero() {
 			// Sharding requires both gte and lte date dimensions
@@ -390,7 +389,6 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 		}
 
 		if baseTable != "" {
-			// Get all tables that match the pattern in a single query
 			tablePattern := baseTable + "_%"
 
 			// Query to get all tables matching the pattern
@@ -405,22 +403,24 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 			if err != nil {
 				return nil, fmt.Errorf("failed to get sharded tables: %w", err)
 			}
+
 			defer rows.Close()
 
-			// Collect matching tables
 			var matchingTables []string
+
 			for rows.Next() {
 				var tableName string
 				if err := rows.Scan(&tableName); err != nil {
 					return nil, fmt.Errorf("failed to scan table name: %w", err)
 				}
+
 				matchingTables = append(matchingTables, tableName)
 			}
+
 			if err := rows.Err(); err != nil {
 				return nil, fmt.Errorf("error iterating table names: %w", err)
 			}
 
-			// Filter tables that fall within the date range
 			allTablesSQL := []string{}
 			dateFormat := "20060102"
 			minDateStr := minShardDate.Format(dateFormat)
@@ -479,8 +479,8 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 
 func translateAggregationPipeline(tableName string, pipeline []model.DBM) (string, []interface{}, error) {
 	// Initialize SQL parts
-	var selectClause string = "*"
-	var fromClause string = tableName
+	var selectClause = "*"
+	var fromClause = tableName
 	var whereClause string
 	var groupByClause string
 	var havingClause string
@@ -488,29 +488,24 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 	var limitClause string
 	var offsetClause string
 
-	// Initialize args for parameterized query
 	var args []interface{}
-	var argIndex int = 1
+	var argIndex = 1
 
-	// Process each stage in the pipeline
 	for _, stage := range pipeline {
-		// Each stage should have exactly one key (the operator)
 		if len(stage) != 1 {
 			return "", nil, errors.New("each pipeline stage must have exactly one operator")
 		}
 
-		// Get the operator and its value
 		var operator string
 		var value interface{}
+
 		for k, v := range stage {
 			operator = k
 			value = v
 		}
 
-		// Process the operator
 		switch operator {
 		case "$match":
-			// $match: Filter documents (WHERE clause)
 			if matchExpr, ok := value.(model.DBM); ok {
 				matchWhere, matchArgs := buildWhereClause(matchExpr)
 				if matchWhere != "" {
@@ -525,16 +520,14 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 			} else {
 				return "", nil, errors.New("$match value must be a DBM")
 			}
+
 		case "$group":
-			// $group: Group documents (GROUP BY clause)
 			if groupExpr, ok := value.(model.DBM); ok {
-				// Process _id field which defines the grouping keys
 				if idExpr, ok := groupExpr["_id"]; ok {
 					if idMap, ok := idExpr.(model.DBM); ok {
-						// _id is a document with field:expression pairs
 						groupFields := []string{}
+
 						for _, expr := range idMap {
-							// For simplicity, we assume the expression is just a field name
 							if fieldName, ok := expr.(string); ok {
 								if strings.HasPrefix(fieldName, "$") {
 									// Remove the $ prefix for field references
@@ -545,14 +538,13 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 								return "", nil, errors.New("complex group expressions not supported")
 							}
 						}
+
 						if len(groupFields) > 0 {
 							groupByClause = strings.Join(groupFields, ", ")
 						}
 					} else if idExpr == nil {
-						// _id: null means group all documents
 						groupByClause = ""
 					} else if fieldName, ok := idExpr.(string); ok {
-						// _id is a simple field reference
 						if strings.HasPrefix(fieldName, "$") {
 							// Remove the $ prefix for field references
 							fieldName = strings.TrimPrefix(fieldName, "$")
@@ -563,7 +555,6 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 					}
 				}
 
-				// Process aggregation functions
 				selectParts := []string{}
 
 				// Add group by fields to select clause
@@ -632,9 +623,9 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 			}
 
 		case "$project":
-			// $project: Reshape documents (SELECT clause)
 			if projectExpr, ok := value.(model.DBM); ok {
 				projectParts := []string{}
+
 				for field, include := range projectExpr {
 					if include == 1 || include == true {
 						// Include the field as is
@@ -683,11 +674,12 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 			}
 
 		case "$sort":
-			// $sort: Sort documents (ORDER BY clause)
 			if sortExpr, ok := value.(model.DBM); ok {
 				sortParts := []string{}
+
 				for field, direction := range sortExpr {
 					var dirStr string
+
 					if dir, ok := direction.(int); ok {
 						if dir == 1 {
 							dirStr = "ASC"
@@ -710,7 +702,6 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 			}
 
 		case "$limit":
-			// $limit: Limit the number of documents (LIMIT clause)
 			if limit, ok := value.(int); ok {
 				limitClause = fmt.Sprintf("%d", limit)
 			} else {
@@ -718,7 +709,6 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 			}
 
 		case "$skip":
-			// $skip: Skip documents (OFFSET clause)
 			if skip, ok := value.(int); ok {
 				offsetClause = fmt.Sprintf("%d", skip)
 			} else {
@@ -729,7 +719,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 			return "", nil, fmt.Errorf("unsupported aggregation operator: %s", operator)
 		}
 	}
-	// Build the SQL query
+
 	query := fmt.Sprintf("SELECT %s FROM %s", selectClause, fromClause)
 
 	if whereClause != "" {
@@ -766,6 +756,7 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 
 	var conditions []string
 	var values []interface{}
+
 	i := 1
 
 	for k, v := range filter {
@@ -780,39 +771,42 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 			continue
 		}
 
-		// Handle field conditions
 		switch val := v.(type) {
 		case model.DBM:
-			// Handle operators like $gt, $gte, etc.
 			for op, opVal := range val {
 				switch op {
 				case "$gt":
 					conditions = append(conditions, fmt.Sprintf("%s > ?", k))
 					values = append(values, opVal)
 					i++
+
 				case "$gte":
 					conditions = append(conditions, fmt.Sprintf("%s >= ?", k))
 					values = append(values, opVal)
 					i++
+
 				case "$lt":
 					conditions = append(conditions, fmt.Sprintf("%s < ?", k))
 					values = append(values, opVal)
 					i++
+
 				case "$lte":
 					conditions = append(conditions, fmt.Sprintf("%s <= ?", k))
 					values = append(values, opVal)
 					i++
+
 				case "$ne":
 					conditions = append(conditions, fmt.Sprintf("%s <> ?", k))
 					values = append(values, opVal)
 					i++
+
 				case "$in":
-					// Handle IN operator (simplified)
 					inValues, ok := opVal.([]interface{})
 					if !ok {
 						// Handle error or try to convert
 						continue
 					}
+
 					placeholders := make([]string, len(inValues))
 					for j := range inValues {
 						placeholders[j] = fmt.Sprintf("?")
@@ -820,13 +814,14 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 						i++
 					}
 					conditions = append(conditions, fmt.Sprintf("%s IN (%s)", k, strings.Join(placeholders, ",")))
+
 				case "$nin":
 					// Handle NOT IN operator (similar to $in)
 					// ...
 				}
 			}
+
 		default:
-			// Handle direct equality
 			conditions = append(conditions, fmt.Sprintf("%s = ?", k))
 			values = append(values, v)
 			i++

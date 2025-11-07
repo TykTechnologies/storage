@@ -119,6 +119,7 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 	if err != nil {
 		return fmt.Errorf("failed to check index existence: %w", err)
 	}
+
 	if exists {
 		return errors.New(types.ErrorIndexAlreadyExist)
 	}
@@ -204,6 +205,7 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
 	if err != nil {
 		return nil, err
 	}
+
 	if !exists {
 		return nil, errors.New(types.ErrorCollectionNotFound)
 	}
@@ -294,6 +296,7 @@ func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 	if err != nil {
 		return err
 	}
+
 	if !exists {
 		return errors.New(types.ErrorCollectionNotFound)
 	}
@@ -316,11 +319,13 @@ func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
     `
 
 	var indexNames []string
+
 	// Execute the query
 	err = d.db.WithContext(ctx).Raw(query, tableName).Scan(&indexNames).Error
 	if err != nil {
 		return fmt.Errorf("failed to query indexes: %w", err)
 	}
+
 	// If no indexes to drop, return early
 	if len(indexNames) == 0 {
 		return nil
@@ -332,7 +337,6 @@ func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
-	// Ensure the transaction is rolled back if there's an error
 	defer func() {
 		if err != nil {
 			tx.Rollback()
@@ -351,6 +355,7 @@ func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 	if err := tx.Commit().Error; err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
+
 	return nil
 }
 

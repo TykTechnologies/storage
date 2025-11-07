@@ -60,7 +60,9 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 	if opts.ConnectionTimeout > 0 {
 		pingTimeout = time.Duration(opts.ConnectionTimeout) * time.Second
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
+
 	defer cancel()
 	if err := l.sqlDB.PingContext(ctx); err != nil {
 		l.db = nil
@@ -76,6 +78,7 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 			}
 		}
 	}
+
 	if l.dbName == "" && (strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://")) {
 		if u, err := url.Parse(dsn); err == nil {
 			l.dbName = strings.TrimPrefix(u.Path, "/")
@@ -92,7 +95,9 @@ func (l *lifeCycle) Close() error {
 	if err != nil {
 		return err
 	}
+
 	l.db = nil
+
 	return nil
 }
 

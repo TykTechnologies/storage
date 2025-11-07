@@ -93,7 +93,6 @@ func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
 		return nil, fmt.Errorf("table %s not found", tableName)
 	}
 
-	// Initialize the result map
 	stats := model.DBM{}
 
 	// Get basic table statistics
@@ -188,7 +187,6 @@ func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
 		return nil, fmt.Errorf("failed to get index statistics: %w", err)
 	}
 
-	// Initialize indexes array
 	indexes := []model.DBM{}
 
 	// Process each index
@@ -237,7 +235,6 @@ func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
 		return nil, fmt.Errorf("failed to get column statistics: %w", err)
 	}
 
-	// Initialize columns array
 	columns := []model.DBM{}
 
 	// Process each column
@@ -270,8 +267,8 @@ func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
 		columns = append(columns, columnStatsMap)
 	}
 
-	// Add columns to the result map
 	stats["columns"] = columns
+
 	// Add MongoDB-compatible fields
 	stats["ns"] = tableName                          // Namespace (table name in PostgreSQL)
 	stats["count"] = basicStats.RowCount             // Document count
@@ -367,20 +364,20 @@ func (d *driver) Migrate(ctx context.Context, objects []model.DBObject, options 
 		return errors.New(types.ErrorRowOptDiffLenght)
 	}
 
-	// Use GORM's context
 	db := d.db.WithContext(ctx)
+
 	// Process each object
 	for _, obj := range objects {
 		// Get the table name
 		if obj == nil {
 			return errors.New(types.ErrorNilObject)
 		}
+
 		tableName := obj.TableName()
 		if tableName == "" {
 			return errors.New(types.ErrorEmptyTableName)
 		}
 
-		// Check if the table already exists
 		tableExists := db.Migrator().HasTable(tableName)
 		if tableExists {
 			continue // Skip if table already exists
@@ -426,10 +423,10 @@ func (d *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
 		return utils.Info{}, errors.New(types.ErrorSessionClosed)
 	}
 
-	// Initialize the result structure
 	info := utils.Info{
 		Type: utils.PostgresDB, // Assuming utils.PostgresSQL is defined in the utils package
 	}
+
 	// Get basic database information
 	basicInfoQuery := `
         SELECT
