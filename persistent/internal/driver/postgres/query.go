@@ -29,6 +29,7 @@ func (d *driver) Query(ctx context.Context, object model.DBObject, result interf
 	}
 
 	db := d.db.WithContext(ctx).Table(tableName)
+
 	db, err = d.translateQuery(db, filter, object)
 	if err != nil {
 		return err
@@ -44,6 +45,7 @@ func (d *driver) Query(ctx context.Context, object model.DBObject, result interf
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return sql.ErrNoRows
 			}
+
 			return err
 		}
 	} else {
@@ -518,6 +520,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 					} else {
 						whereClause = whereClause + " AND (" + matchWhere + ")"
 					}
+
 					args = append(args, matchArgs...)
 					argIndex += len(matchArgs)
 				}
@@ -808,8 +811,8 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 
 					placeholders := make([]string, len(inValues))
 					for j := range inValues {
-						placeholders[j] = "?"
 						values = append(values, inValues[j])
+						placeholders[j] = "?"
 						i++
 					}
 

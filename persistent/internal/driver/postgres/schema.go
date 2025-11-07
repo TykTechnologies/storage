@@ -406,6 +406,7 @@ func (d *driver) Migrate(ctx context.Context, objects []model.DBObject, options 
 						if err.Error() == types.ErrorIndexAlreadyExist {
 							continue
 						}
+
 						return fmt.Errorf("failed to create index %s on table %s: %w", index.Name, tableName, err)
 					}
 				}
@@ -468,6 +469,7 @@ func (d *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
     `
 
 	var connectionCount int
+	
 	err = d.db.WithContext(ctx).Raw(connectionCountQuery).Scan(&connectionCount).Error
 	if err == nil {
 		info.CurrentConnections = connectionCount
