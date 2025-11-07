@@ -5,11 +5,12 @@ package postgres
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/utils"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 func TestLifeCycle_DBType(t *testing.T) {
@@ -66,7 +67,6 @@ func TestPing(t *testing.T) {
 
 		// Ping the database with the timeout context
 		err := driver.Ping(ctx)
-
 		// Verify that the ping failed due to timeout
 		// Note: This might not always fail if the ping is very fast, so we'll make it a soft assertion
 		if err != nil {
@@ -107,7 +107,6 @@ func TestPing(t *testing.T) {
 func TestLifeCycleConnect(t *testing.T) {
 	// Test case 1: Successful connection
 	t.Run("SuccessfulConnection", func(t *testing.T) {
-
 		testCases := []struct {
 			name          string
 			connectionStr string
@@ -153,7 +152,6 @@ func TestLifeCycleConnect(t *testing.T) {
 				}
 			})
 		}
-
 	})
 
 	// Test case 2: Failed connection due to invalid connection string

@@ -4,11 +4,12 @@
 package postgres
 
 import (
+	"testing"
+	"time"
+
 	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 // TestInsert tests the Insert method
@@ -150,7 +151,6 @@ func TestDelete(t *testing.T) {
 }
 
 func TestBulkUpdate(t *testing.T) {
-
 	var err error
 	driver, ctx := setupTest(t)
 	defer teardownTest(t, driver)
@@ -244,7 +244,6 @@ func TestBulkUpdate(t *testing.T) {
 }
 
 func TestUpdateAll(t *testing.T) {
-
 	driver, ctx := setupTest(t)
 	defer teardownTest(t, driver)
 
@@ -595,7 +594,6 @@ func TestMergeQueryFields(t *testing.T) {
 	// Check that allowed fields were updated
 	assert.Equal(t, "Updated Name", obj.Name)
 	assert.Equal(t, 42, obj.Value)
-
 }
 
 func TestEnsureID(t *testing.T) {

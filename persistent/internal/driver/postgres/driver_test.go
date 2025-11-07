@@ -5,10 +5,11 @@ package postgres
 
 import (
 	"context"
-	"github.com/TykTechnologies/storage/persistent/internal/types"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
+
+	"github.com/TykTechnologies/storage/persistent/internal/types"
+	"github.com/stretchr/testify/assert"
 )
 
 func getConnStr() string {

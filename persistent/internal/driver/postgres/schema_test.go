@@ -6,14 +6,15 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"github.com/TykTechnologies/storage/persistent/model"
-	"github.com/TykTechnologies/storage/persistent/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/TykTechnologies/storage/persistent/model"
+	"github.com/TykTechnologies/storage/persistent/utils"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHasTable(t *testing.T) {

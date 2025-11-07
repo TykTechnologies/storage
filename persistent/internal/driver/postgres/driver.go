@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"errors"
+
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/model"
 	_ "github.com/lib/pq"

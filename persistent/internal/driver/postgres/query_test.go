@@ -6,12 +6,13 @@ package postgres
 import (
 	"database/sql"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 func TestQuery(t *testing.T) {

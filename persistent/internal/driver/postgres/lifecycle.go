@@ -5,13 +5,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
+	"time"
+
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/utils"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"net/url"
-	"strings"
-	"time"
 )
 
 type lifeCycle struct {

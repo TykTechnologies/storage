@@ -5,16 +5,19 @@ package postgres
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
-const connStr = "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable"
-const connStrAsURL = "postgres://testuser:testpass@localhost:5432/testdb"
+const (
+	connStr      = "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable"
+	connStrAsURL = "postgres://testuser:testpass@localhost:5432/testdb"
+)
 
 type TestObject struct {
 	ID             model.ObjectID `json:"id" gorm:"primaryKey"`

@@ -5,11 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/model"
 	"gorm.io/gorm"
-	"reflect"
-	"strings"
 )
 
 // Insert adds one or more objects into the database in a single batch operation.
@@ -18,6 +19,7 @@ func (d *driver) Insert(ctx context.Context, objects ...model.DBObject) error {
 	if d.db == nil {
 		return errors.New(types.ErrorSessionClosed)
 	}
+
 	if len(objects) == 0 {
 		return nil
 	}
@@ -462,7 +464,6 @@ func (d *driver) ensureID(originalID model.ObjectID, row model.DBObject, query m
 	} else if qid, ok := query["id"]; ok {
 		if sid, ok2 := qid.(string); ok2 && sid != "" {
 			row.SetObjectID(model.ObjectIDHex(sid))
-
 		}
 	}
 }

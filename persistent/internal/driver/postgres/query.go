@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/TykTechnologies/storage/persistent/internal/types"
-	"github.com/TykTechnologies/storage/persistent/model"
-	"gorm.io/gorm"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/TykTechnologies/storage/persistent/internal/types"
+	"github.com/TykTechnologies/storage/persistent/model"
+	"gorm.io/gorm"
 )
 
 // Query retrieves records from the database matching the given filter into result.
