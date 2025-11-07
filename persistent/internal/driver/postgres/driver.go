@@ -23,10 +23,12 @@ func NewPostgresDriver(opts *types.ClientOpts) (*driver, error) {
 
 	driver := &driver{}
 	driver.lifeCycle = lc
+
 	err := driver.Connect(opts)
 	if err != nil {
 		return nil, err
 	}
+	
 	return driver, nil
 }
 

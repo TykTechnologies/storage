@@ -16,10 +16,9 @@ import (
 )
 
 type lifeCycle struct {
-	db               *gorm.DB
-	connectionString string
-	dbName           string
-	sqlDB            *sql.DB
+	db     *gorm.DB
+	dbName string
+	sqlDB  *sql.DB
 }
 
 // Connect initializes a new database connection using the provided client options.
@@ -40,6 +39,7 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 	if err != nil {
 		return fmt.Errorf("gorm open: %w", err)
 	}
+
 	l.db = db
 
 	// Get underlying sql.DB
@@ -64,6 +64,7 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 
 	defer cancel()
+	
 	if err := l.sqlDB.PingContext(ctx); err != nil {
 		l.db = nil
 		return fmt.Errorf("ping db: %w", err)

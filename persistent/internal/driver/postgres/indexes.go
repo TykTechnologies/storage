@@ -55,12 +55,14 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 	indexName := index.Name
 	if indexName == "" {
 		parts := []string{}
+
 		for _, key := range index.Keys {
 			for field, direction := range key {
 				dirStr := getDirectionString(direction)
 				parts = append(parts, field+"_"+dirStr)
 			}
 		}
+
 		indexName = strings.Join(parts, "_")
 	}
 
@@ -78,6 +80,7 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 			if field == "_id" {
 				field = "id"
 			}
+
 			col, err := sanitizeIdentifier(field)
 			if err != nil {
 				return fmt.Errorf("invalid column name: %w", err)
@@ -86,6 +89,7 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 			switch v := direction.(type) {
 			case int, int32, int64:
 				sortDir := "ASC"
+
 				switch val := v.(type) {
 				case int:
 					if val < 0 {
@@ -100,10 +104,12 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 						sortDir = "DESC"
 					}
 				}
+
 				indexFields = append(indexFields, fmt.Sprintf("%s %s", col, sortDir))
 			case string:
 				if v == "2dsphere" {
 					indexType = "GIST"
+
 					indexFields = append(indexFields, col)
 				} else {
 					indexFields = append(indexFields, fmt.Sprintf("%s ASC", col))
@@ -190,6 +196,7 @@ func getDirectionString(direction interface{}) string {
 	default:
 		// unknown type: default to "1"
 	}
+
 	return "asc"
 }
 
@@ -277,7 +284,9 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
 
 func (d *driver) tableExists(ctx context.Context, tableName string) (bool, error) {
 	var exists bool
-	err := d.db.WithContext(ctx).Raw("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = ?)", tableName).Scan(&exists).Error
+
+	sql := "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = ?)"
+	err := d.db.WithContext(ctx).Raw(sql, tableName).Scan(&exists).Error
 	if err != nil {
 		return false, fmt.Errorf("failed to check if table exists: %w", err)
 	}

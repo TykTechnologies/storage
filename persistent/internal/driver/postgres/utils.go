@@ -45,6 +45,7 @@ func getCollectionName(result interface{}) (string, bool) {
 		if name, ok := tryMethod(reflect.ValueOf(result), method); ok {
 			return name, true
 		}
+
 		if name, ok := tryMethod(val, method); ok {
 			return name, true
 		}

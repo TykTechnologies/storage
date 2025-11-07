@@ -70,8 +70,8 @@ func (d *driver) Count(ctx context.Context, row model.DBObject, filters ...model
 		return 0, err
 	}
 
-	tableExist, _ := d.HasTable(ctx, row.TableName())
-	if !tableExist {
+	tableExist, err := d.HasTable(ctx, row.TableName())
+	if !tableExist || err != nil {
 		return 0, errors.New(types.ErrorCollectionNotFound)
 	}
 
@@ -94,7 +94,7 @@ func (d *driver) Count(ctx context.Context, row model.DBObject, filters ...model
 	var result int64
 	err = db.Count(&result).Error
 	if err != nil {
-		return 0, error
+		return 0, err
 	}
 
 	return int(result), nil
@@ -299,6 +299,7 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 					}
 				}
 			}
+
 			continue
 		}
 
@@ -310,6 +311,7 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 					db = db.Not(fmt.Sprintf("%v = ?", k), nv)
 				case "$gt":
 					db = db.Where(fmt.Sprintf("%v > ?", k), nv)
+
 					if useSharding && k == shardField {
 						minShardDate = nv.(time.Time)
 					}
@@ -360,11 +362,12 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 					}
 				}
 			}
+
 			continue
 		}
 
 		// Convert nested keys from mongo notation
-		where[strings.Replace(k, ".", "_", -1)] = v
+		where[strings.ReplaceAll(k, ".", "_")] = v
 	}
 
 	db = db.Where(where)
@@ -487,7 +490,6 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 	var orderByClause string
 	var limitClause string
 	var offsetClause string
-
 	var args []interface{}
 	var argIndex = 1
 
@@ -529,10 +531,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 
 						for _, expr := range idMap {
 							if fieldName, ok := expr.(string); ok {
-								if strings.HasPrefix(fieldName, "$") {
-									// Remove the $ prefix for field references
-									fieldName = strings.TrimPrefix(fieldName, "$")
-								}
+								fieldName = strings.TrimPrefix(fieldName, "$")
 								groupFields = append(groupFields, fieldName)
 							} else {
 								return "", nil, errors.New("complex group expressions not supported")
@@ -545,10 +544,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 					} else if idExpr == nil {
 						groupByClause = ""
 					} else if fieldName, ok := idExpr.(string); ok {
-						if strings.HasPrefix(fieldName, "$") {
-							// Remove the $ prefix for field references
-							fieldName = strings.TrimPrefix(fieldName, "$")
-						}
+						fieldName = strings.TrimPrefix(fieldName, "$")
 						groupByClause = fieldName
 					} else {
 						return "", nil, errors.New("complex group expressions not supported")
@@ -560,9 +556,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 				// Add group by fields to select clause
 				if groupByClause != "" {
 					groupFields := strings.Split(groupByClause, ", ")
-					for _, field := range groupFields {
-						selectParts = append(selectParts, field)
-					}
+					selectParts = append(selectParts, groupFields...)
 				}
 
 				// Add aggregation functions to select clause
@@ -575,6 +569,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 						for funcName, funcArg := range exprMap {
 							// Map MongoDB aggregation functions to SQL
 							var sqlFunc string
+
 							switch funcName {
 							case "$sum":
 								sqlFunc = "SUM"
@@ -596,14 +591,11 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 								// Special case for $sum: 1 which is COUNT(*)
 								argStr = "*"
 							} else if fieldName, ok := funcArg.(string); ok {
-								if strings.HasPrefix(fieldName, "$") {
-									// Remove the $ prefix for field references
-									fieldName = strings.TrimPrefix(fieldName, "$")
-								}
+								fieldName = strings.TrimPrefix(fieldName, "$")
 								argStr = fieldName
 							} else {
 								// For literals, add as a parameter
-								argStr = fmt.Sprintf("?")
+								argStr = "?"
 								args = append(args, funcArg)
 								argIndex++
 							}
@@ -640,6 +632,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 								// Concatenate strings
 								if concatArray, ok := exprVal.([]interface{}); ok {
 									concatParts := []string{}
+
 									for _, part := range concatArray {
 										if partStr, ok := part.(string); ok {
 											if strings.HasPrefix(partStr, "$") {
@@ -653,7 +646,9 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 											return "", nil, errors.New("$concat arguments must be strings")
 										}
 									}
-									projectParts = append(projectParts, fmt.Sprintf("CONCAT(%s) AS %s", strings.Join(concatParts, ", "), field))
+
+									concatStmt := fmt.Sprintf("CONCAT(%s)", strings.Join(concatParts, ", "))
+									projectParts = append(projectParts, concatStmt, field))
 								} else {
 									return "", nil, errors.New("$concat value must be an array")
 								}
@@ -681,13 +676,15 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 					var dirStr string
 
 					if dir, ok := direction.(int); ok {
-						if dir == 1 {
+						switch dir {
+						case 1:
 							dirStr = "ASC"
-						} else if dir == -1 {
+						case -1:
 							dirStr = "DESC"
-						} else {
+						default:
 							return "", nil, fmt.Errorf("invalid sort direction for field %s: %d", field, dir)
 						}
+
 						sortParts = append(sortParts, fmt.Sprintf("%s %s", field, dirStr))
 					} else {
 						return "", nil, fmt.Errorf("sort direction for field %s must be an integer", field)
@@ -809,16 +806,13 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 
 					placeholders := make([]string, len(inValues))
 					for j := range inValues {
-						placeholders[j] = fmt.Sprintf("?")
+						placeholders[j] = "?"
 						values = append(values, inValues[j])
 						i++
 					}
 					conditions = append(conditions, fmt.Sprintf("%s IN (%s)", k, strings.Join(placeholders, ",")))
-
-				case "$nin":
-					// Handle NOT IN operator (similar to $in)
-					// ...
 				}
+
 			}
 
 		default:

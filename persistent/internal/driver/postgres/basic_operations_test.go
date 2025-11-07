@@ -603,17 +603,38 @@ func TestEnsureID(t *testing.T) {
 	// Case 1: originalID is provided → should preserve it
 	obj1 := &TestObject{}
 	origID := model.NewObjectID()
-	driver.ensureID(origID, obj1, model.DBM{})
+	ensureID(origID, obj1, model.DBM{})
 	assert.Equal(t, origID, obj1.GetObjectID())
 
 	// Case 2: originalID is empty, but query contains "id"
 	obj2 := &TestObject{}
 	queryID := model.NewObjectID()
-	driver.ensureID("", obj2, model.DBM{"id": queryID.Hex()})
+	ensureID("", obj2, model.DBM{"id": queryID.Hex()})
 	assert.Equal(t, queryID, obj2.GetObjectID())
 
 	// Case 3: neither originalID nor query["id"] → ID should remain empty
 	obj3 := &TestObject{}
-	driver.ensureID("", obj3, model.DBM{})
+	ensureID("", obj3, model.DBM{})
 	assert.Equal(t, model.ObjectID(""), obj3.GetObjectID())
+}
+
+func TestToPascalCase(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"api_gateway_driver", "ApiGatewayDriver"},
+		{"foo", "Foo"},
+		{"foo_bar", "FooBar"},
+		{"user_id", "UserId"},
+		{"multi_word_example", "MultiWordExample"},
+		{"alreadyPascal", "Alreadypascal"}, // behavior note: it lowercases internal letters
+	}
+
+	for _, tt := range tests {
+		got := toPascalCase(tt.input)
+		if got != tt.expected {
+			t.Errorf("ToPascalCase(%q) = %q; want %q", tt.input, got, tt.expected)
+		}
+	}
 }

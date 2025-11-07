@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"reflect"
 	"strings"
 
@@ -141,16 +143,18 @@ func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 	if result.RowsAffected == 0 {
 		return sql.ErrNoRows
 	}
+
 	return nil
 }
 
 /*
 BulkUpdate function is designed to efficiently update multiple objects in the database.
 It has two main operational modes:
-- With Filter: When a filter is provided, it updates all records matching the filter with the values from the provided objects.
+- With Filter: When a filter is provided, it updates all records matching the filter with
+the values from the provided objects.
 This is useful for batch updates where multiple records need to be updated based on a common condition.
-- Without Filter: When no filter is provided, it updates each object individually based on its ID. This is useful
-for updating a collection of specific records with different values.
+- Without Filter: When no filter is provided, it updates each object individually based on its ID.
+This is useful for updating a collection of specific records with different values.
 */
 func (d *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filters ...model.DBM) error {
 	if d.db == nil {
@@ -349,8 +353,8 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 	}()
 
 	originalID := row.GetObjectID()
-
 	updateDB := tx.Table(tableName)
+
 	updateDB, err = d.translateQuery(updateDB, query, row)
 	if err != nil {
 		tx.Rollback()
@@ -379,6 +383,7 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 		if originalID != "" {
 			row.SetObjectID(originalID)
 		}
+
 		return tx.Commit().Error
 	}
 
@@ -405,8 +410,9 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 }
 
 func (d *driver) fetchUpdatedRow(tx *gorm.DB, table string, query model.DBM, row model.DBObject) error {
-	db := tx.Table(table)
-	db, err := d.translateQuery(db, query, row)
+	txDB := tx.Table(table)
+
+	db, err := d.translateQuery(txDB, query, row)
 	if err != nil {
 		return err
 	}
@@ -443,16 +449,6 @@ func mergeQueryFields(row model.DBObject, query model.DBM) {
 	}
 }
 
-func (d *driver) ensureID(originalID model.ObjectID, row model.DBObject, query model.DBM) {
-	if originalID != "" {
-		row.SetObjectID(originalID)
-	} else if qid, ok := query["id"]; ok {
-		if sid, ok2 := qid.(string); ok2 && sid != "" {
-			row.SetObjectID(model.ObjectIDHex(sid))
-		}
-	}
-}
-
 // Helper function to set a field in a struct using reflection
 func setField(obj interface{}, name string, value interface{}) {
 	structValue := reflect.ValueOf(obj)
@@ -465,7 +461,7 @@ func setField(obj interface{}, name string, value interface{}) {
 		return
 	}
 
-	fieldName := strings.Replace(strings.Title(strings.Replace(name, "_", " ", -1)), " ", "", -1)
+	fieldName := toPascalCase(name)
 
 	field := structElem.FieldByName(fieldName)
 	if !field.IsValid() || !field.CanSet() {
@@ -479,6 +475,13 @@ func setField(obj interface{}, name string, value interface{}) {
 	} else if valueVal.Type().ConvertibleTo(field.Type()) {
 		field.Set(valueVal.Convert(field.Type()))
 	}
+}
+
+func toPascalCase(s string) string {
+	c := cases.Title(language.English)
+	s = strings.ReplaceAll(s, "_", " ")
+	s = c.String(s)
+	return strings.ReplaceAll(s, " ", "")
 }
 
 func copyStructValues(src, dst interface{}) {
