@@ -80,10 +80,11 @@ func (d *driver) Count(ctx context.Context, row model.DBObject, filters ...model
 	// If we have a filter, use our translator function
 	if len(filters) == 1 {
 		countFilter := make(model.DBM)
+		countFilter["_count"] = true
+
 		for k, v := range filters[0] {
 			countFilter[k] = v
 		}
-		countFilter["_count"] = true
 
 		db, err = d.translateQuery(db, countFilter, row)
 		if err != nil {
@@ -349,6 +350,7 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 							inArr = append(inArr, fmt.Sprint(current))
 						}
 					}
+
 					db = db.Where(fmt.Sprintf("%v IN ?", k), inArr)
 
 				case "$i":
@@ -595,8 +597,8 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 								argStr = fieldName
 							} else {
 								// For literals, add as a parameter
-								argStr = "?"
 								args = append(args, funcArg)
+								argStr = "?"
 								argIndex++
 							}
 
@@ -810,9 +812,9 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 						values = append(values, inValues[j])
 						i++
 					}
+
 					conditions = append(conditions, fmt.Sprintf("%s IN (%s)", k, strings.Join(placeholders, ",")))
 				}
-
 			}
 
 		default:

@@ -471,7 +471,7 @@ func TestUpsert(t *testing.T) {
 
 		// Perform upsert with a query that won't match any document
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"name": "Non-Existent Item"}, // Query that won't match
+			model.DBM{"name": "Non-Existent Item"},                        // Query that won't match
 			model.DBM{"$set": model.DBM{"name": "New Item", "value": 30}}) // Data to insert
 		assert.NoError(t, err)
 
@@ -511,7 +511,7 @@ func TestUpsert(t *testing.T) {
 
 		// Perform upsert with direct update (no $set operator)
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"id": item.ID}, // Query to find the document
+			model.DBM{"id": item.ID},                           // Query to find the document
 			model.DBM{"name": "Directly Updated", "value": 40}) // Direct update
 		assert.NoError(t, err)
 
@@ -538,7 +538,7 @@ func TestUpsert(t *testing.T) {
 
 		// Perform upsert with ID in query
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"id": specificID}, // Query with specific ID
+			model.DBM{"id": specificID},                                       // Query with specific ID
 			model.DBM{"$set": model.DBM{"name": "ID Preserved", "value": 50}}) // Update without ID
 		assert.NoError(t, err)
 

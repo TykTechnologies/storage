@@ -28,7 +28,7 @@ func NewPostgresDriver(opts *types.ClientOpts) (*driver, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return driver, nil
 }
 

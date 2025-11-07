@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 	"reflect"
 	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/model"
@@ -481,6 +482,7 @@ func toPascalCase(s string) string {
 	c := cases.Title(language.English)
 	s = strings.ReplaceAll(s, "_", " ")
 	s = c.String(s)
+	
 	return strings.ReplaceAll(s, " ", "")
 }
 

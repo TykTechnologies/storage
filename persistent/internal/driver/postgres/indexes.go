@@ -25,6 +25,7 @@ func sanitizeIdentifier(s string) (string, error) {
 	if matched := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`).MatchString(s); !matched {
 		return "", fmt.Errorf("invalid identifier: %s", s)
 	}
+
 	return pq.QuoteIdentifier(s), nil // use pq or pgx quoting
 }
 
@@ -176,8 +177,7 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 	return nil
 }
 
-// Helper function to get direction string
-func getDirectionString(direction interface{}) string {
+func getDirectionString(direction any) string {
 	switch v := direction.(type) {
 	case int:
 		if v < 0 {
@@ -193,8 +193,6 @@ func getDirectionString(direction interface{}) string {
 		}
 	case string:
 		return v
-	default:
-		// unknown type: default to "1"
 	}
 
 	return "asc"
@@ -242,6 +240,7 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
     `
 
 	var rows []IndexRow
+
 	err = d.db.WithContext(ctx).Raw(query, tableName).Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to query indexes: %w", err)
@@ -286,10 +285,12 @@ func (d *driver) tableExists(ctx context.Context, tableName string) (bool, error
 	var exists bool
 
 	sql := "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = ?)"
+
 	err := d.db.WithContext(ctx).Raw(sql, tableName).Scan(&exists).Error
 	if err != nil {
 		return false, fmt.Errorf("failed to check if table exists: %w", err)
 	}
+
 	return exists, nil
 }
 
@@ -380,6 +381,7 @@ func (d *driver) indexExists(ctx context.Context, tableName, indexName string) (
     `
 
 	var exists bool
+	
 	err := d.db.WithContext(ctx).Raw(query, tableName, indexName).Scan(&exists).Error
 	if err != nil {
 		return false, err

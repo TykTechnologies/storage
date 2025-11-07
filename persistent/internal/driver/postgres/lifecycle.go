@@ -48,6 +48,7 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 		l.db = nil
 		return fmt.Errorf("getting sql.DB: %w", err)
 	}
+
 	l.sqlDB = sqlDB
 
 	// Set connection lifetime if provided
@@ -64,7 +65,7 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 
 	defer cancel()
-	
+
 	if err := l.sqlDB.PingContext(ctx); err != nil {
 		l.db = nil
 		return fmt.Errorf("ping db: %w", err)

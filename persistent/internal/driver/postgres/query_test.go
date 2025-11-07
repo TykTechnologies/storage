@@ -499,6 +499,17 @@ func TestAggregate(t *testing.T) {
 		_, err := driver.Aggregate(ctx, &TestObject{TableNameValue: tableName}, pipeline)
 		assert.Error(t, err, "Aggregate should return an error with invalid pipeline")
 	})
+
+	// Test case 6: empty pipeline
+	t.Run("EmptyPipeline", func(t *testing.T) {
+		tableName := "test_agg_empty"
+		setupTestData(tableName)
+		defer cleanupTestData(tableName)
+
+		pipeline := []model.DBM{}
+		_, err := driver.Aggregate(ctx, &TestObject{TableNameValue: tableName}, pipeline)
+		assert.Error(t, err, "Aggregate should return an error with invalid empty pipeline")
+	})
 }
 
 func TestTranslateAggregationPipeline(t *testing.T) {
