@@ -110,6 +110,19 @@ func TestHasTable(t *testing.T) {
 		err = driver.db.WithContext(ctx).Exec("DROP SCHEMA IF EXISTS test_schema CASCADE").Error
 		assert.NoError(t, err)
 	})
+
+	// Test case 6: Nil conn
+	t.Run("EmptyTableName", func(t *testing.T) {
+		oldDB := driver.db
+		defer func() {
+			driver.db = oldDB
+		}()
+
+		driver.db = nil
+		exists, err := driver.HasTable(ctx, "some-table")
+		assert.Error(t, err)
+		assert.False(t, exists, "Should return error for nil connection")
+	})
 }
 
 func TestGetTables(t *testing.T) {
@@ -651,6 +664,7 @@ func TestMigrate(t *testing.T) {
 }
 
 func TestGetDatabaseInfo(t *testing.T) {
+
 	driver, ctx := setupTest(t)
 	defer teardownTest(t, driver)
 
@@ -777,6 +791,16 @@ func TestGetDatabaseInfo(t *testing.T) {
 		assert.False(t, info.StartTime.IsZero(), "Database start time should not be zero")
 
 		t.Logf("Database start time: %v", info.StartTime)
+	})
+
+	t.Run("Nil connection", func(t *testing.T) {
+		oldDb := driver.db
+		defer func() { driver.db = oldDb }()
+		driver.db = nil
+
+		// attempt to get info
+		_, err := driver.GetDatabaseInfo(ctx)
+		assert.Error(t, err)
 	})
 }
 
