@@ -38,6 +38,7 @@ func getCollectionName(result interface{}) (string, bool) {
 		if !m.IsValid() || m.Type().NumIn() != 0 || m.Type().NumOut() != 1 || m.Type().Out(0).Kind() != reflect.String {
 			return "", false
 		}
+
 		return m.Call(nil)[0].String(), true
 	}
 

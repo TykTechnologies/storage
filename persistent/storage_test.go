@@ -50,6 +50,7 @@ func connStrFor(driver string) string {
 		if dsn := os.Getenv("postgres_test_dsn"); dsn != "" {
 			return dsn
 		}
+
 		return "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable"
 	default: // Mongo
 		return "mongodb://localhost:27017/test"

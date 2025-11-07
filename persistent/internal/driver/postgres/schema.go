@@ -183,12 +183,12 @@ func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
     `
 
 	var indexStatsRows []IndexStats
+	indexes := []model.DBM{}
+
 	err = d.db.WithContext(ctx).Raw(indexStatsQuery, tableName).Scan(&indexStatsRows).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get index statistics: %w", err)
 	}
-
-	indexes := []model.DBM{}
 
 	// Process each index
 	for _, indexStats := range indexStatsRows {
@@ -231,6 +231,7 @@ func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
     `
 
 	var columnStatsRows []ColumnStats
+
 	err = d.db.WithContext(ctx).Raw(columnStatsQuery, tableName, tableName).Scan(&columnStatsRows).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get column statistics: %w", err)
@@ -318,6 +319,7 @@ func (d *driver) DropTable(ctx context.Context, name string) (int, error) {
 	// This is to return the number of affected rows
 	var rowCount int64
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", name)
+
 	err = d.db.WithContext(ctx).Raw(countQuery).Scan(&rowCount).Error
 	if err != nil {
 		return 0, err

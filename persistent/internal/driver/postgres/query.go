@@ -95,7 +95,7 @@ func (d *driver) Count(ctx context.Context, row model.DBObject, filters ...model
 	}
 
 	var result int64
-	
+
 	err = db.Count(&result).Error
 	if err != nil {
 		return 0, err
@@ -811,6 +811,7 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 					}
 
 					placeholders := make([]string, len(inValues))
+
 					for j := range inValues {
 						values = append(values, inValues[j])
 						placeholders[j] = "?"
