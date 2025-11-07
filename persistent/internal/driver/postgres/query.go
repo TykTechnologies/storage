@@ -95,6 +95,7 @@ func (d *driver) Count(ctx context.Context, row model.DBObject, filters ...model
 	}
 
 	var result int64
+	
 	err = db.Count(&result).Error
 	if err != nil {
 		return 0, err

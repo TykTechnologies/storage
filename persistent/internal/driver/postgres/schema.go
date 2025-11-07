@@ -126,6 +126,7 @@ func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("table %s not found", tableName)
 		}
+
 		return nil, fmt.Errorf("failed to get table statistics: %w", err)
 	}
 
@@ -326,6 +327,7 @@ func (d *driver) DropTable(ctx context.Context, name string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to drop table %s: %w", name, err)
 	}
+
 	return int(rowCount), nil
 }
 
@@ -440,6 +442,7 @@ func (d *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
             current_setting('max_connections') AS max_connections
     `
 	var basicInfo BasicInfo
+
 	err := d.db.WithContext(ctx).Raw(basicInfoQuery).Scan(&basicInfo).Error
 	if err != nil {
 		return utils.Info{}, fmt.Errorf("failed to get database info: %w", err)
@@ -469,7 +472,7 @@ func (d *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
     `
 
 	var connectionCount int
-	
+
 	err = d.db.WithContext(ctx).Raw(connectionCountQuery).Scan(&connectionCount).Error
 	if err == nil {
 		info.CurrentConnections = connectionCount
@@ -487,6 +490,7 @@ func (d *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
     `
 
 	var tableCount int
+
 	err = d.db.WithContext(ctx).Raw(tableCountQuery).Scan(&tableCount).Error
 	if err == nil {
 		info.TableCount = tableCount

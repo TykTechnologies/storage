@@ -381,7 +381,7 @@ func (d *driver) indexExists(ctx context.Context, tableName, indexName string) (
     `
 
 	var exists bool
-	
+
 	err := d.db.WithContext(ctx).Raw(query, tableName, indexName).Scan(&exists).Error
 	if err != nil {
 		return false, err

@@ -482,7 +482,7 @@ func toPascalCase(s string) string {
 	c := cases.Title(language.English)
 	s = strings.ReplaceAll(s, "_", " ")
 	s = c.String(s)
-	
+
 	return strings.ReplaceAll(s, " ", "")
 }
 
