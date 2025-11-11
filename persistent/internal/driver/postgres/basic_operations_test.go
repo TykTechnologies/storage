@@ -14,9 +14,9 @@ import (
 
 // TestInsert tests the Insert method
 func TestInsert(t *testing.T) {
+
 	driver, ctx := setupTest(t)
 	defer teardownTest(t, driver)
-
 	obj := &TestObject{
 		Name:      "Test Object",
 		Value:     42,
@@ -471,7 +471,7 @@ func TestUpsert(t *testing.T) {
 
 		// Perform upsert with a query that won't match any document
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"name": "Non-Existent Item"},                        // Query that won't match
+			model.DBM{"name": "Non-Existent Item"}, // Query that won't match
 			model.DBM{"$set": model.DBM{"name": "New Item", "value": 30}}) // Data to insert
 		assert.NoError(t, err)
 
@@ -511,7 +511,7 @@ func TestUpsert(t *testing.T) {
 
 		// Perform upsert with direct update (no $set operator)
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"id": item.ID},                           // Query to find the document
+			model.DBM{"id": item.ID}, // Query to find the document
 			model.DBM{"name": "Directly Updated", "value": 40}) // Direct update
 		assert.NoError(t, err)
 
@@ -538,7 +538,7 @@ func TestUpsert(t *testing.T) {
 
 		// Perform upsert with ID in query
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"id": specificID},                                       // Query with specific ID
+			model.DBM{"id": specificID}, // Query with specific ID
 			model.DBM{"$set": model.DBM{"name": "ID Preserved", "value": 50}}) // Update without ID
 		assert.NoError(t, err)
 
@@ -637,4 +637,42 @@ func TestToPascalCase(t *testing.T) {
 			t.Errorf("ToPascalCase(%q) = %q; want %q", tt.input, got, tt.expected)
 		}
 	}
+}
+
+func TestDBIsNil(t *testing.T) {
+	d := &driver{db: nil} // nil database
+	ctx := context.Background()
+
+	testObj := &TestObject{ID: "test"}
+	filter := model.DBM{"id": "test"}
+
+	t.Run("Insert", func(t *testing.T) {
+		err := d.Insert(ctx, testObj)
+		assert.ErrorIs(t, err, ErrorSessionClosed)
+	})
+
+	t.Run("Update", func(t *testing.T) {
+		err := d.Update(ctx, testObj, filter)
+		assert.ErrorIs(t, err, ErrorSessionClosed)
+	})
+
+	t.Run("Delete", func(t *testing.T) {
+		err := d.Delete(ctx, testObj, filter)
+		assert.ErrorIs(t, err, ErrorSessionClosed)
+	})
+
+	t.Run("BulkUpdate", func(t *testing.T) {
+		err := d.BulkUpdate(ctx, []model.DBObject{testObj})
+		assert.ErrorIs(t, err, ErrorSessionClosed)
+	})
+
+	t.Run("UpdateAll", func(t *testing.T) {
+		err := d.UpdateAll(ctx, &TestObject{}, filter, model.DBM{})
+		assert.ErrorIs(t, err, ErrorSessionClosed)
+	})
+
+	t.Run("Upsert", func(t *testing.T) {
+		err := d.Upsert(ctx, testObj, filter, model.DBM{})
+		assert.ErrorIs(t, err, ErrorSessionClosed)
+	})
 }
