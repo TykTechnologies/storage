@@ -87,6 +87,11 @@ func convertValue(val reflect.Value) (interface{}, error) {
 		return nil, &json.UnsupportedTypeError{Type: val.Type()}
 
 	case reflect.Struct:
+		// Handle time.Time as a special case - return it directly
+		if val.Type().String() == "time.Time" {
+			return val.Interface(), nil
+		}
+
 		// Recursively convert nested structs
 		return objectToMap(val.Interface())
 
