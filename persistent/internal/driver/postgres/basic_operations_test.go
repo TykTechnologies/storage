@@ -640,7 +640,9 @@ func TestToPascalCase(t *testing.T) {
 }
 
 func TestDBIsNil(t *testing.T) {
-	d := &driver{db: nil} // nil database
+	driver, _ := setupTest(t)
+	defer teardownTest(t, driver)
+	driver.db = nil
 	ctx := context.Background()
 
 	testObj := &TestObject{ID: "test"}
