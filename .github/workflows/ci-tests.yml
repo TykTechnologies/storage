@@ -46,9 +46,19 @@ jobs:
           name: golangcilint-${{ github.run_id }}-${{ matrix.storagetype }}-${{ matrix.database }}-${{ matrix.version }}
           retention-days: 1
           path: golanglint.xml
+  install-task:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Task
+        uses: arduino/setup-task@v1
+      - name: Upload Task binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: task-binary
+          path: /usr/local/bin/task
   test:
     name: Tests ${{ matrix.storagetype }} storage - DB ${{ matrix.database }} ${{ matrix.version }} ${{ matrix.instancetype }}
-    needs: [golangci-lint]
+    needs: [golangci-lint, install-task]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -122,11 +132,6 @@ jobs:
 
       - name: Build
         run: go build -v ./...
-
-      - name: Install Task
-        uses: arduino/setup-task@v1
-        with:
-          version: 3
 
       - if: ${{ matrix.database == 'mongo' }}
         name: Start MongoDB '${{ matrix.version }}'
