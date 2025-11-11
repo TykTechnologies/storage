@@ -16,7 +16,12 @@ import (
 	"gorm.io/gorm"
 )
 
-var ErrorSessionClosed = errors.New(types.ErrorSessionClosed)
+var (
+	ErrorSessionClosed  = errors.New(types.ErrorSessionClosed)
+	ErrorEmptyRow       = errors.New(types.ErrorEmptyRow)
+	ErrorEmptyTableName = errors.New(types.ErrorEmptyTableName)
+	ErrorMultipleDBM    = errors.New(types.ErrorMultipleDBM)
+)
 
 // Insert adds one or more objects into the database in a single batch operation.
 // Returns an error if the input is empty or the insert fails.
@@ -81,7 +86,7 @@ func (d *driver) Delete(ctx context.Context, object model.DBObject, filters ...m
 
 	// Check if we have multiple filters
 	if len(filters) > 1 {
-		return errors.New(types.ErrorMultipleDBM)
+		return ErrorMultipleDBM
 	}
 
 	db := d.db.WithContext(ctx).Table(tableName)
@@ -125,7 +130,7 @@ func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 	}
 
 	if len(filters) > 1 {
-		return errors.New(types.ErrorMultipleDBM)
+		return ErrorMultipleDBM
 	}
 
 	tx := d.db.WithContext(ctx).Table(tableName)
@@ -173,11 +178,11 @@ func (d *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filte
 	}
 
 	if len(objects) == 0 {
-		return errors.New(types.ErrorEmptyRow)
+		return ErrorEmptyRow
 	}
 
 	if len(filters) > 1 {
-		return errors.New(types.ErrorMultipleDBM)
+		return ErrorMultipleDBM
 	}
 
 	// Start a transaction
@@ -196,7 +201,7 @@ func (d *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filte
 	tableName := objects[0].TableName()
 	if tableName == "" {
 		tx.Rollback()
-		return errors.New(types.ErrorEmptyTableName)
+		return ErrorEmptyTableName
 	}
 
 	if len(filters) == 1 {

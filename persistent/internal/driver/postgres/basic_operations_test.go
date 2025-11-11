@@ -24,7 +24,11 @@ func TestInsert(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 
-	err := driver.Insert(ctx, obj)
+	//no objects to insert
+	err := driver.Insert(ctx)
+	assert.NoError(t, err)
+
+	err = driver.Insert(ctx, obj)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, obj.GetObjectID())
 
@@ -242,6 +246,28 @@ func TestBulkUpdate(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(results))
 	})
+
+	t.Run("UpdateWithMultipleFilters", func(t *testing.T) {
+		// Clean up previous test data
+		err := driver.Drop(ctx, &TestObject{})
+		require.NoError(t, err)
+		err = driver.Migrate(ctx, []model.DBObject{&TestObject{}})
+		require.NoError(t, err)
+
+		// Update all Category A items
+		updateItems := []*TestObject{
+			{Name: "Updated Category", Value: 100},
+		}
+		updateObjects := make([]model.DBObject, len(updateItems))
+		for i, item := range updateItems {
+			updateObjects[i] = item
+		}
+
+		err = driver.BulkUpdate(ctx, updateObjects, model.DBM{"name": "Category A"}, model.DBM{"value": 20})
+		assert.ErrorIs(t, err, ErrorMultipleDBM)
+
+	})
+
 }
 
 func TestUpdateAll(t *testing.T) {
@@ -472,7 +498,7 @@ func TestUpsert(t *testing.T) {
 
 		// Perform upsert with a query that won't match any document
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"name": "Non-Existent Item"}, // Query that won't match
+			model.DBM{"name": "Non-Existent Item"},                        // Query that won't match
 			model.DBM{"$set": model.DBM{"name": "New Item", "value": 30}}) // Data to insert
 		assert.NoError(t, err)
 
@@ -512,7 +538,7 @@ func TestUpsert(t *testing.T) {
 
 		// Perform upsert with direct update (no $set operator)
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"id": item.ID}, // Query to find the document
+			model.DBM{"id": item.ID},                           // Query to find the document
 			model.DBM{"name": "Directly Updated", "value": 40}) // Direct update
 		assert.NoError(t, err)
 
@@ -539,7 +565,7 @@ func TestUpsert(t *testing.T) {
 
 		// Perform upsert with ID in query
 		err = driver.Upsert(ctx, resultItem,
-			model.DBM{"id": specificID}, // Query with specific ID
+			model.DBM{"id": specificID},                                       // Query with specific ID
 			model.DBM{"$set": model.DBM{"name": "ID Preserved", "value": 50}}) // Update without ID
 		assert.NoError(t, err)
 
@@ -677,5 +703,112 @@ func TestDBIsNil(t *testing.T) {
 	t.Run("Upsert", func(t *testing.T) {
 		err := d.Upsert(ctx, testObj, filter, model.DBM{})
 		assert.ErrorIs(t, err, ErrorSessionClosed)
+	})
+}
+
+func TestApplySetOperatorToObject(t *testing.T) {
+	t.Run("ApplySetOperator", func(t *testing.T) {
+		testID := model.ObjectIDHex("691338a5f2a2f824099f9ad8")
+		obj := &TestObject{
+			ID:     testID,
+			Name:   "Original Name",
+			Value:  100,
+			Active: true,
+		}
+
+		update := model.DBM{
+			"$set": model.DBM{
+				"name":   "Updated Name",
+				"value":  200,
+				"active": false,
+			},
+		}
+
+		applySetOperatorToObject(obj, update)
+
+		assert.Equal(t, "Updated Name", obj.Name)
+		assert.Equal(t, 200, obj.Value)
+		assert.Equal(t, false, obj.Active)
+		assert.Equal(t, testID, obj.ID) // ID should remain unchanged
+	})
+
+	t.Run("ApplySetOperatorWithMapStringInterface", func(t *testing.T) {
+		testID := model.ObjectIDHex("691338a5f2a2f824099f9ad9")
+		obj := &TestObject{
+			ID:    testID,
+			Name:  "Original",
+			Value: 50,
+		}
+
+		update := model.DBM{
+			"$set": map[string]interface{}{
+				"name":  "New Name",
+				"value": 300,
+			},
+		}
+
+		applySetOperatorToObject(obj, update)
+
+		assert.Equal(t, "New Name", obj.Name)
+		assert.Equal(t, 300, obj.Value)
+	})
+
+	t.Run("NoSetOperator", func(t *testing.T) {
+		testID := model.ObjectIDHex("691338a5f2a2f824099f9ada")
+		obj := &TestObject{
+			ID:    testID,
+			Name:  "Original Name",
+			Value: 100,
+		}
+
+		update := model.DBM{
+			"name":  "Should Not Change",
+			"value": 999,
+		}
+
+		applySetOperatorToObject(obj, update)
+
+		// Nothing should change without $set operator
+		assert.Equal(t, "Original Name", obj.Name)
+		assert.Equal(t, 100, obj.Value)
+	})
+
+	t.Run("EmptySetOperator", func(t *testing.T) {
+		testID := model.ObjectIDHex("691338a5f2a2f824099f9adb")
+		obj := &TestObject{
+			ID:    testID,
+			Name:  "Original Name",
+			Value: 100,
+		}
+
+		update := model.DBM{
+			"$set": model.DBM{},
+		}
+
+		applySetOperatorToObject(obj, update)
+
+		// Nothing should change with empty $set
+		assert.Equal(t, "Original Name", obj.Name)
+		assert.Equal(t, 100, obj.Value)
+	})
+
+	t.Run("SetNonExistentField", func(t *testing.T) {
+		testID := model.ObjectIDHex("691338a5f2a2f824099f9adc")
+		obj := &TestObject{
+			ID:   testID,
+			Name: "Original Name",
+		}
+
+		update := model.DBM{
+			"$set": model.DBM{
+				"nonexistent_field": "value",
+				"name":              "Updated Name",
+			},
+		}
+
+		applySetOperatorToObject(obj, update)
+
+		// Only valid field should be updated
+		assert.Equal(t, "Updated Name", obj.Name)
 	})
 }
