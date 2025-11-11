@@ -15,7 +15,6 @@ import (
 
 // TestInsert tests the Insert method
 func TestInsert(t *testing.T) {
-
 	driver, ctx := setupTest(t)
 	defer teardownTest(t, driver)
 	obj := &TestObject{
@@ -24,7 +23,7 @@ func TestInsert(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 
-	//no objects to insert
+	// no objects to insert
 	err := driver.Insert(ctx)
 	assert.NoError(t, err)
 
@@ -265,9 +264,7 @@ func TestBulkUpdate(t *testing.T) {
 
 		err = driver.BulkUpdate(ctx, updateObjects, model.DBM{"name": "Category A"}, model.DBM{"value": 20})
 		assert.ErrorIs(t, err, ErrorMultipleDBM)
-
 	})
-
 }
 
 func TestUpdateAll(t *testing.T) {

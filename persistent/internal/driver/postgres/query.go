@@ -486,8 +486,8 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 
 func translateAggregationPipeline(tableName string, pipeline []model.DBM) (string, []interface{}, error) {
 	// Initialize SQL parts
-	var selectClause = "*"
-	var fromClause = tableName
+	selectClause := "*"
+	fromClause := tableName
 	var whereClause string
 	var groupByClause string
 	var havingClause string
@@ -495,7 +495,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 	var limitClause string
 	var offsetClause string
 	var args []interface{}
-	var argIndex = 1
+	argIndex := 1
 
 	for _, stage := range pipeline {
 		if len(stage) != 1 {

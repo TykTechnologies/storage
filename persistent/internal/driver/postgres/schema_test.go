@@ -664,7 +664,6 @@ func TestMigrate(t *testing.T) {
 }
 
 func TestGetDatabaseInfo(t *testing.T) {
-
 	driver, ctx := setupTest(t)
 	defer teardownTest(t, driver)
 
