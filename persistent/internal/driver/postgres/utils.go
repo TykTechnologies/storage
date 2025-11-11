@@ -100,19 +100,23 @@ func convertValue(val reflect.Value) (interface{}, error) {
 	case reflect.Slice, reflect.Array:
 		// Convert slices/arrays element by element
 		length := val.Len()
+
 		result := make([]interface{}, length)
 		for i := 0; i < length; i++ {
 			elem, err := convertValue(val.Index(i))
 			if err != nil {
 				return nil, err
 			}
+
 			result[i] = elem
 		}
+
 		return result, nil
 
 	case reflect.Map:
 		// Convert maps key by key
 		result := make(map[string]interface{})
+
 		iter := val.MapRange()
 		for iter.Next() {
 			key := iter.Key()
@@ -121,12 +125,15 @@ func convertValue(val reflect.Value) (interface{}, error) {
 				// Fall back to interface for complex keys
 				return val.Interface(), nil
 			}
+
 			elem, err := convertValue(iter.Value())
 			if err != nil {
 				return nil, err
 			}
+
 			result[key.String()] = elem
 		}
+
 		return result, nil
 
 	default:

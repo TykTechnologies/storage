@@ -290,6 +290,7 @@ func (d *driver) GetTables(ctx context.Context) ([]string, error) {
 	}
 
 	var tables []string
+
 	err := d.db.Raw(`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`).Scan(&tables).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tables: %w", err)
