@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/model"
 	"gorm.io/gorm"
 )

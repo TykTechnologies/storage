@@ -2,12 +2,10 @@ package postgres
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
-	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/lib/pq"
 )
