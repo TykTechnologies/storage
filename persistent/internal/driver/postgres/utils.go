@@ -42,7 +42,14 @@ func objectToMap(obj interface{}) (map[string]interface{}, error) {
 
 		// Get field name from json tag, fallback to field name
 		fieldName := fieldType.Name
-		if tag := fieldType.Tag.Get("json"); tag != "" && tag != "-" {
+
+		tag := fieldType.Tag.Get("json")
+		if tag == "-" {
+			// Skip fields with json:"-"
+			continue
+		}
+
+		if tag != "" {
 			// Handle json tag options (e.g., "name,omitempty")
 			if commaIdx := strings.IndexByte(tag, ','); commaIdx > 0 {
 				fieldName = tag[:commaIdx]
