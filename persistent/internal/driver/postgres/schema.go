@@ -69,12 +69,12 @@ type BasicInfo struct {
 func (d *driver) HasTable(ctx context.Context, tableName string) (bool, error) {
 	// Check if the database connection is valid
 	if d.db == nil {
-		return false, errors.New(types.ErrorSessionClosed)
+		return false, ErrorSessionClosed
 	}
 
 	// Validate table name
 	if tableName == "" {
-		return false, errors.New(types.ErrorEmptyTableName)
+		return false, ErrorEmptyTableName
 	}
 
 	return d.db.Migrator().HasTable(tableName), nil
@@ -286,7 +286,7 @@ func (d *driver) DBTableStats(ctx context.Context, row model.DBObject) (model.DB
 // Returns a slice of table names or an error if the query fails.
 func (d *driver) GetTables(ctx context.Context) ([]string, error) {
 	if d.db == nil {
-		return []string{}, errors.New(types.ErrorSessionClosed)
+		return []string{}, ErrorSessionClosed
 	}
 
 	var tables []string
@@ -302,12 +302,12 @@ func (d *driver) GetTables(ctx context.Context) ([]string, error) {
 // Returns the number of tables dropped and any error encountered.
 func (d *driver) DropTable(ctx context.Context, name string) (int, error) {
 	if d.db == nil {
-		return 0, errors.New(types.ErrorSessionClosed)
+		return 0, ErrorSessionClosed
 	}
 
 	// Validate table name
 	if name == "" {
-		return 0, errors.New(types.ErrorEmptyTableName)
+		return 0, ErrorEmptyTableName
 	}
 
 	exist, err := d.HasTable(ctx, name)
@@ -355,17 +355,17 @@ func (d *driver) Drop(ctx context.Context, object model.DBObject) error {
 func (d *driver) Migrate(ctx context.Context, objects []model.DBObject, options ...model.DBM) error {
 	// Check if the database connection is valid
 	if d.db == nil {
-		return errors.New(types.ErrorSessionClosed)
+		return ErrorSessionClosed
 	}
 
 	// Check if we have objects to migrate
 	if len(objects) == 0 {
-		return errors.New(types.ErrorEmptyRow)
+		return ErrorEmptyRow
 	}
 
 	// Check if we have multiple options
 	if len(options) > 1 {
-		return errors.New(types.ErrorRowOptDiffLenght)
+		return ErrorRowOptDiffLength
 	}
 
 	db := d.db.WithContext(ctx)
@@ -374,12 +374,12 @@ func (d *driver) Migrate(ctx context.Context, objects []model.DBObject, options 
 	for _, obj := range objects {
 		// Get the table name
 		if obj == nil {
-			return errors.New(types.ErrorNilObject)
+			return ErrorNilObject
 		}
 
 		tableName := obj.TableName()
 		if tableName == "" {
-			return errors.New(types.ErrorEmptyTableName)
+			return ErrorEmptyTableName
 		}
 
 		tableExists := db.Migrator().HasTable(tableName)
@@ -425,7 +425,7 @@ func (d *driver) Migrate(ctx context.Context, objects []model.DBObject, options 
 // Provides details such as type, version, and connection information.
 func (d *driver) GetDatabaseInfo(ctx context.Context) (utils.Info, error) {
 	if d.db == nil {
-		return utils.Info{}, errors.New(types.ErrorSessionClosed)
+		return utils.Info{}, ErrorSessionClosed
 	}
 
 	info := utils.Info{

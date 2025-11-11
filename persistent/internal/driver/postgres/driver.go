@@ -1,8 +1,6 @@
 package postgres
 
 import (
-	"errors"
-
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/model"
 	_ "github.com/lib/pq"
@@ -35,16 +33,16 @@ func NewPostgresDriver(opts *types.ClientOpts) (*driver, error) {
 func (d *driver) validateDBAndTable(object model.DBObject) (string, error) {
 	// Check if the database connection is valid
 	if d.db == nil {
-		return "", errors.New(types.ErrorSessionClosed)
+		return "", ErrorSessionClosed
 	}
 
 	if object == nil {
-		return "", errors.New(types.ErrorNilObject)
+		return "", ErrorNilObject
 	}
 	// Get the table name from the DBObject
 	tableName := object.TableName()
 	if tableName == "" {
-		return "", errors.New(types.ErrorEmptyTableName)
+		return "", ErrorEmptyTableName
 	}
 
 	return tableName, nil

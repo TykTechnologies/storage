@@ -11,27 +11,20 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
-	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/model"
 	"gorm.io/gorm"
-)
-
-var (
-	ErrorSessionClosed  = errors.New(types.ErrorSessionClosed)
-	ErrorEmptyRow       = errors.New(types.ErrorEmptyRow)
-	ErrorEmptyTableName = errors.New(types.ErrorEmptyTableName)
-	ErrorMultipleDBM    = errors.New(types.ErrorMultipleDBM)
 )
 
 // Insert adds one or more objects into the database in a single batch operation.
 // Returns an error if the input is empty or the insert fails.
 func (d *driver) Insert(ctx context.Context, objects ...model.DBObject) error {
-	if d.db == nil {
-		return ErrorSessionClosed
-	}
-
 	if len(objects) == 0 {
 		return nil
+	}
+
+	_, err := d.validateDBAndTable(objects[0])
+	if err != nil {
+		return err
 	}
 
 	typeKey := func(obj model.DBObject) string {
@@ -75,10 +68,6 @@ func (d *driver) Insert(ctx context.Context, objects ...model.DBObject) error {
 // Delete removes the specified object from the database using either the provided filter
 // or the object's ID. Returns an error if no rows are affected.
 func (d *driver) Delete(ctx context.Context, object model.DBObject, filters ...model.DBM) error {
-	if d.db == nil {
-		return ErrorSessionClosed
-	}
-
 	tableName, err := d.validateDBAndTable(object)
 	if err != nil {
 		return err
@@ -120,10 +109,6 @@ func (d *driver) Delete(ctx context.Context, object model.DBObject, filters ...m
 // Update applies changes from the given object to the database, using either the provided filter
 // or the object's ID. Excludes ID fields and returns an error if no rows are affected.
 func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...model.DBM) error {
-	if d.db == nil {
-		return ErrorSessionClosed
-	}
-
 	tableName, err := d.validateDBAndTable(object)
 	if err != nil {
 		return err
@@ -279,10 +264,6 @@ func (d *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filte
 // UpdateAll updates all rows in the database matching the given query with the provided update values.
 // Returns an error if the operation fails or the inputs are invalid.
 func (d *driver) UpdateAll(ctx context.Context, row model.DBObject, query, update model.DBM) error {
-	if d.db == nil {
-		return ErrorSessionClosed
-	}
-
 	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
 		return err
@@ -355,10 +336,6 @@ func (d *driver) UpdateAll(ctx context.Context, row model.DBObject, query, updat
 }
 
 func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update model.DBM) error {
-	if d.db == nil {
-		return ErrorSessionClosed
-	}
-
 	tableName, err := d.validateDBAndTable(row)
 	if err != nil {
 		return err

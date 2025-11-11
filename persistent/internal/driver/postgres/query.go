@@ -74,7 +74,7 @@ func (d *driver) Count(ctx context.Context, row model.DBObject, filters ...model
 
 	tableExist, err := d.HasTable(ctx, row.TableName())
 	if !tableExist || err != nil {
-		return 0, errors.New(types.ErrorCollectionNotFound)
+		return 0, ErrorCollectionNotFound
 	}
 
 	db := d.db.WithContext(ctx).Table(tableName)
@@ -172,7 +172,7 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 // applyMongoUpdateOperators applies MongoDB-style update operators to a GORM DB instance
 func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm.DB, map[string]interface{}, error) {
 	if db == nil {
-		return nil, nil, errors.New("nil database connection")
+		return nil, nil, ErrorSessionClosed
 	}
 
 	result := db
@@ -254,7 +254,7 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 // translateQuery converts MongoDB-style queries to GORM queries with sharding support
 func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*gorm.DB, error) {
 	if db == nil {
-		return nil, errors.New("nil database connection")
+		return nil, ErrorSessionClosed
 	}
 
 	where := map[string]interface{}{}

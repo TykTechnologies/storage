@@ -45,11 +45,11 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 
 	// Validate index
 	if len(index.Keys) == 0 {
-		return errors.New(types.ErrorIndexEmpty)
+		return ErrorIndexEmpty
 	}
 
 	if index.IsTTLIndex && len(index.Keys) > 1 {
-		return errors.New(types.ErrorIndexComposedTTL)
+		return ErrorIndexComposedTTL
 	}
 
 	// Generate index name if not provided
@@ -128,7 +128,7 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 	}
 
 	if exists {
-		return errors.New(types.ErrorIndexAlreadyExist)
+		return ErrorIndexAlreadyExist
 	}
 
 	// Build CREATE INDEX statement
@@ -212,7 +212,7 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
 	}
 
 	if !exists {
-		return nil, errors.New(types.ErrorCollectionNotFound)
+		return nil, ErrorCollectionNotFound
 	}
 	// Query to get index information from PostgresSQL system catalogs
 	query := `
@@ -308,7 +308,7 @@ func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 	}
 
 	if !exists {
-		return errors.New(types.ErrorCollectionNotFound)
+		return ErrorCollectionNotFound
 	}
 
 	// Query to get all indexes for the table, excluding primary key and unique constraints

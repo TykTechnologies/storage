@@ -31,7 +31,7 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 	// Use the connection string exactly as provided
 	dsn := strings.TrimSpace(opts.ConnectionString)
 	if dsn == "" {
-		return errors.New("empty connection string")
+		return ErrorEmptyConnStr
 	}
 
 	// Open GORM with PostgreSQL driver
@@ -114,11 +114,11 @@ func (l *lifeCycle) DBType() utils.DBType {
 func (d *driver) Ping(ctx context.Context) error {
 	// Check if the database connection is valid
 	if d.db == nil {
-		return errors.New(types.ErrorSessionClosed)
+		return ErrorSessionClosed
 	}
 
 	if ctx == nil {
-		return errors.New(types.ErrorNilContext)
+		return ErrorNilContext
 	}
 
 	// Get the underlying *sql.DB from GORM
@@ -141,7 +141,7 @@ func (d *driver) Ping(ctx context.Context) error {
 func (d *driver) DropDatabase(_ context.Context) error {
 	// Check if the database connection is valid
 	if d.db == nil {
-		return errors.New(types.ErrorSessionClosed)
+		return ErrorSessionClosed
 	}
 
 	dbNameToDelete := d.dbName
