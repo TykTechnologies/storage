@@ -41,7 +41,7 @@ func TestObjectToMap(t *testing.T) {
 
 		// Check that the map contains the expected fields
 		assert.Equal(t, 4, len(result), "Map should have 4 entries")
-		assert.Equal(t, float64(123), result["id"], "ID field should be correctly mapped")
+		assert.Equal(t, 123, result["id"], "ID field should be correctly mapped")
 		assert.Equal(t, "Test Object", result["name"], "Name field should be correctly mapped")
 		assert.Equal(t, true, result["is_active"], "IsActive field should be correctly mapped")
 	})
@@ -77,7 +77,7 @@ func TestObjectToMap(t *testing.T) {
 
 		// Check that the map contains the expected fields
 		assert.Equal(t, 3, len(result), "Map should have 3 entries")
-		assert.Equal(t, float64(456), result["id"], "ID field should be correctly mapped")
+		assert.Equal(t, 456, result["id"], "ID field should be correctly mapped")
 		assert.Equal(t, "John Doe", result["name"], "Name field should be correctly mapped")
 
 		// Check nested struct
@@ -115,9 +115,9 @@ func TestObjectToMap(t *testing.T) {
 
 		// Check that the map contains the expected fields
 		assert.Equal(t, 4, len(result), "Map should have 4 entries")
-		assert.Equal(t, float64(789), result["id"], "ID field should be correctly mapped")
+		assert.Equal(t, 789, result["id"], "ID field should be correctly mapped")
 		assert.Equal(t, "Test Pointer", result["name"], "Name field should be correctly mapped")
-		assert.Equal(t, float64(30), result["age"], "Age field should be correctly mapped")
+		assert.Equal(t, 30, result["age"], "Age field should be correctly mapped")
 		assert.Equal(t, true, result["is_active"], "IsActive field should be correctly mapped")
 	})
 
@@ -144,7 +144,7 @@ func TestObjectToMap(t *testing.T) {
 
 		// Check that the map contains the expected fields
 		assert.Equal(t, 4, len(result), "Map should have 4 entries")
-		assert.Equal(t, float64(101), result["id"], "ID field should be correctly mapped")
+		assert.Equal(t, 101, result["id"], "ID field should be correctly mapped")
 		assert.Nil(t, result["name"], "Name field should be nil")
 		assert.Nil(t, result["age"], "Age field should be nil")
 		assert.Nil(t, result["is_active"], "IsActive field should be nil")

@@ -3,20 +3,122 @@ package postgres
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 )
 
-// Helper functions
+// objectToMap receives an interface and returns as map
 func objectToMap(obj interface{}) (map[string]interface{}, error) {
-	// Convert object to JSON and then to map
-	data, err := json.Marshal(obj)
-	if err != nil {
-		return nil, err
+	if obj == nil {
+		return nil, nil
 	}
 
-	var result map[string]interface{}
-	err = json.Unmarshal(data, &result)
+	val := reflect.ValueOf(obj)
 
-	return result, err
+	// Dereference pointers
+	for val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			return nil, nil
+		}
+		val = val.Elem()
+	}
+
+	// Only structs can be converted to maps
+	if val.Kind() != reflect.Struct {
+		// Return error for unsupported types
+		return nil, &json.UnsupportedTypeError{Type: val.Type()}
+	}
+
+	result := make(map[string]interface{})
+	typ := val.Type()
+
+	for i := 0; i < val.NumField(); i++ {
+		field := val.Field(i)
+		fieldType := typ.Field(i)
+
+		// Skip unexported fields
+		if !field.CanInterface() {
+			continue
+		}
+
+		// Get field name from json tag, fallback to field name
+		fieldName := fieldType.Name
+		if tag := fieldType.Tag.Get("json"); tag != "" && tag != "-" {
+			// Handle json tag options (e.g., "name,omitempty")
+			if commaIdx := strings.IndexByte(tag, ','); commaIdx > 0 {
+				fieldName = tag[:commaIdx]
+			} else {
+				fieldName = tag
+			}
+		}
+
+		// Convert field value
+		fieldValue, err := convertValue(field)
+		if err != nil {
+			return nil, err
+		}
+
+		result[fieldName] = fieldValue
+	}
+
+	return result, nil
+}
+
+// convertValue converts a reflect.Value to an interface{} suitable for map storage
+func convertValue(val reflect.Value) (interface{}, error) {
+	// Handle nil pointers
+	if val.Kind() == reflect.Ptr {
+		if val.IsNil() {
+			return nil, nil
+		}
+		val = val.Elem()
+	}
+
+	// Handle special types that need JSON marshaling
+	switch val.Kind() {
+	case reflect.Chan, reflect.Func, reflect.UnsafePointer:
+		// These types cannot be marshaled
+		return nil, &json.UnsupportedTypeError{Type: val.Type()}
+
+	case reflect.Struct:
+		// Recursively convert nested structs
+		return objectToMap(val.Interface())
+
+	case reflect.Slice, reflect.Array:
+		// Convert slices/arrays element by element
+		length := val.Len()
+		result := make([]interface{}, length)
+		for i := 0; i < length; i++ {
+			elem, err := convertValue(val.Index(i))
+			if err != nil {
+				return nil, err
+			}
+			result[i] = elem
+		}
+		return result, nil
+
+	case reflect.Map:
+		// Convert maps key by key
+		result := make(map[string]interface{})
+		iter := val.MapRange()
+		for iter.Next() {
+			key := iter.Key()
+			// Only support string keys for simplicity
+			if key.Kind() != reflect.String {
+				// Fall back to interface for complex keys
+				return val.Interface(), nil
+			}
+			elem, err := convertValue(iter.Value())
+			if err != nil {
+				return nil, err
+			}
+			result[key.String()] = elem
+		}
+		return result, nil
+
+	default:
+		// For basic types, just return the interface value
+		return val.Interface(), nil
+	}
 }
 
 // Helper function to get collection name from a struct type
