@@ -19,6 +19,7 @@ func objectToMap(obj interface{}) (map[string]interface{}, error) {
 		if val.IsNil() {
 			return nil, nil
 		}
+
 		val = val.Elem()
 	}
 
@@ -77,6 +78,7 @@ func convertValue(val reflect.Value) (interface{}, error) {
 		if val.IsNil() {
 			return nil, nil
 		}
+
 		val = val.Elem()
 	}
 
