@@ -108,10 +108,19 @@ jobs:
             instancetype: TLS
 
     steps:
-      - name: Checkout repository
+      - name: "Checkout PR"
+        if: github.event_name == 'pull_request'
+        uses: TykTechnologies/github-actions/.github/actions/checkout-pr@main
+        with:
+          token: ${{ secrets.ORG_GH_TOKEN }}
+
+      - name: "Checkout code"
+        if: github.event_name == 'push'
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 1
+          token: ${{ secrets.ORG_GH_TOKEN }}
+          submodules: false
 
       - name: Setup Golang
         uses: actions/setup-go@v3
@@ -157,10 +166,19 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test, golangci-lint]
     steps:
-      - name: Checkout Tyk Storage
+      - name: "Checkout PR"
+        if: github.event_name == 'pull_request'
+        uses: TykTechnologies/github-actions/.github/actions/checkout-pr@main
+        with:
+          token: ${{ secrets.ORG_GH_TOKEN }}
+
+      - name: "Checkout code"
+        if: github.event_name == 'push'
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 1
+          token: ${{ secrets.ORG_GH_TOKEN }}
+
       - name: Setup Golang
         uses: actions/setup-go@v3
         with:
