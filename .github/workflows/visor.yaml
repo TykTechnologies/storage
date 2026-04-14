@@ -2,7 +2,7 @@ name: Visor
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, labeled]
   issues:
     types: [opened]
   issue_comment:
@@ -19,19 +19,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       # Add this step to set up the Go environment
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff  # v5
         with:
           go-version: '1.21' # Or the version specified in go.mod
 
       # Add this step to download Go module dependencies
       - name: Download Go dependencies
         run: go mod download
-        
-      - uses: probelabs/visor@main
+
+      - uses: probelabs/visor@02e893ad11b66319b0fca1a43622038171c1a159  # main
         with:
           app-id: ${{ secrets.PROBE_APP_ID }}
           private-key: ${{ secrets.PROBE_APP_PRIVATE_KEY }}
