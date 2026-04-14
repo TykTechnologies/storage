@@ -44,4 +44,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace gorm.io/gorm => github.com/TykTechnologies/gorm v1.20.7-0.20210910090358-06148e82dc85
+replace gorm.io/gorm => github.com/TykTechnologies/gorm v1.20.7-0.20260413162114-95e095f8d8f2
