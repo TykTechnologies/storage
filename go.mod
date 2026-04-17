@@ -8,6 +8,7 @@ require (
 	github.com/redis/go-redis/v9 v9.3.1
 	github.com/stretchr/testify v1.11.1
 	go.mongodb.org/mongo-driver v1.13.1
+	golang.org/x/text v0.29.0
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22
 	gorm.io/driver/postgres v1.5.0
 	gorm.io/gorm v1.30.1
@@ -39,9 +40,8 @@ require (
 	github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d // indirect
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace gorm.io/gorm => github.com/TykTechnologies/gorm v1.20.7-0.20260413162114-95e095f8d8f2
+replace gorm.io/gorm => github.com/TykTechnologies/gorm v1.20.7-0.20260417144542-d6d1a2e12d9d
