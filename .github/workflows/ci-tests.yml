@@ -25,7 +25,7 @@ jobs:
         env:
           TOKEN: "${{ steps.app-token.outputs.token }}"
         run: >
-          git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
+          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
       - name: "Checkout code on PR"
         if: github.event_name == 'pull_request'
         uses: TykTechnologies/github-actions/.github/actions/checkout-pr@main
@@ -227,7 +227,7 @@ jobs:
         env:
           TOKEN: "${{ steps.app-token.outputs.token }}"
         run: >
-          git config --global url."https://${TOKEN}@github.com".insteadOf "https://github.com"
+          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
 
           go install github.com/wadey/gocovmerge@latest
       - name: Setup CI Tooling
