@@ -667,6 +667,30 @@ func TestKeyValue_DeleteScanMatch(t *testing.T) {
 			expectedErr:     nil,
 		},
 		{
+			name: "many_keys_pattern",
+			setup: func(db KeyValue) {
+				prefix := "cache-ec9d1ec9e4d64a9869d6596e27a79c11"
+				for i := 0; i < 100; i++ {
+					key := fmt.Sprintf("%s-%d", prefix, i)
+					err := db.Set(context.Background(), key, fmt.Sprintf("value%d", i), 0)
+					if err != nil {
+						t.Fatalf("Set() error = %v", err)
+					}
+				}
+				// Adding some non-matching keys
+				for i := 0; i < 10; i++ {
+					key := fmt.Sprintf("other-key-%d", i)
+					err := db.Set(context.Background(), key, fmt.Sprintf("value%d", i), 0)
+					if err != nil {
+						t.Fatalf("Set() error = %v", err)
+					}
+				}
+			},
+			pattern:         "cache-ec9d1ec9e4d64a9869d6596e27a79c11*",
+			expectedDeleted: 100,
+			expectedErr:     nil,
+		},
+		{
 			name:            "non_matching_pattern",
 			pattern:         "key*",
 			expectedDeleted: 0,
@@ -710,6 +734,13 @@ func TestKeyValue_DeleteScanMatch(t *testing.T) {
 				deleted, err := kv.DeleteScanMatch(ctx, tc.pattern)
 				assert.Equal(t, tc.expectedErr, err)
 				assert.Equal(t, tc.expectedDeleted, deleted)
+
+				// additional verification to ensure keys are actually deleted
+				if tc.pattern != "" && tc.expectedErr == nil {
+					keys, err := kv.Keys(ctx, tc.pattern)
+					assert.Nil(t, err)
+					assert.Empty(t, keys, "Keys should be empty after DeleteScanMatch")
+				}
 			})
 		}
 	}

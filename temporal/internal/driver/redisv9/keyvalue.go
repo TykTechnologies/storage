@@ -214,23 +214,28 @@ func (r *RedisV9) DeleteScanMatch(ctx context.Context, pattern string) (int64, e
 func (r *RedisV9) deleteScanMatchSingleNode(ctx context.Context, client redis.Cmdable, pattern string) (int64, error) {
 	var deleted, cursor uint64
 	var err error
-
-	var keys []string
-	keys, _, err = client.Scan(ctx, cursor, pattern, 0).Result()
-	if err != nil {
-		return int64(deleted), err
-	}
-
-	if len(keys) > 0 {
-		del, err := client.Del(ctx, keys...).Result()
+	for {
+		var keys []string
+		keys, cursor, err = client.Scan(ctx, cursor, pattern, 0).Result()
 		if err != nil {
-			return int64(deleted), err
+			break
 		}
 
-		deleted += uint64(del)
+		if len(keys) > 0 {
+			del, err := client.Del(ctx, keys...).Result()
+			if err != nil {
+				break
+			}
+
+			deleted += uint64(del)
+		}
+
+		if cursor == 0 {
+			break
+		}
 	}
 
-	return int64(deleted), nil
+	return int64(deleted), err
 }
 
 // Keys returns all keys matching the given pattern
