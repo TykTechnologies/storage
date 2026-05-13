@@ -28,7 +28,11 @@ func NewRegistry() *Registry {
 // The providerType should match the "type" field used in store configurations.
 //
 // Adding a factory with the same providerType will overwrite the previous factory.
-func (r *Registry) Add(providerType string, factory ProviderFactory) {}
+func (r *Registry) Add(providerType string, factory ProviderFactory) {
+	r.mu.Lock()
+	r.factories[providerType] = factory
+	r.mu.Unlock()
+}
 
 // InitStores initializes named store instances using registered provider factories.
 // The configs map keys become the store names used in KV references.
@@ -53,7 +57,12 @@ func (r *Registry) GetStore(name string) (SecretStore, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	return nil, nil
+	store, ok := r.stores[name]
+	if !ok {
+		return nil, NewStoreNotFoundError(name)
+	}
+
+	return store, nil
 }
 
 // Close gracefully shuts down all initialized stores.
