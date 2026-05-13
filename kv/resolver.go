@@ -36,3 +36,15 @@ type Resolver interface {
 func ResolveConfig(ctx context.Context, resolver Resolver, rawConfig []byte) ([]byte, error) {
 	return nil, nil
 }
+
+type resolver struct {
+	registry *Registry
+}
+
+func NewResolver(registry *Registry) Resolver {
+	return &resolver{registry: registry}
+}
+
+func (r *resolver) Resolve(ctx context.Context, input string) (string, error) {
+	return "", nil
+}

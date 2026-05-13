@@ -43,11 +43,20 @@ func (r *Registry) Add(providerType string, factory ProviderFactory) {}
 //	  "vault-prod": {"type": "vault", "required": true, "config": {...}},
 //	  "aws-dev": {"type": "aws", "required": false, "config": {...}}
 //	}
-func (r *Registry) InitStores(configs map[string]StoreConfig) error {}
+func (r *Registry) InitStores(configs map[string]StoreConfig) error {
+	return nil
+}
 
 // GetStore retrieves an initialized store by name.
 // Returns ErrStoreNotFound if no store with the given name was initialized.
-func (r *Registry) GetStore(name string) (SecretStore, error) {}
+func (r *Registry) GetStore(name string) (SecretStore, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return nil, nil
+}
 
 // Close gracefully shuts down all initialized stores.
-func (r *Registry) Close(ctx context.Context) error {}
+func (r *Registry) Close(ctx context.Context) error {
+	return nil
+}
