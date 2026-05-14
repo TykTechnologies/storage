@@ -311,11 +311,16 @@ func TestCache_CleanupStopsOnContextCancel(t *testing.T) {
 		time.Sleep(2 * time.Second)
 		synctest.Wait()
 
-		_, exists, _, _ := c.Get("key1")
+		_, exists, _, err := c.Get("key1")
+		require.NoError(t, err)
 		assert.False(t, exists, "Get should return false due to lazy eviction (expired)")
 
 		_, physicallyInMap := c.get("key1")
-		assert.True(t, physicallyInMap, "The entry should still physically exist in the map because the background cleanup is stopped")
+		assert.True(
+			t,
+			physicallyInMap,
+			"The entry should still physically exist in the map because the background cleanup is stopped",
+		)
 	})
 }
 
