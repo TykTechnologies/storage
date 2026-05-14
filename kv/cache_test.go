@@ -2,6 +2,8 @@ package kv
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -322,6 +324,52 @@ func TestCache_CleanupStopsOnContextCancel(t *testing.T) {
 			"The entry should still physically exist in the map because the background cleanup is stopped",
 		)
 	})
+}
+
+func TestCache_Concurrency(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfg := CacheConfig{Enabled: true, TTL: "10m"}
+	c, err := newCache(ctx, cfg)
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	workers := 50
+	iterations := 100
+
+	wg.Add(workers)
+
+	for range workers {
+		go func() {
+			defer wg.Done()
+
+			for j := range iterations {
+				key := fmt.Sprintf("key-%d", j)
+				c.Set(key, "value", nil)
+			}
+		}()
+	}
+
+	wg.Add(workers)
+
+	for range workers {
+		go func() {
+			defer wg.Done()
+
+			for j := range iterations {
+				key := fmt.Sprintf("key-%d", j)
+				_, _, _, err := c.Get(key)
+				assert.NoError(t, err)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	c.mu.RLock()
+	assert.Greater(t, len(c.entries), 0)
+	c.mu.RUnlock()
 }
 
 func assertCacheEntry(
