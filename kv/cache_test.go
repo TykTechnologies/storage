@@ -182,7 +182,7 @@ func TestCache_GetSet(t *testing.T) {
 		assert.Empty(t, val)
 		assert.Equal(t, expectedErr, err)
 
-		entry, _ := c.get("key2")
+		entry, _, _ := c.get("key2")
 		expectedTTL := time.Now().Add(defaultNegativeTTLNotFound)
 		require.WithinDuration(t, expectedTTL, entry.expiresAt, time.Second)
 	})
@@ -197,7 +197,7 @@ func TestCache_GetSet(t *testing.T) {
 		assert.Empty(t, val)
 		assert.Equal(t, expectedErr, err)
 
-		entry, _ := c.get("key3")
+		entry, _, _ := c.get("key3")
 		expectedTTL := time.Now().Add(defaultNegativeTTLTransient)
 		require.WithinDuration(t, expectedTTL, entry.expiresAt, time.Second)
 	})
@@ -263,7 +263,7 @@ func TestCache_CleanupExpiredEntries(t *testing.T) {
 		assertCacheEntry(t, c, "key2", "value2", true, true, "not found entry should still be present")
 		assertCacheEntry(t, c, "key3", "value3", true, true, "transient error entry should still be present")
 
-		_, exists := c.get("key1")
+		_, exists, _ := c.get("key1")
 		assert.False(t, exists, "key1 should be removed from internal storage")
 
 		// Phase 3: After 4s total - transient error entry (key3) should expire
@@ -274,7 +274,7 @@ func TestCache_CleanupExpiredEntries(t *testing.T) {
 		assertCacheEntry(t, c, "key2", "value2", true, true, "not found entry should still be present")
 		assertCacheEntry(t, c, "key3", "", false, false, "transient error entry should now be expired")
 
-		_, exists = c.get("key3")
+		_, exists, _ = c.get("key3")
 		assert.False(t, exists, "key3 should be removed from internal storage")
 
 		// Phase 4: After 10s total - not found error entry (key2) should expire
@@ -285,7 +285,7 @@ func TestCache_CleanupExpiredEntries(t *testing.T) {
 		assertCacheEntry(t, c, "key2", "", false, false, "not found entry should now be expired")
 		assertCacheEntry(t, c, "key3", "", false, false, "transient error entry should still be expired")
 
-		_, exists = c.get("key2")
+		_, exists, _ = c.get("key2")
 		assert.False(t, exists, "key2 should be removed from internal storage")
 	})
 }
@@ -315,7 +315,7 @@ func TestCache_CleanupStopsOnContextCancel(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, exists, "Get should return false due to lazy eviction (expired)")
 
-		_, physicallyInMap := c.get("key1")
+		_, physicallyInMap, _ := c.get("key1")
 		assert.True(
 			t,
 			physicallyInMap,

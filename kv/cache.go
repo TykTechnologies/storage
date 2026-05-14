@@ -38,8 +38,8 @@ func (c *cache) Get(key string) (string, bool, bool, error) {
 		return "", false, false, nil
 	}
 
-	entry, exists := c.get(key)
-	if !exists || time.Now().After(entry.expiresAt) {
+	entry, exists, expired := c.get(key)
+	if !exists || expired {
 		return "", false, false, nil
 	}
 
@@ -78,13 +78,20 @@ func (c *cache) Set(key, value string, err error) {
 	}
 }
 
-func (c *cache) get(key string) (*cacheEntry, bool) {
+func (c *cache) get(key string) (*cacheEntry, bool, bool) {
+	now := time.Now()
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	entry, ok := c.entries[key]
+	entry, exists := c.entries[key]
 
-	return entry, ok
+	var expired bool
+	if entry != nil && now.After(entry.expiresAt) {
+		expired = true
+	}
+
+	return entry, exists, expired
 }
 
 func (c *cache) cleanupLoop(ctx context.Context) {
@@ -101,24 +108,38 @@ func (c *cache) cleanupLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			c.mu.Lock()
-			now := time.Now()
-
-			for k, v := range c.entries {
-				// Delete expired entries. !Before() handles both now > expiresAt and now == expiresAt
-				if v == nil || !now.Before(v.expiresAt) {
-					delete(c.entries, k)
-				}
-			}
-
-			c.mu.Unlock()
+			c.cleanup()
 		}
 	}
 }
 
+func (c *cache) cleanup() {
+	now := time.Now()
+	var keysToDelete []string
+
+	c.mu.RLock()
+	for k, v := range c.entries {
+		// Delete expired entries. !Before() handles both now > expiresAt and now == expiresAt
+		if v == nil || !now.Before(v.expiresAt) {
+			keysToDelete = append(keysToDelete, k)
+		}
+	}
+	c.mu.RUnlock()
+
+	if len(keysToDelete) == 0 {
+		return
+	}
+
+	c.mu.Lock()
+	for _, k := range keysToDelete {
+		delete(c.entries, k)
+	}
+	c.mu.Unlock()
+}
+
 func newCache(ctx context.Context, config CacheConfig) (*cache, error) {
 	if !config.Enabled {
-		return &cache{enabled: false}, nil
+		return &cache{enabled: false, entries: make(map[string]*cacheEntry)}, nil
 	}
 
 	ttl, err := time.ParseDuration(config.TTL)
