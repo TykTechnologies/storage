@@ -5,10 +5,8 @@ import (
 	"fmt"
 )
 
-var (
-	// ErrStoreNotFound is returned when referencing an unregistered store name.
-	ErrStoreNotFound = errors.New("store not found")
-)
+// ErrStoreNotFound is returned when referencing an unregistered store name.
+var ErrStoreNotFound = errors.New("store not found")
 
 func NewStoreNotFoundError(storeName string) error {
 	return fmt.Errorf("store %q: %w", storeName, ErrStoreNotFound)
