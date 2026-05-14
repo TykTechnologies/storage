@@ -1,6 +1,8 @@
 package kv
 
-import "encoding/json"
+import (
+	"encoding/json"
+)
 
 // KVConfig represents the top-level "kv" configuration block in component configs.
 // It contains global settings and named store definitions.
@@ -41,4 +43,8 @@ type CacheConfig struct {
 	// TTL specifies how long cached values remain valid before refresh.
 	// Format: Go duration string (e.g., "60s", "5m", "1h")
 	TTL string `json:"ttl"`
+
+	RefreshBeforeExpiry  string `json:"refresh_before_expiry"`
+	NegativeTTLNotFound  string `json:"negative_ttl_not_found"`
+	NegativeTTLTransient string `json:"negative_ttl_transient"`
 }
