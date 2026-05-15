@@ -1,8 +1,13 @@
-package kv
+package registry
 
 import (
 	"context"
 	"sync"
+
+	"github.com/TykTechnologies/storage/kv"
+	"github.com/TykTechnologies/storage/kv/config"
+	"github.com/TykTechnologies/storage/kv/internal/store"
+	"github.com/TykTechnologies/storage/kv/kverr"
 )
 
 // Registry manages provider factories and initialized stores without global state.
@@ -11,16 +16,16 @@ import (
 //
 // All operations are safe for concurrent use.
 type Registry struct {
-	factories map[string]ProviderFactory
-	stores    map[string]SecretStore
+	factories map[string]kv.ProviderFactory
+	stores    map[string]*store.SecretStore
 	mu        sync.RWMutex
 }
 
 // NewRegistry creates a new empty registry with no registered factories or stores.
 func NewRegistry() *Registry {
 	return &Registry{
-		factories: make(map[string]ProviderFactory),
-		stores:    make(map[string]SecretStore),
+		factories: make(map[string]kv.ProviderFactory),
+		stores:    make(map[string]*store.SecretStore),
 	}
 }
 
@@ -28,7 +33,7 @@ func NewRegistry() *Registry {
 // The providerType should match the "type" field used in store configurations.
 //
 // Adding a factory with the same providerType will overwrite the previous factory.
-func (r *Registry) Add(providerType string, factory ProviderFactory) {
+func (r *Registry) Add(providerType string, factory kv.ProviderFactory) {
 	r.mu.Lock()
 	r.factories[providerType] = factory
 	r.mu.Unlock()
@@ -47,19 +52,19 @@ func (r *Registry) Add(providerType string, factory ProviderFactory) {
 //	  "vault-prod": {"type": "vault", "required": true, "config": {...}},
 //	  "aws-dev": {"type": "aws", "required": false, "config": {...}}
 //	}
-func (r *Registry) InitStores(configs map[string]StoreConfig) error {
+func (r *Registry) InitStores(configs map[string]config.StoreConfig) error {
 	return nil
 }
 
 // GetStore retrieves an initialized store by name.
 // Returns ErrStoreNotFound if no store with the given name was initialized.
-func (r *Registry) GetStore(name string) (SecretStore, error) {
+func (r *Registry) GetStore(name string) (*store.SecretStore, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	store, ok := r.stores[name]
 	if !ok {
-		return nil, NewStoreNotFoundError(name)
+		return nil, kverr.NewStoreNotFoundError(name)
 	}
 
 	return store, nil

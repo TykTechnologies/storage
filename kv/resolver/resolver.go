@@ -1,6 +1,10 @@
 package kv
 
-import "context"
+import (
+	"context"
+
+	"github.com/TykTechnologies/storage/kv/registry"
+)
 
 // Resolver handles string replacement for KV references in configuration strings.
 // It supports two syntax patterns:
@@ -38,10 +42,10 @@ func ResolveConfig(ctx context.Context, resolver Resolver, rawConfig []byte) ([]
 }
 
 type resolver struct {
-	registry *Registry
+	registry *registry.Registry
 }
 
-func NewResolver(registry *Registry) Resolver {
+func NewResolver(registry *registry.Registry) Resolver {
 	return &resolver{registry: registry}
 }
 

@@ -1,4 +1,4 @@
-package kv
+package cache
 
 import (
 	"context"
@@ -7,6 +7,9 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"github.com/TykTechnologies/storage/kv/config"
+	"github.com/TykTechnologies/storage/kv/kverr"
 )
 
 const (
@@ -14,16 +17,9 @@ const (
 	defaultNegativeTTLTransient = 5 * time.Second
 )
 
-// cacheEntry holds a cached value with its expiration time
-type cacheEntry struct {
-	value     string
-	err       error
-	expiresAt time.Time
-}
-
-// cache provides TTL-based in-memory caching for secret values.
+// Cache provides TTL-based in-memory caching for secret values.
 // It's thread-safe and automatically expires entries based on configured TTL.
-type cache struct {
+type Cache struct {
 	entries              map[string]*cacheEntry
 	enabled              bool
 	ttl                  time.Duration
@@ -33,14 +29,21 @@ type cache struct {
 	mu                   sync.RWMutex
 }
 
-// Get retrieves a cached value by key and returns metadata about cache state.
+// cacheEntry holds a Cached value with its expiration time
+type cacheEntry struct {
+	value     string
+	err       error
+	expiresAt time.Time
+}
+
+// Get retrieves a Cached value by key and returns metadata about Cache state.
 //
 // Returns:
-//   - value: the cached string value (empty if cache miss or expired)
-//   - found: true if a valid (non-expired) cache entry exists
+//   - value: the Cached string value (empty if Cache miss or expired)
+//   - found: true if a valid (non-expired) Cache entry exists
 //   - needsRefresh: true if entry exists but is within refreshBeforeExpiry window
-//   - err: the cached error from the original fetch operation (nil for successful cached values)
-func (c *cache) Get(key string) (string, bool, bool, error) {
+//   - err: the Cached error from the original fetch operation (nil for successful Cached values)
+func (c *Cache) Get(key string) (string, bool, bool, error) {
 	if !c.enabled {
 		return "", false, false, nil
 	}
@@ -58,12 +61,12 @@ func (c *cache) Get(key string) (string, bool, bool, error) {
 	return entry.value, true, needsRefresh, entry.err
 }
 
-func (c *cache) Set(key, value string, err error) {
+func (c *Cache) Set(key, value string, err error) {
 	if !c.enabled {
 		return
 	}
 
-	// Context errors should NOT be cached - they indicate caller abandonment, not provider failure
+	// Context errors should NOT be Cached - they indicate caller abandonment, not provider failure
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return
 	}
@@ -83,17 +86,18 @@ func (c *cache) Set(key, value string, err error) {
 	}
 }
 
-func (c *cache) selectTTL(err error) (time.Duration, bool) {
+func (c *Cache) selectTTL(err error) (time.Duration, bool) {
 	if err == nil {
 		return c.ttl, true
 	}
 
-	var notFoundErr *KeyNotFoundError
-	var transientErr *StoreUnavailableError
+	var notFoundErr *kverr.KeyNotFoundError
+	var transientErr *kverr.StoreUnavailableError
 
 	if errors.As(err, &notFoundErr) {
 		return c.negativeTTLNotFound, true
 	}
+
 	if errors.As(err, &transientErr) {
 		return c.negativeTTLTransient, true
 	}
@@ -101,7 +105,7 @@ func (c *cache) selectTTL(err error) (time.Duration, bool) {
 	return 0, false
 }
 
-func (c *cache) get(key string) (*cacheEntry, bool, bool) {
+func (c *Cache) get(key string) (*cacheEntry, bool, bool) {
 	now := time.Now()
 
 	c.mu.RLock()
@@ -117,7 +121,7 @@ func (c *cache) get(key string) (*cacheEntry, bool, bool) {
 	return entry, exists, expired
 }
 
-func (c *cache) cleanupLoop(ctx context.Context) {
+func (c *Cache) cleanupLoop(ctx context.Context) {
 	interval := c.ttl
 	if interval < time.Second {
 		interval = time.Second
@@ -136,7 +140,7 @@ func (c *cache) cleanupLoop(ctx context.Context) {
 	}
 }
 
-func (c *cache) cleanup() {
+func (c *Cache) cleanup() {
 	now := time.Now()
 
 	c.mu.Lock()
@@ -149,9 +153,9 @@ func (c *cache) cleanup() {
 	}
 }
 
-func newCache(ctx context.Context, config CacheConfig) (*cache, error) {
+func NewCache(ctx context.Context, config config.CacheConfig) (*Cache, error) {
 	if !config.Enabled {
-		return &cache{enabled: false, entries: make(map[string]*cacheEntry)}, nil
+		return &Cache{enabled: false, entries: make(map[string]*cacheEntry)}, nil
 	}
 
 	ttl, err := time.ParseDuration(config.TTL)
@@ -219,7 +223,7 @@ func newCache(ctx context.Context, config CacheConfig) (*cache, error) {
 		}
 	}
 
-	c := &cache{
+	c := &Cache{
 		entries:              make(map[string]*cacheEntry),
 		enabled:              config.Enabled,
 		ttl:                  ttl,

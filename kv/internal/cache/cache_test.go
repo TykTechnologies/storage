@@ -1,4 +1,4 @@
-package kv
+package cache
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/TykTechnologies/storage/kv/config"
+	"github.com/TykTechnologies/storage/kv/kverr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,88 +20,88 @@ func TestNewCache(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("disable cache", func(t *testing.T) {
-		cfg := CacheConfig{Enabled: false}
-		c, err := newCache(ctx, cfg)
+		cfg := config.CacheConfig{Enabled: false}
+		c, err := NewCache(ctx, cfg)
 		require.NoError(t, err)
 		require.NotNil(t, c)
 		require.False(t, c.enabled)
 	})
 
 	t.Run("invalid TTL", func(t *testing.T) {
-		cfg := CacheConfig{Enabled: true, TTL: "invalid"}
-		c, err := newCache(ctx, cfg)
+		cfg := config.CacheConfig{Enabled: true, TTL: "invalid"}
+		c, err := NewCache(ctx, cfg)
 		require.Error(t, err)
 		require.Nil(t, c)
 		require.Contains(t, err.Error(), "invalid cache ttl")
 	})
 
 	t.Run("negative TTL", func(t *testing.T) {
-		cfg := CacheConfig{Enabled: true, TTL: "-5s"}
-		c, err := newCache(ctx, cfg)
+		cfg := config.CacheConfig{Enabled: true, TTL: "-5s"}
+		c, err := NewCache(ctx, cfg)
 		require.Error(t, err)
 		require.Nil(t, c)
 		require.Contains(t, err.Error(), "cache ttl must be positive")
 	})
 
 	t.Run("invalid refresh before expiry", func(t *testing.T) {
-		cfg := CacheConfig{Enabled: true, TTL: "1s", RefreshBeforeExpiry: "some"}
-		c, err := newCache(ctx, cfg)
+		cfg := config.CacheConfig{Enabled: true, TTL: "1s", RefreshBeforeExpiry: "some"}
+		c, err := NewCache(ctx, cfg)
 		require.Error(t, err)
 		require.Nil(t, c)
 		require.Contains(t, err.Error(), "invalid cache refresh_before_expiry")
 	})
 
 	t.Run("negative refresh before expiry", func(t *testing.T) {
-		cfg := CacheConfig{Enabled: true, TTL: "1s", RefreshBeforeExpiry: "-1s"}
-		c, err := newCache(ctx, cfg)
+		cfg := config.CacheConfig{Enabled: true, TTL: "1s", RefreshBeforeExpiry: "-1s"}
+		c, err := NewCache(ctx, cfg)
 		require.Error(t, err)
 		require.Nil(t, c)
 		require.Contains(t, err.Error(), "refresh_before_expiry must be positive")
 	})
 
 	t.Run("invalid negative ttl not found", func(t *testing.T) {
-		cfg := CacheConfig{Enabled: true, TTL: "1s", NegativeTTLNotFound: "some"}
-		c, err := newCache(ctx, cfg)
+		cfg := config.CacheConfig{Enabled: true, TTL: "1s", NegativeTTLNotFound: "some"}
+		c, err := NewCache(ctx, cfg)
 		require.Error(t, err)
 		require.Nil(t, c)
 		require.Contains(t, err.Error(), "invalid cache negative_ttl_not_found")
 	})
 
 	t.Run("negative value for negative ttl not found", func(t *testing.T) {
-		cfg := CacheConfig{Enabled: true, TTL: "1s", NegativeTTLNotFound: "-1s"}
-		c, err := newCache(ctx, cfg)
+		cfg := config.CacheConfig{Enabled: true, TTL: "1s", NegativeTTLNotFound: "-1s"}
+		c, err := NewCache(ctx, cfg)
 		require.Error(t, err)
 		require.Nil(t, c)
 		require.Contains(t, err.Error(), "negative_ttl_not_found must be positive")
 	})
 
 	t.Run("invalid negative ttl transient", func(t *testing.T) {
-		cfg := CacheConfig{Enabled: true, TTL: "1s", NegativeTTLTransient: "some"}
-		c, err := newCache(ctx, cfg)
+		cfg := config.CacheConfig{Enabled: true, TTL: "1s", NegativeTTLTransient: "some"}
+		c, err := NewCache(ctx, cfg)
 		require.Error(t, err)
 		require.Nil(t, c)
 		require.Contains(t, err.Error(), "invalid cache negative_ttl_transient")
 	})
 
 	t.Run("negative value for negative ttl transient", func(t *testing.T) {
-		cfg := CacheConfig{Enabled: true, TTL: "1s", NegativeTTLTransient: "-1s"}
-		c, err := newCache(ctx, cfg)
+		cfg := config.CacheConfig{Enabled: true, TTL: "1s", NegativeTTLTransient: "-1s"}
+		c, err := NewCache(ctx, cfg)
 		require.Error(t, err)
 		require.Nil(t, c)
 		require.Contains(t, err.Error(), "negative_ttl_transient must be positive")
 	})
 
 	t.Run("overrides refresh before expiry to zero if its >= ttl", func(t *testing.T) {
-		cfg := CacheConfig{Enabled: true, TTL: "1s", RefreshBeforeExpiry: "1s"}
-		c, err := newCache(ctx, cfg)
+		cfg := config.CacheConfig{Enabled: true, TTL: "1s", RefreshBeforeExpiry: "1s"}
+		c, err := NewCache(ctx, cfg)
 		require.NoError(t, err)
 		require.NotNil(t, c)
 		require.Empty(t, c.refreshBeforeExpiry)
 	})
 
 	t.Run("sets correct defaults", func(t *testing.T) {
-		cfg := CacheConfig{Enabled: true, TTL: "1s"}
-		c, err := newCache(ctx, cfg)
+		cfg := config.CacheConfig{Enabled: true, TTL: "1s"}
+		c, err := NewCache(ctx, cfg)
 		require.NoError(t, err)
 		require.NotNil(t, c)
 		require.Empty(t, c.refreshBeforeExpiry)
@@ -111,14 +113,14 @@ func TestNewCache(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		cfg := CacheConfig{
+		cfg := config.CacheConfig{
 			Enabled:              true,
 			TTL:                  "100ms",
 			RefreshBeforeExpiry:  "50ms",
 			NegativeTTLNotFound:  "20s",
 			NegativeTTLTransient: "2s",
 		}
-		c, err := newCache(ctx, cfg)
+		c, err := NewCache(ctx, cfg)
 		require.NoError(t, err)
 		require.NotNil(t, c)
 		require.Equal(t, 100*time.Millisecond, c.ttl)
@@ -135,16 +137,16 @@ func TestCache_GetSet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	defaultConfig := CacheConfig{
+	defaultConfig := config.CacheConfig{
 		Enabled: true,
 		TTL:     "500ms",
 	}
-	c, err := newCache(ctx, defaultConfig)
+	c, err := NewCache(ctx, defaultConfig)
 	require.NoError(t, err)
 
 	t.Run("cache disabled", func(t *testing.T) {
-		cfg := CacheConfig{Enabled: false, TTL: "500ms", RefreshBeforeExpiry: "200ms"}
-		c, err := newCache(ctx, cfg)
+		cfg := config.CacheConfig{Enabled: false, TTL: "500ms", RefreshBeforeExpiry: "200ms"}
+		c, err := NewCache(ctx, cfg)
 		require.NoError(t, err)
 
 		c.Set("cache-disabled", "some", nil)
@@ -175,7 +177,7 @@ func TestCache_GetSet(t *testing.T) {
 	})
 
 	t.Run("negative caching with KeyNotFoundError", func(t *testing.T) {
-		expectedErr := &KeyNotFoundError{}
+		expectedErr := &kverr.KeyNotFoundError{}
 		c.Set("key2", "", expectedErr)
 
 		val, exists, needsRefresh, err := c.Get("key2")
@@ -190,7 +192,7 @@ func TestCache_GetSet(t *testing.T) {
 	})
 
 	t.Run("negative caching with StoreUnavailableError", func(t *testing.T) {
-		expectedErr := &StoreUnavailableError{}
+		expectedErr := &kverr.StoreUnavailableError{}
 		c.Set("key3", "", expectedErr)
 
 		val, exists, needsRefresh, err := c.Get("key3")
@@ -232,12 +234,12 @@ func TestCache_RefreshBeforeExpiry(t *testing.T) {
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
-		cfg := CacheConfig{
+		cfg := config.CacheConfig{
 			Enabled:             true,
 			TTL:                 "2s",
 			RefreshBeforeExpiry: "1s",
 		}
-		c, err := newCache(t.Context(), cfg)
+		c, err := NewCache(t.Context(), cfg)
 		require.NoError(t, err)
 
 		c.Set("key1", "value1", nil)
@@ -255,12 +257,12 @@ func TestCache_RefreshBeforeExpiryBoundary(t *testing.T) {
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
-		cfg := CacheConfig{
+		cfg := config.CacheConfig{
 			Enabled:             true,
 			TTL:                 "1s",
 			RefreshBeforeExpiry: "500ms",
 		}
-		c, err := newCache(t.Context(), cfg)
+		c, err := NewCache(t.Context(), cfg)
 		require.NoError(t, err)
 
 		c.Set("key1", "value1", nil)
@@ -269,13 +271,15 @@ func TestCache_RefreshBeforeExpiryBoundary(t *testing.T) {
 		time.Sleep(490 * time.Millisecond)
 		synctest.Wait()
 
-		_, _, needsRefresh, _ := c.Get("key1")
+		_, _, needsRefresh, err := c.Get("key1")
+		assert.NoError(t, err)
 		assert.False(t, needsRefresh, "Should not need refresh yet")
 
 		time.Sleep(20 * time.Millisecond)
 		synctest.Wait()
 
-		_, _, needsRefresh, _ = c.Get("key1")
+		_, _, needsRefresh, err = c.Get("key1")
+		assert.NoError(t, err)
 		assert.True(t, needsRefresh, "Should need refresh now")
 	})
 }
@@ -284,12 +288,12 @@ func TestCache_ZeroRefreshBeforeExpiry(t *testing.T) {
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
-		cfg := CacheConfig{
+		cfg := config.CacheConfig{
 			Enabled:             true,
 			TTL:                 "1s",
 			RefreshBeforeExpiry: "0s",
 		}
-		c, err := newCache(t.Context(), cfg)
+		c, err := NewCache(t.Context(), cfg)
 		require.NoError(t, err)
 
 		c.Set("key1", "value1", nil)
@@ -297,7 +301,8 @@ func TestCache_ZeroRefreshBeforeExpiry(t *testing.T) {
 		time.Sleep(900 * time.Millisecond)
 		synctest.Wait()
 
-		_, _, needsRefresh, _ := c.Get("key1")
+		_, _, needsRefresh, err := c.Get("key1")
+		require.NoError(t, err)
 		assert.False(t, needsRefresh, "Zero refresh window should never trigger refresh")
 	})
 }
@@ -306,36 +311,37 @@ func TestCache_NegativeCachingBoundaries(t *testing.T) {
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
-		cfg := CacheConfig{
+		cfg := config.CacheConfig{
 			Enabled:             true,
 			TTL:                 "1s",
 			NegativeTTLNotFound: "100ms",
 		}
-		c, err := newCache(t.Context(), cfg)
+		c, err := NewCache(t.Context(), cfg)
 		require.NoError(t, err)
 
-		c.Set("short-not-found", "", &KeyNotFoundError{})
+		c.Set("short-not-found", "", &kverr.KeyNotFoundError{})
 
 		time.Sleep(60 * time.Millisecond)
 		synctest.Wait()
 
-		_, exists, _, _ := c.Get("short-not-found")
+		_, exists, _, err := c.Get("short-not-found")
+		require.Error(t, err)
 		assert.True(t, exists, "Should still exist before negative TTL expires")
 
 		time.Sleep(50 * time.Millisecond)
 		synctest.Wait()
 
-		_, exists, _, _ = c.Get("short-not-found")
+		_, exists, _, err = c.Get("short-not-found")
+		require.NoError(t, err)
 		assert.False(t, exists, "Should expire after negative TTL")
 	})
-
 }
 
 func TestCache_OverwriteExistingEntry(t *testing.T) {
 	t.Parallel()
 
-	cfg := CacheConfig{Enabled: true, TTL: "1s"}
-	c, err := newCache(t.Context(), cfg)
+	cfg := config.CacheConfig{Enabled: true, TTL: "1s"}
+	c, err := NewCache(t.Context(), cfg)
 	require.NoError(t, err)
 
 	// Set initial value
@@ -346,7 +352,7 @@ func TestCache_OverwriteExistingEntry(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Overwrite with error
-	c.Set("key1", "", &KeyNotFoundError{})
+	c.Set("key1", "", &kverr.KeyNotFoundError{})
 	val, exists, _, err = c.Get("key1")
 	assert.True(t, exists)
 	assert.Empty(t, val)
@@ -363,14 +369,15 @@ func TestCache_OverwriteExistingEntry(t *testing.T) {
 func TestCache_UnknownErrorTypes(t *testing.T) {
 	t.Parallel()
 
-	cfg := CacheConfig{Enabled: true, TTL: "1s"}
-	c, err := newCache(t.Context(), cfg)
+	cfg := config.CacheConfig{Enabled: true, TTL: "1s"}
+	c, err := NewCache(t.Context(), cfg)
 	require.NoError(t, err)
 
 	unknownErr := fmt.Errorf("some random error")
 	c.Set("key1", "value1", unknownErr)
 
-	_, exists, _, _ := c.Get("key1")
+	_, exists, _, err := c.Get("key1")
+	require.NoError(t, err)
 	assert.False(t, exists, "Unknown errors should not be cached")
 }
 
@@ -378,11 +385,11 @@ func TestCache_CleanupIntervalScaling(t *testing.T) {
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
-		cfg := CacheConfig{
+		cfg := config.CacheConfig{
 			Enabled: true,
 			TTL:     "100ms",
 		}
-		c, err := newCache(t.Context(), cfg)
+		c, err := NewCache(t.Context(), cfg)
 		require.NoError(t, err)
 
 		c.Set("key1", "value1", nil)
@@ -390,7 +397,8 @@ func TestCache_CleanupIntervalScaling(t *testing.T) {
 		time.Sleep(150 * time.Millisecond)
 		synctest.Wait()
 
-		_, exists, _, _ := c.Get("key1")
+		_, exists, _, err := c.Get("key1")
+		require.NoError(t, err)
 		assert.False(t, exists)
 
 		// Wait for cleanup interval (should be 1s minimum)
@@ -406,13 +414,13 @@ func TestCache_CleanupExpiredEntries(t *testing.T) {
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
-		cfg := CacheConfig{
+		cfg := config.CacheConfig{
 			Enabled:              true,
 			TTL:                  "2s",
 			NegativeTTLNotFound:  "10s",
 			NegativeTTLTransient: "4s",
 		}
-		c, err := newCache(t.Context(), cfg)
+		c, err := NewCache(t.Context(), cfg)
 		require.NoError(t, err)
 
 		testEntries := []struct {
@@ -422,8 +430,8 @@ func TestCache_CleanupExpiredEntries(t *testing.T) {
 			description string
 		}{
 			{"key1", "value1", nil, "normal entry (2s TTL)"},
-			{"key2", "value2", &KeyNotFoundError{}, "not found entry (10s TTL)"},
-			{"key3", "value3", &StoreUnavailableError{}, "transient error entry (5s TTL)"},
+			{"key2", "value2", &kverr.KeyNotFoundError{}, "not found entry (10s TTL)"},
+			{"key3", "value3", &kverr.StoreUnavailableError{}, "transient error entry (5s TTL)"},
 		}
 
 		for _, entry := range testEntries {
@@ -476,11 +484,11 @@ func TestCache_CleanupStopsOnContextCancel(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 
-		cfg := CacheConfig{
+		cfg := config.CacheConfig{
 			Enabled: true,
 			TTL:     "1s",
 		}
-		c, err := newCache(ctx, cfg)
+		c, err := NewCache(ctx, cfg)
 		require.NoError(t, err)
 
 		c.Set("key1", "value1", nil)
@@ -512,8 +520,8 @@ func TestCache_Concurrency(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cfg := CacheConfig{Enabled: true, TTL: "10m"}
-	c, err := newCache(ctx, cfg)
+	cfg := config.CacheConfig{Enabled: true, TTL: "10m"}
+	c, err := NewCache(ctx, cfg)
 	require.NoError(t, err)
 
 	var wg sync.WaitGroup
@@ -556,7 +564,7 @@ func TestCache_Concurrency(t *testing.T) {
 
 func assertCacheEntry(
 	t *testing.T,
-	c *cache,
+	c *Cache,
 	key,
 	expectedValue string,
 	shouldExist,

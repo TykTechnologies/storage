@@ -1,4 +1,4 @@
-package kv
+package store
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/TykTechnologies/storage/kv/config"
+	"github.com/TykTechnologies/storage/kv/kverr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,7 +43,7 @@ func TestNewSecretStore(t *testing.T) {
 	t.Parallel()
 
 	t.Run("nil provider", func(t *testing.T) {
-		store, err := NewSecretStore(t.Context(), "test", nil, CacheConfig{Enabled: true, TTL: "1m"})
+		store, err := NewSecretStore(t.Context(), "test", nil, config.CacheConfig{Enabled: true, TTL: "1m"})
 		require.Error(t, err)
 		require.Nil(t, store)
 		require.Contains(t, err.Error(), "provider cannot be nil")
@@ -49,7 +51,7 @@ func TestNewSecretStore(t *testing.T) {
 
 	t.Run("invalid cache config", func(t *testing.T) {
 		provider := &mockProvider{}
-		store, err := NewSecretStore(t.Context(), "test", provider, CacheConfig{
+		store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
 			Enabled: true,
 			TTL:     "invalid-duration",
 		})
@@ -60,7 +62,7 @@ func TestNewSecretStore(t *testing.T) {
 
 	t.Run("negative TTL", func(t *testing.T) {
 		provider := &mockProvider{}
-		store, err := NewSecretStore(t.Context(), "test", provider, CacheConfig{
+		store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
 			Enabled: true,
 			TTL:     "-10s",
 		})
@@ -70,15 +72,17 @@ func TestNewSecretStore(t *testing.T) {
 
 	t.Run("cache disabled", func(t *testing.T) {
 		provider := &mockProvider{}
-		store, err := NewSecretStore(t.Context(), "test", provider, CacheConfig{
+		store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
 			Enabled: false,
 		})
 		require.NoError(t, err)
 		require.NotNil(t, store)
 
 		// Every call should hit provider
-		store.GetSecret(t.Context(), "key1")
-		store.GetSecret(t.Context(), "key1")
+		_, err = store.GetSecret(t.Context(), "key1")
+		require.NoError(t, err)
+		_, err = store.GetSecret(t.Context(), "key1")
+		require.NoError(t, err)
 		require.Equal(t, int32(2), provider.calls.Load())
 	})
 }
@@ -87,7 +91,7 @@ func TestGetSecret_CacheMissAndHit(t *testing.T) {
 	t.Parallel()
 
 	provider := &mockProvider{}
-	cfg := CacheConfig{Enabled: true, TTL: "1m"}
+	cfg := config.CacheConfig{Enabled: true, TTL: "1m"}
 	store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 	require.NoError(t, err)
 
@@ -107,13 +111,13 @@ func TestGetSecret_CacheMissAndHit(t *testing.T) {
 func TestGetSecret_ProviderErrorReturned(t *testing.T) {
 	t.Parallel()
 
-	expectedErr := &KeyNotFoundError{}
+	expectedErr := &kverr.KeyNotFoundError{}
 	provider := &mockProvider{
 		mockGetFunc: func(ctx context.Context, path string) (string, error) {
 			return "", expectedErr
 		},
 	}
-	cfg := CacheConfig{Enabled: true, TTL: "1m"}
+	cfg := config.CacheConfig{Enabled: true, TTL: "1m"}
 	store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 	require.NoError(t, err)
 
@@ -127,13 +131,13 @@ func TestGetSecret_ProviderErrorReturned(t *testing.T) {
 func TestGetSecret_NegativeCachingForKeyNotFoundError(t *testing.T) {
 	t.Parallel()
 
-	expectedErr := &KeyNotFoundError{}
+	expectedErr := &kverr.KeyNotFoundError{}
 	provider := &mockProvider{
 		mockGetFunc: func(ctx context.Context, path string) (string, error) {
 			return "secret", expectedErr
 		},
 	}
-	cfg := CacheConfig{
+	cfg := config.CacheConfig{
 		Enabled:             true,
 		TTL:                 "1m",
 		NegativeTTLNotFound: "30s",
@@ -160,7 +164,7 @@ func TestGetSecret_SingleFlightDeduplication(t *testing.T) {
 	provider := &mockProvider{
 		delay: 50 * time.Millisecond,
 	}
-	cfg := CacheConfig{Enabled: true, TTL: "1m"}
+	cfg := config.CacheConfig{Enabled: true, TTL: "1m"}
 	store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 	require.NoError(t, err)
 
@@ -171,6 +175,7 @@ func TestGetSecret_SingleFlightDeduplication(t *testing.T) {
 	for range workers {
 		go func() {
 			defer wg.Done()
+
 			val, err := store.GetSecret(t.Context(), "concurrent-secret")
 			require.NoError(t, err)
 			assert.Equal(t, "mock-secret", val)
@@ -191,7 +196,7 @@ func TestGetSecret_CacheDisabled_AlwaysCallsProvider(t *testing.T) {
 	t.Parallel()
 
 	provider := &mockProvider{}
-	cfg := CacheConfig{Enabled: false}
+	cfg := config.CacheConfig{Enabled: false}
 	store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 	require.NoError(t, err)
 
@@ -221,7 +226,7 @@ func TestGetSecret_DifferentKeysIndependent(t *testing.T) {
 			return fmt.Sprintf("secret-%s", path), nil
 		},
 	}
-	cfg := CacheConfig{Enabled: true, TTL: "1m"}
+	cfg := config.CacheConfig{Enabled: true, TTL: "1m"}
 	store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 	require.NoError(t, err)
 
@@ -247,7 +252,7 @@ func TestGetSecret_ProviderTimeoutEnforced(t *testing.T) {
 	provider := &mockProvider{
 		delay: 10 * time.Second,
 	}
-	cfg := CacheConfig{Enabled: true, TTL: "1m"}
+	cfg := config.CacheConfig{Enabled: true, TTL: "1m"}
 	store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 	require.NoError(t, err)
 
@@ -273,7 +278,7 @@ func TestStaleWhileRevalidate(t *testing.T) {
 				return fmt.Sprintf("secret-v%d", count), nil
 			},
 		}
-		cfg := CacheConfig{Enabled: true, TTL: "5s", RefreshBeforeExpiry: "1s"}
+		cfg := config.CacheConfig{Enabled: true, TTL: "5s", RefreshBeforeExpiry: "1s"}
 		store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 		require.NoError(t, err)
 
@@ -312,7 +317,7 @@ func TestBackgroundRefreshDeduplication(t *testing.T) {
 		delay: 100 * time.Millisecond,
 	}
 
-	store, err := NewSecretStore(t.Context(), "test", provider, CacheConfig{
+	store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
 		Enabled:             true,
 		TTL:                 "1s",
 		RefreshBeforeExpiry: "500ms",
@@ -356,7 +361,7 @@ func TestBackgroundRefreshSurvivesRequestCancellation(t *testing.T) {
 		},
 	}
 
-	store, err := NewSecretStore(t.Context(), "test", provider, CacheConfig{
+	store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
 		Enabled:             true,
 		TTL:                 "2s",
 		RefreshBeforeExpiry: "1s",
@@ -404,7 +409,7 @@ func TestConcurrentBackgroundRefreshDifferentKeys(t *testing.T) {
 		},
 	}
 
-	store, err := NewSecretStore(t.Context(), "test", provider, CacheConfig{
+	store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
 		Enabled:             true,
 		TTL:                 "2s",
 		RefreshBeforeExpiry: "1s",
@@ -423,12 +428,16 @@ func TestConcurrentBackgroundRefreshDifferentKeys(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		store.GetSecret(t.Context(), "key1")
+
+		_, err := store.GetSecret(t.Context(), "key1")
+		require.NoError(t, err)
 	}()
 
 	go func() {
 		defer wg.Done()
-		store.GetSecret(t.Context(), "key2")
+
+		_, err := store.GetSecret(t.Context(), "key2")
+		require.NoError(t, err)
 	}()
 
 	wg.Wait()
@@ -446,7 +455,7 @@ func TestContextCancellationDoesNotPoisonCache(t *testing.T) {
 		delay: 100 * time.Millisecond,
 	}
 
-	cfg := CacheConfig{Enabled: true, TTL: "5s"}
+	cfg := config.CacheConfig{Enabled: true, TTL: "5s"}
 	store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 	require.NoError(t, err)
 

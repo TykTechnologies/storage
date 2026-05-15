@@ -1,4 +1,4 @@
-package kv
+package store
 
 import (
 	"context"
@@ -6,27 +6,23 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/TykTechnologies/storage/kv"
+	"github.com/TykTechnologies/storage/kv/config"
+	"github.com/TykTechnologies/storage/kv/internal/cache"
 	"golang.org/x/sync/singleflight"
 )
 
 const defaultProviderTimeout = 5 * time.Second
 
-// SecretStore is the high-level interface. It wraps Provider
-// implementations with additional capabilities like caching,
-// single-flight deduplication, and enhanced error handling.
-type SecretStore interface {
-	GetSecret(ctx context.Context, path string) (string, error)
-}
-
-type secretStore struct {
+type SecretStore struct {
 	name     string
-	provider Provider
-	cache    *cache
+	provider kv.Provider
+	cache    *cache.Cache
 	sf       *singleflight.Group
 }
 
 // GetSecret retrieves a secret value with caching and deduplication.
-func (s *secretStore) GetSecret(ctx context.Context, path string) (string, error) {
+func (s *SecretStore) GetSecret(ctx context.Context, path string) (string, error) {
 	val, exists, needsRefresh, err := s.cache.Get(path)
 	if exists {
 		// Fail fast on cached errors
@@ -75,7 +71,7 @@ func (s *secretStore) GetSecret(ctx context.Context, path string) (string, error
 	return resStr, nil
 }
 
-func (s *secretStore) triggerBackgroundRefreshOnce(path string) {
+func (s *SecretStore) triggerBackgroundRefreshOnce(path string) {
 	// Use separate singleflight key to prevent collision with foreground fetches
 	refreshKey := fmt.Sprintf("%s:refresh", path)
 
@@ -85,7 +81,7 @@ func (s *secretStore) triggerBackgroundRefreshOnce(path string) {
 	_ = ch
 }
 
-func (s *secretStore) doBackgroundRefresh(path string) (any, error) {
+func (s *SecretStore) doBackgroundRefresh(path string) (any, error) {
 	// We're creating a new context for background refresh because we don't want
 	// a cancelled HTTP request to abort a cache refresh that benefits all future callers.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultProviderTimeout)
@@ -103,19 +99,19 @@ func (s *secretStore) doBackgroundRefresh(path string) (any, error) {
 func NewSecretStore(
 	ctx context.Context,
 	name string,
-	provider Provider,
-	cacheConfig CacheConfig,
-) (SecretStore, error) {
+	provider kv.Provider,
+	cacheConfig config.CacheConfig,
+) (*SecretStore, error) {
 	if provider == nil {
 		return nil, fmt.Errorf("failed to create a secret store with name %q: provider cannot be nil", name)
 	}
 
-	cache, err := newCache(ctx, cacheConfig)
+	cache, err := cache.NewCache(ctx, cacheConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create secret store: %w", err)
 	}
 
-	return &secretStore{
+	return &SecretStore{
 		name:     name,
 		provider: provider,
 		cache:    cache,
