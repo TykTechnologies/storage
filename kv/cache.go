@@ -56,36 +56,42 @@ func (c *cache) Set(key, value string, err error) {
 		return
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	// Context errors should NOT be cached - they indicate caller abandonment, not provider failure
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return
 	}
 
-	ttl := c.ttl
-
-	if err != nil {
-		// TODO: Update with errors.AsType() after Go 1.26 migration
-		var notFoundErr *KeyNotFoundError
-		var transientErr *StoreUnavailableError
-
-		if errors.As(err, &notFoundErr) {
-			ttl = c.negativeTTLNotFound
-		} else if errors.As(err, &transientErr) {
-			ttl = c.negativeTTLTransient
-		} else {
-			// Uknown error type: don't cache (let next request retry)
-			return
-		}
+	ttl, shouldCache := c.selectTTL(err)
+	if !shouldCache {
+		return
 	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	c.entries[key] = &cacheEntry{
 		value:     value,
 		expiresAt: time.Now().Add(ttl),
 		err:       err,
 	}
+}
+
+func (c *cache) selectTTL(err error) (time.Duration, bool) {
+	if err == nil {
+		return c.ttl, true
+	}
+
+	var notFoundErr *KeyNotFoundError
+	var transientErr *StoreUnavailableError
+
+	if errors.As(err, &notFoundErr) {
+		return c.negativeTTLNotFound, true
+	}
+	if errors.As(err, &transientErr) {
+		return c.negativeTTLTransient, true
+	}
+
+	return 0, false
 }
 
 func (c *cache) get(key string) (*cacheEntry, bool, bool) {
