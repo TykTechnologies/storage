@@ -229,6 +229,8 @@ func TestCache_GetSet(t *testing.T) {
 }
 
 func TestCache_RefreshBeforeExpiry(t *testing.T) {
+	t.Parallel()
+
 	synctest.Test(t, func(t *testing.T) {
 		cfg := CacheConfig{
 			Enabled:             true,
@@ -250,6 +252,8 @@ func TestCache_RefreshBeforeExpiry(t *testing.T) {
 }
 
 func TestCache_RefreshBeforeExpiryBoundary(t *testing.T) {
+	t.Parallel()
+
 	synctest.Test(t, func(t *testing.T) {
 		cfg := CacheConfig{
 			Enabled:             true,
@@ -277,6 +281,8 @@ func TestCache_RefreshBeforeExpiryBoundary(t *testing.T) {
 }
 
 func TestCache_ZeroRefreshBeforeExpiry(t *testing.T) {
+	t.Parallel()
+
 	synctest.Test(t, func(t *testing.T) {
 		cfg := CacheConfig{
 			Enabled:             true,
@@ -369,6 +375,8 @@ func TestCache_UnknownErrorTypes(t *testing.T) {
 }
 
 func TestCache_CleanupIntervalScaling(t *testing.T) {
+	t.Parallel()
+
 	synctest.Test(t, func(t *testing.T) {
 		cfg := CacheConfig{
 			Enabled: true,
@@ -395,6 +403,8 @@ func TestCache_CleanupIntervalScaling(t *testing.T) {
 }
 
 func TestCache_CleanupExpiredEntries(t *testing.T) {
+	t.Parallel()
+
 	synctest.Test(t, func(t *testing.T) {
 		cfg := CacheConfig{
 			Enabled:              true,
@@ -461,6 +471,8 @@ func TestCache_CleanupExpiredEntries(t *testing.T) {
 }
 
 func TestCache_CleanupStopsOnContextCancel(t *testing.T) {
+	t.Parallel()
+
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 
@@ -495,6 +507,8 @@ func TestCache_CleanupStopsOnContextCancel(t *testing.T) {
 }
 
 func TestCache_Concurrency(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
