@@ -2,11 +2,14 @@ package kv
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"golang.org/x/sync/singleflight"
 )
+
+const defaultProviderTimeout = 5 * time.Second
 
 // SecretStore is the high-level interface. It wraps Provider
 // implementations with additional capabilities like caching,
@@ -26,20 +29,32 @@ type secretStore struct {
 func (s *secretStore) GetSecret(ctx context.Context, path string) (string, error) {
 	val, exists, needsRefresh, err := s.cache.Get(path)
 	if exists {
+		// Fail fast on cached errors
+		if err != nil {
+			return "", err
+		}
+
 		// If value is almost expired on cache, the process should refresh it
 		// on background which is called "stale-while-revalidate" strategy
 		if needsRefresh {
-			s.triggerBackgroundRefresh(path)
+			s.triggerBackgroundRefreshOnce(path)
 		}
 
 		return val, err
 	}
 
 	res, fetchErr, _ := s.sf.Do(path, func() (any, error) {
-		fetchCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		fetchCtx, cancel := context.WithTimeout(ctx, defaultProviderTimeout)
 		defer cancel()
 
 		newVal, err := s.provider.Get(fetchCtx, path)
+
+		if errors.Is(err, context.Canceled) {
+			return "", fmt.Errorf("request cancelled while fetching %q: %w", path, err)
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			return "", fmt.Errorf("timeout fetching %q: %w", path, err)
+		}
+
 		s.cache.Set(path, newVal, err)
 
 		return newVal, err
@@ -60,18 +75,29 @@ func (s *secretStore) GetSecret(ctx context.Context, path string) (string, error
 	return resStr, nil
 }
 
-func (s *secretStore) triggerBackgroundRefresh(path string) {
-	go func() {
-		bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+func (s *secretStore) triggerBackgroundRefreshOnce(path string) {
+	// Use separate singleflight key to prevent collision with foreground fetches
+	refreshKey := fmt.Sprintf("%s:refresh", path)
 
-		_, _, _ = s.sf.Do(path, func() (any, error) {
-			newVal, err := s.provider.Get(bgCtx, path)
-			s.cache.Set(path, newVal, err)
+	ch := s.sf.DoChan(refreshKey, func() (any, error) {
+		return s.doBackgroundRefresh(path)
+	})
+	_ = ch
+}
 
-			return newVal, err
-		})
-	}()
+func (s *secretStore) doBackgroundRefresh(path string) (any, error) {
+	// We're creating a new context for background refresh because we don't want
+	// a cancelled HTTP request to abort a cache refresh that benefits all future callers.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultProviderTimeout)
+	defer cancel()
+
+	newVal, err := s.provider.Get(ctx, path)
+
+	if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		s.cache.Set(path, newVal, err)
+	}
+
+	return newVal, nil
 }
 
 func NewSecretStore(
