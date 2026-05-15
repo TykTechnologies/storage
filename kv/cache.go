@@ -33,6 +33,13 @@ type cache struct {
 	mu                   sync.RWMutex
 }
 
+// Get retrieves a cached value by key and returns metadata about cache state.
+//
+// Returns:
+//   - value: the cached string value (empty if cache miss or expired)
+//   - found: true if a valid (non-expired) cache entry exists
+//   - needsRefresh: true if entry exists but is within refreshBeforeExpiry window
+//   - err: the cached error from the original fetch operation (nil for successful cached values)
 func (c *cache) Get(key string) (string, bool, bool, error) {
 	if !c.enabled {
 		return "", false, false, nil
