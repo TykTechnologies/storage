@@ -115,26 +115,16 @@ func (c *cache) cleanupLoop(ctx context.Context) {
 
 func (c *cache) cleanup() {
 	now := time.Now()
-	var keysToDelete []string
 
-	c.mu.RLock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	for k, v := range c.entries {
 		// Delete expired entries. !Before() handles both now > expiresAt and now == expiresAt
 		if v == nil || !now.Before(v.expiresAt) {
-			keysToDelete = append(keysToDelete, k)
+			delete(c.entries, k)
 		}
 	}
-	c.mu.RUnlock()
-
-	if len(keysToDelete) == 0 {
-		return
-	}
-
-	c.mu.Lock()
-	for _, k := range keysToDelete {
-		delete(c.entries, k)
-	}
-	c.mu.Unlock()
 }
 
 func newCache(ctx context.Context, config CacheConfig) (*cache, error) {
