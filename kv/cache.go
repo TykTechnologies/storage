@@ -130,8 +130,7 @@ func (c *cache) cleanup() {
 	defer c.mu.Unlock()
 
 	for k, v := range c.entries {
-		// Delete expired entries. !Before() handles both now > expiresAt and now == expiresAt
-		if v == nil || !now.Before(v.expiresAt) {
+		if v == nil || now.After(v.expiresAt) || now.Equal(v.expiresAt) {
 			delete(c.entries, k)
 		}
 	}
@@ -170,7 +169,7 @@ func newCache(ctx context.Context, config CacheConfig) (*cache, error) {
 
 			// TODO: Replace with logger
 			log.Printf(
-				"refresh_before_expiry of %q is not less than ttl of %q - background refresh disabled",
+				"refresh_before_expiry(%v) must be less than ttl(%v) - background refresh disabled",
 				refreshBeforeExpiry,
 				ttl,
 			)
