@@ -203,6 +203,29 @@ func TestCache_GetSet(t *testing.T) {
 		expectedTTL := time.Now().Add(defaultNegativeTTLTransient)
 		require.WithinDuration(t, expectedTTL, entry.expiresAt, time.Second)
 	})
+
+	t.Run("negative caching is disabled for context errors", func(t *testing.T) {
+		c.Set("key3", "value3", context.Canceled)
+		c.Set("key4", "value4", context.DeadlineExceeded)
+
+		val, exists, needsRefresh, err := c.Get("key3")
+		assert.False(t, exists)
+		assert.False(t, needsRefresh)
+		assert.Empty(t, val)
+		assert.NoError(t, err)
+
+		val, exists, needsRefresh, err = c.Get("key4")
+		assert.False(t, exists)
+		assert.False(t, needsRefresh)
+		assert.Empty(t, val)
+		assert.NoError(t, err)
+
+		entry, _, _ := c.get("key3")
+		require.Empty(t, entry)
+
+		entry, _, _ = c.get("key4")
+		require.Empty(t, entry)
+	})
 }
 
 func TestCache_RefreshBeforeExpiry(t *testing.T) {
