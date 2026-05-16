@@ -103,7 +103,7 @@ func (s *SecretStore) doBackgroundRefresh(path string) (any, error) {
 		s.cache.Set(path, newVal, nil)
 	}
 
-	return newVal, nil
+	return newVal, err
 }
 
 func NewSecretStore(
