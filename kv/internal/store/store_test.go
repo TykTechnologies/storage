@@ -174,16 +174,11 @@ func TestGet_SingleFlightDeduplication(t *testing.T) {
 		start := time.Now()
 
 		for range 100 {
-			wg.Add(1)
-
-			go func() {
-				defer wg.Done()
-
-				// Foreground fetch
+			wg.Go(func() {
 				val, err := store.Get(t.Context(), "concurrent-secret")
 				require.NoError(t, err)
 				assert.Equal(t, "mock-secret", val)
-			}()
+			})
 		}
 
 		wg.Wait()
@@ -346,14 +341,10 @@ func TestBackgroundRefreshDeduplication(t *testing.T) {
 		var wg sync.WaitGroup
 
 		for range 100 {
-			wg.Add(1)
-
-			go func() {
-				defer wg.Done()
-
+			wg.Go(func() {
 				_, err := store.Get(t.Context(), "key1")
 				require.NoError(t, err)
-			}()
+			})
 		}
 
 		wg.Wait()
@@ -446,21 +437,15 @@ func TestConcurrentBackgroundRefreshDifferentKeys(t *testing.T) {
 		time.Sleep(time.Second)
 
 		var wg sync.WaitGroup
-		wg.Add(2)
 
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			_, err := store.Get(t.Context(), "key1")
 			require.NoError(t, err)
-		}()
-
-		go func() {
-			defer wg.Done()
-
+		})
+		wg.Go(func() {
 			_, err := store.Get(t.Context(), "key2")
 			require.NoError(t, err)
-		}()
+		})
 
 		wg.Wait()
 

@@ -518,34 +518,24 @@ func TestCache_Concurrency(t *testing.T) {
 	require.NoError(t, err)
 
 	var wg sync.WaitGroup
-	workers := 50
-	iterations := 100
 
-	wg.Add(workers)
-
-	for range workers {
-		go func() {
-			defer wg.Done()
-
-			for j := range iterations {
+	for range 50 {
+		wg.Go(func() {
+			for j := range 100 {
 				key := fmt.Sprintf("key-%d", j)
 				c.Set(key, "value", nil)
 			}
-		}()
+		})
 	}
 
-	wg.Add(workers)
-
-	for range workers {
-		go func() {
-			defer wg.Done()
-
-			for j := range iterations {
+	for range 50 {
+		wg.Go(func() {
+			for j := range 100 {
 				key := fmt.Sprintf("key-%d", j)
 				_, _, _, err := c.Get(key)
 				assert.NoError(t, err)
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
