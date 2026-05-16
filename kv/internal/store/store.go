@@ -14,6 +14,7 @@ import (
 
 const defaultProviderTimeout = 5 * time.Second
 
+// SecretStore is an internal decorator that adds caching and singleflight to a Provider.
 type SecretStore struct {
 	name     string
 	provider kv.Provider
@@ -21,8 +22,8 @@ type SecretStore struct {
 	sf       *singleflight.Group
 }
 
-// GetSecret retrieves a secret value with caching and deduplication.
-func (s *SecretStore) GetSecret(ctx context.Context, path string) (string, error) {
+// Get retrieves a secret value with caching and deduplication.
+func (s *SecretStore) Get(ctx context.Context, path string) (string, error) {
 	val, exists, needsRefresh, err := s.cache.Get(path)
 	if exists {
 		// Fail fast on cached errors
@@ -69,6 +70,11 @@ func (s *SecretStore) GetSecret(ctx context.Context, path string) (string, error
 	}
 
 	return resStr, nil
+}
+
+// Unwrap allows callers to access the underlying provider for optional interfaces (like Lister)
+func (s *SecretStore) Unwrap() kv.Provider {
+	return s.provider
 }
 
 func (s *SecretStore) triggerBackgroundRefreshOnce(path string) {

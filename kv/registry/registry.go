@@ -6,7 +6,6 @@ import (
 
 	"github.com/TykTechnologies/storage/kv"
 	"github.com/TykTechnologies/storage/kv/config"
-	"github.com/TykTechnologies/storage/kv/internal/store"
 	"github.com/TykTechnologies/storage/kv/kverr"
 )
 
@@ -17,7 +16,7 @@ import (
 // All operations are safe for concurrent use.
 type Registry struct {
 	factories map[string]kv.ProviderFactory
-	stores    map[string]*store.SecretStore
+	stores    map[string]kv.Provider
 	mu        sync.RWMutex
 }
 
@@ -25,7 +24,7 @@ type Registry struct {
 func NewRegistry() *Registry {
 	return &Registry{
 		factories: make(map[string]kv.ProviderFactory),
-		stores:    make(map[string]*store.SecretStore),
+		stores:    make(map[string]kv.Provider),
 	}
 }
 
@@ -58,7 +57,7 @@ func (r *Registry) InitStores(configs map[string]config.StoreConfig) error {
 
 // GetStore retrieves an initialized store by name.
 // Returns ErrStoreNotFound if no store with the given name was initialized.
-func (r *Registry) GetStore(name string) (*store.SecretStore, error) {
+func (r *Registry) GetStore(name string) (kv.Provider, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
