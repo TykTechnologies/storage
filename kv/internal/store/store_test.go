@@ -161,35 +161,46 @@ func TestGet_NegativeCachingForKeyNotFoundError(t *testing.T) {
 func TestGet_SingleFlightDeduplication(t *testing.T) {
 	t.Parallel()
 
-	provider := &mockProvider{
-		delay: 50 * time.Millisecond,
-	}
-	cfg := config.CacheConfig{Enabled: true, TTL: "1m"}
-	store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
-	require.NoError(t, err)
+	synctest.Test(t, func(t *testing.T) {
+		provider := &mockProvider{
+			delay: time.Second,
+		}
+		cfg := config.CacheConfig{Enabled: true, TTL: "10s"}
+		store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
+		require.NoError(t, err)
 
-	var wg sync.WaitGroup
-	const workers = 100
-	wg.Add(workers)
+		var wg sync.WaitGroup
 
-	for range workers {
-		go func() {
-			defer wg.Done()
+		start := time.Now()
 
-			val, err := store.Get(t.Context(), "concurrent-secret")
-			require.NoError(t, err)
-			assert.Equal(t, "mock-secret", val)
-		}()
-	}
+		for range 100 {
+			wg.Add(1)
 
-	wg.Wait()
+			go func() {
+				defer wg.Done()
 
-	assert.Equal(
-		t,
-		int32(1),
-		provider.calls.Load(),
-		"100 concurrent requests should deduplicate to 1 provider call",
-	)
+				// Foreground fetch
+				val, err := store.Get(t.Context(), "concurrent-secret")
+				require.NoError(t, err)
+				assert.Equal(t, "mock-secret", val)
+			}()
+		}
+
+		wg.Wait()
+
+		require.Less(
+			t,
+			time.Since(start),
+			1001*time.Millisecond,
+			"all 100 requests will return after first success singleflight call",
+		)
+		assert.Equal(
+			t,
+			int32(1),
+			provider.calls.Load(),
+			"100 concurrent requests should deduplicate to 1 provider call",
+		)
+	})
 }
 
 func TestGet_CacheDisabled_AlwaysCallsProvider(t *testing.T) {
@@ -249,21 +260,23 @@ func TestGet_DifferentKeysIndependent(t *testing.T) {
 func TestGet_ProviderTimeoutEnforced(t *testing.T) {
 	t.Parallel()
 
-	provider := &mockProvider{
-		delay: 10 * time.Second,
-	}
-	cfg := config.CacheConfig{Enabled: true, TTL: "1m"}
-	store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
-	require.NoError(t, err)
+	synctest.Test(t, func(t *testing.T) {
+		provider := &mockProvider{
+			delay: 10 * time.Second,
+		}
+		cfg := config.CacheConfig{Enabled: true, TTL: "1m"}
+		store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
+		require.NoError(t, err)
 
-	start := time.Now()
-	val, err := store.Get(t.Context(), "slow-key")
-	elapsed := time.Since(start)
+		start := time.Now()
+		val, err := store.Get(t.Context(), "slow-key")
+		elapsed := time.Since(start)
 
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "timeout fetching")
-	assert.Empty(t, val)
-	assert.Less(t, elapsed, 6*time.Second, "should timeout at defaultProviderTimeout (5s)")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "timeout fetching")
+		assert.Empty(t, val)
+		assert.Less(t, elapsed, 6*time.Second, "should timeout at defaultProviderTimeout (5s)")
+	})
 }
 
 func TestStaleWhileRevalidate(t *testing.T) {
@@ -288,7 +301,6 @@ func TestStaleWhileRevalidate(t *testing.T) {
 		assert.Equal(t, "secret-v1", val)
 
 		time.Sleep(4 * time.Second)
-		synctest.Wait()
 
 		// Cache hit and triggers background refresh
 		val, err = store.Get(t.Context(), "stale-secret")
@@ -313,139 +325,153 @@ func TestStaleWhileRevalidate(t *testing.T) {
 func TestBackgroundRefreshDeduplication(t *testing.T) {
 	t.Parallel()
 
-	provider := &mockProvider{
-		delay: 100 * time.Millisecond,
-	}
+	synctest.Test(t, func(t *testing.T) {
+		provider := &mockProvider{
+			delay: 100 * time.Millisecond,
+		}
 
-	store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
-		Enabled:             true,
-		TTL:                 "1s",
-		RefreshBeforeExpiry: "500ms",
+		store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
+			Enabled:             true,
+			TTL:                 "1s",
+			RefreshBeforeExpiry: "500ms",
+		})
+		require.NoError(t, err)
+
+		_, err = store.Get(t.Context(), "key1")
+		require.NoError(t, err)
+
+		// Advance time to enter RefreshBeforeExpiry window
+		time.Sleep(600 * time.Millisecond)
+
+		var wg sync.WaitGroup
+
+		for range 100 {
+			wg.Add(1)
+
+			go func() {
+				defer wg.Done()
+
+				_, err := store.Get(t.Context(), "key1")
+				require.NoError(t, err)
+			}()
+		}
+
+		wg.Wait()
+
+		// We wanna be sure that second request to provider is finished
+		time.Sleep(100 * time.Millisecond)
+		synctest.Wait()
+
+		require.Equal(t, int32(2), provider.calls.Load())
 	})
-	require.NoError(t, err)
-
-	_, err = store.Get(t.Context(), "key1")
-	require.NoError(t, err)
-
-	time.Sleep(600 * time.Millisecond)
-
-	var wg sync.WaitGroup
-	for range 100 {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
-			_, err := store.Get(context.Background(), "key1")
-			require.NoError(t, err)
-		}()
-	}
-
-	// We wanna be sure that second request to provider is finished
-	time.Sleep(100 * time.Millisecond)
-
-	wg.Wait()
-
-	require.Equal(t, int32(2), provider.calls.Load())
 }
 
 func TestBackgroundRefreshSurvivesRequestCancellation(t *testing.T) {
 	t.Parallel()
 
-	var callCount atomic.Int32
-	provider := &mockProvider{
-		delay: 100 * time.Millisecond,
-		mockGetFunc: func(ctx context.Context, path string) (string, error) {
-			count := callCount.Add(1)
-			return fmt.Sprintf("secret-v%d", count), nil
-		},
-	}
+	synctest.Test(t, func(t *testing.T) {
+		var callCount atomic.Int32
+		provider := &mockProvider{
+			delay: 100 * time.Millisecond,
+			mockGetFunc: func(ctx context.Context, path string) (string, error) {
+				count := callCount.Add(1)
+				return fmt.Sprintf("secret-v%d", count), nil
+			},
+		}
 
-	store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
-		Enabled:             true,
-		TTL:                 "2s",
-		RefreshBeforeExpiry: "1s",
+		store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
+			Enabled:             true,
+			TTL:                 "2s",
+			RefreshBeforeExpiry: "1s",
+		})
+		require.NoError(t, err)
+
+		// Initial fetch
+		val, err := store.Get(t.Context(), "key1")
+		require.NoError(t, err)
+		require.Equal(t, "secret-v1", val)
+
+		// Advance time to enter the RefreshBeforeExpiry window
+		time.Sleep(time.Second)
+
+		cancelCtx, cancel := context.WithCancel(context.Background())
+		val, err = store.Get(cancelCtx, "key1")
+		require.NoError(t, err)
+		require.Equal(t, "secret-v1", val)
+
+		cancel()
+
+		// Wait for background refresh to complete
+		time.Sleep(100 * time.Millisecond)
+		synctest.Wait()
+
+		// Verify fresh value was cached despite cancellation
+		val, err = store.Get(t.Context(), "key1")
+		require.NoError(t, err)
+		require.Equal(t, "secret-v2", val)
+		require.Equal(t, int32(2), callCount.Load())
 	})
-	require.NoError(t, err)
-
-	// Initial fetch
-	val, err := store.Get(t.Context(), "key1")
-	require.NoError(t, err)
-	require.Equal(t, "secret-v1", val)
-
-	time.Sleep(time.Second)
-
-	cancelCtx, cancel := context.WithCancel(context.Background())
-	val, err = store.Get(cancelCtx, "key1")
-	require.NoError(t, err)
-	require.Equal(t, "secret-v1", val)
-
-	cancel()
-
-	// Wait for background refresh to complete
-	time.Sleep(200 * time.Millisecond)
-
-	// Verify fresh value was cached despite cancellation
-	val, err = store.Get(t.Context(), "key1")
-	require.NoError(t, err)
-	require.Equal(t, "secret-v2", val)
-	require.Equal(t, int32(2), callCount.Load())
 }
 
 func TestConcurrentBackgroundRefreshDifferentKeys(t *testing.T) {
 	t.Parallel()
 
-	var key1Calls, key2Calls atomic.Int32
-	provider := &mockProvider{
-		delay: 100 * time.Millisecond,
-		mockGetFunc: func(ctx context.Context, path string) (string, error) {
-			if path == "key1" {
-				key1Calls.Add(1)
-				return "secret-key1", nil
-			}
+	synctest.Test(t, func(t *testing.T) {
+		var key1Calls, key2Calls atomic.Int32
+		provider := &mockProvider{
+			delay: 100 * time.Millisecond,
+			mockGetFunc: func(ctx context.Context, path string) (string, error) {
+				if path == "key1" {
+					key1Calls.Add(1)
+					return "secret-key1", nil
+				}
 
-			key2Calls.Add(1)
-			return "secret-key2", nil
-		},
-	}
+				key2Calls.Add(1)
+				return "secret-key2", nil
+			},
+		}
 
-	store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
-		Enabled:             true,
-		TTL:                 "2s",
-		RefreshBeforeExpiry: "1s",
+		store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
+			Enabled:             true,
+			TTL:                 "2s",
+			RefreshBeforeExpiry: "1s",
+		})
+		require.NoError(t, err)
+
+		_, err = store.Get(t.Context(), "key1")
+		require.NoError(t, err)
+		_, err = store.Get(t.Context(), "key2")
+		require.NoError(t, err)
+
+		time.Sleep(time.Second)
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+
+			_, err := store.Get(t.Context(), "key1")
+			require.NoError(t, err)
+		}()
+
+		go func() {
+			defer wg.Done()
+
+			_, err := store.Get(t.Context(), "key2")
+			require.NoError(t, err)
+		}()
+
+		wg.Wait()
+
+		time.Sleep(100 * time.Millisecond) // Wait for refreshes to complete
+		synctest.Wait()
+
+		// Each key should have exactly 2 calls (initial + 1 refresh)
+		require.Equal(t, int32(2), key1Calls.Load())
+		require.Equal(t, int32(2), key2Calls.Load())
 	})
-	require.NoError(t, err)
 
-	_, err = store.Get(t.Context(), "key1")
-	require.NoError(t, err)
-	_, err = store.Get(t.Context(), "key2")
-	require.NoError(t, err)
-
-	time.Sleep(time.Second)
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-
-		_, err := store.Get(t.Context(), "key1")
-		require.NoError(t, err)
-	}()
-
-	go func() {
-		defer wg.Done()
-
-		_, err := store.Get(t.Context(), "key2")
-		require.NoError(t, err)
-	}()
-
-	wg.Wait()
-	time.Sleep(200 * time.Millisecond) // Wait for refreshes to complete
-
-	// Each key should have exactly 2 calls (initial + 1 refresh)
-	require.Equal(t, int32(2), key1Calls.Load())
-	require.Equal(t, int32(2), key2Calls.Load())
 }
 
 func TestContextCancellationDoesNotPoisonCache(t *testing.T) {
@@ -460,25 +486,33 @@ func TestContextCancellationDoesNotPoisonCache(t *testing.T) {
 		store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 		require.NoError(t, err)
 
-		// Foreground fetch
+		go func() {
+			// Foreground fetch with canceled request.
+			// The select immediately returns an error and provider
+			// hasn't been called.
+			ctx, cancel := context.WithCancel(t.Context())
+
+			cancel()
+
+			val, err := store.Get(ctx, "cancel-secret")
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "context canceled")
+			require.Empty(t, val)
+		}()
+
 		val, err := store.Get(t.Context(), "cancel-secret")
-
-		time.Sleep(defaultProviderTimeout)
-		synctest.Wait()
-
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "context deadline exceeded")
+		require.Contains(t, err.Error(), "timeout fetching ")
 		require.Empty(t, val)
-
-		require.Equal(t, int32(1), provider.calls.Load())
 
 		val, err = store.Get(t.Context(), "cancel-secret")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "context deadline exceeded")
+		require.Contains(t, err.Error(), "timeout fetching ")
 		require.Empty(t, val)
 
-		// Two calls are the marker that negative cached is disabled
-		// for context errors.
+		time.Sleep(10 * time.Second)
+		synctest.Wait()
+
 		require.Equal(t, int32(2), provider.calls.Load())
 	})
 }
