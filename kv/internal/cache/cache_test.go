@@ -389,15 +389,19 @@ func TestCache_CleanupIntervalScaling(t *testing.T) {
 		time.Sleep(150 * time.Millisecond)
 		synctest.Wait()
 
+		// Value is expired but still physically exists
 		_, exists, _, err := c.Get("key1")
 		require.NoError(t, err)
 		assert.False(t, exists)
+
+		_, physicallyExists, _ := c.get("key1")
+		assert.True(t, physicallyExists, "Should be physically present as cleanup hasn't run yet")
 
 		// Wait for cleanup interval (should be 1s minimum)
 		time.Sleep(2 * time.Second)
 		synctest.Wait()
 
-		_, physicallyExists, _ := c.get("key1")
+		_, physicallyExists, _ = c.get("key1")
 		assert.False(t, physicallyExists, "Should be physically removed after cleanup")
 	})
 }

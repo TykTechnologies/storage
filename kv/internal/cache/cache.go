@@ -122,7 +122,7 @@ func (c *Cache) get(key string) (*cacheEntry, bool, bool) {
 }
 
 func (c *Cache) cleanupLoop(ctx context.Context) {
-	interval := c.ttl
+	interval := min(c.ttl, c.negativeTTLNotFound, c.negativeTTLTransient)
 	if interval < time.Second {
 		interval = time.Second
 	}
