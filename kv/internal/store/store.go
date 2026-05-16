@@ -40,7 +40,7 @@ func (s *SecretStore) Get(ctx context.Context, path string) (string, error) {
 		return val, err
 	}
 
-	res, fetchErr, _ := s.sf.Do(path, func() (any, error) {
+	ch := s.sf.DoChan(path, func() (any, error) {
 		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), defaultProviderTimeout)
 		defer cancel()
 
@@ -56,19 +56,24 @@ func (s *SecretStore) Get(ctx context.Context, path string) (string, error) {
 		return newVal, err
 	})
 
-	if fetchErr != nil {
-		return "", fetchErr
-	}
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case res := <-ch:
+		if res.Err != nil {
+			return "", res.Err
+		}
 
-	// Providers always return string but anyway its better to be safe
-	resStr, ok := res.(string)
-	if !ok {
-		// TODO: Replace with some generic fetch error. If the result is not a string,
-		// its a programming mistake as every provider should return strign
-		return "", fmt.Errorf("provider returned unexpected type %T; expected string", res)
-	}
+		// Providers always return string
+		v, ok := res.Val.(string)
+		if !ok {
+			// TODO: Replace with some generic fetch error. If the result is not a string,
+			// its a programming mistake as every provider should return strign
+			return "", fmt.Errorf("provider returned unexpected type %T; expected string", res)
+		}
 
-	return resStr, nil
+		return v, nil
+	}
 }
 
 // Unwrap allows callers to access the underlying provider for optional interfaces (like Lister)
