@@ -451,39 +451,41 @@ func TestConcurrentBackgroundRefreshDifferentKeys(t *testing.T) {
 func TestContextCancellationDoesNotPoisonCache(t *testing.T) {
 	t.Parallel()
 
-	provider := &mockProvider{
-		delay: 100 * time.Millisecond,
-	}
+	synctest.Test(t, func(t *testing.T) {
+		provider := &mockProvider{
+			delay: 10 * time.Second,
+		}
 
-	cfg := config.CacheConfig{Enabled: true, TTL: "5s"}
-	store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
-	require.NoError(t, err)
+		cfg := config.CacheConfig{Enabled: true, TTL: "5s"}
+		store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
+		require.NoError(t, err)
 
-	cancelCtx, cancelFunc := context.WithCancel(context.Background())
-	cancelFunc()
+		// Foreground fetch
+		val, err := store.Get(t.Context(), "cancel-secret")
 
-	// Foreground fetch
-	val, err := store.Get(cancelCtx, "cancel-secret")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "request cancelled while fetching")
-	require.Empty(t, val)
+		time.Sleep(defaultProviderTimeout)
+		synctest.Wait()
 
-	require.Equal(t, int32(1), provider.calls.Load())
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "context deadline exceeded")
+		require.Empty(t, val)
 
-	val, err = store.Get(t.Context(), "cancel-secret")
-	require.NoError(t, err)
-	require.Equal(t, "mock-secret", val)
+		require.Equal(t, int32(1), provider.calls.Load())
 
-	require.Equal(t, int32(2), provider.calls.Load())
+		val, err = store.Get(t.Context(), "cancel-secret")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "context deadline exceeded")
+		require.Empty(t, val)
 
-	val, err = store.Get(t.Context(), "cancel-secret")
-	require.NoError(t, err)
-	require.Equal(t, "mock-secret", val)
-
-	require.Equal(t, int32(2), provider.calls.Load())
+		// Two calls are the marker that negative cached is disabled
+		// for context errors.
+		require.Equal(t, int32(2), provider.calls.Load())
+	})
 }
 
 func TestUnwrapReturnsStoredProvider(t *testing.T) {
+	t.Parallel()
+
 	provider := &mockProvider{}
 
 	store, err := NewSecretStore(t.Context(), "test-store", provider, config.CacheConfig{

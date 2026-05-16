@@ -41,14 +41,13 @@ func (s *SecretStore) Get(ctx context.Context, path string) (string, error) {
 	}
 
 	res, fetchErr, _ := s.sf.Do(path, func() (any, error) {
-		fetchCtx, cancel := context.WithTimeout(ctx, defaultProviderTimeout)
+		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), defaultProviderTimeout)
 		defer cancel()
 
 		newVal, err := s.provider.Get(fetchCtx, path)
 
-		if errors.Is(err, context.Canceled) {
-			return "", fmt.Errorf("request cancelled while fetching %q: %w", path, err)
-		} else if errors.Is(err, context.DeadlineExceeded) {
+		// Return earlier to prevent cache poisoning with context errors
+		if errors.Is(err, context.DeadlineExceeded) {
 			return "", fmt.Errorf("timeout fetching %q: %w", path, err)
 		}
 
@@ -94,9 +93,9 @@ func (s *SecretStore) doBackgroundRefresh(path string) (any, error) {
 	defer cancel()
 
 	newVal, err := s.provider.Get(ctx, path)
-
-	if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-		s.cache.Set(path, newVal, err)
+	// Update the cache on success to ensure errors don't overwrite valid entries.
+	if err == nil {
+		s.cache.Set(path, newVal, nil)
 	}
 
 	return newVal, nil
