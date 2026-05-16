@@ -142,15 +142,28 @@ func (c *Cache) cleanupLoop(ctx context.Context) {
 
 func (c *Cache) cleanup() {
 	now := time.Now()
+	var expired []string
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
+	c.mu.RLock()
 	for k, v := range c.entries {
 		if v == nil || now.After(v.expiresAt) || now.Equal(v.expiresAt) {
+			expired = append(expired, k)
+		}
+	}
+	c.mu.RUnlock()
+
+	if len(expired) == 0 {
+		return
+	}
+
+	c.mu.Lock()
+	for _, k := range expired {
+		entry := c.entries[k]
+		if entry == nil || now.After(entry.expiresAt) || now.Equal(entry.expiresAt) {
 			delete(c.entries, k)
 		}
 	}
+	c.mu.Unlock()
 }
 
 func NewCache(ctx context.Context, config config.CacheConfig) (*Cache, error) {
