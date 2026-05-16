@@ -6,7 +6,6 @@ import (
 
 	"github.com/TykTechnologies/storage/kv"
 	"github.com/TykTechnologies/storage/kv/config"
-	"github.com/TykTechnologies/storage/kv/kverr"
 )
 
 // Registry manages provider factories and initialized stores without global state.
@@ -63,7 +62,7 @@ func (r *Registry) GetStore(name string) (kv.Provider, error) {
 
 	store, ok := r.stores[name]
 	if !ok {
-		return nil, kverr.NewStoreNotFoundError(name)
+		return nil, kv.NewStoreNotFoundError(name)
 	}
 
 	return store, nil

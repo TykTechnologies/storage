@@ -1,4 +1,4 @@
-package kverr
+package kv
 
 import (
 	"errors"

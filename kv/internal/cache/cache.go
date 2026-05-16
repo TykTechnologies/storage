@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/TykTechnologies/storage/kv"
 	"github.com/TykTechnologies/storage/kv/config"
-	"github.com/TykTechnologies/storage/kv/kverr"
 )
 
 const (
@@ -91,8 +91,8 @@ func (c *Cache) selectTTL(err error) (time.Duration, bool) {
 		return c.ttl, true
 	}
 
-	var notFoundErr *kverr.KeyNotFoundError
-	var transientErr *kverr.StoreUnavailableError
+	var notFoundErr *kv.KeyNotFoundError
+	var transientErr *kv.StoreUnavailableError
 
 	if errors.As(err, &notFoundErr) {
 		return c.negativeTTLNotFound, true

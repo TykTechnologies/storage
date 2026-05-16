@@ -8,8 +8,8 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/TykTechnologies/storage/kv"
 	"github.com/TykTechnologies/storage/kv/config"
-	"github.com/TykTechnologies/storage/kv/kverr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -169,7 +169,7 @@ func TestCache_GetSet(t *testing.T) {
 	})
 
 	t.Run("negative caching with KeyNotFoundError", func(t *testing.T) {
-		expectedErr := &kverr.KeyNotFoundError{}
+		expectedErr := &kv.KeyNotFoundError{}
 		c.Set("key2", "", expectedErr)
 
 		val, exists, needsRefresh, err := c.Get("key2")
@@ -184,7 +184,7 @@ func TestCache_GetSet(t *testing.T) {
 	})
 
 	t.Run("negative caching with StoreUnavailableError", func(t *testing.T) {
-		expectedErr := &kverr.StoreUnavailableError{}
+		expectedErr := &kv.StoreUnavailableError{}
 		c.Set("key3", "", expectedErr)
 
 		val, exists, needsRefresh, err := c.Get("key3")
@@ -311,7 +311,7 @@ func TestCache_NegativeCachingBoundaries(t *testing.T) {
 		c, err := NewCache(t.Context(), cfg)
 		require.NoError(t, err)
 
-		c.Set("short-not-found", "", &kverr.KeyNotFoundError{})
+		c.Set("short-not-found", "", &kv.KeyNotFoundError{})
 
 		time.Sleep(60 * time.Millisecond)
 		synctest.Wait()
@@ -344,7 +344,7 @@ func TestCache_OverwriteExistingEntry(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Overwrite with error
-	c.Set("key1", "", &kverr.KeyNotFoundError{})
+	c.Set("key1", "", &kv.KeyNotFoundError{})
 	val, exists, _, err = c.Get("key1")
 	assert.True(t, exists)
 	assert.Empty(t, val)
@@ -422,8 +422,8 @@ func TestCache_CleanupExpiredEntries(t *testing.T) {
 			description string
 		}{
 			{"key1", "value1", nil, "normal entry (2s TTL)"},
-			{"key2", "value2", &kverr.KeyNotFoundError{}, "not found entry (10s TTL)"},
-			{"key3", "value3", &kverr.StoreUnavailableError{}, "transient error entry (5s TTL)"},
+			{"key2", "value2", &kv.KeyNotFoundError{}, "not found entry (10s TTL)"},
+			{"key3", "value3", &kv.StoreUnavailableError{}, "transient error entry (5s TTL)"},
 		}
 
 		for _, entry := range testEntries {

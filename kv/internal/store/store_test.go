@@ -9,8 +9,8 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/TykTechnologies/storage/kv"
 	"github.com/TykTechnologies/storage/kv/config"
-	"github.com/TykTechnologies/storage/kv/kverr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -111,7 +111,7 @@ func TestGet_CacheMissAndHit(t *testing.T) {
 func TestGet_ProviderErrorReturned(t *testing.T) {
 	t.Parallel()
 
-	expectedErr := &kverr.KeyNotFoundError{}
+	expectedErr := &kv.KeyNotFoundError{}
 	provider := &mockProvider{
 		mockGetFunc: func(ctx context.Context, path string) (string, error) {
 			return "", expectedErr
@@ -131,7 +131,7 @@ func TestGet_ProviderErrorReturned(t *testing.T) {
 func TestGet_NegativeCachingForKeyNotFoundError(t *testing.T) {
 	t.Parallel()
 
-	expectedErr := &kverr.KeyNotFoundError{}
+	expectedErr := &kv.KeyNotFoundError{}
 	provider := &mockProvider{
 		mockGetFunc: func(ctx context.Context, path string) (string, error) {
 			return "secret", expectedErr
