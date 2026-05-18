@@ -300,15 +300,11 @@ func TestQueue_Ctx(t *testing.T) {
 				sub := queue.Subscribe(ctx, "test_channel")
 				defer sub.Close()
 				for {
-					msg, err := sub.Receive(ctx)
+					_, err := sub.Receive(ctx)
 					if err != nil {
 						assert.NotNil(t, err)
 						didReceive <- true
 						return
-					}
-
-					if msg == nil {
-						continue
 					}
 				}
 			}(ctx)
