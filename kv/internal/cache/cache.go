@@ -179,60 +179,27 @@ func NewCache(ctx context.Context, config kv.CacheConfig) (*Cache, error) {
 		return nil, fmt.Errorf("cache ttl must be positive, got %v", config.TTL)
 	}
 
-	var refreshBeforeExpiry time.Duration
-
-	if config.RefreshBeforeExpiry != "" {
-		var err error
-
-		refreshBeforeExpiry, err = time.ParseDuration(config.RefreshBeforeExpiry)
-		if err != nil {
-			return nil, fmt.Errorf("invalid cache refresh_before_expiry value: %w", err)
-		}
-
-		if refreshBeforeExpiry < 0 {
-			return nil, fmt.Errorf("cache refresh_before_expiry must be positive, got %v", config.RefreshBeforeExpiry)
-		}
-
-		if refreshBeforeExpiry >= ttl {
-			refreshBeforeExpiry = 0
-
-			// TODO: Replace with logger
-			log.Printf(
-				"refresh_before_expiry(%v) must be less than ttl(%v) - background refresh disabled",
-				refreshBeforeExpiry,
-				ttl,
-			)
-		}
+	refreshBeforeExpiry, err := parseRefreshBeforeExpiry(config.RefreshBeforeExpiry, ttl)
+	if err != nil {
+		return nil, err
 	}
 
-	negativeTTLNotFound := defaultNegativeTTLNotFound
-
-	if config.NegativeTTLNotFound != "" {
-		var err error
-
-		negativeTTLNotFound, err = time.ParseDuration(config.NegativeTTLNotFound)
-		if err != nil {
-			return nil, fmt.Errorf("invalid cache negative_ttl_not_found value: %w", err)
-		}
-
-		if negativeTTLNotFound <= 0 {
-			return nil, fmt.Errorf("cache negative_ttl_not_found must be positive, got %v", config.NegativeTTLNotFound)
-		}
+	negativeTTLNotFound, err := parseOptionalDuration(
+		config.NegativeTTLNotFound,
+		defaultNegativeTTLNotFound,
+		"negative_ttl_not_found",
+	)
+	if err != nil {
+		return nil, err
 	}
 
-	negativeTTLTransient := defaultNegativeTTLTransient
-
-	if config.NegativeTTLTransient != "" {
-		var err error
-
-		negativeTTLTransient, err = time.ParseDuration(config.NegativeTTLTransient)
-		if err != nil {
-			return nil, fmt.Errorf("invalid cache negative_ttl_transient value: %w", err)
-		}
-
-		if negativeTTLTransient <= 0 {
-			return nil, fmt.Errorf("cache negative_ttl_transient must be positive, got %v", config.NegativeTTLTransient)
-		}
+	negativeTTLTransient, err := parseOptionalDuration(
+		config.NegativeTTLTransient,
+		defaultNegativeTTLTransient,
+		"negative_ttl_transient",
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	c := &Cache{
@@ -247,4 +214,52 @@ func NewCache(ctx context.Context, config kv.CacheConfig) (*Cache, error) {
 	go c.cleanupLoop(ctx)
 
 	return c, nil
+}
+
+// parseOptionalDuration parses a duration string, returning a default value if empty.
+// It also validates that the parsed duration is strictly positive.
+func parseOptionalDuration(val string, defaultVal time.Duration, name string) (time.Duration, error) {
+	if val == "" {
+		return defaultVal, nil
+	}
+
+	d, err := time.ParseDuration(val)
+	if err != nil {
+		return 0, fmt.Errorf("invalid cache %s value: %w", name, err)
+	}
+
+	if d <= 0 {
+		return 0, fmt.Errorf("cache %s must be positive, got %v", name, val)
+	}
+
+	return d, nil
+}
+
+// parseRefreshBeforeExpiry parses and validates the refresh_before_expiry configuration.
+func parseRefreshBeforeExpiry(val string, ttl time.Duration) (time.Duration, error) {
+	if val == "" {
+		return 0, nil
+	}
+
+	d, err := time.ParseDuration(val)
+	if err != nil {
+		return 0, fmt.Errorf("invalid cache refresh_before_expiry value: %w", err)
+	}
+
+	if d < 0 {
+		return 0, fmt.Errorf("cache refresh_before_expiry must be positive, got %v", val)
+	}
+
+	if d >= ttl {
+		// TODO: Replace with logger
+		log.Printf(
+			"refresh_before_expiry(%v) must be less than ttl(%v) - background refresh disabled",
+			d,
+			ttl,
+		)
+
+		return 0, nil
+	}
+
+	return d, nil
 }
