@@ -67,10 +67,9 @@ func (s *SecretStore) Get(ctx context.Context, path string) (string, error) {
 		v, ok := res.Val.(string)
 		if !ok {
 			return "", fmt.Errorf(
-				"%w: path %q returned type %T; exptected string",
+				"%w: path %q returned non-string type",
 				kv.ErrContractViolation,
 				path,
-				res.Val,
 			)
 		}
 
