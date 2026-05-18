@@ -5,8 +5,18 @@ import (
 	"fmt"
 )
 
-// ErrStoreNotFound is returned when referencing an unregistered store name.
-var ErrStoreNotFound = errors.New("store not found")
+var (
+	// ErrStoreNotFound is returned when referencing an unregistered store name.
+	ErrStoreNotFound = errors.New("store not found")
+
+	// ErrContractViolation indicates that an underlying KV provider returned data
+	// or behavior that violates the expected API contract (e.g., type assertion failures,
+	// missing required metadata, or structural corruption).
+	//
+	// This represents an invariant failure or programming mistake within the provider
+	// implementation rather than a transient operational issue like a network timeout.
+	ErrContractViolation = errors.New("provider contract violation")
+)
 
 func NewStoreNotFoundError(storeName string) error {
 	return fmt.Errorf("store %q: %w", storeName, ErrStoreNotFound)

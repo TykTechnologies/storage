@@ -66,9 +66,12 @@ func (s *SecretStore) Get(ctx context.Context, path string) (string, error) {
 		// Providers always return string
 		v, ok := res.Val.(string)
 		if !ok {
-			// TODO: Replace with some generic fetch error. If the result is not a string,
-			// its a programming mistake as every provider should return strign
-			return "", fmt.Errorf("provider returned unexpected type %T; expected string", res)
+			return "", fmt.Errorf(
+				"%w: path %q returned type %T; exptected string",
+				kv.ErrContractViolation,
+				path,
+				res,
+			)
 		}
 
 		return v, nil
