@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/TykTechnologies/storage/kv"
-	"github.com/TykTechnologies/storage/kv/config"
 )
 
 const (
@@ -166,7 +165,7 @@ func (c *Cache) cleanup() {
 	c.mu.Unlock()
 }
 
-func NewCache(ctx context.Context, config config.CacheConfig) (*Cache, error) {
+func NewCache(ctx context.Context, config kv.CacheConfig) (*Cache, error) {
 	if !config.Enabled {
 		return &Cache{enabled: false, entries: make(map[string]*cacheEntry)}, nil
 	}

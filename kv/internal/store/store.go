@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/TykTechnologies/storage/kv"
-	"github.com/TykTechnologies/storage/kv/config"
 	"github.com/TykTechnologies/storage/kv/internal/cache"
 	"golang.org/x/sync/singleflight"
 )
@@ -110,7 +109,7 @@ func NewSecretStore(
 	ctx context.Context,
 	name string,
 	provider kv.Provider,
-	cacheConfig config.CacheConfig,
+	cacheConfig kv.CacheConfig,
 ) (*SecretStore, error) {
 	if provider == nil {
 		return nil, fmt.Errorf("failed to create a secret store with name %q: provider cannot be nil", name)

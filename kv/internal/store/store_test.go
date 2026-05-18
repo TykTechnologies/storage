@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/TykTechnologies/storage/kv"
-	"github.com/TykTechnologies/storage/kv/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -43,7 +42,7 @@ func TestNewSecretStore(t *testing.T) {
 	t.Parallel()
 
 	t.Run("nil provider", func(t *testing.T) {
-		store, err := NewSecretStore(t.Context(), "test", nil, config.CacheConfig{Enabled: true, TTL: "1m"})
+		store, err := NewSecretStore(t.Context(), "test", nil, kv.CacheConfig{Enabled: true, TTL: "1m"})
 		require.Error(t, err)
 		require.Nil(t, store)
 		require.Contains(t, err.Error(), "provider cannot be nil")
@@ -51,7 +50,7 @@ func TestNewSecretStore(t *testing.T) {
 
 	t.Run("invalid cache config", func(t *testing.T) {
 		provider := &mockProvider{}
-		store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
+		store, err := NewSecretStore(t.Context(), "test", provider, kv.CacheConfig{
 			Enabled: true,
 			TTL:     "invalid-duration",
 		})
@@ -62,7 +61,7 @@ func TestNewSecretStore(t *testing.T) {
 
 	t.Run("negative TTL", func(t *testing.T) {
 		provider := &mockProvider{}
-		store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
+		store, err := NewSecretStore(t.Context(), "test", provider, kv.CacheConfig{
 			Enabled: true,
 			TTL:     "-10s",
 		})
@@ -72,7 +71,7 @@ func TestNewSecretStore(t *testing.T) {
 
 	t.Run("cache disabled", func(t *testing.T) {
 		provider := &mockProvider{}
-		store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
+		store, err := NewSecretStore(t.Context(), "test", provider, kv.CacheConfig{
 			Enabled: false,
 		})
 		require.NoError(t, err)
@@ -91,7 +90,7 @@ func TestGet_CacheMissAndHit(t *testing.T) {
 	t.Parallel()
 
 	provider := &mockProvider{}
-	cfg := config.CacheConfig{Enabled: true, TTL: "1m"}
+	cfg := kv.CacheConfig{Enabled: true, TTL: "1m"}
 	store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 	require.NoError(t, err)
 
@@ -117,7 +116,7 @@ func TestGet_ProviderErrorReturned(t *testing.T) {
 			return "", expectedErr
 		},
 	}
-	cfg := config.CacheConfig{Enabled: true, TTL: "1m"}
+	cfg := kv.CacheConfig{Enabled: true, TTL: "1m"}
 	store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 	require.NoError(t, err)
 
@@ -137,7 +136,7 @@ func TestGet_NegativeCachingForKeyNotFoundError(t *testing.T) {
 			return "secret", expectedErr
 		},
 	}
-	cfg := config.CacheConfig{
+	cfg := kv.CacheConfig{
 		Enabled:             true,
 		TTL:                 "1m",
 		NegativeTTLNotFound: "30s",
@@ -165,7 +164,7 @@ func TestGet_SingleFlightDeduplication(t *testing.T) {
 		provider := &mockProvider{
 			delay: time.Second,
 		}
-		cfg := config.CacheConfig{Enabled: true, TTL: "10s"}
+		cfg := kv.CacheConfig{Enabled: true, TTL: "10s"}
 		store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 		require.NoError(t, err)
 
@@ -202,7 +201,7 @@ func TestGet_CacheDisabled_AlwaysCallsProvider(t *testing.T) {
 	t.Parallel()
 
 	provider := &mockProvider{}
-	cfg := config.CacheConfig{Enabled: false}
+	cfg := kv.CacheConfig{Enabled: false}
 	store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 	require.NoError(t, err)
 
@@ -232,7 +231,7 @@ func TestGet_DifferentKeysIndependent(t *testing.T) {
 			return fmt.Sprintf("secret-%s", path), nil
 		},
 	}
-	cfg := config.CacheConfig{Enabled: true, TTL: "1m"}
+	cfg := kv.CacheConfig{Enabled: true, TTL: "1m"}
 	store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 	require.NoError(t, err)
 
@@ -259,7 +258,7 @@ func TestGet_ProviderTimeoutEnforced(t *testing.T) {
 		provider := &mockProvider{
 			delay: 10 * time.Second,
 		}
-		cfg := config.CacheConfig{Enabled: true, TTL: "1m"}
+		cfg := kv.CacheConfig{Enabled: true, TTL: "1m"}
 		store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 		require.NoError(t, err)
 
@@ -286,7 +285,7 @@ func TestStaleWhileRevalidate(t *testing.T) {
 				return fmt.Sprintf("secret-v%d", count), nil
 			},
 		}
-		cfg := config.CacheConfig{Enabled: true, TTL: "5s", RefreshBeforeExpiry: "1s"}
+		cfg := kv.CacheConfig{Enabled: true, TTL: "5s", RefreshBeforeExpiry: "1s"}
 		store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 		require.NoError(t, err)
 
@@ -325,7 +324,7 @@ func TestBackgroundRefreshDeduplication(t *testing.T) {
 			delay: 100 * time.Millisecond,
 		}
 
-		store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
+		store, err := NewSecretStore(t.Context(), "test", provider, kv.CacheConfig{
 			Enabled:             true,
 			TTL:                 "1s",
 			RefreshBeforeExpiry: "500ms",
@@ -370,7 +369,7 @@ func TestBackgroundRefreshSurvivesRequestCancellation(t *testing.T) {
 			},
 		}
 
-		store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
+		store, err := NewSecretStore(t.Context(), "test", provider, kv.CacheConfig{
 			Enabled:             true,
 			TTL:                 "2s",
 			RefreshBeforeExpiry: "1s",
@@ -422,7 +421,7 @@ func TestConcurrentBackgroundRefreshDifferentKeys(t *testing.T) {
 			},
 		}
 
-		store, err := NewSecretStore(t.Context(), "test", provider, config.CacheConfig{
+		store, err := NewSecretStore(t.Context(), "test", provider, kv.CacheConfig{
 			Enabled:             true,
 			TTL:                 "2s",
 			RefreshBeforeExpiry: "1s",
@@ -456,7 +455,6 @@ func TestConcurrentBackgroundRefreshDifferentKeys(t *testing.T) {
 		require.Equal(t, int32(2), key1Calls.Load())
 		require.Equal(t, int32(2), key2Calls.Load())
 	})
-
 }
 
 func TestContextCancellationDoesNotPoisonCache(t *testing.T) {
@@ -467,7 +465,7 @@ func TestContextCancellationDoesNotPoisonCache(t *testing.T) {
 			delay: 10 * time.Second,
 		}
 
-		cfg := config.CacheConfig{Enabled: true, TTL: "5s"}
+		cfg := kv.CacheConfig{Enabled: true, TTL: "5s"}
 		store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
 		require.NoError(t, err)
 
@@ -507,7 +505,7 @@ func TestUnwrapReturnsStoredProvider(t *testing.T) {
 
 	provider := &mockProvider{}
 
-	store, err := NewSecretStore(t.Context(), "test-store", provider, config.CacheConfig{
+	store, err := NewSecretStore(t.Context(), "test-store", provider, kv.CacheConfig{
 		Enabled: false,
 	})
 	require.NotNil(t, store)

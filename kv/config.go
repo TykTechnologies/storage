@@ -1,4 +1,4 @@
-package config
+package kv
 
 import (
 	"encoding/json"

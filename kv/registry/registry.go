@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/TykTechnologies/storage/kv"
-	"github.com/TykTechnologies/storage/kv/config"
 )
 
 // Registry manages provider factories and initialized stores without global state.
@@ -50,7 +49,7 @@ func (r *Registry) Add(providerType string, factory kv.ProviderFactory) {
 //	  "vault-prod": {"type": "vault", "required": true, "config": {...}},
 //	  "aws-dev": {"type": "aws", "required": false, "config": {...}}
 //	}
-func (r *Registry) InitStores(configs map[string]config.StoreConfig) error {
+func (r *Registry) InitStores(configs map[string]kv.StoreConfig) error {
 	return nil
 }
 
