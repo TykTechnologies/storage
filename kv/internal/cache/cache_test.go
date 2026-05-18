@@ -88,12 +88,12 @@ func TestNewCache(t *testing.T) {
 		require.Contains(t, err.Error(), "negative_ttl_transient must be positive")
 	})
 
-	t.Run("overrides refresh before expiry to zero if its >= ttl", func(t *testing.T) {
+	t.Run("returns error when refresh before expiry >= ttl", func(t *testing.T) {
 		cfg := kv.CacheConfig{Enabled: true, TTL: "1s", RefreshBeforeExpiry: "1s"}
 		c, err := NewCache(t.Context(), cfg)
-		require.NoError(t, err)
-		require.NotNil(t, c)
-		require.Empty(t, c.refreshBeforeExpiry)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "must be less than ttl")
+		require.Nil(t, c)
 	})
 
 	t.Run("sets correct defaults", func(t *testing.T) {

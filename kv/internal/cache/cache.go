@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -251,14 +250,11 @@ func parseRefreshBeforeExpiry(val string, ttl time.Duration) (time.Duration, err
 	}
 
 	if d >= ttl {
-		// TODO: Replace with logger
-		log.Printf(
-			"refresh_before_expiry(%v) must be less than ttl(%v) - background refresh disabled",
+		return 0, fmt.Errorf(
+			"refresh_before_expiry(%v) must be less than ttl(%v)",
 			d,
 			ttl,
 		)
-
-		return 0, nil
 	}
 
 	return d, nil
