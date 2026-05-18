@@ -462,6 +462,8 @@ func TestContextCancellationDoesNotPoisonCache(t *testing.T) {
 
 	synctest.Test(t, func(t *testing.T) {
 		provider := &mockProvider{
+			// Each call to provider will end-up deadline exceeded
+			// if context is not canceled before.
 			delay: 10 * time.Second,
 		}
 
