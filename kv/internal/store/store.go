@@ -84,7 +84,7 @@ func (s *SecretStore) Unwrap() kv.Provider {
 
 func (s *SecretStore) triggerBackgroundRefreshOnce(path string) {
 	// Use separate singleflight key to prevent collision with foreground fetches
-	refreshKey := fmt.Sprintf("%s:refresh", path)
+	refreshKey := path + ":refresh"
 
 	ch := s.sf.DoChan(refreshKey, func() (any, error) {
 		return s.doBackgroundRefresh(path)
