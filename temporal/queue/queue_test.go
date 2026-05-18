@@ -302,7 +302,6 @@ func TestQueue_Ctx(t *testing.T) {
 				for {
 					_, err := sub.Receive(ctx)
 					if err != nil {
-						assert.NotNil(t, err)
 						didReceive <- true
 						return
 					}
