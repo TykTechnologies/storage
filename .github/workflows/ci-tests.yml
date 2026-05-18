@@ -114,6 +114,10 @@ jobs:
             database: redis
             version: 7.0.0
             instancetype: TLS
+          - storagetype: kv
+            database: none
+            version: none
+            instancetype: none
 
     steps:
       - name: Generate GitHub App token
