@@ -301,8 +301,7 @@ func TestQueue_Ctx(t *testing.T) {
 				defer sub.Close()
 				for {
 					_, err := sub.Receive(ctx)
-					if err != nil {
-						assert.NotNil(t, err)
+					if errors.Is(err, context.Canceled) {
 						didReceive <- true
 						return
 					}
