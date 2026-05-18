@@ -70,7 +70,7 @@ func (s *SecretStore) Get(ctx context.Context, path string) (string, error) {
 				"%w: path %q returned type %T; exptected string",
 				kv.ErrContractViolation,
 				path,
-				res,
+				res.Val,
 			)
 		}
 
