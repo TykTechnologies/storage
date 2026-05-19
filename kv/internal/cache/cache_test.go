@@ -97,10 +97,11 @@ func TestNewCache(t *testing.T) {
 	})
 
 	t.Run("sets correct defaults", func(t *testing.T) {
-		cfg := kv.CacheConfig{Enabled: true, TTL: "1s"}
+		cfg := kv.CacheConfig{Enabled: true}
 		c, err := NewCache(t.Context(), cfg)
 		require.NoError(t, err)
 		require.NotNil(t, c)
+		require.Equal(t, defaultTTL, c.ttl)
 		require.Empty(t, c.refreshBeforeExpiry)
 		require.Equal(t, defaultNegativeTTLNotFound, c.negativeTTLNotFound)
 		require.Equal(t, defaultNegativeTTLTransient, c.negativeTTLTransient)

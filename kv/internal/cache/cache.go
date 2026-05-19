@@ -12,6 +12,7 @@ import (
 )
 
 const (
+	defaultTTL                  = 60 * time.Second
 	defaultNegativeTTLNotFound  = 60 * time.Second
 	defaultNegativeTTLTransient = 5 * time.Second
 )
@@ -194,9 +195,9 @@ func NewCache(ctx context.Context, config kv.CacheConfig) (*Cache, error) {
 		return &Cache{enabled: false, entries: make(map[string]*cacheEntry)}, nil
 	}
 
-	ttl, err := time.ParseDuration(config.TTL)
+	ttl, err := parseOptionalDuration(config.TTL, defaultTTL, "ttl")
 	if err != nil {
-		return nil, fmt.Errorf("invalid cache ttl %q: %w", config.TTL, err)
+		return nil, err
 	}
 
 	if ttl <= 0 {
