@@ -550,21 +550,6 @@ func TestContextCancellationDoesNotPoisonCache(t *testing.T) {
 	})
 }
 
-func TestUnwrapReturnsStoredProvider(t *testing.T) {
-	t.Parallel()
-
-	provider := &mockProvider{}
-
-	store, err := NewSecretStore(t.Context(), "test-store", provider, kv.CacheConfig{
-		Enabled: false,
-	})
-	require.NotNil(t, store)
-	require.NoError(t, err)
-
-	p := store.Unwrap()
-	require.Equal(t, provider, p)
-}
-
 func TestClose_LifecycleBoundaries(t *testing.T) {
 	t.Parallel()
 

@@ -16,12 +16,13 @@ const defaultProviderTimeout = 5 * time.Second
 
 // SecretStore is an internal decorator that adds caching and singleflight to a Provider.
 type SecretStore struct {
-	name     string
-	provider kv.Provider
-	cache    *cache.Cache
-	sf       *singleflight.Group
-	isClosed atomic.Bool
-	timeout  time.Duration
+	name      string
+	provider  kv.Provider
+	cache     *cache.Cache
+	sf        *singleflight.Group
+	sfRefresh *singleflight.Group
+	isClosed  atomic.Bool
+	timeout   time.Duration
 }
 
 // Option defines a functional option for configuring the SecretStore.
@@ -113,10 +114,7 @@ func (s *SecretStore) Close(ctx context.Context) error {
 }
 
 func (s *SecretStore) triggerBackgroundRefreshOnce(path string) {
-	// Use separate singleflight key to prevent collision with foreground fetches
-	refreshKey := path + ":refresh"
-
-	ch := s.sf.DoChan(refreshKey, func() (any, error) {
+	ch := s.sfRefresh.DoChan(path, func() (any, error) {
 		return s.doBackgroundRefresh(path)
 	})
 	_ = ch
@@ -168,11 +166,12 @@ func NewSecretStore(
 	}
 
 	s := &SecretStore{
-		name:     name,
-		provider: provider,
-		cache:    cache,
-		sf:       &singleflight.Group{},
-		timeout:  defaultProviderTimeout,
+		name:      name,
+		provider:  provider,
+		cache:     cache,
+		sf:        &singleflight.Group{},
+		sfRefresh: &singleflight.Group{},
+		timeout:   defaultProviderTimeout,
 	}
 
 	for _, opt := range opts {
