@@ -97,9 +97,12 @@ func (c *Cache) Set(key, value string, err error) {
 func (c *Cache) Close() {
 	if c.done != nil {
 		c.closeOnce.Do(func() {
-			close(c.done)
 			c.isClosed.Store(true)
+			close(c.done)
+
+			c.mu.Lock()
 			c.entries = nil
+			c.mu.Unlock()
 		})
 	}
 }

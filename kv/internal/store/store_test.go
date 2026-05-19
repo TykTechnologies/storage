@@ -18,7 +18,7 @@ type mockProvider struct {
 	calls       atomic.Int32
 	delay       time.Duration
 	mockGetFunc func(ctx context.Context, path string) (string, error)
-	closed      bool
+	closed      atomic.Bool
 }
 
 func (m *mockProvider) Get(ctx context.Context, path string) (string, error) {
@@ -40,7 +40,7 @@ func (m *mockProvider) Get(ctx context.Context, path string) (string, error) {
 }
 
 func (m *mockProvider) Close(_ context.Context) error {
-	m.closed = true
+	m.closed.Store(true)
 	return nil
 }
 
@@ -523,22 +523,6 @@ func TestUnwrapReturnsStoredProvider(t *testing.T) {
 	require.Equal(t, provider, p)
 }
 
-func TestCloseProvider(t *testing.T) {
-	t.Parallel()
-
-	provider := &mockProvider{}
-
-	store, err := NewSecretStore(t.Context(), "test-store", provider, kv.CacheConfig{
-		Enabled: true, TTL: "1m",
-	})
-	require.NotNil(t, store)
-	require.NoError(t, err)
-
-	err = store.Close(t.Context())
-	require.NoError(t, err)
-	require.True(t, provider.closed)
-}
-
 func TestClose_LifecycleBoundaries(t *testing.T) {
 	t.Parallel()
 
@@ -566,7 +550,7 @@ func TestClose_LifecycleBoundaries(t *testing.T) {
 
 			var wg sync.WaitGroup
 			wg.Go(func() {
-				_, err = store.Get(t.Context(), "mid-flight-key")
+				_, err := store.Get(t.Context(), "mid-flight-key")
 				require.NoError(t, err)
 			})
 
@@ -617,7 +601,7 @@ func TestClose_LifecycleBoundaries(t *testing.T) {
 			time.Sleep(600 * time.Millisecond)
 			synctest.Wait()
 
-			assert.True(t, provider.closed)
+			assert.True(t, provider.closed.Load())
 		})
 	})
 
@@ -634,12 +618,13 @@ func TestClose_LifecycleBoundaries(t *testing.T) {
 		var wg sync.WaitGroup
 		for range 10 {
 			wg.Go(func() {
-				_ = store.Close(t.Context())
+				err := store.Close(t.Context())
+				require.NoError(t, err)
 			})
 		}
 
 		wg.Wait()
 
-		assert.True(t, provider.closed)
+		assert.True(t, provider.closed.Load())
 	})
 }
