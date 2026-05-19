@@ -544,6 +544,50 @@ func TestCache_Concurrency(t *testing.T) {
 	c.mu.RUnlock()
 }
 
+func TestCache_Close(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		cache, err := NewCache(t.Context(), kv.CacheConfig{Enabled: true, TTL: "1s"})
+		require.NoError(t, err)
+
+		cache.Set("key", "value", nil)
+
+		time.Sleep(time.Second)
+		synctest.Wait()
+
+		// Value is cleared by normal cleanup work
+		_, exists, _, err := cache.Get("key")
+		require.NoError(t, err)
+		assert.False(t, exists)
+
+		cache.Set("key2", "value2", nil)
+
+		_, exists, _, err = cache.Get("key2")
+		require.NoError(t, err)
+		assert.True(t, exists)
+
+		// The cleanup goroutine stopped
+		cache.Close()
+
+		// Advance time past TTL
+		time.Sleep(time.Second)
+		synctest.Wait()
+
+		_, exists, _, err = cache.Get("key2")
+		require.NoError(t, err)
+		assert.True(t, exists)
+
+		// Stress test concurrent idempotency of Close()
+		var wg sync.WaitGroup
+		for range 10 {
+			wg.Go(func() {
+				cache.Close()
+			})
+		}
+	})
+}
+
 func assertCacheEntry(
 	t *testing.T,
 	c *Cache,

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/TykTechnologies/storage/kv"
@@ -25,6 +26,9 @@ type Cache struct {
 	negativeTTLNotFound  time.Duration
 	negativeTTLTransient time.Duration
 	mu                   sync.RWMutex
+	done                 chan struct{}
+	closeOnce            sync.Once
+	isClosed             atomic.Bool
 }
 
 // cacheEntry holds a Cached value with its expiration time
@@ -42,7 +46,7 @@ type cacheEntry struct {
 //   - needsRefresh: true if entry exists but is within refreshBeforeExpiry window
 //   - err: the Cached error from the original fetch operation (nil for successful Cached values)
 func (c *Cache) Get(key string) (string, bool, bool, error) {
-	if !c.enabled {
+	if !c.enabled || c.isClosed.Load() {
 		return "", false, false, nil
 	}
 
@@ -60,7 +64,7 @@ func (c *Cache) Get(key string) (string, bool, bool, error) {
 }
 
 func (c *Cache) Set(key, value string, err error) {
-	if !c.enabled {
+	if !c.enabled || c.isClosed.Load() {
 		return
 	}
 
@@ -81,6 +85,17 @@ func (c *Cache) Set(key, value string, err error) {
 		value:     value,
 		expiresAt: time.Now().Add(ttl),
 		err:       err,
+	}
+}
+
+// Close stops the cleanup goroutine and releases resources.
+// It is fully thread-safe and safe to call multiple times.
+func (c *Cache) Close() {
+	if c.done != nil {
+		c.closeOnce.Do(func() {
+			close(c.done)
+			c.isClosed.Store(true)
+		})
 	}
 }
 
@@ -130,6 +145,8 @@ func (c *Cache) cleanupLoop(ctx context.Context) {
 
 	for {
 		select {
+		case <-c.done:
+			return
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
@@ -208,6 +225,7 @@ func NewCache(ctx context.Context, config kv.CacheConfig) (*Cache, error) {
 		refreshBeforeExpiry:  refreshBeforeExpiry,
 		negativeTTLNotFound:  negativeTTLNotFound,
 		negativeTTLTransient: negativeTTLTransient,
+		done:                 make(chan struct{}),
 	}
 
 	go c.cleanupLoop(ctx)

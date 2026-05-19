@@ -82,6 +82,20 @@ func (s *SecretStore) Unwrap() kv.Provider {
 	return s.provider
 }
 
+func (s *SecretStore) Close(ctx context.Context) error {
+	if s.isClosed.Swap(true) {
+		return nil
+	}
+
+	s.cache.Close()
+
+	if closer, ok := kv.AsCloser(s.provider); ok {
+		return closer.Close(ctx)
+	}
+
+	return nil
+}
+
 func (s *SecretStore) triggerBackgroundRefreshOnce(path string) {
 	// Use separate singleflight key to prevent collision with foreground fetches
 	refreshKey := path + ":refresh"

@@ -18,6 +18,7 @@ type mockProvider struct {
 	calls       atomic.Int32
 	delay       time.Duration
 	mockGetFunc func(ctx context.Context, path string) (string, error)
+	closed      bool
 }
 
 func (m *mockProvider) Get(ctx context.Context, path string) (string, error) {
@@ -36,6 +37,11 @@ func (m *mockProvider) Get(ctx context.Context, path string) (string, error) {
 	}
 
 	return "mock-secret", nil
+}
+
+func (m *mockProvider) Close(_ context.Context) error {
+	m.closed = true
+	return nil
 }
 
 func TestNewSecretStore(t *testing.T) {
@@ -515,4 +521,20 @@ func TestUnwrapReturnsStoredProvider(t *testing.T) {
 
 	p := store.Unwrap()
 	require.Equal(t, provider, p)
+}
+
+func TestCloseProvider(t *testing.T) {
+	t.Parallel()
+
+	provider := &mockProvider{}
+
+	store, err := NewSecretStore(t.Context(), "test-store", provider, kv.CacheConfig{
+		Enabled: true, TTL: "1m",
+	})
+	require.NotNil(t, store)
+	require.NoError(t, err)
+
+	err = store.Close(t.Context())
+	require.NoError(t, err)
+	require.True(t, provider.closed)
 }
