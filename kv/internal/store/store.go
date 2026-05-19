@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/TykTechnologies/storage/kv"
@@ -19,10 +20,15 @@ type SecretStore struct {
 	provider kv.Provider
 	cache    *cache.Cache
 	sf       *singleflight.Group
+	isClosed atomic.Bool
 }
 
 // Get retrieves a secret value with caching and deduplication.
 func (s *SecretStore) Get(ctx context.Context, path string) (string, error) {
+	if s.isClosed.Load() {
+		return "", kv.ErrStoreClosed
+	}
+
 	val, exists, needsRefresh, err := s.cache.Get(path)
 	if exists {
 		// Fail fast on cached errors
@@ -32,11 +38,15 @@ func (s *SecretStore) Get(ctx context.Context, path string) (string, error) {
 
 		// If value is almost expired on cache, the process should refresh it
 		// on background which is called "stale-while-revalidate" strategy
-		if needsRefresh {
+		if needsRefresh && !s.isClosed.Load() {
 			s.triggerBackgroundRefreshOnce(path)
 		}
 
 		return val, err
+	}
+
+	if s.isClosed.Load() {
+		return "", kv.ErrStoreClosed
 	}
 
 	ch := s.sf.DoChan(path, func() (any, error) {
@@ -50,7 +60,9 @@ func (s *SecretStore) Get(ctx context.Context, path string) (string, error) {
 			return "", fmt.Errorf("timeout fetching %q: %w", path, err)
 		}
 
-		s.cache.Set(path, newVal, err)
+		if !s.isClosed.Load() {
+			s.cache.Set(path, newVal, err)
+		}
 
 		return newVal, err
 	})
@@ -107,6 +119,10 @@ func (s *SecretStore) triggerBackgroundRefreshOnce(path string) {
 }
 
 func (s *SecretStore) doBackgroundRefresh(path string) (any, error) {
+	if s.isClosed.Load() {
+		return "", kv.ErrStoreClosed
+	}
+
 	// We're creating a new context for background refresh because we don't want
 	// a cancelled HTTP request to abort a cache refresh that benefits all future callers.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultProviderTimeout)
@@ -114,7 +130,7 @@ func (s *SecretStore) doBackgroundRefresh(path string) (any, error) {
 
 	newVal, err := s.provider.Get(ctx, path)
 	// Update the cache on success to ensure errors don't overwrite valid entries.
-	if err == nil {
+	if err == nil && !s.isClosed.Load() {
 		s.cache.Set(path, newVal, nil)
 	}
 

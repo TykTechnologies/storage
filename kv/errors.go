@@ -10,12 +10,12 @@ var (
 	ErrStoreNotFound = errors.New("store not found")
 
 	// ErrContractViolation indicates that an underlying KV provider returned data
-	// or behavior that violates the expected API contract (e.g., type assertion failures,
-	// missing required metadata, or structural corruption).
-	//
-	// This represents an invariant failure or programming mistake within the provider
-	// implementation rather than a transient operational issue like a network timeout.
+	// violates the expected API contract (e.g., type assertion failures)
 	ErrContractViolation = errors.New("provider contract violation")
+
+	// ErrStoreClosed is returned when an operation is attempted on closed store or
+	// provider that has already been shut down via its Close method.
+	ErrStoreClosed = errors.New("secret store is closed")
 )
 
 func NewStoreNotFoundError(storeName string) error {

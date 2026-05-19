@@ -538,3 +538,106 @@ func TestCloseProvider(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, provider.closed)
 }
+
+func TestClose_LifecycleBoundaries(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Get rejects calls immediately after close", func(t *testing.T) {
+		provider := &mockProvider{}
+		store, err := NewSecretStore(t.Context(), "test", provider, kv.CacheConfig{Enabled: true, TTL: "1m"})
+		require.NoError(t, err)
+
+		err = store.Close(t.Context())
+		require.NoError(t, err)
+
+		val, err := store.Get(t.Context(), "any-key")
+		assert.ErrorIs(t, err, kv.ErrStoreClosed)
+		assert.Empty(t, val)
+		assert.Equal(t, int32(0), provider.calls.Load(), "Should never hit provider once closed")
+	})
+
+	t.Run("In-flight foreground fetches do not write to cache on mid-flight close", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			provider := &mockProvider{
+				delay: 2 * time.Second,
+			}
+			store, err := NewSecretStore(t.Context(), "test", provider, kv.CacheConfig{Enabled: true, TTL: "10s"})
+			require.NoError(t, err)
+
+			var wg sync.WaitGroup
+			wg.Go(func() {
+				_, _ = store.Get(t.Context(), "mid-flight-key")
+			})
+
+			// Give the goroutine a small virtual tick to enter the provider block
+			time.Sleep(100 * time.Millisecond)
+
+			// Suddenly close the store while the provider call is working
+			err = store.Close(t.Context())
+			require.NoError(t, err)
+
+			// Let the provider finish its work
+			time.Sleep(2 * time.Second)
+			synctest.Wait()
+			wg.Wait()
+
+			// Because store was closed mid-flight, the singleflight shouldn't poison/write to cache.
+			_, err = store.Get(t.Context(), "mid-flight-key")
+			assert.ErrorIs(t, err, kv.ErrStoreClosed)
+		})
+	})
+
+	t.Run("Background refresh drops writes if closed mid-execution", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			provider := &mockProvider{
+				delay: 500 * time.Millisecond,
+			}
+			store, err := NewSecretStore(t.Context(), "test", provider, kv.CacheConfig{
+				Enabled:             true,
+				TTL:                 "2s",
+				RefreshBeforeExpiry: "1s",
+			})
+			require.NoError(t, err)
+
+			_, err = store.Get(t.Context(), "refresh-key")
+			require.NoError(t, err)
+
+			// Move virtual clock into the refresh window
+			time.Sleep(1200 * time.Millisecond)
+
+			// Trigger the background task by asking for it
+			_, err = store.Get(t.Context(), "refresh-key")
+			require.NoError(t, err)
+
+			err = store.Close(t.Context())
+			require.NoError(t, err)
+
+			// Advance past the provider delay so background worker wraps up
+			time.Sleep(600 * time.Millisecond)
+			synctest.Wait()
+
+			assert.True(t, provider.closed)
+		})
+	})
+
+	t.Run("Close is idempotent", func(t *testing.T) {
+		provider := &mockProvider{}
+		store, err := NewSecretStore(
+			t.Context(),
+			"test",
+			provider,
+			kv.CacheConfig{Enabled: true, TTL: "1s"},
+		)
+		require.NoError(t, err)
+
+		var wg sync.WaitGroup
+		for range 10 {
+			wg.Go(func() {
+				_ = store.Close(t.Context())
+			})
+		}
+		wg.Wait()
+
+		assert.True(t, provider.closed)
+	})
+}
