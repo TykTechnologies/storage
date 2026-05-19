@@ -81,6 +81,10 @@ func (c *Cache) Set(key, value string, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if c.entries == nil {
+		return
+	}
+
 	c.entries[key] = &cacheEntry{
 		value:     value,
 		expiresAt: time.Now().Add(ttl),
@@ -95,6 +99,7 @@ func (c *Cache) Close() {
 		c.closeOnce.Do(func() {
 			close(c.done)
 			c.isClosed.Store(true)
+			c.entries = nil
 		})
 	}
 }

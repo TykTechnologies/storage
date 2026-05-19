@@ -566,7 +566,8 @@ func TestClose_LifecycleBoundaries(t *testing.T) {
 
 			var wg sync.WaitGroup
 			wg.Go(func() {
-				_, _ = store.Get(t.Context(), "mid-flight-key")
+				_, err = store.Get(t.Context(), "mid-flight-key")
+				require.NoError(t, err)
 			})
 
 			// Give the goroutine a small virtual tick to enter the provider block
@@ -636,6 +637,7 @@ func TestClose_LifecycleBoundaries(t *testing.T) {
 				_ = store.Close(t.Context())
 			})
 		}
+
 		wg.Wait()
 
 		assert.True(t, provider.closed)

@@ -576,7 +576,10 @@ func TestCache_Close(t *testing.T) {
 
 		_, exists, _, err = cache.Get("key2")
 		require.NoError(t, err)
-		assert.True(t, exists)
+		assert.False(t, exists)
+
+		entry, _, _ := cache.get("key2")
+		require.Empty(t, entry)
 
 		// Stress test concurrent idempotency of Close()
 		var wg sync.WaitGroup
