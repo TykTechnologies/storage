@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/TykTechnologies/storage/kv"
+	"github.com/TykTechnologies/storage/kv/internal/store"
 )
 
 // Registry manages provider factories and initialized stores without global state.
@@ -131,28 +133,27 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.KVConfig) error 
 			}
 		}
 
-		// FIX: Uncomment this when PR with cache and stores are merged
-		// if storeCfg.type != "env" && storeCfg.type != "inline" {
-		// 	timeout := extractTimeout(storeCfg.Config)
-		//
-		// 	secretStore, err := store.NewSecretStore(
-		// 		ctx,
-		// 		name,
-		// 		provider,
-		// 		kvConfig.Cache,
-		// 		store.WithTimeout(storeCfg.Config.Timeout)
-		// 	)
-		// 	if err != nil {
-		// 		wrapErr := fmt.Errorf("failed to wrap store %q: %w", name, err)
-		// 		if storeCfg.Required {
-		// 			return wrapErr
-		// 		}
-		// 		// log.Warn(...)
-		// 		continue
-		// 	}
-		//
-		// 	provider = secretStore
-		// }
+		if storeCfg.Type != "env" && storeCfg.Type != "inline" {
+			timeout := extractTimeout(storeCfg.Config)
+
+			secretStore, err := store.NewSecretStore(
+				ctx,
+				name,
+				provider,
+				kvConfig.Cache,
+				store.WithTimeout(timeout),
+			)
+			if err != nil {
+				wrapErr := fmt.Errorf("failed to wrap store %q: %w", name, err)
+				if storeCfg.Required {
+					return wrapErr
+				}
+				// log.Warn(...)
+				continue
+			}
+
+			provider = secretStore
+		}
 
 		tempStores[name] = provider
 	}
@@ -191,28 +192,27 @@ func (r *Registry) Close(ctx context.Context) error {
 	return nil
 }
 
-// FIX: Uncomment later
-// func extractTimeout(config any) time.Duration {
-// 	if config == nil {
-// 		return 0
-// 	}
-//
-// 	configMap, ok := config.(map[string]any)
-// 	if !ok {
-// 		return 0
-// 	}
-//
-// 	timeoutVal, exists := configMap["timeout"]
-// 	if !exists {
-// 		return 0
-// 	}
-//
-// 	// If parsed from JSON/YAML, it's usually a string ("5s")
-// 	if timeoutStr, isString := timeoutVal.(string); isString {
-// 		if parsed, err := time.ParseDuration(timeoutStr); err == nil {
-// 			return parsed
-// 		}
-// 	}
-//
-// 	return 0
-// }
+func extractTimeout(config any) time.Duration {
+	if config == nil {
+		return 0
+	}
+
+	configMap, ok := config.(map[string]any)
+	if !ok {
+		return 0
+	}
+
+	timeoutVal, exists := configMap["timeout"]
+	if !exists {
+		return 0
+	}
+
+	// If parsed from JSON/YAML, it's usually a string ("5s")
+	if timeoutStr, isString := timeoutVal.(string); isString {
+		if parsed, err := time.ParseDuration(timeoutStr); err == nil {
+			return parsed
+		}
+	}
+
+	return 0
+}
