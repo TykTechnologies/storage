@@ -48,7 +48,8 @@ type Closer interface {
 	Close(ctx context.Context) error
 }
 
-// AsLister attempts to extract a Lister from a Provider, automatically unwrapping decorators.
+// AsLister attempts to extract a Lister from a Provider,
+// automatically unwrapping decorators.
 func AsLister(p Provider) (Lister, bool) {
 	if l, ok := p.(Lister); ok {
 		return l, true
@@ -61,7 +62,8 @@ func AsLister(p Provider) (Lister, bool) {
 	return nil, false
 }
 
-// AsInitializer attempts to extract an Initializer from a Provider.
+// AsInitializer attempts to extract an Initializer from a Provider,
+// automatically unwrapping decorators.
 func AsInitializer(p Provider) (Initializer, bool) {
 	if i, ok := p.(Initializer); ok {
 		return i, true
@@ -69,6 +71,20 @@ func AsInitializer(p Provider) (Initializer, bool) {
 
 	if wrapper, ok := p.(interface{ Unwrap() Provider }); ok {
 		return AsInitializer(wrapper.Unwrap())
+	}
+
+	return nil, false
+}
+
+// AsCloser attempts to extract an Closer from a Provider,
+// automatically unwrapping decorators.
+func AsCloser(p Provider) (Closer, bool) {
+	if c, ok := p.(Closer); ok {
+		return c, true
+	}
+
+	if wrapper, ok := p.(interface{ Unwrap() Provider }); ok {
+		return AsCloser(wrapper.Unwrap())
 	}
 
 	return nil, false
