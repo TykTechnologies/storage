@@ -75,6 +75,16 @@ func TestNewSecretStore(t *testing.T) {
 		require.Nil(t, store)
 	})
 
+	t.Run("assigns default values", func(t *testing.T) {
+		provider := &mockProvider{}
+		store, err := NewSecretStore(t.Context(), "test", provider, kv.CacheConfig{
+			Enabled: false,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, store)
+		require.Equal(t, defaultProviderTimeout, store.timeout)
+	})
+
 	t.Run("cache disabled", func(t *testing.T) {
 		provider := &mockProvider{}
 		store, err := NewSecretStore(t.Context(), "test", provider, kv.CacheConfig{
@@ -257,26 +267,58 @@ func TestGet_DifferentKeysIndependent(t *testing.T) {
 	assert.Equal(t, int32(2), callCount.Load(), "refetch should use cache")
 }
 
-func TestGet_ProviderTimeoutEnforced(t *testing.T) {
+func TestGet_TimeoutEnforcement(t *testing.T) {
 	t.Parallel()
 
-	synctest.Test(t, func(t *testing.T) {
-		provider := &mockProvider{
-			delay: 10 * time.Second,
-		}
-		cfg := kv.CacheConfig{Enabled: true, TTL: "1m"}
-		store, err := NewSecretStore(t.Context(), "test-store", provider, cfg)
-		require.NoError(t, err)
+	tests := []struct {
+		name            string
+		opts            []Option
+		expectedTimeout time.Duration
+	}{
+		{
+			name:            "Use default timeout if not explicitly provided",
+			opts:            nil,
+			expectedTimeout: 5 * time.Second,
+		},
+		{
+			name:            "Override default timeout with custom duration",
+			opts:            []Option{WithTimeout(10 * time.Second)},
+			expectedTimeout: 10 * time.Second,
+		},
+	}
 
-		start := time.Now()
-		val, err := store.Get(t.Context(), "slow-key")
-		elapsed := time.Since(start)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "timeout fetching")
-		assert.Empty(t, val)
-		assert.Less(t, elapsed, 6*time.Second, "should timeout at defaultProviderTimeout (5s)")
-	})
+			synctest.Test(t, func(t *testing.T) {
+				provider := &mockProvider{
+					delay: 30 * time.Second,
+				}
+				cfg := kv.CacheConfig{Enabled: true, TTL: "1m"}
+
+				store, err := NewSecretStore(t.Context(), "test-store", provider, cfg, tt.opts...)
+				require.NotNil(t, store)
+				require.NoError(t, err)
+
+				start := time.Now()
+
+				var wg sync.WaitGroup
+				wg.Go(func() {
+					val, err := store.Get(t.Context(), "slow-key")
+					require.Error(t, err)
+					require.Contains(t, err.Error(), "timeout fetching")
+					assert.Empty(t, val)
+				})
+
+				synctest.Wait()
+				wg.Wait()
+
+				elapsed := time.Since(start)
+				assert.Equal(t, tt.expectedTimeout, elapsed)
+			})
+		})
+	}
 }
 
 func TestStaleWhileRevalidate(t *testing.T) {
