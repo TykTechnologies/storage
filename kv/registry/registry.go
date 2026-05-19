@@ -184,12 +184,22 @@ func (r *Registry) GetStore(name string) (kv.Provider, error) {
 
 // Close gracefully shuts down all initialized stores.
 func (r *Registry) Close(ctx context.Context) error {
-	// TODO: We should iterate over stores and call Close.
-	// Each provider or secret store will call its Close func
-	// which should gracefully shutdown provider connection.
-	// AFAIK not every provider need this shutdown so we will type
-	// asset for Close method in provider and call it if its present.
-	return nil
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var errs []error
+
+	for _, store := range r.stores {
+		if closer, ok := kv.AsCloser(store); ok {
+			if err := closer.Close(ctx); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	r.stores = make(map[string]kv.Provider)
+
+	return errors.Join(errs...)
 }
 
 func extractTimeout(config any) time.Duration {
