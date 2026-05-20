@@ -38,6 +38,15 @@ func (m *mockProvider) Close(ctx context.Context) error {
 	return nil
 }
 
+type mockLogger struct {
+	warnCalls int
+}
+
+func (l *mockLogger) Warn(_ string, _ map[string]any) {
+	l.warnCalls++
+}
+func (*mockLogger) Warnf(_ string, _ ...any) {}
+
 func newFactory(initFunc, closeFunc func(ctx context.Context) error) kv.ProviderFactory {
 	return func(config json.RawMessage) (kv.Provider, error) {
 		return &mockProvider{
@@ -61,6 +70,10 @@ func TestNewRegistry(t *testing.T) {
 	require.NotNil(t, registry.stores)
 	require.NotNil(t, registry.factories)
 }
+
+// TODO: Update the test case when providers are set, to assert
+// that all OSS providers are registered.
+func TestNewDefaultRegistry(t *testing.T) {}
 
 func TestAddFactory(t *testing.T) {
 	t.Parallel()
@@ -110,6 +123,26 @@ func TestAddFactory(t *testing.T) {
 		require.Contains(t, err.Error(), "factory cannot be nil")
 		require.Len(t, r.factories, 0)
 	})
+}
+
+func TestGetStore(t *testing.T) {
+	t.Parallel()
+
+	r := NewRegistry()
+
+	err := r.Add("valid", newFactory(nil, nil))
+	require.NoError(t, err)
+
+	err = r.InitStores(t.Context(), &kv.Config{
+		Stores: map[string]kv.StoreConfig{
+			"valid-1": {Type: "valid", Required: true},
+		},
+	})
+	require.NoError(t, err)
+
+	p, err := r.GetStore("valid-1")
+	require.NoError(t, err)
+	require.NotNil(t, p)
 }
 
 func TestInitStores_BlastRadius(t *testing.T) {
@@ -266,7 +299,6 @@ func TestInitStores_EdgeCases(t *testing.T) {
 		// We have to iterate over until valid store is initialized because
 		// we have map non-deterministic iteration order.
 		for {
-
 			r := NewRegistry()
 
 			var validInitialized bool
@@ -290,8 +322,8 @@ func TestInitStores_EdgeCases(t *testing.T) {
 
 			err = r.InitStores(t.Context(), &kv.Config{
 				Stores: map[string]kv.StoreConfig{
-					"valid-1":   kv.StoreConfig{Type: "valid", Required: true},
-					"invalid-1": kv.StoreConfig{Type: "invalid", Required: true},
+					"valid-1":   {Type: "valid", Required: true},
+					"invalid-1": {Type: "invalid", Required: true},
 				},
 			})
 			require.Error(t, err)
@@ -308,8 +340,47 @@ func TestInitStores_EdgeCases(t *testing.T) {
 
 				break
 			}
-
 		}
+	})
+
+	t.Run("should handle error returned by secret store wrapper", func(t *testing.T) {
+		r := NewRegistry()
+
+		err := r.Add("valid", newFactory(nil, nil))
+		require.NoError(t, err)
+
+		err = r.InitStores(t.Context(), &kv.Config{
+			Stores: map[string]kv.StoreConfig{
+				"valid-1": {Type: "valid", Required: true},
+			},
+			Cache: kv.CacheConfig{
+				Enabled: true,
+				TTL:     "-10s",
+			},
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to wrap store")
+		require.False(t, r.isInitialized.Load())
+	})
+
+	t.Run("should log warning when optional store failed one of the steps", func(t *testing.T) {
+		l := &mockLogger{}
+		r := NewRegistry(WithLogger(l))
+
+		err := r.Add("valid", newFactory(nil, nil))
+		require.NoError(t, err)
+
+		err = r.InitStores(t.Context(), &kv.Config{
+			Stores: map[string]kv.StoreConfig{
+				"valid-1": {Type: "valid", Required: false},
+			},
+			Cache: kv.CacheConfig{
+				Enabled: true,
+				TTL:     "-10s",
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, 1, l.warnCalls)
 	})
 }
 
