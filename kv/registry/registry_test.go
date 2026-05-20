@@ -189,7 +189,7 @@ func TestInitStores_BlastRadius(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			config := &kv.KVConfig{
+			config := &kv.Config{
 				Stores: map[string]kv.StoreConfig{
 					"target-store": {
 						Type:     tc.storeType,
@@ -212,7 +212,7 @@ func TestInitStores_EdgeCases(t *testing.T) {
 
 	t.Run("returns error if no factory provided", func(t *testing.T) {
 		r := NewRegistry()
-		err := r.InitStores(t.Context(), &kv.KVConfig{})
+		err := r.InitStores(t.Context(), &kv.Config{})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "factories must be added before initialize stores")
 	})
@@ -225,7 +225,7 @@ func TestInitStores_EdgeCases(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		config := &kv.KVConfig{
+		config := &kv.Config{
 			Stores: map[string]kv.StoreConfig{
 				"target-store": {
 					Type:     "mock",
@@ -248,7 +248,6 @@ func TestInitStores_EdgeCases(t *testing.T) {
 		err = reg.InitStores(t.Context(), config)
 		require.NoError(t, err)
 	})
-
 }
 
 func TestRegistry_Close_ErrorAggregation(t *testing.T) {
@@ -263,7 +262,7 @@ func TestRegistry_Close_ErrorAggregation(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	config := &kv.KVConfig{
+	config := &kv.Config{
 		Stores: map[string]kv.StoreConfig{
 			"store-1": {Type: "mock", Required: true},
 			"store-2": {Type: "mock", Required: true},

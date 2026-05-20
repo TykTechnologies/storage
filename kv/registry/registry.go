@@ -115,7 +115,7 @@ func (r *Registry) Add(providerType string, factory kv.ProviderFactory) error {
 //	    }
 //	  }
 //	}
-func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.KVConfig) (err error) {
+func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err error) {
 	if r.isInitialized.Swap(true) {
 		return errors.New("stores have been initialized")
 	}
