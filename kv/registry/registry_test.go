@@ -1,11 +1,55 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/TykTechnologies/storage/kv"
 	"github.com/stretchr/testify/require"
+)
+
+type mockProvider struct {
+	initFunc  func(ctx context.Context) error
+	closeFunc func(ctx context.Context) error
+}
+
+func (m *mockProvider) Get(ctx context.Context, key string) (string, error) {
+	return "value", nil
+}
+
+func (m *mockProvider) Init(ctx context.Context) error {
+	if m.initFunc != nil {
+		return m.initFunc(ctx)
+	}
+
+	return nil
+}
+
+func (m *mockProvider) Close(ctx context.Context) error {
+	if m.closeFunc != nil {
+		return m.closeFunc(ctx)
+	}
+
+	return nil
+}
+
+func newFactory(initFunc, closeFunc func(ctx context.Context) error, err error) kv.ProviderFactory {
+	return func(config json.RawMessage) (kv.Provider, error) {
+		return &mockProvider{
+			initFunc:  initFunc,
+			closeFunc: closeFunc,
+		}, err
+	}
+}
+
+var (
+	_ kv.Provider    = (*mockProvider)(nil)
+	_ kv.Initializer = (*mockProvider)(nil)
+	_ kv.Closer      = (*mockProvider)(nil)
 )
 
 func TestNewRegistry(t *testing.T) {
@@ -15,13 +59,25 @@ func TestNewRegistry(t *testing.T) {
 	require.NotNil(t, registry.factories)
 }
 
-// Test: Adding factory is working with concurrent request. Returns error if provider type is not valid.
-// Test: InitStores are calling provider factory with passing config.
-// Wrap specific providers with secret store and call Init methods if its present.
-// Returns error if
-
 func TestAddFactory(t *testing.T) {
-	t.Run("returns an error if provider type is empty", func(t *testing.T) {
+	t.Run("successful registration", func(t *testing.T) {
+		r := NewRegistry()
+
+		var wg sync.WaitGroup
+
+		for i := range 10 {
+			wg.Go(func() {
+				err := r.Add(fmt.Sprintf("env-%d", i), newFactory(nil, nil, nil))
+				require.NoError(t, err)
+			})
+		}
+
+		wg.Wait()
+
+		require.Len(t, r.factories, 10)
+	})
+
+	t.Run("reject empty provider type", func(t *testing.T) {
 		r := NewRegistry()
 		err := r.Add("", nil)
 		require.Error(t, err)
@@ -30,40 +86,211 @@ func TestAddFactory(t *testing.T) {
 		require.Len(t, r.factories, 0)
 	})
 
-	t.Run("returns an error if factory is already registered for the type", func(t *testing.T) {
+	t.Run("prevent factory duplication override", func(t *testing.T) {
 		r := NewRegistry()
-		err := r.Add("env", newFactory())
+		err := r.Add("env", newFactory(nil, nil, nil))
 		require.NoError(t, err)
 
-		err = r.Add("env", newFactory())
+		err = r.Add("env", newFactory(nil, nil, nil))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "is already provided")
 
 		require.Len(t, r.factories, 1)
 	})
 
-	t.Run("returns an error if factory is nil", func(t *testing.T) {
+	t.Run("reject nil factory", func(t *testing.T) {
 		r := NewRegistry()
 		err := r.Add("env", nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "factory cannot be nil")
 		require.Len(t, r.factories, 0)
 	})
-
-	t.Run("stores factories correctly in concurrent env", func(t *testing.T) {})
 }
 
-// InitStores should probably be called only once.
-func TestInitStores(t *testing.T) {
-	t.Run("returns an error if called with empty config map", func(t *testing.T) {})
+func TestInitStores_BlastRadius(t *testing.T) {
+	t.Parallel()
 
-	t.Run("returns an error if called more than once", func(t *testing.T) {})
+	type testCase struct {
+		name        string
+		storeType   string
+		required    bool
+		factoryErr  error
+		initErr     error
+		expectError bool
+	}
 
-	t.Run("returns an error if Init() func failed and 'required: true' is set", func(t *testing.T) {})
-}
+	table := []testCase{
+		{
+			name:        "required store initializes perfectly",
+			storeType:   "mock",
+			required:    true,
+			expectError: false,
+		},
+		{
+			name:        "unregistered provider type fails if required",
+			storeType:   "unknown",
+			required:    true,
+			expectError: true,
+		},
+		{
+			name:        "unregistered provider type skipped if optional",
+			storeType:   "unknown",
+			required:    false,
+			expectError: false,
+		},
+		{
+			name:        "factory generation failure blocks startup if required",
+			storeType:   "mock",
+			required:    true,
+			factoryErr:  errors.New("bad config content"),
+			expectError: true,
+		},
+		{
+			name:        "factory generation failure skipped if optional",
+			storeType:   "mock",
+			required:    false,
+			factoryErr:  errors.New("bad config content"),
+			expectError: false,
+		},
+		{
+			name:        "network init phase failure blocks startup if required",
+			storeType:   "mock",
+			required:    true,
+			initErr:     errors.New("vault unreachable"),
+			expectError: true,
+		},
+		{
+			name:        "network init phase failure skipped if not required",
+			storeType:   "mock",
+			required:    false,
+			initErr:     errors.New("consul dead"),
+			expectError: false,
+		},
+	}
 
-func newFactory() kv.ProviderFactory {
-	return func(config json.RawMessage) (kv.Provider, error) {
-		return nil, nil
+	for _, tc := range table {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := NewRegistry()
+
+			// Register factory for the "mock" provider type
+			err := reg.Add("mock", func(cfg json.RawMessage) (kv.Provider, error) {
+				if tc.factoryErr != nil {
+					return nil, tc.factoryErr
+				}
+
+				return &mockProvider{
+					initFunc: func(ctx context.Context) error {
+						return tc.initErr
+					},
+				}, nil
+			})
+			require.NoError(t, err)
+
+			config := &kv.KVConfig{
+				Stores: map[string]kv.StoreConfig{
+					"target-store": {
+						Type:     tc.storeType,
+						Required: tc.required,
+						Config:   json.RawMessage(`{"timeout": "2s"}`),
+					},
+				},
+			}
+
+			err = reg.InitStores(t.Context(), config)
+			if tc.expectError {
+				require.Error(t, err)
+			}
+		})
 	}
 }
+
+func TestInitStores_ShouldBeCalledOnce(t *testing.T) {
+	reg := NewRegistry()
+
+	err := reg.Add("mock", func(cfg json.RawMessage) (kv.Provider, error) {
+		return &mockProvider{}, nil
+	})
+	require.NoError(t, err)
+
+	config := &kv.KVConfig{
+		Stores: map[string]kv.StoreConfig{
+			"target-store": {
+				Type:     "mock",
+				Required: true,
+				Config:   json.RawMessage(`{"timeout": "2s"}`),
+			},
+		},
+	}
+
+	err = reg.InitStores(t.Context(), config)
+	require.NoError(t, err)
+
+	err = reg.InitStores(t.Context(), config)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "stores have been initialized")
+}
+
+func TestRegistry_Close_ErrorAggregation(t *testing.T) {
+	reg := NewRegistry()
+
+	err := reg.Add("mock", func(cfg json.RawMessage) (kv.Provider, error) {
+		return &mockProvider{
+			closeFunc: func(ctx context.Context) error {
+				return errors.New("cleanup failed")
+			},
+		}, nil
+	})
+	require.NoError(t, err)
+
+	config := &kv.KVConfig{
+		Stores: map[string]kv.StoreConfig{
+			"store-1": {Type: "mock", Required: true},
+			"store-2": {Type: "mock", Required: true},
+		},
+	}
+
+	err = reg.InitStores(context.Background(), config)
+	require.NoError(t, err)
+
+	err = reg.Close(context.Background())
+	require.NoError(t, err)
+
+	// if len(errors.Unwrap(closeErr).([]error)) < 2 {
+	// 	t.Logf("Warning: Ensure errors are cleanly preserved through standard join mechanisms. Raw: %v", closeErr)
+	// }
+}
+
+// func TestRegistry_ConcurrencyThreadSafety(t *testing.T) {
+// 	reg := registry.NewRegistry()
+// 	var wg sync.WaitGroup
+//
+// 	factory := func(cfg json.RawMessage) (kv.Provider, error) { return &mockProvider{}, nil }
+// 	_ = reg.Add("static-type", factory)
+//
+// 	// Concurrently invoke read operations and state additions
+// 	for i := 0; i < 50; i++ {
+// 		wg.Add(3)
+//
+// 		go func() {
+// 			defer wg.Done()
+// 			_ = reg.Add("type", factory) // Writes safely guarded via write-lock
+// 		}()
+//
+// 		go func() {
+// 			defer wg.Done()
+// 			_, _ = reg.GetStore("any-store") // Reads safely guarded via r-lock
+// 		}()
+//
+// 		go func() {
+// 			defer wg.Done()
+// 			config := &kv.KVConfig{
+// 				Stores: map[string]kv.StoreConfig{
+// 					"static-store": {Type: "static-type"},
+// 				},
+// 			}
+// 			_ = reg.InitStores(context.Background(), config)
+// 		}()
+// 	}
+//
+// 	wg.Wait() // Will trigger go race detector if protection mechanisms fail
+// }

@@ -2,9 +2,11 @@ package registry
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/TykTechnologies/storage/kv"
@@ -17,17 +19,50 @@ import (
 //
 // All operations are safe for concurrent use.
 type Registry struct {
-	factories map[string]kv.ProviderFactory
-	stores    map[string]kv.Provider
-	mu        sync.RWMutex
+	logger        kv.Logger
+	factories     map[string]kv.ProviderFactory
+	stores        map[string]kv.Provider
+	mu            sync.RWMutex
+	isInitialized atomic.Bool
+}
+
+type Option func(r *Registry)
+
+func WithLogger(l kv.Logger) Option {
+	return func(r *Registry) {
+		if l != nil {
+			r.logger = l
+		}
+	}
 }
 
 // NewRegistry creates a new empty registry with no registered factories or stores.
-func NewRegistry() *Registry {
-	return &Registry{
+func NewRegistry(opts ...Option) *Registry {
+	r := &Registry{
 		factories: make(map[string]kv.ProviderFactory),
 		stores:    make(map[string]kv.Provider),
+		logger:    kv.NoopLogger{},
 	}
+
+	for _, opt := range opts {
+		opt(r)
+	}
+
+	return r
+}
+
+// NewDefaultRegistry creates a registry with added OSS providers.
+func NewDefaultRegistry(opts ...Option) *Registry {
+	r := NewRegistry(opts...)
+
+	// FIX: Uncomment provider registration when implementation is added
+	// r.Add("env", env.NewFactory())
+	// r.Add("inline", inline.NewFactory())
+	// r.Add("hashicorp_vault", vault.NewFactory())
+	// r.Add("hashicorp_consul", consul.NewFactory())
+	// r.Add("k8s_files", k8s.NewFactory())
+
+	return r
 }
 
 // Add registers a provider factory for the given provider type.
@@ -81,13 +116,17 @@ func (r *Registry) Add(providerType string, factory kv.ProviderFactory) error {
 //	  }
 //	}
 func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.KVConfig) error {
-	r.mu.RLock()
-	factoriesCount := len(r.factories)
-	r.mu.RUnlock()
+	r.mu.Lock()
+	if r.isInitialized.Swap(true) {
+		return errors.New("stores have been initialized")
+	}
+	r.mu.Unlock()
 
-	if factoriesCount == 0 {
+	r.mu.RLock()
+	if len(r.factories) == 0 {
 		return errors.New("factories must be added before initialize stores")
 	}
+	r.mu.RUnlock()
 
 	if kvConfig == nil || kvConfig.Stores == nil {
 		return nil
@@ -105,29 +144,39 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.KVConfig) error 
 			if storeCfg.Required {
 				return err
 			}
-			// FIX: Add the logger...
-			// r.logger.WithError(err).Warn("Skipping optional store initialization")
+
+			r.logger.Warn("Skipping optional store initialization", map[string]any{
+				"err": err,
+			})
+
 			continue
 		}
 
 		provider, err := factory(storeCfg.Config)
 		if err != nil {
-			initErr := fmt.Errorf("failed to create provider %q (type: %s): %w", name, storeCfg.Type, err)
+			err := fmt.Errorf("failed to create provider %q (type: %s): %w", name, storeCfg.Type, err)
 			if storeCfg.Required {
-				return initErr
+				return err
 			}
-			// FIX: Add the logger
-			// r.logger.WithError(initErr).Warn("Failed to initialize optional store, skipping")
+
+			r.logger.Warn("Skipping optional store initialization", map[string]any{
+				"err": err,
+			})
+
 			continue
 		}
 
 		if initializer, ok := kv.AsInitializer(provider); ok {
 			err := initializer.Init(ctx)
 			if err != nil {
-				initErr := fmt.Errorf("failed to initialize store %q (type: %s): %w", name, storeCfg.Type, err)
+				err := fmt.Errorf("failed to initialize store %q (type: %s): %w", name, storeCfg.Type, err)
 				if storeCfg.Required {
-					return initErr
+					return err
 				}
+
+				r.logger.Warn("Skipping optional store initialization", map[string]any{
+					"err": err,
+				})
 
 				continue
 			}
@@ -144,11 +193,15 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.KVConfig) error 
 				store.WithTimeout(timeout),
 			)
 			if err != nil {
-				wrapErr := fmt.Errorf("failed to wrap store %q: %w", name, err)
+				err := fmt.Errorf("failed to wrap store %q: %w", name, err)
 				if storeCfg.Required {
-					return wrapErr
+					return err
 				}
-				// log.Warn(...)
+
+				r.logger.Warn("Skipping optional store initialization", map[string]any{
+					"err": err,
+				})
+
 				continue
 			}
 
@@ -189,10 +242,10 @@ func (r *Registry) Close(ctx context.Context) error {
 
 	var errs []error
 
-	for _, store := range r.stores {
+	for name, store := range r.stores {
 		if closer, ok := kv.AsCloser(store); ok {
 			if err := closer.Close(ctx); err != nil {
-				errs = append(errs, err)
+				errs = append(errs, fmt.Errorf("failed to close store %q: %w", name, err))
 			}
 		}
 	}
@@ -202,26 +255,24 @@ func (r *Registry) Close(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-func extractTimeout(config any) time.Duration {
+func extractTimeout(config json.RawMessage) time.Duration {
 	if config == nil {
 		return 0
 	}
 
-	configMap, ok := config.(map[string]any)
-	if !ok {
+	type storeConfig struct {
+		Timeout string `json:"timeout"`
+	}
+
+	var sc storeConfig
+
+	err := json.Unmarshal(config, &sc)
+	if err != nil {
 		return 0
 	}
 
-	timeoutVal, exists := configMap["timeout"]
-	if !exists {
-		return 0
-	}
-
-	// If parsed from JSON/YAML, it's usually a string ("5s")
-	if timeoutStr, isString := timeoutVal.(string); isString {
-		if parsed, err := time.ParseDuration(timeoutStr); err == nil {
-			return parsed
-		}
+	if parsed, err := time.ParseDuration(sc.Timeout); err == nil {
+		return parsed
 	}
 
 	return 0
