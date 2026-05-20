@@ -53,6 +53,8 @@ var (
 )
 
 func TestNewRegistry(t *testing.T) {
+	t.Parallel()
+
 	registry := NewRegistry()
 	require.NotNil(t, registry)
 	require.NotNil(t, registry.stores)
@@ -60,6 +62,8 @@ func TestNewRegistry(t *testing.T) {
 }
 
 func TestAddFactory(t *testing.T) {
+	t.Parallel()
+
 	t.Run("successful registration", func(t *testing.T) {
 		r := NewRegistry()
 
@@ -172,7 +176,6 @@ func TestInitStores_BlastRadius(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			reg := NewRegistry()
 
-			// Register factory for the "mock" provider type
 			err := reg.Add("mock", func(cfg json.RawMessage) (kv.Provider, error) {
 				if tc.factoryErr != nil {
 					return nil, tc.factoryErr
@@ -204,36 +207,48 @@ func TestInitStores_BlastRadius(t *testing.T) {
 	}
 }
 
-func TestInitStores_ShouldBeCalledOnceUnlessWasClosed(t *testing.T) {
-	reg := NewRegistry()
+func TestInitStores_EdgeCases(t *testing.T) {
+	t.Parallel()
 
-	err := reg.Add("mock", func(cfg json.RawMessage) (kv.Provider, error) {
-		return &mockProvider{}, nil
+	t.Run("returns error if no factory provided", func(t *testing.T) {
+		r := NewRegistry()
+		err := r.InitStores(t.Context(), &kv.KVConfig{})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "factories must be added before initialize stores")
 	})
-	require.NoError(t, err)
 
-	config := &kv.KVConfig{
-		Stores: map[string]kv.StoreConfig{
-			"target-store": {
-				Type:     "mock",
-				Required: true,
-				Config:   json.RawMessage(`{"timeout": "2s"}`),
+	t.Run("should be called once unless Close() was called", func(t *testing.T) {
+		reg := NewRegistry()
+
+		err := reg.Add("mock", func(cfg json.RawMessage) (kv.Provider, error) {
+			return &mockProvider{}, nil
+		})
+		require.NoError(t, err)
+
+		config := &kv.KVConfig{
+			Stores: map[string]kv.StoreConfig{
+				"target-store": {
+					Type:     "mock",
+					Required: true,
+					Config:   json.RawMessage(`{"timeout": "2s"}`),
+				},
 			},
-		},
-	}
+		}
 
-	err = reg.InitStores(t.Context(), config)
-	require.NoError(t, err)
+		err = reg.InitStores(t.Context(), config)
+		require.NoError(t, err)
 
-	err = reg.InitStores(t.Context(), config)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "stores have been initialized")
+		err = reg.InitStores(t.Context(), config)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "stores have been initialized")
 
-	err = reg.Close(t.Context())
-	require.NoError(t, err)
+		err = reg.Close(t.Context())
+		require.NoError(t, err)
 
-	err = reg.InitStores(t.Context(), config)
-	require.NoError(t, err)
+		err = reg.InitStores(t.Context(), config)
+		require.NoError(t, err)
+	})
+
 }
 
 func TestRegistry_Close_ErrorAggregation(t *testing.T) {
