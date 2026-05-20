@@ -115,15 +115,20 @@ func (r *Registry) Add(providerType string, factory kv.ProviderFactory) error {
 //	    }
 //	  }
 //	}
-func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.KVConfig) error {
-	r.mu.Lock()
+func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.KVConfig) (err error) {
 	if r.isInitialized.Swap(true) {
 		return errors.New("stores have been initialized")
 	}
-	r.mu.Unlock()
+
+	defer func() {
+		if err != nil {
+			r.isInitialized.Store(false)
+		}
+	}()
 
 	r.mu.RLock()
 	if len(r.factories) == 0 {
+		r.mu.RUnlock()
 		return errors.New("factories must be added before initialize stores")
 	}
 	r.mu.RUnlock()
@@ -134,13 +139,23 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.KVConfig) error 
 
 	tempStores := make(map[string]kv.Provider)
 
+	defer func() {
+		if err != nil {
+			for _, p := range tempStores {
+				if closer, ok := kv.AsCloser(p); ok {
+					_ = closer.Close(context.Background())
+				}
+			}
+		}
+	}()
+
 	for name, storeCfg := range kvConfig.Stores {
 		r.mu.RLock()
 		factory, ok := r.factories[storeCfg.Type]
 		r.mu.RUnlock()
 
 		if !ok {
-			err := fmt.Errorf("unknown provider type %q for store %q", storeCfg.Type, name)
+			err = fmt.Errorf("unknown provider type %q for store %q", storeCfg.Type, name)
 			if storeCfg.Required {
 				return err
 			}
@@ -152,9 +167,9 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.KVConfig) error 
 			continue
 		}
 
-		provider, err := factory(storeCfg.Config)
-		if err != nil {
-			err := fmt.Errorf("failed to create provider %q (type: %s): %w", name, storeCfg.Type, err)
+		provider, createErr := factory(storeCfg.Config)
+		if createErr != nil {
+			err = fmt.Errorf("failed to create provider %q (type: %s): %w", name, storeCfg.Type, createErr)
 			if storeCfg.Required {
 				return err
 			}
@@ -167,9 +182,9 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.KVConfig) error 
 		}
 
 		if initializer, ok := kv.AsInitializer(provider); ok {
-			err := initializer.Init(ctx)
-			if err != nil {
-				err := fmt.Errorf("failed to initialize store %q (type: %s): %w", name, storeCfg.Type, err)
+			initError := initializer.Init(ctx)
+			if initError != nil {
+				err = fmt.Errorf("failed to initialize store %q (type: %s): %w", name, storeCfg.Type, initError)
 				if storeCfg.Required {
 					return err
 				}
@@ -185,15 +200,15 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.KVConfig) error 
 		if storeCfg.Type != "env" && storeCfg.Type != "inline" {
 			timeout := extractTimeout(storeCfg.Config)
 
-			secretStore, err := store.NewSecretStore(
+			secretStore, wrapErr := store.NewSecretStore(
 				ctx,
 				name,
 				provider,
 				kvConfig.Cache,
 				store.WithTimeout(timeout),
 			)
-			if err != nil {
-				err := fmt.Errorf("failed to wrap store %q: %w", name, err)
+			if wrapErr != nil {
+				err = fmt.Errorf("failed to wrap store %q: %w", name, wrapErr)
 				if storeCfg.Required {
 					return err
 				}
@@ -251,6 +266,8 @@ func (r *Registry) Close(ctx context.Context) error {
 	}
 
 	r.stores = make(map[string]kv.Provider)
+
+	r.isInitialized.Store(false)
 
 	return errors.Join(errs...)
 }
