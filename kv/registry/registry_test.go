@@ -204,7 +204,7 @@ func TestInitStores_BlastRadius(t *testing.T) {
 	}
 }
 
-func TestInitStores_ShouldBeCalledOnce(t *testing.T) {
+func TestInitStores_ShouldBeCalledOnceUnlessWasClosed(t *testing.T) {
 	reg := NewRegistry()
 
 	err := reg.Add("mock", func(cfg json.RawMessage) (kv.Provider, error) {
@@ -228,6 +228,12 @@ func TestInitStores_ShouldBeCalledOnce(t *testing.T) {
 	err = reg.InitStores(t.Context(), config)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "stores have been initialized")
+
+	err = reg.Close(t.Context())
+	require.NoError(t, err)
+
+	err = reg.InitStores(t.Context(), config)
+	require.NoError(t, err)
 }
 
 func TestRegistry_Close_ErrorAggregation(t *testing.T) {
@@ -252,12 +258,15 @@ func TestRegistry_Close_ErrorAggregation(t *testing.T) {
 	err = reg.InitStores(context.Background(), config)
 	require.NoError(t, err)
 
-	err = reg.Close(context.Background())
-	require.NoError(t, err)
+	closeErr := reg.Close(t.Context())
+	require.Error(t, closeErr)
 
-	// if len(errors.Unwrap(closeErr).([]error)) < 2 {
-	// 	t.Logf("Warning: Ensure errors are cleanly preserved through standard join mechanisms. Raw: %v", closeErr)
-	// }
+	if err, ok := closeErr.(interface{ Unwrap() []error }); ok {
+		er := err.Unwrap()
+		require.Len(t, er, 2)
+	} else {
+		t.Error("close error must be a result of errors.Join which implements Unwrap")
+	}
 }
 
 // func TestRegistry_ConcurrencyThreadSafety(t *testing.T) {
