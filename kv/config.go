@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 )
 
-// KVConfig represents the top-level "kv" configuration block in component configs.
+// Config represents the top-level "kv" configuration block in component configs.
 // It contains global settings and named store definitions.
 //
 // Example JSON structure:
@@ -17,7 +17,7 @@ import (
 //	    }
 //	  }
 //	}
-type KVConfig struct {
+type Config struct {
 	Stores map[string]StoreConfig `json:"stores"`
 	Cache  CacheConfig            `json:"cache"`
 }
