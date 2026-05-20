@@ -19,11 +19,11 @@ import (
 //
 // All operations are safe for concurrent use.
 type Registry struct {
-	logger        kv.Logger
 	factories     map[string]kv.ProviderFactory
 	stores        map[string]kv.Provider
 	mu            sync.RWMutex
 	isInitialized atomic.Bool
+	logger        kv.Logger
 }
 
 type Option func(r *Registry)
@@ -134,6 +134,7 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 	r.mu.RUnlock()
 
 	if kvConfig == nil || kvConfig.Stores == nil {
+		r.isInitialized.Store(false)
 		return nil
 	}
 
@@ -200,15 +201,15 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 		if storeCfg.Type != "env" && storeCfg.Type != "inline" {
 			timeout := extractTimeout(storeCfg.Config)
 
-			secretStore, wrapErr := store.NewSecretStore(
+			secretStore, secretStoreErr := store.NewSecretStore(
 				ctx,
 				name,
 				provider,
 				kvConfig.Cache,
 				store.WithTimeout(timeout),
 			)
-			if wrapErr != nil {
-				err = fmt.Errorf("failed to wrap store %q: %w", name, wrapErr)
+			if secretStoreErr != nil {
+				err = fmt.Errorf("failed to wrap store %q: %w", name, secretStoreErr)
 				if storeCfg.Required {
 					return err
 				}
@@ -277,11 +278,9 @@ func extractTimeout(config json.RawMessage) time.Duration {
 		return 0
 	}
 
-	type storeConfig struct {
+	var sc struct {
 		Timeout string `json:"timeout"`
 	}
-
-	var sc storeConfig
 
 	err := json.Unmarshal(config, &sc)
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/TykTechnologies/storage/kv"
 	"github.com/stretchr/testify/require"
+	"github.com/zeebo/assert"
 )
 
 type mockProvider struct {
@@ -37,12 +38,12 @@ func (m *mockProvider) Close(ctx context.Context) error {
 	return nil
 }
 
-func newFactory(initFunc, closeFunc func(ctx context.Context) error, err error) kv.ProviderFactory {
+func newFactory(initFunc, closeFunc func(ctx context.Context) error) kv.ProviderFactory {
 	return func(config json.RawMessage) (kv.Provider, error) {
 		return &mockProvider{
 			initFunc:  initFunc,
 			closeFunc: closeFunc,
-		}, err
+		}, nil
 	}
 }
 
@@ -71,7 +72,7 @@ func TestAddFactory(t *testing.T) {
 
 		for i := range 10 {
 			wg.Go(func() {
-				err := r.Add(fmt.Sprintf("env-%d", i), newFactory(nil, nil, nil))
+				err := r.Add(fmt.Sprintf("env-%d", i), newFactory(nil, nil))
 				require.NoError(t, err)
 			})
 		}
@@ -92,10 +93,10 @@ func TestAddFactory(t *testing.T) {
 
 	t.Run("prevent factory duplication override", func(t *testing.T) {
 		r := NewRegistry()
-		err := r.Add("env", newFactory(nil, nil, nil))
+		err := r.Add("env", newFactory(nil, nil))
 		require.NoError(t, err)
 
-		err = r.Add("env", newFactory(nil, nil, nil))
+		err = r.Add("env", newFactory(nil, nil))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "is already provided")
 
@@ -210,6 +211,20 @@ func TestInitStores_BlastRadius(t *testing.T) {
 func TestInitStores_EdgeCases(t *testing.T) {
 	t.Parallel()
 
+	t.Run("returns nil early without initializing stores when config is empty", func(t *testing.T) {
+		r := NewRegistry()
+		err := r.Add("mock", newFactory(nil, nil))
+		require.NoError(t, err)
+
+		err = r.InitStores(t.Context(), nil)
+		assert.NoError(t, err)
+
+		err = r.InitStores(t.Context(), &kv.Config{})
+		assert.NoError(t, err)
+
+		assert.False(t, r.isInitialized.Load())
+	})
+
 	t.Run("returns error if no factory provided", func(t *testing.T) {
 		r := NewRegistry()
 		err := r.InitStores(t.Context(), &kv.Config{})
@@ -220,9 +235,7 @@ func TestInitStores_EdgeCases(t *testing.T) {
 	t.Run("should be called once unless Close() was called", func(t *testing.T) {
 		reg := NewRegistry()
 
-		err := reg.Add("mock", func(cfg json.RawMessage) (kv.Provider, error) {
-			return &mockProvider{}, nil
-		})
+		err := reg.Add("mock", newFactory(nil, nil))
 		require.NoError(t, err)
 
 		config := &kv.Config{
@@ -247,6 +260,56 @@ func TestInitStores_EdgeCases(t *testing.T) {
 
 		err = reg.InitStores(t.Context(), config)
 		require.NoError(t, err)
+	})
+
+	t.Run("should close temporaly added stores when required store failed", func(t *testing.T) {
+		// We have to iterate over until valid store is initialized because
+		// we have map non-deterministic iteration order.
+		for {
+
+			r := NewRegistry()
+
+			var validInitialized bool
+			done := make(chan struct{})
+			validFactory := newFactory(func(ctx context.Context) error {
+				validInitialized = true
+				return nil
+			}, func(ctx context.Context) error {
+				close(done)
+				return nil
+			})
+
+			err := r.Add("valid", validFactory)
+			require.NoError(t, err)
+
+			invalidFactory := newFactory(func(ctx context.Context) error {
+				return errors.New("init error")
+			}, nil)
+			err = r.Add("invalid", invalidFactory)
+			require.NoError(t, err)
+
+			err = r.InitStores(t.Context(), &kv.Config{
+				Stores: map[string]kv.StoreConfig{
+					"valid-1":   kv.StoreConfig{Type: "valid", Required: true},
+					"invalid-1": kv.StoreConfig{Type: "invalid", Required: true},
+				},
+			})
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "failed to initialize store")
+
+			if validInitialized {
+				select {
+				case <-done:
+				default:
+					t.Fatal("expected temporarily added store to be closed, but Close was not called")
+				}
+
+				require.False(t, r.isInitialized.Load())
+
+				break
+			}
+
+		}
 	})
 }
 
@@ -286,14 +349,14 @@ func TestRegistry_Close_ErrorAggregation(t *testing.T) {
 func TestRegistry_Concurrency(t *testing.T) {
 	reg := NewRegistry()
 
-	err := reg.Add("static-type", newFactory(nil, nil, nil))
+	err := reg.Add("static-type", newFactory(nil, nil))
 	require.NoError(t, err)
 
 	var wg sync.WaitGroup
 
 	for i := range 50 {
 		wg.Go(func() {
-			err := reg.Add(fmt.Sprintf("type-%d", i), newFactory(nil, nil, nil))
+			err := reg.Add(fmt.Sprintf("type-%d", i), newFactory(nil, nil))
 			require.NoError(t, err)
 		})
 
