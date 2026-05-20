@@ -269,37 +269,25 @@ func TestRegistry_Close_ErrorAggregation(t *testing.T) {
 	}
 }
 
-// func TestRegistry_ConcurrencyThreadSafety(t *testing.T) {
-// 	reg := registry.NewRegistry()
-// 	var wg sync.WaitGroup
-//
-// 	factory := func(cfg json.RawMessage) (kv.Provider, error) { return &mockProvider{}, nil }
-// 	_ = reg.Add("static-type", factory)
-//
-// 	// Concurrently invoke read operations and state additions
-// 	for i := 0; i < 50; i++ {
-// 		wg.Add(3)
-//
-// 		go func() {
-// 			defer wg.Done()
-// 			_ = reg.Add("type", factory) // Writes safely guarded via write-lock
-// 		}()
-//
-// 		go func() {
-// 			defer wg.Done()
-// 			_, _ = reg.GetStore("any-store") // Reads safely guarded via r-lock
-// 		}()
-//
-// 		go func() {
-// 			defer wg.Done()
-// 			config := &kv.KVConfig{
-// 				Stores: map[string]kv.StoreConfig{
-// 					"static-store": {Type: "static-type"},
-// 				},
-// 			}
-// 			_ = reg.InitStores(context.Background(), config)
-// 		}()
-// 	}
-//
-// 	wg.Wait() // Will trigger go race detector if protection mechanisms fail
-// }
+func TestRegistry_Concurrency(t *testing.T) {
+	reg := NewRegistry()
+
+	err := reg.Add("static-type", newFactory(nil, nil, nil))
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+
+	for i := range 50 {
+		wg.Go(func() {
+			err := reg.Add(fmt.Sprintf("type-%d", i), newFactory(nil, nil, nil))
+			require.NoError(t, err)
+		})
+
+		wg.Go(func() {
+			_, err := reg.GetStore("any-store")
+			require.ErrorIs(t, err, kv.ErrStoreNotFound)
+		})
+	}
+
+	wg.Wait()
+}
