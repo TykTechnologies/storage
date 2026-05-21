@@ -6,6 +6,8 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/TykTechnologies/storage/kv"
 	"github.com/stretchr/testify/assert"
@@ -390,6 +392,36 @@ func TestInitStores_EdgeCases(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, r.stores, 1)
+	})
+
+	t.Run("should initialize stores concurrently", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			r := NewRegistry()
+
+			err := r.Add("valid", newFactory(func(ctx context.Context) error {
+				time.Sleep(10 * time.Second)
+				return nil
+			}, nil))
+			require.NoError(t, err)
+
+			start := time.Now()
+			err = r.InitStores(t.Context(), &kv.Config{
+				Stores: map[string]kv.StoreConfig{
+					"valid-1": {Type: "valid", Required: true},
+					"valid-2": {Type: "valid", Required: true},
+					"valid-3": {Type: "valid", Required: true},
+					"valid-4": {Type: "valid", Required: true},
+					"valid-5": {Type: "valid", Required: true},
+				},
+			})
+			require.NoError(t, err)
+			synctest.Wait()
+
+			elapsed := time.Since(start)
+
+			require.Equal(t, 10*time.Second, elapsed)
+			require.Len(t, r.stores, 5)
+		})
 	})
 }
 

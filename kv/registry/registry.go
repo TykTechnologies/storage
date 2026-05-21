@@ -10,6 +10,8 @@ import (
 
 	"github.com/TykTechnologies/storage/kv"
 	"github.com/TykTechnologies/storage/kv/internal/store"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // Registry manages provider factories and initialized stores without global state.
@@ -133,6 +135,7 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 		return errors.New("stores have been initialized")
 	}
 
+	var tempMu sync.Mutex
 	tempStores := make(map[string]kv.Provider, len(config.Stores))
 
 	// This defer block guarantees cleanup of partially initialized stores if the
@@ -142,9 +145,21 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 	defer func() {
 		if err != nil {
 			r.isInitialized.Store(false)
-			r.cleanupPartials(ctx, tempStores)
+
+			cleanupCtx := context.WithoutCancel(ctx)
+
+			tempMu.Lock()
+			defer tempMu.Unlock()
+
+			for _, store := range tempStores {
+				if closer, ok := kv.AsCloser(store); ok {
+					_ = closer.Close(cleanupCtx)
+				}
+			}
 		}
 	}()
+
+	eg, egCtx := errgroup.WithContext(ctx)
 
 	for name, storeCfg := range config.Stores {
 		r.mu.RLock()
@@ -165,29 +180,44 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 			continue
 		}
 
-		store, initErr := buildSingleStore(ctx, name, storeCfg, config.Cache, factory)
-		if initErr != nil {
-			if storeCfg.Required {
-				return initErr
+		eg.Go(func() error {
+			store, initErr := buildSingleStore(egCtx, name, storeCfg, config.Cache, factory)
+			if initErr != nil {
+				if storeCfg.Required {
+					return initErr
+				}
+
+				r.logger.Warn("Skipping optional store initialization", map[string]any{
+					"store": name,
+					"error": initErr,
+				})
+
+				return nil
 			}
 
-			r.logger.Warn("Skipping optional store initialization", map[string]any{
-				"store": name,
-				"error": initErr,
-			})
+			tempMu.Lock()
+			tempStores[name] = store
+			tempMu.Unlock()
 
-			continue
-		}
+			return nil
+		})
+	}
 
-		tempStores[name] = store
+	err = eg.Wait()
+	if err != nil {
+		return err
+	}
+
+	// Double-check registry wasn't closed during the initialization
+	if !r.isInitialized.Load() {
+		return errors.New("registry was closed during initialization")
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Double-check registry wasn't closed during the initialization
-	if !r.isInitialized.Load() {
-		return errors.New("registry was closed during initialization")
+	if r.stores == nil {
+		r.stores = make(map[string]kv.Provider, len(tempStores))
 	}
 
 	for name, store := range tempStores {
@@ -195,14 +225,6 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 	}
 
 	return nil
-}
-
-func (r *Registry) cleanupPartials(ctx context.Context, stores map[string]kv.Provider) {
-	for _, p := range stores {
-		if closer, ok := kv.AsCloser(p); ok {
-			_ = closer.Close(ctx)
-		}
-	}
 }
 
 // GetStore retrieves an initialized store by name.
