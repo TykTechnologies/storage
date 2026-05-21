@@ -271,7 +271,7 @@ func buildSingleStore(
 		}
 	}
 
-	if dp, ok := kv.AsDirectProvider(provider); ok && dp.IsDirecty() {
+	if dp, ok := kv.AsDirectProvider(provider); ok && dp.IsDirect() {
 		return provider, nil
 	}
 
