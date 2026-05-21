@@ -13,8 +13,9 @@ import (
 )
 
 type mockProvider struct {
-	initFunc  func(ctx context.Context) error
-	closeFunc func(ctx context.Context) error
+	initFunc     func(ctx context.Context) error
+	closeFunc    func(ctx context.Context) error
+	isStandalone bool
 }
 
 func (m *mockProvider) Get(ctx context.Context, key string) (string, error) {
@@ -37,6 +38,10 @@ func (m *mockProvider) Close(ctx context.Context) error {
 	return nil
 }
 
+func (m *mockProvider) IsStandalone() bool {
+	return m.isStandalone
+}
+
 type mockLogger struct {
 	warnCalls int
 }
@@ -54,12 +59,6 @@ func newFactory(initFunc, closeFunc func(ctx context.Context) error) kv.Provider
 		}, nil
 	}
 }
-
-var (
-	_ kv.Provider    = (*mockProvider)(nil)
-	_ kv.Initializer = (*mockProvider)(nil)
-	_ kv.Closer      = (*mockProvider)(nil)
-)
 
 func TestNewRegistry(t *testing.T) {
 	t.Parallel()
@@ -223,7 +222,6 @@ func TestInitStores_BlastRadius(t *testing.T) {
 					"target-store": {
 						Type:     tc.storeType,
 						Required: tc.required,
-						Config:   json.RawMessage(`{"timeout": "2s"}`),
 					},
 				},
 			}
@@ -272,7 +270,6 @@ func TestInitStores_EdgeCases(t *testing.T) {
 				"target-store": {
 					Type:     "mock",
 					Required: true,
-					Config:   json.RawMessage(`{"timeout": "2s"}`),
 				},
 			},
 		}
@@ -376,6 +373,23 @@ func TestInitStores_EdgeCases(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, 1, l.warnCalls)
+	})
+
+	t.Run("should skip secret store wrapping if provider is standalone", func(t *testing.T) {
+		r := NewRegistry()
+
+		err := r.Add("valid", func(_ json.RawMessage) (kv.Provider, error) {
+			return &mockProvider{isStandalone: true}, nil
+		})
+		require.NoError(t, err)
+
+		err = r.InitStores(t.Context(), &kv.Config{
+			Stores: map[string]kv.StoreConfig{
+				"valid-1": {Type: "valid", Required: true},
+			},
+		})
+		require.NoError(t, err)
+		require.Len(t, r.stores, 1)
 	})
 }
 

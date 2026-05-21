@@ -3,6 +3,7 @@ package kv
 import (
 	"context"
 	"encoding/json"
+	"time"
 )
 
 // ProviderType represents the unique string identifier for a KV provider.
@@ -84,10 +85,16 @@ type Closer interface {
 	Close(ctx context.Context) error
 }
 
-// DirectProvider is an optional interface for providers that should not be
-// wrapped with additional decorators.
-type DirectProvider interface {
-	IsDirect() bool
+// Standalone is an optional interface for providers that do not need
+// to be combined with caching or singleflight mechanisms.
+type Standalone interface {
+	IsStandalone() bool
+}
+
+// Timeouter is an optional interface for providers that expose a custom
+// duration configuration for operations.
+type Timeouter interface {
+	Timeout() time.Duration
 }
 
 // AsLister attempts to extract a Lister from a Provider,
@@ -108,9 +115,14 @@ func AsCloser(p Provider) (Closer, bool) {
 	return As[Closer](p)
 }
 
-// AsDirectProvider attempts to extract a DirectProvider from a Provider.
-func AsDirectProvider(p Provider) (DirectProvider, bool) {
-	return As[DirectProvider](p)
+// AsTimeouter attempts to extract a Standalone from a Provider.
+func AsStandalone(p Provider) (Standalone, bool) {
+	return As[Standalone](p)
+}
+
+// AsTimeouter attempts to extract a Timeouter from a Provider.
+func AsTimeouter(p Provider) (Timeouter, bool) {
+	return As[Timeouter](p)
 }
 
 // As attempts to extract an interface of type T from a Provider,

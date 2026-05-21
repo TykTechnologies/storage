@@ -2,7 +2,6 @@ package registry
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -271,11 +270,14 @@ func buildSingleStore(
 		}
 	}
 
-	if dp, ok := kv.AsDirectProvider(provider); ok && dp.IsDirect() {
+	if s, ok := kv.AsStandalone(provider); ok && s.IsStandalone() {
 		return provider, nil
 	}
 
-	timeout := extractTimeout(storeCfg.Config)
+	var timeout time.Duration
+	if t, ok := kv.AsTimeouter(provider); ok {
+		timeout = t.Timeout()
+	}
 
 	ss, err := store.NewSecretStore(
 		ctx,
@@ -289,25 +291,4 @@ func buildSingleStore(
 	}
 
 	return ss, nil
-}
-
-func extractTimeout(config json.RawMessage) time.Duration {
-	if config == nil {
-		return 0
-	}
-
-	var sc struct {
-		Timeout string `json:"timeout"`
-	}
-
-	err := json.Unmarshal(config, &sc)
-	if err != nil {
-		return 0
-	}
-
-	if parsed, err := time.ParseDuration(sc.Timeout); err == nil {
-		return parsed
-	}
-
-	return 0
 }
