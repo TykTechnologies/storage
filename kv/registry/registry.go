@@ -226,6 +226,14 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// If InitStores and Close were called concurrently we can endup with initialized stores
+	// and isInitialized keep false value. The defer func will clear temporaly initialized
+	// stores.
+	if !r.isInitialized.Load() {
+		err = errors.New("registry was closed during initialization")
+		return err
+	}
+
 	for name, provider := range tempStores {
 		r.stores[name] = provider
 	}
@@ -252,18 +260,28 @@ func (r *Registry) Close(ctx context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	var errs []error
+	errCh := make(chan error, len(r.stores))
+	var wg sync.WaitGroup
 
 	for name, store := range r.stores {
-		if closer, ok := kv.AsCloser(store); ok {
-			if err := closer.Close(ctx); err != nil {
-				errs = append(errs, fmt.Errorf("failed to close store %q: %w", name, err))
+		wg.Go(func() {
+			if closer, ok := kv.AsCloser(store); ok {
+				if err := closer.Close(ctx); err != nil {
+					errCh <- fmt.Errorf("failed to close store %q: %w", name, err)
+				}
 			}
-		}
+		})
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	var errs []error
+	for err := range errCh {
+		errs = append(errs, err)
 	}
 
 	r.stores = make(map[string]kv.Provider)
-
 	r.isInitialized.Store(false)
 
 	return errors.Join(errs...)
