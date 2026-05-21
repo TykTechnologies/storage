@@ -473,6 +473,8 @@ func TestClose(t *testing.T) {
 }
 
 func TestRegistry_Concurrency(t *testing.T) {
+	t.Parallel()
+
 	reg := NewRegistry()
 
 	err := reg.Add("static-type", newFactory(nil, nil))
@@ -494,6 +496,8 @@ func TestRegistry_Concurrency(t *testing.T) {
 }
 
 func TestConcurrentInitStoresAndCloseAreHandledCorrectly(t *testing.T) {
+	t.Parallel()
+
 	reg := NewRegistry()
 
 	inInit := make(chan struct{})
