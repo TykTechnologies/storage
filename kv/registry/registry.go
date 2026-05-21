@@ -216,10 +216,6 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stores == nil {
-		r.stores = make(map[string]kv.Provider, len(tempStores))
-	}
-
 	for name, store := range tempStores {
 		r.stores[name] = store
 	}
