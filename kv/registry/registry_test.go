@@ -302,12 +302,12 @@ func TestInitStores_EdgeCases(t *testing.T) {
 			r := NewRegistry()
 
 			var validInitialized bool
-			done := make(chan struct{})
+			var closeFuncCalled bool
 			validFactory := newFactory(func(ctx context.Context) error {
 				validInitialized = true
 				return nil
 			}, func(ctx context.Context) error {
-				close(done)
+				closeFuncCalled = true
 				return nil
 			})
 
@@ -330,12 +330,11 @@ func TestInitStores_EdgeCases(t *testing.T) {
 			require.Contains(t, err.Error(), "failed to initialize store")
 
 			if validInitialized {
-				select {
-				case <-done:
-				default:
-					t.Fatal("expected temporarily added store to be closed, but Close was not called")
-				}
-
+				require.True(
+					t,
+					closeFuncCalled,
+					"expected temporarily added store to be closed, but Close was not called",
+				)
 				require.False(t, r.isInitialized.Load())
 
 				break

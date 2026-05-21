@@ -120,12 +120,6 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 		return errors.New("stores have been initialized")
 	}
 
-	defer func() {
-		if err != nil {
-			r.isInitialized.Store(false)
-		}
-	}()
-
 	r.mu.RLock()
 	if len(r.factories) == 0 {
 		r.mu.RUnlock()
@@ -142,9 +136,11 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 
 	defer func() {
 		if err != nil {
+			r.isInitialized.Store(false)
+
 			for _, p := range tempStores {
 				if closer, ok := kv.AsCloser(p); ok {
-					_ = closer.Close(context.Background())
+					_ = closer.Close(ctx)
 				}
 			}
 		}
