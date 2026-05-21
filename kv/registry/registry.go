@@ -118,7 +118,7 @@ func (r *Registry) Add(pt kv.ProviderType, factory kv.ProviderFactory) error {
 //	  }
 //	}
 func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err error) {
-	if r.isInitialized.Swap(true) {
+	if r.isInitialized.Load() {
 		return errors.New("stores have been initialized")
 	}
 
@@ -130,8 +130,6 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 	// implicitly assigns the value to `err` right before this defer runs.
 	defer func() {
 		if err != nil {
-			r.isInitialized.Store(false)
-
 			for _, p := range tempStores {
 				if closer, ok := kv.AsCloser(p); ok {
 					_ = closer.Close(ctx)
@@ -148,7 +146,6 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 	r.mu.RUnlock()
 
 	if kvConfig == nil || kvConfig.Stores == nil {
-		r.isInitialized.Store(false)
 		return nil
 	}
 
@@ -232,16 +229,11 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// If InitStores and Close were called concurrently we can endup with initialized stores
-	// and isInitialized keep false value.
-	if !r.isInitialized.Load() {
-		err = errors.New("registry was closed during initialization")
-		return err
-	}
-
 	for name, provider := range tempStores {
 		r.stores[name] = provider
 	}
+
+	r.isInitialized.Store(true)
 
 	return nil
 }

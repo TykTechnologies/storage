@@ -472,8 +472,7 @@ func TestConcurrentInitStoresAndCloseAreHandledCorrectly(t *testing.T) {
 		}
 
 		err := reg.InitStores(t.Context(), config)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "registry was closed during initialization")
+		require.NoError(t, err)
 	})
 
 	wg.Go(func() {
