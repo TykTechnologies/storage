@@ -51,41 +51,43 @@ type Closer interface {
 // AsLister attempts to extract a Lister from a Provider,
 // automatically unwrapping decorators.
 func AsLister(p Provider) (Lister, bool) {
-	if l, ok := p.(Lister); ok {
-		return l, true
-	}
-
-	if wrapper, ok := p.(interface{ Unwrap() Provider }); ok {
-		return AsLister(wrapper.Unwrap())
-	}
-
-	return nil, false
+	return As[Lister](p)
 }
 
 // AsInitializer attempts to extract an Initializer from a Provider,
 // automatically unwrapping decorators.
 func AsInitializer(p Provider) (Initializer, bool) {
-	if i, ok := p.(Initializer); ok {
-		return i, true
-	}
-
-	if wrapper, ok := p.(interface{ Unwrap() Provider }); ok {
-		return AsInitializer(wrapper.Unwrap())
-	}
-
-	return nil, false
+	return As[Initializer](p)
 }
 
 // AsCloser attempts to extract an Closer from a Provider,
 // automatically unwrapping decorators.
 func AsCloser(p Provider) (Closer, bool) {
-	if c, ok := p.(Closer); ok {
-		return c, true
+	return As[Closer](p)
+}
+
+// As attempts to extract an interface of type T from a Provider,
+// automatically unwrapping decorators up to a maximum depth.
+func As[T any](p Provider) (T, bool) {
+	const maxDepth = 100
+	var zero T
+
+	for range maxDepth {
+		if p == nil {
+			return zero, false
+		}
+
+		if v, ok := p.(T); ok {
+			return v, true
+		}
+
+		wrapper, ok := p.(interface{ Unwrap() Provider })
+		if !ok {
+			return zero, false
+		}
+
+		p = wrapper.Unwrap()
 	}
 
-	if wrapper, ok := p.(interface{ Unwrap() Provider }); ok {
-		return AsCloser(wrapper.Unwrap())
-	}
-
-	return nil, false
+	return zero, false
 }
