@@ -25,7 +25,7 @@ type Config struct {
 // StoreConfig defines the configuration for a single named KV store instance.
 type StoreConfig struct {
 	// Type specifies which provider factory to use.
-	Type string `json:"type"`
+	Type ProviderType `json:"type"`
 
 	// Required determines startup behavior if the store fails to initialize.
 	Required bool `json:"required"`

@@ -13,7 +13,7 @@ import (
 //
 // All operations are safe for concurrent use.
 type Registry struct {
-	factories map[string]kv.ProviderFactory
+	factories map[kv.ProviderType]kv.ProviderFactory
 	stores    map[string]kv.Provider
 	mu        sync.RWMutex
 }
@@ -21,7 +21,7 @@ type Registry struct {
 // NewRegistry creates a new empty registry with no registered factories or stores.
 func NewRegistry() *Registry {
 	return &Registry{
-		factories: make(map[string]kv.ProviderFactory),
+		factories: make(map[kv.ProviderType]kv.ProviderFactory),
 		stores:    make(map[string]kv.Provider),
 	}
 }
@@ -30,9 +30,9 @@ func NewRegistry() *Registry {
 // The providerType should match the "type" field used in store configurations.
 //
 // Adding a factory with the same providerType will overwrite the previous factory.
-func (r *Registry) Add(providerType string, factory kv.ProviderFactory) {
+func (r *Registry) Add(pt kv.ProviderType, factory kv.ProviderFactory) {
 	r.mu.Lock()
-	r.factories[providerType] = factory
+	r.factories[pt] = factory
 	r.mu.Unlock()
 }
 

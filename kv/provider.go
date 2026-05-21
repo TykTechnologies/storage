@@ -5,6 +5,42 @@ import (
 	"encoding/json"
 )
 
+// ProviderType represents the unique string identifier for a KV provider.
+type ProviderType string
+
+const (
+	// --- Open Source (OSS) Providers ---
+
+	// Env resolves secrets from environment variables.
+	Env ProviderType = "env"
+
+	// Inline resolves secrets from plain text in the configuration.
+	Inline ProviderType = "inline"
+
+	// Vault resolves secrets from HashiCorp Vault.
+	Vault ProviderType = "hashicorp_vault"
+
+	// Consul resolves secrets from HashiCorp Consul.
+	Consul ProviderType = "hashicorp_consul"
+
+	// K8s resolves secrets from Kubernetes Secrets mounted as files.
+	K8s ProviderType = "k8s_files"
+
+	// --- Enterprise Edition (EE) Providers ---
+
+	// AWS resolves secrets from AWS Secrets Manager.
+	AWS ProviderType = "aws_secrets_manager"
+
+	// GCP resolves secrets from Google Cloud Secret Manager.
+	GCP ProviderType = "gcp_secret_manager"
+
+	// Azure resolves secrets from Azure Key Vault.
+	Azure ProviderType = "azure_key_vault"
+
+	// Conjur resolves secrets from CyberArk Conjur.
+	Conjur ProviderType = "cyberark_conjur"
+)
+
 // KeyValueRetriever defines the core read capability for retrieving values by key.
 type KeyValueRetriever interface {
 	Get(ctx context.Context, key string) (string, error)
