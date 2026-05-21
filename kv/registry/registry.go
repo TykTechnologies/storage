@@ -122,20 +122,12 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 		return errors.New("stores have been initialized")
 	}
 
-	r.mu.RLock()
-	if len(r.factories) == 0 {
-		r.mu.RUnlock()
-		return errors.New("factories must be added before initialize stores")
-	}
-	r.mu.RUnlock()
-
-	if kvConfig == nil || kvConfig.Stores == nil {
-		r.isInitialized.Store(false)
-		return nil
-	}
-
 	tempStores := make(map[string]kv.Provider)
 
+	// This defer block guarantees cleanup of partially initialized stores if the
+	// overall initialization process fails, preventing resource leaks.
+	// It relies on the named return variable. In Go, executing `return someErr`
+	// implicitly assigns the value to `err` right before this defer runs.
 	defer func() {
 		if err != nil {
 			r.isInitialized.Store(false)
@@ -148,19 +140,31 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 		}
 	}()
 
+	r.mu.RLock()
+	if len(r.factories) == 0 {
+		r.mu.RUnlock()
+		return errors.New("factories must be added before initialize stores")
+	}
+	r.mu.RUnlock()
+
+	if kvConfig == nil || kvConfig.Stores == nil {
+		r.isInitialized.Store(false)
+		return nil
+	}
+
 	for name, storeCfg := range kvConfig.Stores {
 		r.mu.RLock()
 		factory, ok := r.factories[storeCfg.Type]
 		r.mu.RUnlock()
 
 		if !ok {
-			err = fmt.Errorf("unknown provider type %q for store %q", storeCfg.Type, name)
+			warnErr := fmt.Errorf("unknown provider type %q for store %q", storeCfg.Type, name)
 			if storeCfg.Required {
-				return err
+				return warnErr
 			}
 
 			r.logger.Warn("Skipping optional store initialization", map[string]any{
-				"err": err,
+				"err": warnErr,
 			})
 
 			continue
@@ -168,13 +172,13 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 
 		provider, createErr := factory(storeCfg.Config)
 		if createErr != nil {
-			err = fmt.Errorf("failed to create provider %q (type: %s): %w", name, storeCfg.Type, createErr)
+			warnErr := fmt.Errorf("failed to create provider %q (type: %s): %w", name, storeCfg.Type, createErr)
 			if storeCfg.Required {
-				return err
+				return warnErr
 			}
 
 			r.logger.Warn("Skipping optional store initialization", map[string]any{
-				"err": err,
+				"err": warnErr,
 			})
 
 			continue
@@ -183,13 +187,13 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 		if initializer, ok := kv.AsInitializer(provider); ok {
 			initError := initializer.Init(ctx)
 			if initError != nil {
-				err = fmt.Errorf("failed to initialize store %q (type: %s): %w", name, storeCfg.Type, initError)
+				warnErr := fmt.Errorf("failed to initialize store %q (type: %s): %w", name, storeCfg.Type, initError)
 				if storeCfg.Required {
-					return err
+					return warnErr
 				}
 
 				r.logger.Warn("Skipping optional store initialization", map[string]any{
-					"err": err,
+					"err": warnErr,
 				})
 
 				continue
@@ -207,13 +211,13 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 				store.WithTimeout(timeout),
 			)
 			if secretStoreErr != nil {
-				err = fmt.Errorf("failed to wrap store %q: %w", name, secretStoreErr)
+				warnErr := fmt.Errorf("failed to wrap store %q: %w", name, secretStoreErr)
 				if storeCfg.Required {
-					return err
+					return warnErr
 				}
 
 				r.logger.Warn("Skipping optional store initialization", map[string]any{
-					"err": err,
+					"err": warnErr,
 				})
 
 				continue

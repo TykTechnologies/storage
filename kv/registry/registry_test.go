@@ -258,6 +258,7 @@ func TestInitStores_EdgeCases(t *testing.T) {
 		err := r.InitStores(t.Context(), &kv.Config{})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "factories must be added before initialize stores")
+		require.False(t, r.isInitialized.Load())
 	})
 
 	t.Run("should be called once unless Close() was called", func(t *testing.T) {
