@@ -229,8 +229,7 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 	defer r.mu.Unlock()
 
 	// If InitStores and Close were called concurrently we can endup with initialized stores
-	// and isInitialized keep false value. The defer func will clear temporaly initialized
-	// stores.
+	// and isInitialized keep false value.
 	if !r.isInitialized.Load() {
 		err = errors.New("registry was closed during initialization")
 		return err

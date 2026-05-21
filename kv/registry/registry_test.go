@@ -378,37 +378,51 @@ func TestInitStores_EdgeCases(t *testing.T) {
 	})
 }
 
-func TestRegistry_Close_ErrorAggregation(t *testing.T) {
-	reg := NewRegistry()
+func TestClose(t *testing.T) {
+	t.Parallel()
 
-	err := reg.Add("mock", func(cfg json.RawMessage) (kv.Provider, error) {
-		return &mockProvider{
-			closeFunc: func(ctx context.Context) error {
-				return errors.New("cleanup failed")
-			},
-		}, nil
+	t.Run("can be called multiple times without error", func(t *testing.T) {
+		reg := NewRegistry()
+		err := reg.Close(t.Context())
+		require.NoError(t, err)
+		err = reg.Close(t.Context())
+		require.NoError(t, err)
+		err = reg.Close(t.Context())
+		require.NoError(t, err)
 	})
-	require.NoError(t, err)
 
-	config := &kv.Config{
-		Stores: map[string]kv.StoreConfig{
-			"store-1": {Type: "mock", Required: true},
-			"store-2": {Type: "mock", Required: true},
-		},
-	}
+	t.Run("aggregates multiple errors", func(t *testing.T) {
+		reg := NewRegistry()
 
-	err = reg.InitStores(context.Background(), config)
-	require.NoError(t, err)
+		err := reg.Add("mock", func(cfg json.RawMessage) (kv.Provider, error) {
+			return &mockProvider{
+				closeFunc: func(ctx context.Context) error {
+					return errors.New("cleanup failed")
+				},
+			}, nil
+		})
+		require.NoError(t, err)
 
-	closeErr := reg.Close(t.Context())
-	require.Error(t, closeErr)
+		config := &kv.Config{
+			Stores: map[string]kv.StoreConfig{
+				"store-1": {Type: "mock", Required: true},
+				"store-2": {Type: "mock", Required: true},
+			},
+		}
 
-	if err, ok := closeErr.(interface{ Unwrap() []error }); ok {
-		er := err.Unwrap()
-		require.Len(t, er, 2)
-	} else {
-		t.Error("close error must be a result of errors.Join which implements Unwrap")
-	}
+		err = reg.InitStores(t.Context(), config)
+		require.NoError(t, err)
+
+		closeErr := reg.Close(t.Context())
+		require.Error(t, closeErr)
+
+		if err, ok := closeErr.(interface{ Unwrap() []error }); ok {
+			er := err.Unwrap()
+			require.Len(t, er, 2)
+		} else {
+			t.Error("close error must be a result of errors.Join which implements Unwrap")
+		}
+	})
 }
 
 func TestRegistry_Concurrency(t *testing.T) {
@@ -427,6 +441,47 @@ func TestRegistry_Concurrency(t *testing.T) {
 	wg.Go(func() {
 		_, err := reg.GetStore("any-store")
 		require.ErrorIs(t, err, kv.ErrStoreNotFound)
+	})
+
+	wg.Wait()
+}
+
+func TestConcurrentInitStoresAndCloseAreHandledCorrectly(t *testing.T) {
+	reg := NewRegistry()
+
+	inInit := make(chan struct{})
+	closeDone := make(chan struct{})
+
+	err := reg.Add("mock", newFactory(func(ctx context.Context) error {
+		close(inInit)
+		<-closeDone
+
+		return nil
+	}, nil))
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+
+	// While InitStores is running another goroutine calls the Close method
+	wg.Go(func() {
+		config := &kv.Config{
+			Stores: map[string]kv.StoreConfig{
+				"store-1": {Type: "mock", Required: true},
+			},
+		}
+
+		err := reg.InitStores(t.Context(), config)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "registry was closed during initialization")
+	})
+
+	wg.Go(func() {
+		<-inInit
+
+		err := reg.Close(t.Context())
+		require.NoError(t, err)
+
+		close(closeDone)
 	})
 
 	wg.Wait()
