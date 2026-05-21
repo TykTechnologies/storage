@@ -117,9 +117,21 @@ func (r *Registry) Add(pt kv.ProviderType, factory kv.ProviderFactory) error {
 //	    }
 //	  }
 //	}
-func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err error) {
+func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error) {
 	if r.isInitialized.Load() {
 		return errors.New("stores have been initialized")
+	}
+
+	r.mu.RLock()
+	isEmpty := len(r.factories) == 0
+	r.mu.RUnlock()
+
+	if isEmpty {
+		return errors.New("factories must be added before initialize stores")
+	}
+
+	if config == nil || config.Stores == nil {
+		return nil
 	}
 
 	tempStores := make(map[string]kv.Provider)
@@ -138,104 +150,79 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 		}
 	}()
 
-	r.mu.RLock()
-	if len(r.factories) == 0 {
-		r.mu.RUnlock()
-		return errors.New("factories must be added before initialize stores")
-	}
-	r.mu.RUnlock()
-
-	if kvConfig == nil || kvConfig.Stores == nil {
-		return nil
-	}
-
-	for name, storeCfg := range kvConfig.Stores {
-		r.mu.RLock()
-		factory, ok := r.factories[storeCfg.Type]
-		r.mu.RUnlock()
-
-		if !ok {
-			warnErr := fmt.Errorf("unknown provider type %q for store %q", storeCfg.Type, name)
+	for name, storeCfg := range config.Stores {
+		store, initErr := r.initSingleStore(ctx, name, storeCfg, config.Cache)
+		if initErr != nil {
 			if storeCfg.Required {
-				return warnErr
+				return initErr
 			}
 
 			r.logger.Warn("Skipping optional store initialization", map[string]any{
-				"err": warnErr,
+				"err": initErr,
 			})
 
 			continue
 		}
 
-		provider, createErr := factory(storeCfg.Config)
-		if createErr != nil {
-			warnErr := fmt.Errorf("failed to create provider %q (type: %s): %w", name, storeCfg.Type, createErr)
-			if storeCfg.Required {
-				return warnErr
-			}
-
-			r.logger.Warn("Skipping optional store initialization", map[string]any{
-				"err": warnErr,
-			})
-
-			continue
-		}
-
-		if initializer, ok := kv.AsInitializer(provider); ok {
-			initError := initializer.Init(ctx)
-			if initError != nil {
-				warnErr := fmt.Errorf("failed to initialize store %q (type: %s): %w", name, storeCfg.Type, initError)
-				if storeCfg.Required {
-					return warnErr
-				}
-
-				r.logger.Warn("Skipping optional store initialization", map[string]any{
-					"err": warnErr,
-				})
-
-				continue
-			}
-		}
-
-		if storeCfg.Type != kv.Env && storeCfg.Type != kv.Inline {
-			timeout := extractTimeout(storeCfg.Config)
-
-			secretStore, secretStoreErr := store.NewSecretStore(
-				ctx,
-				name,
-				provider,
-				kvConfig.Cache,
-				store.WithTimeout(timeout),
-			)
-			if secretStoreErr != nil {
-				warnErr := fmt.Errorf("failed to wrap store %q: %w", name, secretStoreErr)
-				if storeCfg.Required {
-					return warnErr
-				}
-
-				r.logger.Warn("Skipping optional store initialization", map[string]any{
-					"err": warnErr,
-				})
-
-				continue
-			}
-
-			provider = secretStore
-		}
-
-		tempStores[name] = provider
+		tempStores[name] = store
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	for name, provider := range tempStores {
-		r.stores[name] = provider
+	for name, store := range tempStores {
+		r.stores[name] = store
 	}
 
 	r.isInitialized.Store(true)
 
 	return nil
+}
+
+func (r *Registry) initSingleStore(
+	ctx context.Context,
+	name string,
+	storeCfg kv.StoreConfig,
+	cacheCfg kv.CacheConfig,
+) (kv.Provider, error) {
+	r.mu.RLock()
+	factory, ok := r.factories[storeCfg.Type]
+	r.mu.RUnlock()
+
+	if !ok {
+		return nil, fmt.Errorf("unknown provider type %q for store %q", storeCfg.Type, name)
+	}
+
+	provider, err := factory(storeCfg.Config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create provider %q (type: %s): %w", name, storeCfg.Type, err)
+	}
+
+	if initializer, ok := kv.AsInitializer(provider); ok {
+		err := initializer.Init(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize store %q (type: %s): %w", name, storeCfg.Type, err)
+		}
+	}
+
+	if storeCfg.Type == kv.Env || storeCfg.Type == kv.Inline {
+		return provider, nil
+	}
+
+	timeout := extractTimeout(storeCfg.Config)
+
+	ss, err := store.NewSecretStore(
+		ctx,
+		name,
+		provider,
+		cacheCfg,
+		store.WithTimeout(timeout),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to wrap store %q: %w", name, err)
+	}
+
+	return ss, nil
 }
 
 // GetStore retrieves an initialized store by name.
