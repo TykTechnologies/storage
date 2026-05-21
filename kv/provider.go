@@ -84,6 +84,12 @@ type Closer interface {
 	Close(ctx context.Context) error
 }
 
+// DirectProvider is an optional interface for providers that should not be
+// wrapped with additional decorators.
+type DirectProvider interface {
+	IsDirect() bool
+}
+
 // AsLister attempts to extract a Lister from a Provider,
 // automatically unwrapping decorators.
 func AsLister(p Provider) (Lister, bool) {
@@ -100,6 +106,11 @@ func AsInitializer(p Provider) (Initializer, bool) {
 // automatically unwrapping decorators.
 func AsCloser(p Provider) (Closer, bool) {
 	return As[Closer](p)
+}
+
+// AsDirectProvider attempts to extract a DirectProvider from a Provider.
+func AsDirectProvider(p Provider) (DirectProvider, bool) {
+	return As[DirectProvider](p)
 }
 
 // As attempts to extract an interface of type T from a Provider,

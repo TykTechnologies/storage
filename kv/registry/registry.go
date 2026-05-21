@@ -271,7 +271,7 @@ func buildSingleStore(
 		}
 	}
 
-	if storeCfg.Type == kv.Env || storeCfg.Type == kv.Inline {
+	if dp, ok := kv.AsDirectProvider(provider); ok && dp.IsDirecty() {
 		return provider, nil
 	}
 
