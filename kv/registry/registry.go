@@ -166,7 +166,7 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 			continue
 		}
 
-		store, initErr := r.buildSingleStore(ctx, name, storeCfg, config.Cache, factory)
+		store, initErr := buildSingleStore(ctx, name, storeCfg, config.Cache, factory)
 		if initErr != nil {
 			if storeCfg.Required {
 				return initErr
@@ -204,45 +204,6 @@ func (r *Registry) cleanupPartials(ctx context.Context, stores map[string]kv.Pro
 			_ = closer.Close(ctx)
 		}
 	}
-}
-
-func (r *Registry) buildSingleStore(
-	ctx context.Context,
-	name string,
-	storeCfg kv.StoreConfig,
-	cacheCfg kv.CacheConfig,
-	factory kv.ProviderFactory,
-) (kv.Provider, error) {
-	provider, err := factory(storeCfg.Config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create provider %q (type: %s): %w", name, storeCfg.Type, err)
-	}
-
-	if initializer, ok := kv.AsInitializer(provider); ok {
-		err := initializer.Init(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize store %q (type: %s): %w", name, storeCfg.Type, err)
-		}
-	}
-
-	if storeCfg.Type == kv.Env || storeCfg.Type == kv.Inline {
-		return provider, nil
-	}
-
-	timeout := extractTimeout(storeCfg.Config)
-
-	ss, err := store.NewSecretStore(
-		ctx,
-		name,
-		provider,
-		cacheCfg,
-		store.WithTimeout(timeout),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to wrap store %q: %w", name, err)
-	}
-
-	return ss, nil
 }
 
 // GetStore retrieves an initialized store by name.
@@ -289,6 +250,45 @@ func (r *Registry) Close(ctx context.Context) error {
 	r.isInitialized.Store(false)
 
 	return errors.Join(errs...)
+}
+
+func buildSingleStore(
+	ctx context.Context,
+	name string,
+	storeCfg kv.StoreConfig,
+	cacheCfg kv.CacheConfig,
+	factory kv.ProviderFactory,
+) (kv.Provider, error) {
+	provider, err := factory(storeCfg.Config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create provider %q (type: %s): %w", name, storeCfg.Type, err)
+	}
+
+	if initializer, ok := kv.AsInitializer(provider); ok {
+		err := initializer.Init(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize store %q (type: %s): %w", name, storeCfg.Type, err)
+		}
+	}
+
+	if storeCfg.Type == kv.Env || storeCfg.Type == kv.Inline {
+		return provider, nil
+	}
+
+	timeout := extractTimeout(storeCfg.Config)
+
+	ss, err := store.NewSecretStore(
+		ctx,
+		name,
+		provider,
+		cacheCfg,
+		store.WithTimeout(timeout),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to wrap store %q: %w", name, err)
+	}
+
+	return ss, nil
 }
 
 func extractTimeout(config json.RawMessage) time.Duration {
