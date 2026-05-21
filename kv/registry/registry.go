@@ -196,7 +196,7 @@ func (r *Registry) InitStores(ctx context.Context, kvConfig *kv.Config) (err err
 			}
 		}
 
-		if storeCfg.Type != "env" && storeCfg.Type != "inline" {
+		if storeCfg.Type != kv.Env && storeCfg.Type != kv.Inline {
 			timeout := extractTimeout(storeCfg.Config)
 
 			secretStore, secretStoreErr := store.NewSecretStore(
