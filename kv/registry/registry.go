@@ -118,25 +118,23 @@ func (r *Registry) Add(pt kv.ProviderType, factory kv.ProviderFactory) error {
 //	  }
 //	}
 func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error) {
-	if r.isInitialized.Swap(true) {
-		return errors.New("stores have been initialized")
-	}
-
 	r.mu.RLock()
-	isEmpty := len(r.factories) == 0
+	factoriesCount := len(r.factories)
 	r.mu.RUnlock()
 
-	if isEmpty {
-		r.isInitialized.Store(false)
+	if factoriesCount == 0 {
 		return errors.New("factories must be added before initialize stores")
 	}
 
 	if config == nil || config.Stores == nil {
-		r.isInitialized.Store(false)
 		return nil
 	}
 
-	tempStores := make(map[string]kv.Provider)
+	if r.isInitialized.Swap(true) {
+		return errors.New("stores have been initialized")
+	}
+
+	tempStores := make(map[string]kv.Provider, len(config.Stores))
 
 	// This defer block guarantees cleanup of partially initialized stores if the
 	// overall initialization process fails, preventing resource leaks.
@@ -145,23 +143,38 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 	defer func() {
 		if err != nil {
 			r.isInitialized.Store(false)
-			for _, p := range tempStores {
-				if closer, ok := kv.AsCloser(p); ok {
-					_ = closer.Close(ctx)
-				}
-			}
+			r.cleanupPartials(ctx, tempStores)
 		}
 	}()
 
 	for name, storeCfg := range config.Stores {
-		store, initErr := r.initSingleStore(ctx, name, storeCfg, config.Cache)
+		r.mu.RLock()
+		factory, ok := r.factories[storeCfg.Type]
+		r.mu.RUnlock()
+
+		if !ok {
+			initErr := fmt.Errorf("unknown provider type %q for store %q", storeCfg.Type, name)
+			if storeCfg.Required {
+				return initErr
+			}
+
+			r.logger.Warn("Skipping optional store initialization", map[string]any{
+				"store": name,
+				"error": initErr,
+			})
+
+			continue
+		}
+
+		store, initErr := r.buildSingleStore(ctx, name, storeCfg, config.Cache, factory)
 		if initErr != nil {
 			if storeCfg.Required {
 				return initErr
 			}
 
 			r.logger.Warn("Skipping optional store initialization", map[string]any{
-				"err": initErr,
+				"store": name,
+				"error": initErr,
 			})
 
 			continue
@@ -173,6 +186,7 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// Double-check registry wasn't closed during the initialization
 	if !r.isInitialized.Load() {
 		return errors.New("registry was closed during initialization")
 	}
@@ -184,20 +198,21 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 	return nil
 }
 
-func (r *Registry) initSingleStore(
+func (r *Registry) cleanupPartials(ctx context.Context, stores map[string]kv.Provider) {
+	for _, p := range stores {
+		if closer, ok := kv.AsCloser(p); ok {
+			_ = closer.Close(ctx)
+		}
+	}
+}
+
+func (r *Registry) buildSingleStore(
 	ctx context.Context,
 	name string,
 	storeCfg kv.StoreConfig,
 	cacheCfg kv.CacheConfig,
+	factory kv.ProviderFactory,
 ) (kv.Provider, error) {
-	r.mu.RLock()
-	factory, ok := r.factories[storeCfg.Type]
-	r.mu.RUnlock()
-
-	if !ok {
-		return nil, fmt.Errorf("unknown provider type %q for store %q", storeCfg.Type, name)
-	}
-
 	provider, err := factory(storeCfg.Config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create provider %q (type: %s): %w", name, storeCfg.Type, err)
