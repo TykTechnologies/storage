@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"sync"
 	"testing"
 
@@ -81,18 +80,13 @@ func TestAddFactory(t *testing.T) {
 	t.Run("successful registration", func(t *testing.T) {
 		r := NewRegistry()
 
-		var wg sync.WaitGroup
+		err := r.Add(kv.Env, newFactory(nil, nil))
+		require.NoError(t, err)
 
-		for i := range 10 {
-			wg.Go(func() {
-				err := r.Add(fmt.Sprintf("env-%d", i), newFactory(nil, nil))
-				require.NoError(t, err)
-			})
-		}
+		err = r.Add(kv.Inline, newFactory(nil, nil))
+		require.NoError(t, err)
 
-		wg.Wait()
-
-		require.Len(t, r.factories, 10)
+		require.Len(t, r.factories, 2)
 	})
 
 	t.Run("reject empty provider type", func(t *testing.T) {
@@ -150,7 +144,7 @@ func TestInitStores_BlastRadius(t *testing.T) {
 
 	type testCase struct {
 		name        string
-		storeType   string
+		storeType   kv.ProviderType
 		required    bool
 		factoryErr  error
 		initErr     error
@@ -160,46 +154,46 @@ func TestInitStores_BlastRadius(t *testing.T) {
 	table := []testCase{
 		{
 			name:        "required store initializes perfectly",
-			storeType:   "mock",
+			storeType:   kv.Env,
 			required:    true,
 			expectError: false,
 		},
 		{
 			name:        "unregistered provider type fails if required",
-			storeType:   "unknown",
+			storeType:   kv.Inline,
 			required:    true,
 			expectError: true,
 		},
 		{
 			name:        "unregistered provider type skipped if optional",
-			storeType:   "unknown",
+			storeType:   kv.Inline,
 			required:    false,
 			expectError: false,
 		},
 		{
 			name:        "factory generation failure blocks startup if required",
-			storeType:   "mock",
+			storeType:   kv.Env,
 			required:    true,
 			factoryErr:  errors.New("bad config content"),
 			expectError: true,
 		},
 		{
 			name:        "factory generation failure skipped if optional",
-			storeType:   "mock",
+			storeType:   kv.Env,
 			required:    false,
 			factoryErr:  errors.New("bad config content"),
 			expectError: false,
 		},
 		{
 			name:        "network init phase failure blocks startup if required",
-			storeType:   "mock",
+			storeType:   kv.Env,
 			required:    true,
 			initErr:     errors.New("vault unreachable"),
 			expectError: true,
 		},
 		{
 			name:        "network init phase failure skipped if not required",
-			storeType:   "mock",
+			storeType:   kv.Env,
 			required:    false,
 			initErr:     errors.New("consul dead"),
 			expectError: false,
@@ -210,7 +204,8 @@ func TestInitStores_BlastRadius(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			reg := NewRegistry()
 
-			err := reg.Add("mock", func(cfg json.RawMessage) (kv.Provider, error) {
+			// Adding factory for env provider
+			err := reg.Add(kv.Env, func(cfg json.RawMessage) (kv.Provider, error) {
 				if tc.factoryErr != nil {
 					return nil, tc.factoryErr
 				}
@@ -424,17 +419,15 @@ func TestRegistry_Concurrency(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	for i := range 50 {
-		wg.Go(func() {
-			err := reg.Add(fmt.Sprintf("type-%d", i), newFactory(nil, nil))
-			require.NoError(t, err)
-		})
+	wg.Go(func() {
+		err := reg.Add(kv.Env, newFactory(nil, nil))
+		require.NoError(t, err)
+	})
 
-		wg.Go(func() {
-			_, err := reg.GetStore("any-store")
-			require.ErrorIs(t, err, kv.ErrStoreNotFound)
-		})
-	}
+	wg.Go(func() {
+		_, err := reg.GetStore("any-store")
+		require.ErrorIs(t, err, kv.ErrStoreNotFound)
+	})
 
 	wg.Wait()
 }

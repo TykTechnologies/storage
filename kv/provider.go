@@ -5,6 +5,20 @@ import (
 	"encoding/json"
 )
 
+type ProviderType string
+
+const (
+	Env    ProviderType = "env"
+	Inline ProviderType = "inline"
+	Vault  ProviderType = "hashicorp_vault"
+	Consul ProviderType = "hashicorp_consul"
+	K8s    ProviderType = "k8s_files"
+	AWS    ProviderType = "aws_secrets_manager"
+	GCP    ProviderType = "gcp_secret_manager"
+	Azure  ProviderType = "azure_key_vault"
+	Conjur ProviderType = "cyberark_conjur"
+)
+
 // KeyValueRetriever defines the core read capability for retrieving values by key.
 type KeyValueRetriever interface {
 	Get(ctx context.Context, key string) (string, error)

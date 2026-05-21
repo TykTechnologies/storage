@@ -19,7 +19,7 @@ import (
 //
 // All operations are safe for concurrent use.
 type Registry struct {
-	factories     map[string]kv.ProviderFactory
+	factories     map[kv.ProviderType]kv.ProviderFactory
 	stores        map[string]kv.Provider
 	mu            sync.RWMutex
 	isInitialized atomic.Bool
@@ -39,7 +39,7 @@ func WithLogger(l kv.Logger) Option {
 // NewRegistry creates a new empty registry with no registered factories or stores.
 func NewRegistry(opts ...Option) *Registry {
 	r := &Registry{
-		factories: make(map[string]kv.ProviderFactory),
+		factories: make(map[kv.ProviderType]kv.ProviderFactory),
 		stores:    make(map[string]kv.Provider),
 		logger:    kv.NoopLogger{},
 	}
@@ -66,8 +66,10 @@ func NewDefaultRegistry(opts ...Option) *Registry {
 }
 
 // Add registers a provider factory for the given provider type.
-func (r *Registry) Add(providerType string, factory kv.ProviderFactory) error {
-	if providerType == "" {
+func (r *Registry) Add(pt kv.ProviderType, factory kv.ProviderFactory) error {
+	// In Go string literals are considered untyped string constants. The compiler
+	// won't scream if caller pass the empty string argument as provider type.
+	if pt == "" {
 		return errors.New("provider type cannot be empty")
 	}
 
@@ -79,11 +81,11 @@ func (r *Registry) Add(providerType string, factory kv.ProviderFactory) error {
 	defer r.mu.Unlock()
 
 	// Safe check within the write lock prevents the TOCTOU race condition
-	if _, ok := r.factories[providerType]; ok {
-		return fmt.Errorf("factory for type %q is already provided; override is not allowed", providerType)
+	if _, ok := r.factories[pt]; ok {
+		return fmt.Errorf("factory for type %q is already provided; override is not allowed", pt)
 	}
 
-	r.factories[providerType] = factory
+	r.factories[pt] = factory
 
 	return nil
 }
