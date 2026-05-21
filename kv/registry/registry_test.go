@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/TykTechnologies/storage/kv"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zeebo/assert"
 )
 
 type mockProvider struct {
