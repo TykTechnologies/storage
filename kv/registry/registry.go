@@ -56,11 +56,11 @@ func NewDefaultRegistry(opts ...Option) *Registry {
 	r := NewRegistry(opts...)
 
 	// FIX: Uncomment provider registration when implementation is added
-	// r.Add("env", env.NewFactory())
-	// r.Add("inline", inline.NewFactory())
-	// r.Add("hashicorp_vault", vault.NewFactory())
-	// r.Add("hashicorp_consul", consul.NewFactory())
-	// r.Add("k8s_files", k8s.NewFactory())
+	// r.Add(kv.Env, env.NewFactory())
+	// r.Add(kv.Inline, inline.NewFactory())
+	// r.Add(kv.Vault, vault.NewFactory())
+	// r.Add(kv.Consul, consul.NewFactory())
+	// r.Add(kv.K8s, k8s.NewFactory())
 
 	return r
 }
