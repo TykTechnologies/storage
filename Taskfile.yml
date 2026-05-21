@@ -62,3 +62,11 @@ tasks:
           DB_VERSION: "{{.DB_VERSION}}"
       - mkdir -p coverage/temporal
       - cp temporal/*.cov coverage/temporal/
+
+  test-kv:
+    desc: "Run tests for kv storage"
+    cmds:
+      - task: run-tests
+        vars:
+          STORAGE_TYPE: kv
+          DB: "none"
