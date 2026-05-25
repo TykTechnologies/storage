@@ -150,7 +150,6 @@ func WithTimeout(timeout time.Duration) Option {
 
 // NewSecretStore instantiates the store wrapper with optional configurations.
 func NewSecretStore(
-	ctx context.Context,
 	name string,
 	provider kv.Provider,
 	cacheConfig kv.CacheConfig,
@@ -160,7 +159,7 @@ func NewSecretStore(
 		return nil, fmt.Errorf("failed to create a secret store with name %q: provider cannot be nil", name)
 	}
 
-	cache, err := cache.NewCache(ctx, cacheConfig)
+	cache, err := cache.NewCache(cacheConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create secret store: %w", err)
 	}

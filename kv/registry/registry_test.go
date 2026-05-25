@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -18,9 +19,11 @@ type mockProvider struct {
 	initFunc     func(ctx context.Context) error
 	closeFunc    func(ctx context.Context) error
 	isStandalone bool
+	calls        atomic.Int32
 }
 
 func (m *mockProvider) Get(ctx context.Context, key string) (string, error) {
+	m.calls.Add(1)
 	return "value", nil
 }
 
@@ -536,4 +539,54 @@ func TestConcurrentInitStoresAndCloseAreHandledCorrectly(t *testing.T) {
 	})
 
 	wg.Wait()
+}
+
+func TestInitStores_CacheCleanupSurvivesInitialization(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		r := NewRegistry()
+		t.Cleanup(func() {
+			r.Close(t.Context())
+		})
+
+		p := &mockProvider{}
+		err := r.Add("test", func(config json.RawMessage) (kv.Provider, error) {
+			return p, nil
+
+		})
+		require.NoError(t, err)
+
+		cfg := &kv.Config{
+			Cache: kv.CacheConfig{
+				Enabled: true,
+				TTL:     "1s",
+			},
+			Stores: map[string]kv.StoreConfig{
+				"test-store": {Type: "test", Required: true},
+			},
+		}
+
+		err = r.InitStores(t.Context(), cfg)
+		require.NoError(t, err)
+
+		store, err := r.GetStore("test-store")
+		require.NoError(t, err)
+
+		// Populate cache
+		val, err := store.Get(t.Context(), "key1")
+		require.NoError(t, err)
+		require.Equal(t, "value", val)
+		require.Equal(t, int32(1), p.calls.Load())
+
+		// Second call should hit cache (no provider call)
+		_, err = store.Get(t.Context(), "key1")
+		require.NoError(t, err)
+		require.Equal(t, int32(1), p.calls.Load(), "should hit cache")
+
+		time.Sleep(time.Second)
+		synctest.Wait()
+
+		_, err = store.Get(t.Context(), "key1")
+		require.NoError(t, err)
+		require.Equal(t, int32(2), p.calls.Load(), "cache should have cleaned up expired entry")
+	})
 }

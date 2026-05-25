@@ -143,7 +143,7 @@ func (c *Cache) get(key string) (*cacheEntry, bool, bool) {
 	return entry, exists, expired
 }
 
-func (c *Cache) cleanupLoop(ctx context.Context) {
+func (c *Cache) cleanupLoop() {
 	interval := min(c.ttl, c.negativeTTLNotFound, c.negativeTTLTransient)
 	if interval < time.Second {
 		interval = time.Second
@@ -155,8 +155,6 @@ func (c *Cache) cleanupLoop(ctx context.Context) {
 	for {
 		select {
 		case <-c.done:
-			return
-		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			c.cleanup()
@@ -190,7 +188,7 @@ func (c *Cache) cleanup() {
 	c.mu.Unlock()
 }
 
-func NewCache(ctx context.Context, config kv.CacheConfig) (*Cache, error) {
+func NewCache(config kv.CacheConfig) (*Cache, error) {
 	if !config.Enabled {
 		return &Cache{enabled: false, entries: make(map[string]*cacheEntry)}, nil
 	}
@@ -237,7 +235,7 @@ func NewCache(ctx context.Context, config kv.CacheConfig) (*Cache, error) {
 		done:                 make(chan struct{}),
 	}
 
-	go c.cleanupLoop(ctx)
+	go c.cleanupLoop()
 
 	return c, nil
 }

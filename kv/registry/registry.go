@@ -298,7 +298,6 @@ func buildSingleStore(
 	}
 
 	ss, err := store.NewSecretStore(
-		ctx,
 		name,
 		provider,
 		cacheCfg,
