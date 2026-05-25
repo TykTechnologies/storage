@@ -136,7 +136,7 @@ func (c *Cache) get(key string) (*cacheEntry, bool, bool) {
 	entry, exists := c.entries[key]
 
 	var expired bool
-	if entry != nil && now.After(entry.expiresAt) {
+	if entry != nil && !now.Before(entry.expiresAt) {
 		expired = true
 	}
 
@@ -168,7 +168,7 @@ func (c *Cache) cleanup() {
 
 	c.mu.RLock()
 	for k, v := range c.entries {
-		if v == nil || now.After(v.expiresAt) || now.Equal(v.expiresAt) {
+		if v == nil || !now.Before(v.expiresAt) {
 			expired = append(expired, k)
 		}
 	}
@@ -178,16 +178,22 @@ func (c *Cache) cleanup() {
 		return
 	}
 
+	// Recompute the current time under the write lock to avoid deleting entries
+	// that were written (or renewed) during the window between RUnlock and Lock.
+	deleteNow := time.Now()
+
 	c.mu.Lock()
 	for _, k := range expired {
 		entry := c.entries[k]
-		if entry == nil || now.After(entry.expiresAt) || now.Equal(entry.expiresAt) {
+		if entry == nil || !deleteNow.Before(entry.expiresAt) {
 			delete(c.entries, k)
 		}
 	}
 	c.mu.Unlock()
 }
 
+// NewCache creates a TTL-based in-memory cache. When Enabled is true, callers
+// must call Close() to stop the background cleanup goroutine and release resources.
 func NewCache(config kv.CacheConfig) (*Cache, error) {
 	if !config.Enabled {
 		return &Cache{enabled: false, entries: make(map[string]*cacheEntry)}, nil
@@ -196,10 +202,6 @@ func NewCache(config kv.CacheConfig) (*Cache, error) {
 	ttl, err := parseOptionalDuration(config.TTL, defaultTTL, "ttl")
 	if err != nil {
 		return nil, err
-	}
-
-	if ttl <= 0 {
-		return nil, fmt.Errorf("cache ttl must be positive, got %v", config.TTL)
 	}
 
 	refreshBeforeExpiry, err := parseRefreshBeforeExpiry(config.RefreshBeforeExpiry, ttl)

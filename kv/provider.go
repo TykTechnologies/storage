@@ -115,7 +115,7 @@ func AsCloser(p Provider) (Closer, bool) {
 	return As[Closer](p)
 }
 
-// AsTimeouter attempts to extract a Standalone from a Provider.
+// AsStandalone attempts to extract a Standalone from a Provider.
 func AsStandalone(p Provider) (Standalone, bool) {
 	return As[Standalone](p)
 }

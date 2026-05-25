@@ -658,6 +658,7 @@ func TestClose_LifecycleBoundaries(t *testing.T) {
 
 func newTestStore(t *testing.T, provider kv.Provider, cfg kv.CacheConfig) *SecretStore {
 	t.Helper()
+
 	store, err := NewSecretStore("test", provider, cfg)
 	require.NoError(t, err)
 	t.Cleanup(func() {

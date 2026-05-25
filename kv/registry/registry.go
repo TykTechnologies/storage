@@ -56,7 +56,7 @@ func NewRegistry(opts ...Option) *Registry {
 func NewDefaultRegistry(opts ...Option) *Registry {
 	r := NewRegistry(opts...)
 
-	// FIX: Uncomment provider registration when implementation is added
+	// TODO: Uncomment provider registration when implementation is added
 	// r.Add(kv.Env, env.NewFactory())
 	// r.Add(kv.Inline, inline.NewFactory())
 	// r.Add(kv.Vault, vault.NewFactory())
@@ -68,8 +68,6 @@ func NewDefaultRegistry(opts ...Option) *Registry {
 
 // Add registers a provider factory for the given provider type.
 func (r *Registry) Add(pt kv.ProviderType, factory kv.ProviderFactory) error {
-	// In Go string literals are considered untyped string constants. The compiler
-	// won't scream if caller pass the empty string argument as provider type.
 	if pt == "" {
 		return errors.New("provider type cannot be empty")
 	}
@@ -140,8 +138,6 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 
 	// This defer block guarantees cleanup of partially initialized stores if the
 	// overall initialization process fails, preventing resource leaks.
-	// It relies on the named return variable. In Go, executing `return someErr`
-	// implicitly assigns the value to `err` right before this defer runs.
 	defer func() {
 		if err != nil {
 			r.isInitialized.Store(false)
@@ -208,13 +204,13 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 		return err
 	}
 
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	// Double-check registry wasn't closed during the initialization
 	if !r.isInitialized.Load() {
 		return errors.New("registry was closed during initialization")
 	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	for name, store := range tempStores {
 		r.stores[name] = store
@@ -240,31 +236,30 @@ func (r *Registry) GetStore(name string) (kv.Provider, error) {
 // Close gracefully shuts down all initialized stores.
 func (r *Registry) Close(ctx context.Context) error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
+	stores := r.stores
+	r.stores = make(map[string]kv.Provider)
+	r.isInitialized.Store(false)
+	r.mu.Unlock()
 
-	errCh := make(chan error, len(r.stores))
-	var wg sync.WaitGroup
+	var (
+		mu   sync.Mutex
+		errs []error
+		wg   sync.WaitGroup
+	)
 
-	for name, store := range r.stores {
+	for name, store := range stores {
 		wg.Go(func() {
 			if closer, ok := kv.AsCloser(store); ok {
 				if err := closer.Close(ctx); err != nil {
-					errCh <- fmt.Errorf("failed to close store %q: %w", name, err)
+					mu.Lock()
+					errs = append(errs, fmt.Errorf("failed to close store %q: %w", name, err))
+					mu.Unlock()
 				}
 			}
 		})
 	}
 
 	wg.Wait()
-	close(errCh)
-
-	var errs []error
-	for err := range errCh {
-		errs = append(errs, err)
-	}
-
-	r.stores = make(map[string]kv.Provider)
-	r.isInitialized.Store(false)
 
 	return errors.Join(errs...)
 }

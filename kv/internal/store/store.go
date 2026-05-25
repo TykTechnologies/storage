@@ -80,7 +80,6 @@ func (s *SecretStore) Get(ctx context.Context, path string) (string, error) {
 			return "", res.Err
 		}
 
-		// Providers always return string
 		v, ok := res.Val.(string)
 		if !ok {
 			return "", fmt.Errorf(

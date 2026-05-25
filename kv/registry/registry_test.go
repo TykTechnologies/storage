@@ -293,7 +293,7 @@ func TestInitStores_EdgeCases(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("should close temporaly added stores when required store failed", func(t *testing.T) {
+	t.Run("should close temporarily added stores when required store failed", func(t *testing.T) {
 		// We have to iterate over until valid store is initialized because
 		// we have map non-deterministic iteration order.
 		for {
@@ -544,6 +544,7 @@ func TestConcurrentInitStoresAndCloseAreHandledCorrectly(t *testing.T) {
 func TestInitStores_CacheCleanupSurvivesInitialization(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		r := NewRegistry()
+
 		t.Cleanup(func() {
 			r.Close(t.Context())
 		})
@@ -551,7 +552,6 @@ func TestInitStores_CacheCleanupSurvivesInitialization(t *testing.T) {
 		p := &mockProvider{}
 		err := r.Add("test", func(config json.RawMessage) (kv.Provider, error) {
 			return p, nil
-
 		})
 		require.NoError(t, err)
 
