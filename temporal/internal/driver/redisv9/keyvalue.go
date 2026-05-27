@@ -472,6 +472,14 @@ func (r *RedisV9) SetIfNotExist(ctx context.Context, key, value string, expirati
 	return res.Val(), nil
 }
 
+func (r *RedisV9) SetIfExist(ctx context.Context, key, value string, expiration time.Duration) (bool, error) {
+	if key == "" {
+		return false, temperr.KeyEmpty
+	}
+
+	return r.client.SetXX(ctx, key, value, expiration).Result()
+}
+
 func fetchKeysWithCursor(ctx context.Context,
 	client redis.UniversalClient,
 	pattern string,
