@@ -3,6 +3,8 @@ package redisv9
 import (
 	"context"
 	"crypto/tls"
+	"embed"
+	"fmt"
 	"time"
 
 	"github.com/TykTechnologies/storage/temporal/internal/helper"
@@ -20,7 +22,13 @@ type RedisV9 struct {
 	cfg       *model.RedisOptions
 	onConnect func(context.Context) error
 	retryCfg  *model.RetryOptions
+
+	deleteAtomicScript *redis.Script
+	setAtomicScript    *redis.Script
 }
+
+//go:embed scripts/*.lua
+var luaScripts embed.FS
 
 // NewList returns a new RedisV9 instance.
 func NewRedisV9WithOpts(options ...model.Option) (*RedisV9, error) {
@@ -101,6 +109,10 @@ func NewRedisV9WithOpts(options ...model.Option) (*RedisV9, error) {
 
 	driver.client = client
 
+	if err := driver.loadScripts(); err != nil {
+		return nil, err
+	}
+
 	return driver, nil
 }
 
@@ -111,5 +123,29 @@ func NewRedisV9WithConnection(conn model.Connector) (*RedisV9, error) {
 		return nil, temperr.InvalidConnector
 	}
 
-	return &RedisV9{connector: conn, client: client}, nil
+	r := &RedisV9{connector: conn, client: client}
+
+	if err := r.loadScripts(); err != nil {
+		return nil, err
+	}
+
+	return r, nil
+}
+
+func (r *RedisV9) loadScripts() error {
+	for _, script := range []struct {
+		ptr  **redis.Script
+		path string
+	}{
+		{&r.deleteAtomicScript, "scripts/atomic_delete.lua"},
+		{&r.setAtomicScript, "scripts/atomic_set.lua"},
+	} {
+		if data, err := luaScripts.ReadFile(script.path); err != nil {
+			return fmt.Errorf("failed to load lua script: %w", err)
+		} else {
+			*script.ptr = redis.NewScript(string(data))
+		}
+	}
+
+	return nil
 }

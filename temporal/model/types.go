@@ -58,8 +58,15 @@ type KeyValue interface {
 	// SetIfNotExist sets the string value of a key if the key does not exist.
 	// Returns true if the key was set, false otherwise.
 	SetIfNotExist(ctx context.Context, key, value string, expiration time.Duration) (bool, error)
+	// SetAtomic sets the string value of a key if the was not remove by .
+	// Returns true if the key was set, false otherwise.
+	SetAtomic(ctx context.Context, key, value string, ttl time.Duration) (bool, error)
 	// Delete removes the specified keys
 	Delete(ctx context.Context, key string) error
+	// DeleteAtomic removes the specified keys.
+	// Deletes the key and puts block on the key for TTL provided in options.
+	// All the subsequent SetAtomic operations would fail until TTL expires.
+	DeleteAtomic(ctx context.Context, key string, opts ...DeleteAtomicOpt) (bool, error)
 	// Increment atomically increments the integer value of a key by one
 	Increment(ctx context.Context, key string) (newValue int64, err error)
 	// Decrement atomically decrements the integer value of a key by one
@@ -163,4 +170,22 @@ type Message interface {
 	// - the subscription kind (e.g. "subscribe", "unsubscribe")
 	// - an empty string, returning an error
 	Payload() (string, error)
+}
+
+type DeleteAtomicOption struct {
+	TTL time.Duration
+}
+
+func DefaultDeleteAtomicOption() DeleteAtomicOption {
+	return DeleteAtomicOption{
+		TTL: time.Minute,
+	}
+}
+
+type DeleteAtomicOpt func(*DeleteAtomicOption)
+
+func WithDeleteAtomicTtl(ttl time.Duration) DeleteAtomicOpt {
+	return func(option *DeleteAtomicOption) {
+		option.TTL = ttl
+	}
 }

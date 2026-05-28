@@ -14,6 +14,7 @@ import (
 	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestKeyValue_Set(t *testing.T) {
@@ -1350,4 +1351,45 @@ func TestKeyValue_SetIfNotExist(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestTombstoneManager(t *testing.T) {
+	ctx := context.Background()
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
+
+	for _, connector := range connectors {
+		t.Run(connector.Type(), func(t *testing.T) {
+			kv, err := NewKeyValue(connector)
+			assert.Nil(t, err)
+
+			t.Run("Atomic Delete blocks subsequent Atomic Set", func(t *testing.T) {
+				key := "test_key_1"
+
+				delSuccess, err := kv.DeleteAtomic(ctx, key)
+				require.NoError(t, err)
+				assert.True(t, delSuccess)
+
+				setSuccess, err := kv.SetAtomic(ctx, key, "some_value", 0)
+				require.NoError(t, err)
+				assert.False(t, setSuccess)
+
+				_, err = kv.Get(ctx, key)
+				assert.Equal(t, temperr.KeyNotFound, err)
+			})
+
+			t.Run("Atomic Set succeeds when no tombstone exists", func(t *testing.T) {
+				key := "test_key_2"
+
+				setSuccess, err := kv.SetAtomic(ctx, key, "valid_value", 0)
+				require.NoError(t, err)
+				assert.True(t, setSuccess)
+
+				val, err := kv.Get(ctx, key)
+				require.NoError(t, err)
+				assert.Equal(t, "valid_value", val)
+			})
+		})
+	}
+
 }

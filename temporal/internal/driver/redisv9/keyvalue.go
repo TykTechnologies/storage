@@ -7,8 +7,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/redis/go-redis/v9"
+)
+
+// var luaScripts embed.FS
+const (
+	atomicDeleteZsetKey = "system.delete_atomic"
 )
 
 // Get retrieves the value for a given key from Redis
@@ -470,6 +476,38 @@ func (r *RedisV9) SetIfNotExist(ctx context.Context, key, value string, expirati
 	}
 
 	return res.Val(), nil
+}
+
+func (r *RedisV9) SetAtomic(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
+	now := time.Now().Unix()
+
+	// KEYS: [key, zsetKey], ARGV: [value, now]
+	res, err := r.setAtomicScript.
+		Run(ctx, r.client, []string{key, atomicDeleteZsetKey}, value, now, int64(ttl.Seconds())).
+		Result()
+
+	if err != nil {
+		return false, err
+	}
+
+	return res.(int64) == 1, nil
+}
+
+func (r *RedisV9) DeleteAtomic(ctx context.Context, key string, opts ...model.DeleteAtomicOpt) (bool, error) {
+	opt := model.DefaultDeleteAtomicOption()
+	for _, apply := range opts {
+		apply(&opt)
+	}
+
+	ttl := opt.TTL.Seconds()
+	now := time.Now().Unix()
+
+	res, err := r.deleteAtomicScript.Run(ctx, r.client, []string{key, atomicDeleteZsetKey}, now, ttl).Result()
+	if err != nil {
+		return false, err
+	}
+
+	return res.(int64) == 1, nil
 }
 
 func fetchKeysWithCursor(ctx context.Context,
