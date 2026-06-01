@@ -14,6 +14,7 @@ import (
 	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestKeyValue_Set(t *testing.T) {
@@ -1349,5 +1350,47 @@ func TestKeyValue_SetIfNotExist(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestKeyValue_SetIfExist(t *testing.T) {
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
+
+	for _, connector := range connectors {
+		t.Run(connector.Type(), func(t *testing.T) {
+			ctx := context.Background()
+			kv, err := NewKeyValue(connector)
+			require.Nil(t, err)
+
+			flusher, err := flusher.NewFlusher(connector)
+			assert.Nil(t, err)
+			defer assert.Nil(t, flusher.FlushAll(ctx))
+
+			t.Run("does not set key if key does not exist", func(t *testing.T) {
+				const key = "non_existent_key"
+				ok, err := kv.SetIfExist(t.Context(), key, "value", 0)
+				assert.False(t, ok)
+				assert.NoError(t, err)
+
+				_, err = kv.Get(t.Context(), key)
+				assert.ErrorIs(t, err, temperr.KeyNotFound)
+			})
+
+			t.Run("overrides key of already exists", func(t *testing.T) {
+				const key = "existent_key"
+
+				err := kv.Set(t.Context(), key, "value1", 0)
+				assert.NoError(t, err)
+
+				ok, err := kv.SetIfExist(t.Context(), key, "value2", 0)
+				assert.True(t, ok)
+				assert.NoError(t, err)
+
+				v, err := kv.Get(t.Context(), key)
+				assert.Equal(t, "value2", v)
+				assert.NoError(t, err)
+			})
+		})
 	}
 }
