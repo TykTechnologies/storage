@@ -1391,6 +1391,12 @@ func TestKeyValue_SetIfExist(t *testing.T) {
 				assert.Equal(t, "value2", v)
 				assert.NoError(t, err)
 			})
+
+			t.Run("returns err if empty key was given", func(t *testing.T) {
+				ok, err := kv.SetIfExist(t.Context(), "", "1", 0)
+				assert.False(t, ok)
+				assert.ErrorIs(t, err, temperr.KeyEmpty)
+			})
 		})
 	}
 }
