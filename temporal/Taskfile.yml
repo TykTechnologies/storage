@@ -38,4 +38,4 @@ tasks:
     status:
       - type mockery
     cmds:
-      - go install github.com/vektra/mockery/v2@v2.38.0
+      - go install github.com/vektra/mockery/v2@v2.53.6
