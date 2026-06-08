@@ -2,11 +2,13 @@ package resolver_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/TykTechnologies/storage/kv"
 	"github.com/TykTechnologies/storage/kv/resolver"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type mockProvider struct {
@@ -259,105 +261,107 @@ func TestResolve_InlineToken_StoreNotFound(t *testing.T) {
 // ResolveAll
 // --------------------------------------------------------------------------
 
-// func TestResolveAll_FlatDocument(t *testing.T) {
-// 	getter := newGetter(map[string]kv.Provider{
-// 		"env": &mockProvider{value: "resolved-value"},
-// 	})
-// 	r := resolver.NewResolver(getter, nil)
-//
-// 	input := []byte(`{"host":"kv://env/HOST","port":"5432"}`)
-//
-// 	got, err := r.ResolveAll(t.Context(), input)
-// 	if err != nil {
-// 		t.Fatalf("unexpected error: %v", err)
-// 	}
-//
-// 	// port should be preserved, host should be resolved.
-// 	if !bytes.Equal(got, input) {
-// 		t.Error("expected document to change after resolution")
-// 	}
-// }
+func TestResolveAll_FlatDocument(t *testing.T) {
+	getter := newGetter(map[string]kv.Provider{
+		"env": &mockProvider{value: "resolved-value"},
+	})
+	r := resolver.NewResolver(getter, nil)
 
-// func TestResolveAll_NestedObjectAndArray(t *testing.T) {
-// 	getter := newGetter(map[string]kv.Provider{
-// 		"env": &mockProvider{value: "deep-value"},
-// 	})
-// 	r := resolver.NewResolver(getter, nil)
-//
-// 	input := []byte(`{"outer":{"inner":"kv://env/KEY","list":["kv://env/A","plain"]}}`)
-//
-// 	got, err := r.ResolveAll(context.Background(), input)
-// 	if err != nil {
-// 		t.Fatalf("unexpected error: %v", err)
-// 	}
-//
-// 	_ = got // structural correctness checked below via no-error
-// }
+	input := []byte(`{"host":"kv://env/HOST","port":"5432"}`)
 
-// func TestResolveAll_NonStringValuesPreserved(t *testing.T) {
-// 	getter := newGetter(map[string]kv.Provider{
-// 		"env": &mockProvider{value: "ok"},
-// 	})
-// 	r := resolver.NewResolver(getter, nil)
-//
-// 	input := []byte(`{"flag":true,"count":42,"nothing":null,"name":"kv://env/NAME"}`)
-//
-// 	got, err := r.ResolveAll(context.Background(), input)
-// 	if err != nil {
-// 		t.Fatalf("unexpected error: %v", err)
-// 	}
-//
-// 	_ = got
-// }
+	got, err := r.ResolveAll(t.Context(), input)
+	assert.NoError(t, err)
 
-// func TestResolveAll_NoKVReferences_ReturnedUnchanged(t *testing.T) {
-// 	r := resolver.NewResolver(newGetter(nil), nil)
-//
-// 	input := []byte(`{"host":"localhost","port":5432}`)
-//
-// 	got, err := r.ResolveAll(context.Background(), input)
-// 	if err != nil {
-// 		t.Fatalf("unexpected error: %v", err)
-// 	}
-// 	// Content must be semantically identical (JSON round-trip may reformat).
-// 	if len(got) == 0 {
-// 		t.Error("expected non-empty output")
-// 	}
-// }
-//
-// func TestResolveAll_EmptyDocument(t *testing.T) {
-// 	r := resolver.NewResolver(newGetter(nil), nil)
-//
-// 	got, err := r.ResolveAll(context.Background(), []byte(`{}`))
-// 	if err != nil {
-// 		t.Fatalf("unexpected error: %v", err)
-// 	}
-//
-// 	if len(got) == 0 {
-// 		t.Error("expected non-empty output for empty document")
-// 	}
-// }
-//
-// func TestResolveAll_OneFieldFails_ErrorReturned(t *testing.T) {
-// 	getter := newGetter(nil) // no stores registered → any kv:// ref fails
-// 	r := resolver.NewResolver(getter, nil)
-//
-// 	input := []byte(`{"a":"kv://missing/key","b":"plain"}`)
-//
-// 	_, err := r.ResolveAll(context.Background(), input)
-// 	if err == nil {
-// 		t.Fatal("expected error when a field fails to resolve")
-// 	}
-// }
-//
-// func TestResolveAll_InvalidJSON_Input(t *testing.T) {
-// 	r := resolver.NewResolver(newGetter(nil), nil)
-//
-// 	_, err := r.ResolveAll(context.Background(), []byte(`not json`))
-// 	if err == nil {
-// 		t.Fatal("expected error for invalid JSON input")
-// 	}
-// }
+	var result map[string]string
+	require.NoError(t, json.Unmarshal(got, &result))
+	assert.Equal(t, "resolved-value", result["host"])
+	assert.Equal(t, "5432", result["port"])
+}
+
+func TestResolveAll_NestedObjectAndArray(t *testing.T) {
+	getter := newGetter(map[string]kv.Provider{
+		"env": &mockProvider{value: "deep-value"},
+	})
+	r := resolver.NewResolver(getter, nil)
+
+	input := []byte(`{"outer":{"inner":"kv://env/KEY","list":["kv://env/A","plain"]}}`)
+
+	got, err := r.ResolveAll(t.Context(), input)
+	assert.NoError(t, err)
+
+	type nested struct {
+		Outer struct {
+			Inner string   `json:"inner"`
+			List  []string `json:"list"`
+		} `json:"outer"`
+	}
+	var result nested
+	require.NoError(t, json.Unmarshal(got, &result))
+	assert.Equal(t, "deep-value", result.Outer.Inner)
+	assert.Equal(t, "deep-value", result.Outer.List[0])
+	assert.Equal(t, "plain", result.Outer.List[1])
+}
+
+func TestResolveAll_NonStringValuesPreserved(t *testing.T) {
+	getter := newGetter(map[string]kv.Provider{
+		"env": &mockProvider{value: "ok"},
+	})
+	r := resolver.NewResolver(getter, nil)
+
+	input := []byte(`{"flag":true,"count":42,"nothing":null,"name":"kv://env/NAME"}`)
+
+	got, err := r.ResolveAll(t.Context(), input)
+	assert.NoError(t, err)
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(got, &result))
+	assert.Equal(t, true, result["flag"])
+	assert.Equal(t, float64(42), result["count"])
+	assert.Nil(t, result["nothing"])
+	assert.Equal(t, "ok", result["name"])
+}
+
+func TestResolveAll_NoKVReferences_ReturnedUnchanged(t *testing.T) {
+	r := resolver.NewResolver(newGetter(nil), nil)
+
+	input := []byte(`{"host":"localhost","port":5432}`)
+
+	got, err := r.ResolveAll(t.Context(), input)
+	assert.NoError(t, err)
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(got, &result))
+	assert.Equal(t, "localhost", result["host"])
+	assert.Equal(t, float64(5432), result["port"])
+}
+
+func TestResolveAll_EmptyDocument(t *testing.T) {
+	r := resolver.NewResolver(newGetter(nil), nil)
+
+	got, err := r.ResolveAll(t.Context(), []byte(`{}`))
+	assert.NoError(t, err)
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(got, &result))
+	assert.Empty(t, result)
+}
+
+func TestResolveAll_OneFieldFails_ErrorReturned(t *testing.T) {
+	getter := newGetter(nil) // no stores registered → any kv:// ref fails
+	r := resolver.NewResolver(getter, nil)
+
+	input := []byte(`{"a":"kv://missing/key","b":"plain"}`)
+
+	_, err := r.ResolveAll(t.Context(), input)
+	assert.ErrorIs(t, err, kv.ErrStoreNotFound)
+}
+
+func TestResolveAll_InvalidJSON_Input(t *testing.T) {
+	r := resolver.NewResolver(newGetter(nil), nil)
+
+	_, err := r.ResolveAll(t.Context(), []byte(`not json`))
+	assert.Error(t, err)
+}
 
 // --------------------------------------------------------------------------
 // Benchmarks

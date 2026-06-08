@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -111,7 +112,19 @@ func (r *resolver) Resolve(ctx context.Context, input string) (string, error) {
 }
 
 func (r *resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, error) {
-	return nil, nil
+	var doc any
+	if err := json.Unmarshal(rawJSON, &doc); err != nil {
+		// TODO: Update error message
+		return nil, fmt.Errorf("failed to resolve all: %w", err)
+	}
+
+	resolved, err := r.walkAndResolve(ctx, doc)
+	if err != nil {
+		// TODO: Update error message
+		return nil, fmt.Errorf("failed to resolve all: %w", err)
+	}
+
+	return json.Marshal(resolved)
 }
 
 func (r *resolver) fetchAndExtract(ctx context.Context, storeName, path, fragment string) (string, error) {
@@ -130,4 +143,33 @@ func (r *resolver) fetchAndExtract(ctx context.Context, storeName, path, fragmen
 	}
 
 	return extractJSONPointer(raw, fragment)
+}
+
+func (r *resolver) walkAndResolve(ctx context.Context, node any) (any, error) {
+	switch v := node.(type) {
+	case string:
+		return r.Resolve(ctx, v)
+	case map[string]any:
+		for key, value := range v {
+			resolved, err := r.walkAndResolve(ctx, value)
+			if err != nil {
+				return nil, fmt.Errorf("field %q: %w", key, err)
+			}
+
+			v[key] = resolved
+		}
+	case []any:
+		for i, value := range v {
+			resolved, err := r.walkAndResolve(ctx, value)
+			if err != nil {
+				return nil, fmt.Errorf("index %d: %w", i, err)
+			}
+
+			v[i] = resolved
+		}
+	default:
+		return v, nil
+	}
+
+	return node, nil
 }
