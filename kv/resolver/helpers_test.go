@@ -72,7 +72,7 @@ func TestExtractJSONPointer(t *testing.T) {
 			name:     "object leaf re-serialized as JSON",
 			raw:      `{"db":{"host":"localhost","port":5432}}`,
 			fragment: "/db",
-			want:     "", // non-empty JSON, checked separately below
+			want:     `{"host":"localhost","port":5432}`,
 		},
 		{
 			name:     "object then object then array index",
@@ -165,12 +165,6 @@ func TestExtractJSONPointer(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-
-			if tc.want == "" {
-				assert.NotEmpty(t, got)
-				return
-			}
-
 			assert.Equal(t, tc.want, got)
 		})
 	}

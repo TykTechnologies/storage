@@ -83,7 +83,7 @@ func (r *resolver) Resolve(ctx context.Context, input string) (string, error) {
 			return match
 		}
 
-		// Strip "kv{}"
+		// strip "$kv{" prefix and "}" suffix
 		inner := match[4 : len(match)-1]
 
 		colonIdx := strings.IndexByte(inner, ':')

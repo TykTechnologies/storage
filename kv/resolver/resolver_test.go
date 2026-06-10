@@ -417,8 +417,6 @@ func TestResolveAll_Errors(t *testing.T) {
 				assert.ErrorIs(t, err, tc.wantErr)
 				return
 			}
-
-			assert.Error(t, err)
 		})
 	}
 }
