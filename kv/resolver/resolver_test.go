@@ -12,11 +12,13 @@ import (
 )
 
 type mockProvider struct {
-	value string
-	err   error
+	value   string
+	err     error
+	lastKey string
 }
 
-func (m *mockProvider) Get(_ context.Context, _ string) (string, error) {
+func (m *mockProvider) Get(_ context.Context, key string) (string, error) {
+	m.lastKey = key
 	return m.value, m.err
 }
 
@@ -167,6 +169,56 @@ func TestResolve(t *testing.T) {
 
 			assert.NoError(t, err)
 			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestResolve_PathRouting(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		input   string
+		wantKey string
+	}{
+		{
+			name:    "kv:// single-segment path",
+			input:   "kv://vault/secret",
+			wantKey: "secret",
+		},
+		{
+			name:    "kv:// multi-segment path",
+			input:   "kv://vault/db/creds",
+			wantKey: "db/creds",
+		},
+		{
+			name:    "kv:// path with fragment stripped before Get",
+			input:   "kv://vault/db/creds#password",
+			wantKey: "db/creds",
+		},
+		{
+			name:    "inline $kv{} path",
+			input:   "$kv{vault:db/creds}",
+			wantKey: "db/creds",
+		},
+		{
+			name:    "inline $kv{} path with fragment stripped before Get",
+			input:   "$kv{vault:db/creds#password}",
+			wantKey: "db/creds",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			provider := &mockProvider{value: `{"password":"secret"}`}
+			getter := &mockStoreGetter{stores: map[string]kv.Provider{"vault": provider}}
+			r := resolver.NewResolver(getter)
+
+			_, err := r.Resolve(t.Context(), tc.input)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.wantKey, provider.lastKey)
 		})
 	}
 }
