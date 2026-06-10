@@ -200,10 +200,6 @@ func TestResolve_JSONPointer_ObjectLeaf_ReserializedAsJSON(t *testing.T) {
 	assert.NotEmpty(t, got)
 }
 
-// --------------------------------------------------------------------------
-// ResolveAll
-// --------------------------------------------------------------------------
-
 func TestResolveAll_FlatDocument(t *testing.T) {
 	getter := newGetter(map[string]kv.Provider{
 		"env": &mockProvider{value: "resolved-value"},
@@ -289,21 +285,41 @@ func TestResolveAll_EmptyDocument(t *testing.T) {
 	assert.Empty(t, result)
 }
 
-func TestResolveAll_OneFieldFails_ErrorReturned(t *testing.T) {
-	getter := newGetter(nil) // no stores registered → any kv:// ref fails
-	r := resolver.NewResolver(getter, nil)
+func TestResolveAll_Errors(t *testing.T) {
+	t.Parallel()
 
-	input := []byte(`{"a":"kv://missing/key","b":"plain"}`)
+	tests := []struct {
+		name    string
+		stores  map[string]kv.Provider
+		input   []byte
+		wantErr error
+	}{
+		{
+			name:    "unresolvable kv reference returns store error",
+			input:   []byte(`{"a":"kv://missing/key","b":"plain"}`),
+			wantErr: kv.ErrStoreNotFound,
+		},
+		{
+			name:  "invalid JSON input returns error",
+			input: []byte(`not json`),
+		},
+	}
 
-	_, err := r.ResolveAll(t.Context(), input)
-	assert.ErrorIs(t, err, kv.ErrStoreNotFound)
-}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-func TestResolveAll_InvalidJSON_Input(t *testing.T) {
-	r := resolver.NewResolver(newGetter(nil), nil)
+			r := resolver.NewResolver(newGetter(tc.stores), nil)
+			_, err := r.ResolveAll(t.Context(), tc.input)
 
-	_, err := r.ResolveAll(t.Context(), []byte(`not json`))
-	assert.Error(t, err)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+
+			assert.Error(t, err)
+		})
+	}
 }
 
 // --------------------------------------------------------------------------
