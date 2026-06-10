@@ -10,7 +10,7 @@ import (
 func extractJSONPointer(raw, fragment string) (string, error) {
 	var doc any
 	if err := json.Unmarshal([]byte(raw), &doc); err != nil {
-		return "", ErrInvalidJSON
+		return "", fmt.Errorf("%w: %w", ErrInvalidJSON, err)
 	}
 
 	// Normalize fragment with leading "/"
@@ -32,7 +32,7 @@ func extractJSONPointer(raw, fragment string) (string, error) {
 		case map[string]any:
 			val, ok := v[seg]
 			if !ok {
-				return "", fmt.Errorf("%w: segment %q", ErrFieldNotFound, seg)
+				return "", fmt.Errorf("%w: %q", ErrFieldNotFound, seg)
 			}
 
 			current = val
@@ -40,18 +40,13 @@ func extractJSONPointer(raw, fragment string) (string, error) {
 		case []any:
 			idx, err := strconv.Atoi(seg)
 			if err != nil || idx < 0 || idx >= len(v) {
-				return "", fmt.Errorf("%w: index %q", ErrFieldNotFound, seg)
+				return "", fmt.Errorf("%w: %q", ErrFieldNotFound, seg)
 			}
 
 			current = v[idx]
 
 		default:
-			return "", fmt.Errorf(
-				"%w: cannot traverse into %T with segment %q",
-				ErrFieldNotFound,
-				current,
-				seg,
-			)
+			return "", fmt.Errorf("%w: %q", ErrFieldNotFound, seg)
 		}
 	}
 

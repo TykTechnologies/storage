@@ -48,18 +48,6 @@ func NewResolver(registry StoreGetter, logger kv.Logger) Resolver {
 
 var inlineRe = regexp.MustCompile(`\$kv\{([^}]+)\}`)
 
-// input like - kv://store-name/some-stuff#field
-// This method should parse it and detect the kv:// or $kv{
-// It should detect the 3 parts of the string, store-name, key and field within value if provided.
-// To detect this parts we need some regex probably.
-// When we get the parts, we should validate them.
-// When every values is validated we're trying to get store first, check if its present,
-// return error if its not.
-// If the field is present we should JSON unmarshal the value and search for the field. Return error
-// if its not present OR if its empty. I have to clarify this with Andy but it looks logical to me
-// that if the value is empty something is wrong and the client should know that they put empty value.
-// Warning maeby?
-// If an input is inline we have to inject result to the string and return complete result
 func (r *resolver) Resolve(ctx context.Context, input string) (string, error) {
 	if strings.HasPrefix(input, "kv://") {
 		trimmed := strings.TrimPrefix(input, "kv://")
@@ -114,14 +102,12 @@ func (r *resolver) Resolve(ctx context.Context, input string) (string, error) {
 func (r *resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, error) {
 	var doc any
 	if err := json.Unmarshal(rawJSON, &doc); err != nil {
-		// TODO: Update error message
-		return nil, fmt.Errorf("failed to resolve all: %w", err)
+		return nil, fmt.Errorf("invalid JSON input: %w", err)
 	}
 
 	resolved, err := r.walkAndResolve(ctx, doc)
 	if err != nil {
-		// TODO: Update error message
-		return nil, fmt.Errorf("failed to resolve all: %w", err)
+		return nil, err
 	}
 
 	return json.Marshal(resolved)
@@ -130,7 +116,7 @@ func (r *resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, erro
 func (r *resolver) fetchAndExtract(ctx context.Context, storeName, path, fragment string) (string, error) {
 	store, err := r.registry.GetStore(storeName)
 	if err != nil {
-		return "", fmt.Errorf("get store %q: %w", storeName, err)
+		return "", err
 	}
 
 	raw, err := store.Get(ctx, path)
