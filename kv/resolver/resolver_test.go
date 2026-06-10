@@ -309,6 +309,27 @@ func TestResolveAll_FlatDocument(t *testing.T) {
 	assert.Equal(t, "5432", result["port"])
 }
 
+func TestResolveAll_MixedSyntax(t *testing.T) {
+	t.Parallel()
+
+	provider := &mockProvider{value: "resolved"}
+	getter := newGetter(map[string]kv.Provider{"env": provider})
+	r := resolver.NewResolver(getter)
+
+	input := []byte(`{
+        "host": "kv://env/HOST",
+        "dsn":  "postgres://$kv{env:USER}@localhost/db"
+    }`)
+
+	got, err := r.ResolveAll(t.Context(), input)
+	require.NoError(t, err)
+
+	var result map[string]string
+	require.NoError(t, json.Unmarshal(got, &result))
+	assert.Equal(t, "resolved", result["host"])
+	assert.Equal(t, "postgres://resolved@localhost/db", result["dsn"])
+}
+
 func TestResolveAll_NestedObjectAndArray(t *testing.T) {
 	t.Parallel()
 
