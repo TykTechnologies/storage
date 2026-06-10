@@ -141,13 +141,23 @@ func TestResolve(t *testing.T) {
 			input:   "prefix-$kv{ghost:key}-suffix",
 			wantErr: kv.ErrStoreNotFound,
 		},
+		{
+			name:    "malformed kv:// missing slash",
+			input:   "kv://nopath",
+			wantErr: resolver.ErrMalformedReference,
+		},
+		{
+			name:    "malformed $kv{} missing colon",
+			input:   "$kv{nocolon}",
+			wantErr: resolver.ErrMalformedReference,
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			r := resolver.NewResolver(newGetter(tc.stores), nil)
+			r := resolver.NewResolver(newGetter(tc.stores))
 			got, err := r.Resolve(t.Context(), tc.input)
 
 			if tc.wantErr != nil {
@@ -162,10 +172,12 @@ func TestResolve(t *testing.T) {
 }
 
 func TestResolve_KeyNotFound(t *testing.T) {
+	t.Parallel()
+
 	getter := newGetter(map[string]kv.Provider{
 		"env": &mockProvider{err: &kv.KeyNotFoundError{StoreName: "env", KeyPath: "MISSING"}},
 	})
-	r := resolver.NewResolver(getter, nil)
+	r := resolver.NewResolver(getter)
 
 	_, err := r.Resolve(t.Context(), "kv://env/MISSING")
 
@@ -174,10 +186,12 @@ func TestResolve_KeyNotFound(t *testing.T) {
 }
 
 func TestResolve_WholeValue_FragmentNormalization(t *testing.T) {
+	t.Parallel()
+
 	getter := newGetter(map[string]kv.Provider{
 		"env": &mockProvider{value: `{"password":"secret"}`},
 	})
-	r := resolver.NewResolver(getter, nil)
+	r := resolver.NewResolver(getter)
 
 	withoutSlash, err := r.Resolve(t.Context(), "kv://env/MY_KEY#password")
 	assert.NoError(t, err)
@@ -189,22 +203,48 @@ func TestResolve_WholeValue_FragmentNormalization(t *testing.T) {
 	assert.Equal(t, "secret", withSlash)
 }
 
+func TestResolve_Inline_FragmentNormalization(t *testing.T) {
+	t.Parallel()
+
+	getter := newGetter(map[string]kv.Provider{
+		"env": &mockProvider{value: `{"password":"secret"}`},
+	})
+	r := resolver.NewResolver(getter)
+
+	withoutSlash, err := r.Resolve(t.Context(), "prefix-$kv{env:MY_KEY#password}-suffix")
+	assert.NoError(t, err)
+
+	withSlash, err := r.Resolve(t.Context(), "prefix-$kv{env:MY_KEY#/password}-suffix")
+	assert.NoError(t, err)
+
+	assert.Equal(t, withoutSlash, withSlash)
+	assert.Equal(t, "prefix-secret-suffix", withSlash)
+}
+
 func TestResolve_JSONPointer_ObjectLeaf_ReserializedAsJSON(t *testing.T) {
+	t.Parallel()
+
 	getter := newGetter(map[string]kv.Provider{
 		"vault": &mockProvider{value: `{"db":{"host":"localhost","port":5432}}`},
 	})
-	r := resolver.NewResolver(getter, nil)
+	r := resolver.NewResolver(getter)
 
 	got, err := r.Resolve(t.Context(), "kv://vault/secret#/db")
 	assert.NoError(t, err)
-	assert.NotEmpty(t, got)
+
+	var reserialized map[string]any
+	assert.NoError(t, json.Unmarshal([]byte(got), &reserialized))
+	assert.Equal(t, "localhost", reserialized["host"])
+	assert.Equal(t, float64(5432), reserialized["port"])
 }
 
 func TestResolveAll_FlatDocument(t *testing.T) {
+	t.Parallel()
+
 	getter := newGetter(map[string]kv.Provider{
 		"env": &mockProvider{value: "resolved-value"},
 	})
-	r := resolver.NewResolver(getter, nil)
+	r := resolver.NewResolver(getter)
 
 	input := []byte(`{"host":"kv://env/HOST","port":"5432"}`)
 
@@ -218,10 +258,12 @@ func TestResolveAll_FlatDocument(t *testing.T) {
 }
 
 func TestResolveAll_NestedObjectAndArray(t *testing.T) {
+	t.Parallel()
+
 	getter := newGetter(map[string]kv.Provider{
 		"env": &mockProvider{value: "deep-value"},
 	})
-	r := resolver.NewResolver(getter, nil)
+	r := resolver.NewResolver(getter)
 
 	input := []byte(`{"outer":{"inner":"kv://env/KEY","list":["kv://env/A","plain"]}}`)
 
@@ -242,10 +284,12 @@ func TestResolveAll_NestedObjectAndArray(t *testing.T) {
 }
 
 func TestResolveAll_NonStringValuesPreserved(t *testing.T) {
+	t.Parallel()
+
 	getter := newGetter(map[string]kv.Provider{
 		"env": &mockProvider{value: "ok"},
 	})
-	r := resolver.NewResolver(getter, nil)
+	r := resolver.NewResolver(getter)
 
 	input := []byte(`{"flag":true,"count":42,"nothing":null,"name":"kv://env/NAME"}`)
 
@@ -261,7 +305,9 @@ func TestResolveAll_NonStringValuesPreserved(t *testing.T) {
 }
 
 func TestResolveAll_NoKVReferences_ReturnedUnchanged(t *testing.T) {
-	r := resolver.NewResolver(newGetter(nil), nil)
+	t.Parallel()
+
+	r := resolver.NewResolver(newGetter(nil))
 
 	input := []byte(`{"host":"localhost","port":5432}`)
 
@@ -275,7 +321,9 @@ func TestResolveAll_NoKVReferences_ReturnedUnchanged(t *testing.T) {
 }
 
 func TestResolveAll_EmptyDocument(t *testing.T) {
-	r := resolver.NewResolver(newGetter(nil), nil)
+	t.Parallel()
+
+	r := resolver.NewResolver(newGetter(nil))
 
 	got, err := r.ResolveAll(t.Context(), []byte(`{}`))
 	assert.NoError(t, err)
@@ -300,8 +348,9 @@ func TestResolveAll_Errors(t *testing.T) {
 			wantErr: kv.ErrStoreNotFound,
 		},
 		{
-			name:  "invalid JSON input returns error",
-			input: []byte(`not json`),
+			name:    "invalid JSON input returns error",
+			input:   []byte(`not json containing kv://store/key`),
+			wantErr: resolver.ErrInvalidJSON,
 		},
 	}
 
@@ -309,7 +358,7 @@ func TestResolveAll_Errors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			r := resolver.NewResolver(newGetter(tc.stores), nil)
+			r := resolver.NewResolver(newGetter(tc.stores))
 			_, err := r.ResolveAll(t.Context(), tc.input)
 
 			if tc.wantErr != nil {
@@ -332,7 +381,7 @@ func BenchmarkResolve_ThreeInlineTokensWithFragment(b *testing.B) {
 		"vault": &mockProvider{value: payload},
 		"env":   &mockProvider{value: "simple-value"},
 	})
-	r := resolver.NewResolver(getter, nil)
+	r := resolver.NewResolver(getter)
 	input := "postgres://$kv{vault:db/creds#host}:$kv{vault:db/creds#port}/$kv{env:DB_NAME}"
 	ctx := context.Background()
 

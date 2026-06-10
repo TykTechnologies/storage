@@ -160,6 +160,7 @@ func TestExtractJSONPointer(t *testing.T) {
 			if tc.wantErr != nil {
 				require.Error(t, err)
 				assert.True(t, errors.Is(err, tc.wantErr), "want %v, got %v", tc.wantErr, err)
+
 				return
 			}
 

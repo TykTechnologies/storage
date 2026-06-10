@@ -3,6 +3,7 @@ package resolver
 import "errors"
 
 var (
-	ErrInvalidJSON   = errors.New("invalid JSON")
-	ErrFieldNotFound = errors.New("field not found")
+	ErrInvalidJSON        = errors.New("invalid JSON")
+	ErrFieldNotFound      = errors.New("field not found")
+	ErrMalformedReference = errors.New("malformed KV reference")
 )

@@ -1,6 +1,7 @@
 package resolver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -34,16 +35,24 @@ type Resolver interface {
 	// If the input contains no KV references, it is returned unchanged.
 	Resolve(ctx context.Context, input string) (string, error)
 
+	// ResolveAll walks a raw JSON document recursively and applies Resolve to
+	// every string value found at any depth, including inside nested objects
+	// and arrays. Non-string scalars (numbers, booleans, null) are left as-is.
+	//
+	// Returns the re-serialized document with all KV references replaced, or an
+	// error if any reference cannot be resolved. On error the document is not
+	// partially written.
+	//
+	// If the input is not valid JSON, ErrInvalidJSON is returned.
 	ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, error)
 }
 
 type resolver struct {
 	registry StoreGetter
-	logger   kv.Logger
 }
 
-func NewResolver(registry StoreGetter, logger kv.Logger) Resolver {
-	return &resolver{registry: registry, logger: logger}
+func NewResolver(registry StoreGetter) Resolver {
+	return &resolver{registry: registry}
 }
 
 var inlineRe = regexp.MustCompile(`\$kv\{([^}]+)\}`)
@@ -54,7 +63,11 @@ func (r *resolver) Resolve(ctx context.Context, input string) (string, error) {
 
 		slashIdx := strings.IndexByte(trimmed, '/')
 		if slashIdx < 0 {
-			return "", fmt.Errorf("malformed kv:// reference: %q", input)
+			return "", fmt.Errorf(
+				"%w: missing path separator in %q",
+				ErrMalformedReference,
+				input,
+			)
 		}
 
 		storeName := trimmed[:slashIdx]
@@ -75,7 +88,12 @@ func (r *resolver) Resolve(ctx context.Context, input string) (string, error) {
 
 		colonIdx := strings.IndexByte(inner, ':')
 		if colonIdx < 0 {
-			resolveErr = fmt.Errorf("malformed $kv{} token: %q", match)
+			resolveErr = fmt.Errorf(
+				"%w: missing store separator in %q",
+				ErrMalformedReference,
+				match,
+			)
+
 			return match
 		}
 
@@ -100,9 +118,15 @@ func (r *resolver) Resolve(ctx context.Context, input string) (string, error) {
 }
 
 func (r *resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, error) {
+	// Fast path: skip unmarshal/remarshal entirely when no KV syntax is present,
+	// preserving the original bytes and avoiding unnecessary allocations.
+	if !bytes.Contains(rawJSON, []byte("kv://")) && !bytes.Contains(rawJSON, []byte("$kv{")) {
+		return rawJSON, nil
+	}
+
 	var doc any
 	if err := json.Unmarshal(rawJSON, &doc); err != nil {
-		return nil, fmt.Errorf("invalid JSON input: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidJSON, err)
 	}
 
 	resolved, err := r.walkAndResolve(ctx, doc)
@@ -144,6 +168,8 @@ func (r *resolver) walkAndResolve(ctx context.Context, node any) (any, error) {
 
 			v[key] = resolved
 		}
+
+		return v, nil
 	case []any:
 		for i, value := range v {
 			resolved, err := r.walkAndResolve(ctx, value)
@@ -153,9 +179,9 @@ func (r *resolver) walkAndResolve(ctx context.Context, node any) (any, error) {
 
 			v[i] = resolved
 		}
+
+		return v, nil
 	default:
 		return v, nil
 	}
-
-	return node, nil
 }
