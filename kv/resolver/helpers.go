@@ -8,8 +8,13 @@ import (
 )
 
 func extractJSONPointer(raw, fragment string) (string, error) {
+	// UseNumber keeps numeric leaves as json.Number —  a float64 round-trip
+	// silently corrupts integers above 2^53.
+	dec := json.NewDecoder(strings.NewReader(raw))
+	dec.UseNumber()
+
 	var doc any
-	if err := json.Unmarshal([]byte(raw), &doc); err != nil {
+	if err := dec.Decode(&doc); err != nil {
 		return "", fmt.Errorf("%w: %w", ErrInvalidJSON, err)
 	}
 
@@ -53,8 +58,8 @@ func extractJSONPointer(raw, fragment string) (string, error) {
 	switch v := current.(type) {
 	case string:
 		return v, nil
-	case float64:
-		return strconv.FormatFloat(v, 'f', -1, 64), nil
+	case json.Number:
+		return v.String(), nil
 	case bool:
 		return strconv.FormatBool(v), nil
 	case nil:

@@ -37,13 +37,20 @@ type Resolver interface {
 
 	// ResolveAll walks a raw JSON document recursively and applies Resolve to
 	// every string value found at any depth, including inside nested objects
-	// and arrays. Non-string scalars (numbers, booleans, null) are left as-is.
+	// and arrays. Non-string scalars (numbers, booleans, null) are left as-is;
+	// number values preserve their exact representation (no float64 precision
+	// loss for large integers).
 	//
 	// Returns the re-serialized document with all KV references replaced, or an
 	// error if any reference cannot be resolved. On error the document is not
 	// partially written.
 	//
-	// If the input is not valid JSON, ErrInvalidJSON is returned.
+	// A document containing no KV syntax (no "kv://" or "$kv{" substrings) is
+	// returned byte-for-byte unchanged WITHOUT being parsed — invalid JSON
+	// passes through in that case. Documents that do contain KV syntax are
+	// parsed; ErrInvalidJSON is returned if they are not valid JSON, and the
+	// re-serialized output normalizes formatting (object keys sorted,
+	// insignificant whitespace removed) while preserving all values.
 	ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, error)
 }
 
@@ -120,12 +127,19 @@ func (r *resolver) Resolve(ctx context.Context, input string) (string, error) {
 func (r *resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, error) {
 	// Fast path: skip unmarshal/remarshal entirely when no KV syntax is present,
 	// preserving the original bytes and avoiding unnecessary allocations.
+	// NOTE: this means documents without KV syntax are NOT validated as JSON.
 	if !bytes.Contains(rawJSON, []byte("kv://")) && !bytes.Contains(rawJSON, []byte("$kv{")) {
 		return rawJSON, nil
 	}
 
+	// UseNumber keeps numbers as json.Number instead of float64. A float64
+	// round-trip silently corrupts integers above 2^53 (IDs, nanosecond
+	// timestamps).
+	dec := json.NewDecoder(bytes.NewReader(rawJSON))
+	dec.UseNumber()
+
 	var doc any
-	if err := json.Unmarshal(rawJSON, &doc); err != nil {
+	if err := dec.Decode(&doc); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidJSON, err)
 	}
 

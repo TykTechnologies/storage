@@ -442,6 +442,71 @@ func TestResolveAll_Errors(t *testing.T) {
 	}
 }
 
+func TestResolveAll_LargeIntegersPreserved(t *testing.T) {
+	t.Parallel()
+
+	getter := newGetter(map[string]kv.Provider{
+		"env": &mockProvider{value: "resolved"},
+	})
+	r := resolver.NewResolver(getter)
+
+	// 2^53+1 is not representable as float64; a float64 round-trip corrupts it.
+	// The kv ref forces the slow path (unmarshal/re-marshal) —  the fast path
+	// would mask the bug by returning the bytes untouched.
+	input := []byte(`{"id":9007199254740993,"nested":{"ts":1749600000000000001},"host":"kv://env/HOST"}`)
+
+	got, err := r.ResolveAll(t.Context(), input)
+	require.NoError(t, err)
+
+	assert.Contains(t, string(got), "9007199254740993")
+	assert.Contains(t, string(got), "1749600000000000001")
+	assert.Contains(t, string(got), `"host":"resolved"`)
+}
+
+func TestResolveAll_FloatsPreserved(t *testing.T) {
+	t.Parallel()
+
+	getter := newGetter(map[string]kv.Provider{
+		"env": &mockProvider{value: "resolved"},
+	})
+	r := resolver.NewResolver(getter)
+
+	input := []byte(`{"ratio":0.25,"host":"kv://env/HOST"}`)
+
+	got, err := r.ResolveAll(t.Context(), input)
+	require.NoError(t, err)
+
+	assert.Contains(t, string(got), "0.25")
+}
+
+func TestResolveAll_InvalidJSONWithoutRefs_PassesThrough(t *testing.T) {
+	t.Parallel()
+
+	// Documented fast-path contract: a document with no KV syntax is returned
+	// unchanged WITHOUT validation. Only documents containing kv:// or $kv{
+	// are parsed (and may return ErrInvalidJSON).
+	r := resolver.NewResolver(newGetter(nil))
+
+	input := []byte(`{definitely not json`)
+
+	got, err := r.ResolveAll(t.Context(), input)
+	assert.NoError(t, err)
+	assert.Equal(t, input, got)
+}
+
+func TestExtractJSONPointer_LargeIntegerLeaf(t *testing.T) {
+	t.Parallel()
+
+	getter := newGetter(map[string]kv.Provider{
+		"vault": &mockProvider{value: `{"big_id":9007199254740993}`},
+	})
+	r := resolver.NewResolver(getter)
+
+	got, err := r.Resolve(t.Context(), "kv://vault/secret#big_id")
+	require.NoError(t, err)
+	assert.Equal(t, "9007199254740993", got)
+}
+
 // --------------------------------------------------------------------------
 // Benchmarks
 // --------------------------------------------------------------------------
