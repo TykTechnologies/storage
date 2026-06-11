@@ -37,10 +37,10 @@ type Resolver interface {
 	// If the input contains no KV references, it is returned unchanged.
 	//
 	// Precedence: an input starting with "kv://" is treated as a whole-value
-	// reference —  everything after the store name is the path, including any
+	// reference — everything after the store name is the path, including any
 	// "$kv{...}" text, which is NOT expanded. Inline tokens are only processed
 	// in strings that do not start with "kv://". An inline path cannot contain
-	// "}" —  use the whole-value form for such keys.
+	// "}" — use the whole-value form for such keys.
 	Resolve(ctx context.Context, input string) (string, error)
 
 	// ResolveAll walks a raw JSON document recursively and applies Resolve to

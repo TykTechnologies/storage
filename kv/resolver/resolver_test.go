@@ -182,6 +182,22 @@ func TestResolve(t *testing.T) {
 			wantErr: resolver.ErrMalformedReference,
 		},
 		{
+			name:    "malformed kv:// empty store name and path",
+			input:   "kv:///",
+			wantErr: resolver.ErrMalformedReference,
+		},
+		{
+			name:    "malformed $kv{} empty store name and path",
+			input:   "$kv{:}",
+			wantErr: resolver.ErrMalformedReference,
+		},
+		{
+			name:    "malformed $kv{} empty path with fragment",
+			stores:  map[string]kv.Provider{"vault": &mockProvider{value: "x"}},
+			input:   "$kv{vault:#field}",
+			wantErr: resolver.ErrMalformedReference,
+		},
+		{
 			name:   "whole-value takes precedence over inline token in path",
 			stores: map[string]kv.Provider{"vault": &mockProvider{value: "resolved"}},
 			input:  "kv://vault/$kv{env:SUFFIX}",
@@ -512,7 +528,7 @@ func TestResolveAll_LargeIntegersPreserved(t *testing.T) {
 	r := resolver.NewResolver(getter)
 
 	// 2^53+1 is not representable as float64; a float64 round-trip corrupts it.
-	// The kv ref forces the slow path (unmarshal/re-marshal) —  the fast path
+	// The kv ref forces the slow path (unmarshal/re-marshal) — the fast path
 	// would mask the bug by returning the bytes untouched.
 	input := []byte(`{"id":9007199254740993,"nested":{"ts":1749600000000000001},"host":"kv://env/HOST"}`)
 

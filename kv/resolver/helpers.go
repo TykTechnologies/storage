@@ -8,7 +8,7 @@ import (
 )
 
 func extractJSONPointer(raw, fragment string) (string, error) {
-	// UseNumber keeps numeric leaves as json.Number —  a float64 round-trip
+	// UseNumber keeps numeric leaves as json.Number — a float64 round-trip
 	// silently corrupts integers above 2^53.
 	dec := json.NewDecoder(strings.NewReader(raw))
 	dec.UseNumber()
