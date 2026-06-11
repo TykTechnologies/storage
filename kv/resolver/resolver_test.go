@@ -553,12 +553,21 @@ func TestResolveAll_FloatsPreserved(t *testing.T) {
 	assert.Contains(t, string(got), "0.25")
 }
 
-func TestResolveAll_InvalidJSONWithoutRefs_PassesThrough(t *testing.T) {
+func TestResolveAll_InvalidJSONWithoutRefs_ReturnsError(t *testing.T) {
 	t.Parallel()
 
 	r := resolver.NewResolver(newGetter(nil))
 
-	input := []byte(`{definitely not json`)
+	_, err := r.ResolveAll(t.Context(), []byte(`{definitely not json`))
+	assert.ErrorIs(t, err, resolver.ErrInvalidJSON)
+}
+
+func TestResolveAll_ValidJSONWithoutRefs_ByteIdentical(t *testing.T) {
+	t.Parallel()
+
+	r := resolver.NewResolver(newGetter(nil))
+
+	input := []byte("{\n  \"z\": 1,\n  \"a\": \"plain\"\n}")
 
 	got, err := r.ResolveAll(t.Context(), input)
 	assert.NoError(t, err)

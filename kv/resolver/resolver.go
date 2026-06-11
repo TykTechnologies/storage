@@ -53,11 +53,10 @@ type Resolver interface {
 	// error if any reference cannot be resolved. On error the document is not
 	// partially written.
 	//
-	// A document containing no KV syntax (no "kv://" or "$kv{" substrings) is
-	// returned byte-for-byte unchanged WITHOUT being parsed — invalid JSON
-	// passes through in that case. Documents that do contain KV syntax are
-	// parsed; ErrInvalidJSON is returned if they are not valid JSON, and the
-	// re-serialized output normalizes formatting (object keys sorted,
+	// If the input is not valid JSON, ErrInvalidJSON is returned. A valid
+	// document containing no KV syntax (no "kv://" or "$kv{" substrings) is
+	// returned byte-for-byte unchanged. Documents that do contain KV syntax
+	// are re-serialized: the output normalizes formatting (object keys sorted,
 	// insignificant whitespace removed) while preserving all values.
 	// HTML characters (&, <, >) are NOT escaped in the output.
 	ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, error)
@@ -150,8 +149,13 @@ func (r *resolver) Resolve(ctx context.Context, input string) (string, error) {
 func (r *resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, error) {
 	// Fast path: skip unmarshal/remarshal entirely when no KV syntax is present,
 	// preserving the original bytes and avoiding unnecessary allocations.
-	// NOTE: this means documents without KV syntax are NOT validated as JSON.
 	if !bytes.Contains(rawJSON, []byte("kv://")) && !bytes.Contains(rawJSON, []byte("$kv{")) {
+		// Without this check, JSON validation would depend on whether
+		// the document happens to contain KV syntax.
+		if !json.Valid(rawJSON) {
+			return nil, fmt.Errorf("%w: invalid document", ErrInvalidJSON)
+		}
+
 		return rawJSON, nil
 	}
 
