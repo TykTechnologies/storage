@@ -527,9 +527,6 @@ func TestResolveAll_LargeIntegersPreserved(t *testing.T) {
 	})
 	r := resolver.NewResolver(getter)
 
-	// 2^53+1 is not representable as float64; a float64 round-trip corrupts it.
-	// The kv ref forces the slow path (unmarshal/re-marshal) — the fast path
-	// would mask the bug by returning the bytes untouched.
 	input := []byte(`{"id":9007199254740993,"nested":{"ts":1749600000000000001},"host":"kv://env/HOST"}`)
 
 	got, err := r.ResolveAll(t.Context(), input)
@@ -559,9 +556,6 @@ func TestResolveAll_FloatsPreserved(t *testing.T) {
 func TestResolveAll_InvalidJSONWithoutRefs_PassesThrough(t *testing.T) {
 	t.Parallel()
 
-	// Documented fast-path contract: a document with no KV syntax is returned
-	// unchanged WITHOUT validation. Only documents containing kv:// or $kv{
-	// are parsed (and may return ErrInvalidJSON).
 	r := resolver.NewResolver(newGetter(nil))
 
 	input := []byte(`{definitely not json`)
