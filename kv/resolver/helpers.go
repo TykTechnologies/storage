@@ -37,7 +37,7 @@ func extractJSONPointer(raw, fragment string) (string, error) {
 		case map[string]any:
 			val, ok := v[seg]
 			if !ok {
-				return "", fmt.Errorf("%w: %q", ErrFieldNotFound, seg)
+				return "", fieldNotFoundError(seg)
 			}
 
 			current = val
@@ -45,13 +45,13 @@ func extractJSONPointer(raw, fragment string) (string, error) {
 		case []any:
 			idx, err := strconv.Atoi(seg)
 			if err != nil || idx < 0 || idx >= len(v) {
-				return "", fmt.Errorf("%w: %q", ErrFieldNotFound, seg)
+				return "", fieldNotFoundError(seg)
 			}
 
 			current = v[idx]
 
 		default:
-			return "", fmt.Errorf("%w: %q", ErrFieldNotFound, seg)
+			return "", fieldNotFoundError(seg)
 		}
 	}
 
