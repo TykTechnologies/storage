@@ -153,6 +153,40 @@ func TestResolve(t *testing.T) {
 			input:   "$kv{nocolon}",
 			wantErr: resolver.ErrMalformedReference,
 		},
+		{
+			name:    "malformed kv:// empty path",
+			stores:  map[string]kv.Provider{"vault": &mockProvider{value: "x"}},
+			input:   "kv://vault/",
+			wantErr: resolver.ErrMalformedReference,
+		},
+		{
+			name:    "malformed kv:// empty store name",
+			input:   "kv:///path",
+			wantErr: resolver.ErrMalformedReference,
+		},
+		{
+			name:    "malformed kv:// empty path with fragment",
+			stores:  map[string]kv.Provider{"vault": &mockProvider{value: "x"}},
+			input:   "kv://vault/#field",
+			wantErr: resolver.ErrMalformedReference,
+		},
+		{
+			name:    "malformed $kv{} empty path",
+			stores:  map[string]kv.Provider{"vault": &mockProvider{value: "x"}},
+			input:   "$kv{vault:}",
+			wantErr: resolver.ErrMalformedReference,
+		},
+		{
+			name:    "malformed $kv{} empty store name",
+			input:   "$kv{:path}",
+			wantErr: resolver.ErrMalformedReference,
+		},
+		{
+			name:   "whole-value takes precedence over inline token in path",
+			stores: map[string]kv.Provider{"vault": &mockProvider{value: "resolved"}},
+			input:  "kv://vault/$kv{env:SUFFIX}",
+			want:   "resolved",
+		},
 	}
 
 	for _, tc := range tests {
@@ -221,6 +255,33 @@ func TestResolve_PathRouting(t *testing.T) {
 			assert.Equal(t, tc.wantKey, provider.lastKey)
 		})
 	}
+}
+
+func TestResolve_MultipleFailedTokens_AllReported(t *testing.T) {
+	t.Parallel()
+
+	r := resolver.NewResolver(newGetter(nil))
+
+	_, err := r.Resolve(t.Context(), "$kv{ghost1:a}/$kv{ghost2:b}")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, kv.ErrStoreNotFound)
+	assert.Contains(t, err.Error(), "ghost1")
+	assert.Contains(t, err.Error(), "ghost2")
+}
+
+func TestResolve_MixedFailedAndResolvableTokens_ErrorWins(t *testing.T) {
+	t.Parallel()
+
+	getter := newGetter(map[string]kv.Provider{
+		"env": &mockProvider{value: "ok"},
+	})
+	r := resolver.NewResolver(getter)
+
+	got, err := r.Resolve(t.Context(), "$kv{env:GOOD}/$kv{ghost:bad}")
+
+	assert.ErrorIs(t, err, kv.ErrStoreNotFound)
+	assert.Empty(t, got)
 }
 
 func TestResolve_KeyNotFound(t *testing.T) {
@@ -507,6 +568,25 @@ func TestExtractJSONPointer_LargeIntegerLeaf(t *testing.T) {
 	assert.Equal(t, "9007199254740993", got)
 }
 
+func TestResolveAll_NoHTMLEscaping(t *testing.T) {
+	t.Parallel()
+
+	getter := newGetter(map[string]kv.Provider{
+		"env": &mockProvider{value: "https://upstream.internal/?a=1&b=<2>"},
+	})
+	r := resolver.NewResolver(getter)
+
+	input := []byte(`{"url":"https://example.com/?x=1&y=2","target":"kv://env/UPSTREAM"}`)
+
+	got, err := r.ResolveAll(t.Context(), input)
+	require.NoError(t, err)
+
+	assert.Contains(t, string(got), "https://example.com/?x=1&y=2")
+	assert.Contains(t, string(got), "https://upstream.internal/?a=1&b=<2>")
+	assert.NotContains(t, string(got), `\u0026`)
+	assert.NotContains(t, string(got), `\u003c`)
+}
+
 // --------------------------------------------------------------------------
 // Benchmarks
 // --------------------------------------------------------------------------
@@ -524,6 +604,9 @@ func BenchmarkResolve_ThreeInlineTokensWithFragment(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		_, _ = r.Resolve(ctx, input)
+		_, err := r.Resolve(ctx, input)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -30,9 +31,16 @@ type Resolver interface {
 	// their resolved values from the configured stores.
 	//
 	// Returns the resolved string with all KV references replaced, or an error
-	// if any reference cannot be resolved.
+	// if any reference cannot be resolved. When several inline tokens fail,
+	// all failures are reported in a single joined error.
 	//
 	// If the input contains no KV references, it is returned unchanged.
+	//
+	// Precedence: an input starting with "kv://" is treated as a whole-value
+	// reference —  everything after the store name is the path, including any
+	// "$kv{...}" text, which is NOT expanded. Inline tokens are only processed
+	// in strings that do not start with "kv://". An inline path cannot contain
+	// "}" —  use the whole-value form for such keys.
 	Resolve(ctx context.Context, input string) (string, error)
 
 	// ResolveAll walks a raw JSON document recursively and applies Resolve to
@@ -51,6 +59,7 @@ type Resolver interface {
 	// parsed; ErrInvalidJSON is returned if they are not valid JSON, and the
 	// re-serialized output normalizes formatting (object keys sorted,
 	// insignificant whitespace removed) while preserving all values.
+	// HTML characters (&, <, >) are NOT escaped in the output.
 	ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, error)
 }
 
@@ -81,25 +90,29 @@ func (r *resolver) Resolve(ctx context.Context, input string) (string, error) {
 		rest := trimmed[slashIdx+1:]
 		path, fragment, _ := strings.Cut(rest, "#")
 
+		if storeName == "" || path == "" {
+			return "", fmt.Errorf(
+				"%w: empty store name or path in %q",
+				ErrMalformedReference,
+				input,
+			)
+		}
+
 		return r.fetchAndExtract(ctx, storeName, path, fragment)
 	}
 
-	var resolveErr error
+	var resolveErrs []error
 	result := inlineRe.ReplaceAllStringFunc(input, func(match string) string {
-		if resolveErr != nil {
-			return match
-		}
-
 		// strip "$kv{" prefix and "}" suffix
 		inner := match[4 : len(match)-1]
 
 		colonIdx := strings.IndexByte(inner, ':')
 		if colonIdx < 0 {
-			resolveErr = fmt.Errorf(
+			resolveErrs = append(resolveErrs, fmt.Errorf(
 				"%w: missing store separator in %q",
 				ErrMalformedReference,
 				match,
-			)
+			))
 
 			return match
 		}
@@ -108,17 +121,27 @@ func (r *resolver) Resolve(ctx context.Context, input string) (string, error) {
 		rest := inner[colonIdx+1:]
 		path, fragment, _ := strings.Cut(rest, "#")
 
+		if storeName == "" || path == "" {
+			resolveErrs = append(resolveErrs, fmt.Errorf(
+				"%w: empty store name or path in %q",
+				ErrMalformedReference,
+				match,
+			))
+
+			return match
+		}
+
 		val, err := r.fetchAndExtract(ctx, storeName, path, fragment)
 		if err != nil {
-			resolveErr = err
+			resolveErrs = append(resolveErrs, err)
 			return match
 		}
 
 		return val
 	})
 
-	if resolveErr != nil {
-		return "", resolveErr
+	if len(resolveErrs) > 0 {
+		return "", errors.Join(resolveErrs...)
 	}
 
 	return result, nil
@@ -148,7 +171,17 @@ func (r *resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, erro
 		return nil, err
 	}
 
-	return json.Marshal(resolved)
+	// Encoder with SetEscapeHTML(false) keeps &, <, > literal
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+
+	if err := enc.Encode(resolved); err != nil {
+		return nil, err
+	}
+
+	// Encode appends a trailing newline; Marshal does not.
+	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
 }
 
 func (r *resolver) fetchAndExtract(ctx context.Context, storeName, path, fragment string) (string, error) {
