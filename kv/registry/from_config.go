@@ -3,25 +3,28 @@ package registry
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"maps"
 
 	"github.com/TykTechnologies/storage/kv"
 	"github.com/TykTechnologies/storage/kv/internal/resolve"
 )
 
-type initOption struct {
+// initOptions collects the inputs to NewFromConfig that aren't the raw
+// config document.
+type initOptions struct {
 	factories     map[kv.ProviderType]kv.ProviderFactory
 	defaultStores map[string]kv.StoreConfig
 }
 
-type InitOption func(*initOption)
+// InitOption configures NewFromConfig.
+type InitOption func(*initOptions)
 
 // WithFactories injects additional provider factories (enterprise or custom)
 // on top of the OSS defaults. A nil map is a no-op — the OSS build path.
 func WithFactories(f map[kv.ProviderType]kv.ProviderFactory) InitOption {
-	return func(o *initOption) {
-		if f != nil {
-			o.factories = f
-		}
+	return func(o *initOptions) {
+		o.factories = f
 	}
 }
 
@@ -29,108 +32,147 @@ func WithFactories(f map[kv.ProviderType]kv.ProviderFactory) InitOption {
 // than the kv.stores block in rawConfig — a store defined in both places
 // uses the rawConfig definition.
 func WithDefaultStores(s map[string]kv.StoreConfig) InitOption {
-	return func(o *initOption) {
+	return func(o *initOptions) {
 		o.defaultStores = s
 	}
 }
 
+// NewFromConfig initializes a Registry from the kv section of rawConfig.
+// Internally it runs a two-phase process so that store credentials (e.g. a
+// Vault token) can themselves live in an env or inline store and be
+// referenced from the config.
+//
+// Referenceability rules:
+//
+//   - A store config may reference any env- or inline-type store by name —
+//     wherever it is defined (WithDefaultStores or kv.stores) — because all
+//     local-type stores initialize before store configs are resolved.
+//   - A store config may never reference a remote store (vault, consul,
+//     aws, ...): remote stores initialize concurrently, so this is an
+//     unresolvable bootstrap cycle. Such references reach the provider
+//     factory as literals and fail there, subject to the store's
+//     required flag.
+//   - Values inside an inline store's data map are always literal; a
+//     kv:// reference there is never resolved.
+//
+// NewFromConfig does not resolve the rest of the document — the single
+// strict ResolveAll pass over the full config is owned by the caller.
+// A nil or empty rawConfig is valid: the kv-section parse is skipped and
+// the registry is built from WithDefaultStores alone.
+//
+// The caller owns the returned registry, including Close on shutdown.
 func NewFromConfig(
 	ctx context.Context,
 	rawConfig []byte,
 	opts ...InitOption,
 ) (*Registry, error) {
-	initRegistry := NewDefaultRegistry()
-
-	option := &initOption{
-		factories:     make(map[kv.ProviderType]kv.ProviderFactory),
-		defaultStores: make(map[string]kv.StoreConfig),
-	}
+	options := &initOptions{}
 	for _, opt := range opts {
-		opt(option)
-	}
-
-	for pType, pFactory := range option.factories {
-		err := initRegistry.Add(pType, pFactory)
-		if err != nil {
-			return nil, err
-		}
+		opt(options)
 	}
 
 	var config struct {
 		KV kv.Config `json:"kv"`
 	}
 
-	// FIX this more elegantly
-	if rawConfig == nil {
-		rawConfig = []byte(`{"kv": {}}`)
+	if len(rawConfig) > 0 {
+		if err := json.Unmarshal(rawConfig, &config); err != nil {
+			return nil, fmt.Errorf("kv: failed to parse config: %w", err)
+		}
 	}
 
-	if err := json.Unmarshal(rawConfig, &config); err != nil {
-		// IT looks like we have to log warning here but not return an error right?
+	merged := make(map[string]kv.StoreConfig, len(options.defaultStores)+len(config.KV.Stores))
+	maps.Copy(merged, options.defaultStores)
+	maps.Copy(merged, config.KV.Stores)
+
+	if err := resolveStoreConfigs(ctx, merged, options.factories); err != nil {
 		return nil, err
 	}
 
-	// FIX: What if default stores contain references to kv://
-	// I'm doing smashing first and then marshaling and resolving.
-	// Not sure if its a good way to achieve solid result there.j
-	inlineOrEnv := make(map[string]kv.StoreConfig)
-	merged := make(map[string]kv.StoreConfig)
-	for name, storeCfg := range config.KV.Stores {
-		if storeCfg.Type == kv.Env || storeCfg.Type == kv.Inline {
-			inlineOrEnv[name] = storeCfg
+	full, err := newRegistryWithFactories(options.factories)
+	if err != nil {
+		return nil, err
+	}
 
+	if len(merged) > 0 {
+		err := full.InitStores(ctx, &kv.Config{Stores: merged, Cache: config.KV.Cache})
+		if err != nil {
+			return nil, fmt.Errorf("kv: failed to initialize stores: %w", err)
+		}
+	}
+
+	return full, nil
+}
+
+// resolveStoreConfigs is Phase 1 of the bootstrap: it initializes all
+// local-type stores from merged into a throwaway registry, then
+// lenient-resolves the remaining store configs against it, in place.
+func resolveStoreConfigs(
+	ctx context.Context,
+	merged map[string]kv.StoreConfig,
+	factories map[kv.ProviderType]kv.ProviderFactory,
+) error {
+	locals := make(map[string]kv.StoreConfig)
+	remotes := 0
+
+	for name, storeCfg := range merged {
+		if isLocalType(storeCfg.Type) {
+			locals[name] = storeCfg
+		} else {
+			remotes++
+		}
+	}
+
+	if remotes == 0 {
+		return nil
+	}
+
+	bootstrap, err := newRegistryWithFactories(factories)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		_ = bootstrap.Close(context.WithoutCancel(ctx))
+	}()
+
+	if len(locals) > 0 {
+		if err := bootstrap.InitStores(ctx, &kv.Config{Stores: locals}); err != nil {
+			return fmt.Errorf("kv: failed to initialize local stores for bootstrap: %w", err)
+		}
+	}
+
+	lenient := resolve.NewResolver(bootstrap, resolve.WithLenientMode())
+
+	for name, storeCfg := range merged {
+		if isLocalType(storeCfg.Type) || len(storeCfg.Config) == 0 {
 			continue
 		}
 
+		resolved, err := lenient.ResolveAll(ctx, storeCfg.Config)
+		if err != nil {
+			return fmt.Errorf("kv: failed to resolve config of store %q: %w", name, err)
+		}
+
+		storeCfg.Config = resolved
 		merged[name] = storeCfg
 	}
 
-	for name, storeCfg := range option.defaultStores {
-		if storeCfg.Type == kv.Env || storeCfg.Type == kv.Inline {
-			inlineOrEnv[name] = storeCfg
+	return nil
+}
 
-			continue
+func isLocalType(t kv.ProviderType) bool {
+	return t == kv.Env || t == kv.Inline
+}
+
+func newRegistryWithFactories(factories map[kv.ProviderType]kv.ProviderFactory) (*Registry, error) {
+	r := NewDefaultRegistry()
+
+	for providerType, factory := range factories {
+		if err := r.Add(providerType, factory); err != nil {
+			return nil, fmt.Errorf("kv: failed to register factory: %w", err)
 		}
-
-		if _, ok := merged[name]; ok {
-			continue
-		}
-
-		merged[name] = storeCfg
 	}
 
-	config.KV.Stores = inlineOrEnv
-
-	err := initRegistry.InitStores(ctx, &config.KV)
-	if err != nil {
-		return nil, err
-	}
-
-	config.KV.Stores = merged
-
-	rawConfig, err = json.Marshal(config)
-	if err != nil {
-		return nil, err
-	}
-
-	bootstrapRegistry := NewDefaultRegistry()
-	bootstrapRegistry.stores = initRegistry.stores
-	bootstrapRegistry.factories = initRegistry.factories
-
-	resolver := resolve.NewResolver(bootstrapRegistry, resolve.WithLenientMode())
-	resolvedRawCfg, err := resolver.ResolveAll(ctx, rawConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := json.Unmarshal(resolvedRawCfg, &config); err != nil {
-		return nil, err
-	}
-
-	err = bootstrapRegistry.InitStores(ctx, &config.KV)
-	if err != nil {
-		return nil, err
-	}
-
-	return initRegistry, nil
+	return r, nil
 }
