@@ -44,7 +44,7 @@ func TestNewResolverDelegatesToEngine(t *testing.T) {
 	t.Run("whole-value reference", func(t *testing.T) {
 		t.Parallel()
 
-		got, err := res.Resolve(context.Background(), "kv://env/API_HOST")
+		got, err := res.Resolve(t.Context(), "kv://env/API_HOST")
 		require.NoError(t, err)
 		require.Equal(t, "myhost.com", got)
 	})
@@ -52,7 +52,7 @@ func TestNewResolverDelegatesToEngine(t *testing.T) {
 	t.Run("whole-value reference with fragment extraction", func(t *testing.T) {
 		t.Parallel()
 
-		got, err := res.Resolve(context.Background(), "kv://vault/db/creds#password")
+		got, err := res.Resolve(t.Context(), "kv://vault/db/creds#password")
 		require.NoError(t, err)
 		require.Equal(t, "hunter2", got)
 	})
@@ -60,7 +60,7 @@ func TestNewResolverDelegatesToEngine(t *testing.T) {
 	t.Run("inline token inside a larger string", func(t *testing.T) {
 		t.Parallel()
 
-		got, err := res.Resolve(context.Background(), "https://$kv{env:API_HOST}/v1")
+		got, err := res.Resolve(t.Context(), "https://$kv{env:API_HOST}/v1")
 		require.NoError(t, err)
 		require.Equal(t, "https://myhost.com/v1", got)
 	})
@@ -70,7 +70,7 @@ func TestNewResolverDelegatesToEngine(t *testing.T) {
 
 		doc := []byte(`{"url":"https://$kv{env:API_HOST}/v1","secret":"kv://vault/db/creds#password","port":8080}`)
 
-		got, err := res.ResolveAll(context.Background(), doc)
+		got, err := res.ResolveAll(t.Context(), doc)
 		require.NoError(t, err)
 		require.JSONEq(t, `{"url":"https://myhost.com/v1","secret":"hunter2","port":8080}`, string(got))
 	})
@@ -80,7 +80,7 @@ func TestNewResolverDelegatesToEngine(t *testing.T) {
 
 		doc := []byte(`{"plain": "value", "n": 1}`)
 
-		got, err := res.ResolveAll(context.Background(), doc)
+		got, err := res.ResolveAll(t.Context(), doc)
 		require.NoError(t, err)
 		require.Equal(t, doc, got)
 	})
@@ -96,28 +96,28 @@ func TestPublicErrorSentinelsSurviveTheFacade(t *testing.T) {
 	t.Run("malformed reference matches resolver.ErrMalformedReference", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := res.Resolve(context.Background(), "kv://no-path-separator")
+		_, err := res.Resolve(t.Context(), "kv://no-path-separator")
 		require.ErrorIs(t, err, resolver.ErrMalformedReference)
 	})
 
 	t.Run("missing JSON field matches resolver.ErrFieldNotFound", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := res.Resolve(context.Background(), "kv://vault/creds#missing_field")
+		_, err := res.Resolve(t.Context(), "kv://vault/creds#missing_field")
 		require.ErrorIs(t, err, resolver.ErrFieldNotFound)
 	})
 
 	t.Run("invalid document matches resolver.ErrInvalidJSON", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := res.ResolveAll(context.Background(), []byte(`{not json`))
+		_, err := res.ResolveAll(t.Context(), []byte(`{not json`))
 		require.ErrorIs(t, err, resolver.ErrInvalidJSON)
 	})
 
 	t.Run("unknown store matches kv.ErrStoreNotFound", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := res.Resolve(context.Background(), "kv://absent/some/key")
+		_, err := res.Resolve(t.Context(), "kv://absent/some/key")
 		require.ErrorIs(t, err, kv.ErrStoreNotFound)
 	})
 }
@@ -130,7 +130,7 @@ func TestProviderErrorsPropagateThroughFacade(t *testing.T) {
 		"vault": stubProvider{err: keyErr},
 	})
 
-	_, err := res.Resolve(context.Background(), "kv://vault/db/creds")
+	_, err := res.Resolve(t.Context(), "kv://vault/db/creds")
 
 	var got *kv.KeyNotFoundError
 	require.ErrorAs(t, err, &got)
