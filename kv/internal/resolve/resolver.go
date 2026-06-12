@@ -120,6 +120,7 @@ func (r *Resolver) Resolve(ctx context.Context, input string) (string, error) {
 			}
 
 			resolveErrs = append(resolveErrs, err)
+
 			return match
 		}
 

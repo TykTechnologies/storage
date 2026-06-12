@@ -106,6 +106,7 @@ func dataFactory(rec *configRecorder) kv.ProviderFactory {
 		var parsed struct {
 			Data map[string]string `json:"data"`
 		}
+
 		if err := json.Unmarshal(cfg, &parsed); err != nil {
 			return nil, err
 		}
@@ -291,6 +292,7 @@ func TestNewFromConfigUnresolvableReferences(t *testing.T) {
 			var parsed struct {
 				Token string `json:"token"`
 			}
+
 			if err := json.Unmarshal(cfg, &parsed); err != nil {
 				return nil, err
 			}

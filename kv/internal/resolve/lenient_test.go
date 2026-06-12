@@ -2,6 +2,7 @@ package resolve_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/TykTechnologies/storage/kv"
@@ -90,12 +91,11 @@ func TestLenientResolve(t *testing.T) {
 			got, err := r.Resolve(t.Context(), tt.input)
 
 			if tt.wantErr != nil {
-				switch want := tt.wantErr.(type) {
-				case *kv.KeyNotFoundError:
-					var keyErr *kv.KeyNotFoundError
-					require.ErrorAs(t, err, &keyErr)
-				default:
-					require.ErrorIs(t, err, want)
+				var keyNotFound *kv.KeyNotFoundError
+				if errors.As(tt.wantErr, &keyNotFound) {
+					require.ErrorAs(t, err, &keyNotFound)
+				} else {
+					require.ErrorIs(t, err, tt.wantErr)
 				}
 
 				return
