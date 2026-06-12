@@ -58,6 +58,11 @@ type Provider interface {
 	KeyValueRetriever
 }
 
+// StoreGetter retrieves an initialized store by name.
+type StoreGetter interface {
+	GetStore(name string) (Provider, error)
+}
+
 // ProviderFactory creates a specific provider instance from raw JSON configuration.
 // Each provider type registers its own factory function that knows how to parse
 // its specific configuration format and return a configured Provider.

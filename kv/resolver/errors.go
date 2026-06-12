@@ -1,18 +1,9 @@
 package resolver
 
-import (
-	"errors"
-	"fmt"
-)
+import "github.com/TykTechnologies/storage/kv/internal/resolve"
 
 var (
-	ErrInvalidJSON        = errors.New("invalid JSON")
-	ErrFieldNotFound      = errors.New("field not found")
-	ErrMalformedReference = errors.New("malformed KV reference")
+	ErrInvalidJSON        = resolve.ErrInvalidJSON
+	ErrFieldNotFound      = resolve.ErrFieldNotFound
+	ErrMalformedReference = resolve.ErrMalformedReference
 )
-
-// fieldNotFoundErr wraps ErrFieldNotFound with the JSON pointer segment that
-// could not be resolved.
-func fieldNotFoundError(field string) error {
-	return fmt.Errorf("%w: %q", ErrFieldNotFound, field)
-}
