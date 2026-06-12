@@ -432,9 +432,6 @@ func TestNewFromConfigDocumentHandling(t *testing.T) {
 	t.Run("references outside the kv section are ignored", func(t *testing.T) {
 		t.Parallel()
 
-		// Both an absent-store reference AND a malformed one outside kv:
-		// Phase 1 must not even look at them. The caller's strict
-		// ResolveAll pass owns the rest of the document.
 		doc := []byte(`{
 			"secret": "kv://not-a-store/key",
 			"broken": "kv://no-path-separator",
@@ -480,7 +477,6 @@ func TestNewFromConfigDocumentHandling(t *testing.T) {
 	t.Run("no options and nil config still yield a usable empty registry", func(t *testing.T) {
 		t.Parallel()
 
-		// The OSS build path: no enterprise factories, no defaults, no file.
 		reg, err := registry.NewFromConfig(t.Context(), nil)
 		require.NoError(t, err)
 		require.NotNil(t, reg)
