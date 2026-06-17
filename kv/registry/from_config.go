@@ -44,7 +44,7 @@ func WithDefaultStores(s map[string]kv.StoreConfig) InitOption {
 //
 // Referenceability rules:
 //
-//   - A store config may reference any env- or inline-type store by name —
+//   - A store config may reference any local-type store by name —
 //     wherever it is defined (WithDefaultStores or kv.stores) — because all
 //     local-type stores initialize before store configs are resolved.
 //   - A store config may never reference a remote store (vault, consul,
@@ -167,7 +167,9 @@ func resolveStoreConfigReferences(
 	lenient := resolve.NewResolver(bootstrap, resolve.WithLenientMode())
 
 	for name, storeCfg := range merged {
-		// No config blob to resolve (and ResolveAll(nil) would error).
+		// Local store configs are literal and are initialized from the raw parse in
+		// Phase 1 (env/inline/file alike), so there is nothing to resolve here.
+		// Skip them, and skip stores with no config blob (ResolveAll(nil) errors).
 		if storeCfg.Type.IsLocal() || len(storeCfg.Config) == 0 {
 			continue
 		}
