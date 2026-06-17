@@ -42,6 +42,18 @@ const (
 	Conjur ProviderType = "cyberark_conjur"
 )
 
+// IsLocal reports whether this provider type resolves secrets from resources
+// available to the local process — environment variables, inline config data,
+// or the filesystem — requiring no network and a literal, reference-free config.
+func (t ProviderType) IsLocal() bool {
+	switch t {
+	case Env, Inline, File:
+		return true
+	default:
+		return false
+	}
+}
+
 // KeyValueRetriever defines the core read capability for retrieving values by key.
 type KeyValueRetriever interface {
 	Get(ctx context.Context, key string) (string, error)
