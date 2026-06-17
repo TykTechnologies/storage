@@ -216,6 +216,33 @@ func TestNewFromConfigPhase1Resolution(t *testing.T) {
 		require.Equal(t, "hvs.from-inline", tokenOf(t, vaultRec.single(t)))
 	})
 
+	t.Run("remote config referencing a file store is resolved", func(t *testing.T) {
+		t.Parallel()
+
+		doc := []byte(`{
+			"kv": {
+				"stores": {
+					"vault": {"type": "hashicorp_vault", "config": {"token": "kv://file/vault_token"}}
+				}
+			}
+		}`)
+
+		vaultRec := &configRecorder{}
+		newRegistry(t, doc,
+			registry.WithDefaultStores(map[string]kv.StoreConfig{
+				"file": {Type: kv.File, Required: true, Config: json.RawMessage(`{"base_path": "/etc/some"}`)},
+			}),
+			registry.WithFactories(map[kv.ProviderType]kv.ProviderFactory{
+				kv.Vault: recordingFactory(vaultRec, &fakeProvider{}, nil),
+				kv.File: recordingFactory(nil, &fakeProvider{data: map[string]string{
+					"vault_token": "random_vault_token",
+				}}, nil),
+			}),
+		)
+
+		require.Equal(t, "random_vault_token", tokenOf(t, vaultRec.single(t)))
+	})
+
 	t.Run("references inside WithDefaultStores configs are resolved too", func(t *testing.T) {
 		t.Parallel()
 

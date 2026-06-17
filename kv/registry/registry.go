@@ -61,7 +61,7 @@ func NewDefaultRegistry(opts ...Option) *Registry {
 	// r.Add(kv.Inline, inline.NewFactory())
 	// r.Add(kv.Vault, vault.NewFactory())
 	// r.Add(kv.Consul, consul.NewFactory())
-	// r.Add(kv.K8s, k8s.NewFactory())
+	// r.Add(kv.File, file.NewFactory())
 
 	return r
 }

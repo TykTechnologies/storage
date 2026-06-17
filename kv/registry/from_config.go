@@ -162,7 +162,7 @@ func resolveStoreConfigs(
 }
 
 func isLocalType(t kv.ProviderType) bool {
-	return t == kv.Env || t == kv.Inline
+	return t == kv.Env || t == kv.Inline || t == kv.File
 }
 
 func newRegistryWithFactories(factories map[kv.ProviderType]kv.ProviderFactory) (*Registry, error) {
