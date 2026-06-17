@@ -66,6 +66,17 @@ func NewFromConfig(
 	rawConfig []byte,
 	opts ...InitOption,
 ) (*Registry, error) {
+	// A store's own config can contain kv:// references — e.g. a Vault store
+	// whose token lives in an env var: {"token": "kv://env/VAULT_TOKEN"}.
+	// Resolving that requires the env store to already exist, which forces a
+	// two-phase init:
+	//
+	//   Phase 1 — stand up the local-type stores (env, inline, file: literal
+	//     config, no network) in a throwaway registry, and use them to resolve
+	//     references inside the OTHER store configs.
+	//   Phase 2 — build the real registry and open every store, now that all
+	//     configs are resolved. Local stores re-init cheaply here; remote
+	//     stores open their connections for the first time.
 	options := &initOptions{}
 	for _, opt := range opts {
 		opt(options)
@@ -85,10 +96,12 @@ func NewFromConfig(
 	maps.Copy(merged, options.defaultStores)
 	maps.Copy(merged, config.KV.Stores)
 
-	if err := resolveStoreConfigs(ctx, merged, options.factories); err != nil {
+	// Phase 1: resolve references in store configs against local stores.
+	if err := resolveStoreConfigReferences(ctx, merged, options.factories); err != nil {
 		return nil, err
 	}
 
+	// Phase 2: build the registry and initialize all stores.
 	full, err := newRegistryWithFactories(options.factories)
 	if err != nil {
 		return nil, err
@@ -104,26 +117,35 @@ func NewFromConfig(
 	return full, nil
 }
 
-// resolveStoreConfigs is Phase 1 of the bootstrap: it initializes all
-// local-type stores from merged into a throwaway registry, then
-// lenient-resolves the remaining store configs against it, in place.
-func resolveStoreConfigs(
+// resolveStoreConfigReferences is Phase 1. It initializes the local-type stores
+// from merged into a TEMPORARY registry, then resolves kv:// references found
+// inside the remaining (remote) store configs against them, rewriting merged in
+// place. The temporary registry is discarded; Phase 2 rebuilds everything.
+//
+// Resolution is lenient: a reference to a store absent from the temporary
+// registry — i.e. a remote store, which only exists after Phase 2 — is left
+// untouched instead of failing. It reaches the provider factory as a literal in
+// Phase 2 and fails there if the store was required. This is why a remote store
+// config cannot reference another remote store.
+func resolveStoreConfigReferences(
 	ctx context.Context,
 	merged map[string]kv.StoreConfig,
 	factories map[kv.ProviderType]kv.ProviderFactory,
 ) error {
 	locals := make(map[string]kv.StoreConfig)
-	remotes := 0
+	var hasRemotes bool
 
 	for name, storeCfg := range merged {
 		if isLocalType(storeCfg.Type) {
 			locals[name] = storeCfg
 		} else {
-			remotes++
+			hasRemotes = true
 		}
 	}
 
-	if remotes == 0 {
+	// Only remote configs can carry references worth resolving; local configs
+	// are literal. If there are none, skip the bootstrap entirely.
+	if !hasRemotes {
 		return nil
 	}
 
@@ -145,6 +167,7 @@ func resolveStoreConfigs(
 	lenient := resolve.NewResolver(bootstrap, resolve.WithLenientMode())
 
 	for name, storeCfg := range merged {
+		// No config blob to resolve (and ResolveAll(nil) would error).
 		if isLocalType(storeCfg.Type) || len(storeCfg.Config) == 0 {
 			continue
 		}
