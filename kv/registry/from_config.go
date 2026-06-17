@@ -136,7 +136,7 @@ func resolveStoreConfigReferences(
 	var hasRemotes bool
 
 	for name, storeCfg := range merged {
-		if isLocalType(storeCfg.Type) {
+		if storeCfg.Type.IsLocal() {
 			locals[name] = storeCfg
 		} else {
 			hasRemotes = true
@@ -168,7 +168,7 @@ func resolveStoreConfigReferences(
 
 	for name, storeCfg := range merged {
 		// No config blob to resolve (and ResolveAll(nil) would error).
-		if isLocalType(storeCfg.Type) || len(storeCfg.Config) == 0 {
+		if storeCfg.Type.IsLocal() || len(storeCfg.Config) == 0 {
 			continue
 		}
 
@@ -182,10 +182,6 @@ func resolveStoreConfigReferences(
 	}
 
 	return nil
-}
-
-func isLocalType(t kv.ProviderType) bool {
-	return t == kv.Env || t == kv.Inline || t == kv.File
 }
 
 func newRegistryWithFactories(factories map[kv.ProviderType]kv.ProviderFactory) (*Registry, error) {
