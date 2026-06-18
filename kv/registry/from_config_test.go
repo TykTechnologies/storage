@@ -701,3 +701,29 @@ func TestNewFromConfigLifecycle(t *testing.T) {
 		require.ErrorIs(t, err, kv.ErrStoreNotFound)
 	})
 }
+
+func TestNewFromConfigWithFactoriesOverridesDefault(t *testing.T) {
+	t.Parallel()
+
+	doc := []byte(`{
+		"kv": {
+			"stores": {
+				"file": {"type": "file", "config": {}}
+			}
+		}
+	}`)
+
+	override := &fakeProvider{data: map[string]string{"my-key": "from-override"}}
+
+	reg := newRegistry(t, doc, registry.WithFactories(map[kv.ProviderType]kv.ProviderFactory{
+		kv.File: recordingFactory(nil, override, nil),
+	}))
+
+	store, err := reg.GetStore("file")
+	require.NoError(t, err)
+
+	got, err := store.Get(t.Context(), "my-key")
+	require.NoError(t, err)
+	require.Equal(t, "from-override", got,
+		"the WithFactories kv.File factory must override the OSS default, not error on collision")
+}
