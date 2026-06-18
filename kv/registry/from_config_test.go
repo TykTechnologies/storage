@@ -228,7 +228,8 @@ func TestNewFromConfigPhase1Resolution(t *testing.T) {
 		}`)
 
 		vaultRec := &configRecorder{}
-		newRegistry(t, doc,
+		newRegistry(
+			t, doc,
 			registry.WithDefaultStores(map[string]kv.StoreConfig{
 				"file": {Type: kv.File, Required: true, Config: json.RawMessage(`{"base_path": "/etc/some"}`)},
 			}),
@@ -257,7 +258,8 @@ func TestNewFromConfigPhase1Resolution(t *testing.T) {
 		}`)
 
 		vaultRec := &configRecorder{}
-		newRegistry(t, doc,
+		newRegistry(
+			t, doc,
 			registry.WithDefaultStores(map[string]kv.StoreConfig{
 				"vault": {Type: kv.Vault, Required: true, Config: json.RawMessage(`{"token": "kv://env/VAULT_TOKEN"}`)},
 			}),
@@ -410,7 +412,8 @@ func TestNewFromConfigDefaultStoresMerge(t *testing.T) {
 	t.Run("nil rawConfig builds the registry from defaults alone", func(t *testing.T) {
 		t.Parallel()
 
-		reg := newRegistry(t, nil,
+		reg := newRegistry(
+			t, nil,
 			registry.WithDefaultStores(map[string]kv.StoreConfig{
 				"env": {Type: kv.Env, Required: true, Config: json.RawMessage(`{"data": {"KEY": "from-default"}}`)},
 			}),
@@ -439,7 +442,8 @@ func TestNewFromConfigDefaultStoresMerge(t *testing.T) {
 		}`)
 
 		vaultRec := &configRecorder{}
-		newRegistry(t, doc,
+		newRegistry(
+			t, doc,
 			registry.WithDefaultStores(map[string]kv.StoreConfig{
 				"vault": {Type: kv.Vault, Config: json.RawMessage(`{"token": "from-defaults"}`)},
 			}),
@@ -487,7 +491,8 @@ func TestNewFromConfigDocumentHandling(t *testing.T) {
 			[]byte(`{"listen_port": 8080}`),
 			[]byte(`{"kv": {}}`),
 		} {
-			reg := newRegistry(t, doc,
+			reg := newRegistry(
+				t, doc,
 				registry.WithDefaultStores(map[string]kv.StoreConfig{
 					"env": {Type: kv.Env, Config: json.RawMessage(`{"data": {}}`)},
 				}),
@@ -726,4 +731,34 @@ func TestNewFromConfigWithFactoriesOverridesDefault(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "from-override", got,
 		"the WithFactories kv.File factory must override the OSS default, not error on collision")
+}
+
+func TestNewFromConfigRejectsInvalidFactories(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty provider type", func(t *testing.T) {
+		t.Parallel()
+
+		reg, err := registry.NewFromConfig(t.Context(), nil, registry.WithFactories(
+			map[kv.ProviderType]kv.ProviderFactory{
+				"": recordingFactory(nil, &fakeProvider{}, nil),
+			},
+		))
+		require.Error(t, err)
+		require.Nil(t, reg)
+		require.ErrorContains(t, err, "provider type cannot be empty")
+	})
+
+	t.Run("nil factory", func(t *testing.T) {
+		t.Parallel()
+
+		reg, err := registry.NewFromConfig(t.Context(), nil, registry.WithFactories(
+			map[kv.ProviderType]kv.ProviderFactory{
+				kv.AWS: nil,
+			},
+		))
+		require.Error(t, err)
+		require.Nil(t, reg)
+		require.ErrorContains(t, err, "factory cannot be nil")
+	})
 }
