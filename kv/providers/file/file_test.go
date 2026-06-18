@@ -38,7 +38,7 @@ func TestNewFactory(t *testing.T) {
 		require.NotNil(t, p)
 	})
 
-	t.Run("empty config is accepted (absolute paths work without base_path)", func(t *testing.T) {
+	t.Run("empty config builds a provider (file refs rejected until base_path is set)", func(t *testing.T) {
 		t.Parallel()
 
 		for _, cfg := range []json.RawMessage{nil, {}, json.RawMessage(`{}`)} {
@@ -70,26 +70,13 @@ func TestProviderIsStandalone(t *testing.T) {
 func TestProviderGet(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reads plain file contents via absolute path", func(t *testing.T) {
-		t.Parallel()
-
-		dir := t.TempDir()
-		f := filepath.Join(dir, "secret.txt")
-		require.NoError(t, os.WriteFile(f, []byte("my-secret-value"), 0o600))
-
-		got, err := newProvider(t, "").Get(t.Context(), f)
-		require.NoError(t, err)
-		assert.Equal(t, "my-secret-value", got)
-	})
-
 	t.Run("strips a trailing LF newline", func(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
-		f := filepath.Join(dir, "secret.txt")
-		require.NoError(t, os.WriteFile(f, []byte("my-secret-value\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "secret.txt"), []byte("my-secret-value\n"), 0o600))
 
-		got, err := newProvider(t, "").Get(t.Context(), f)
+		got, err := newProvider(t, dir).Get(t.Context(), "secret.txt")
 		require.NoError(t, err)
 		assert.Equal(t, "my-secret-value", got)
 	})
@@ -98,10 +85,9 @@ func TestProviderGet(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
-		f := filepath.Join(dir, "secret.txt")
-		require.NoError(t, os.WriteFile(f, []byte("my-secret-value\r\n"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "secret.txt"), []byte("my-secret-value\r\n"), 0o600))
 
-		got, err := newProvider(t, "").Get(t.Context(), f)
+		got, err := newProvider(t, dir).Get(t.Context(), "secret.txt")
 		require.NoError(t, err)
 		assert.Equal(t, "my-secret-value", got)
 	})
@@ -110,29 +96,19 @@ func TestProviderGet(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
-		f := filepath.Join(dir, "cert.pem")
 		pem := "-----BEGIN CERTIFICATE-----\nMIIBkTCB+wIJ\n-----END CERTIFICATE-----\n"
-		require.NoError(t, os.WriteFile(f, []byte(pem), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "cert.pem"), []byte(pem), 0o600))
 
-		got, err := newProvider(t, "").Get(t.Context(), f)
+		got, err := newProvider(t, dir).Get(t.Context(), "cert.pem")
 		require.NoError(t, err)
 		assert.Equal(t, "-----BEGIN CERTIFICATE-----\nMIIBkTCB+wIJ\n-----END CERTIFICATE-----", got)
-	})
-
-	t.Run("missing file returns kv.KeyNotFoundError", func(t *testing.T) {
-		t.Parallel()
-
-		// Cross-provider consistency: an absent key is a not-found, detectable
-		// via errors.As regardless of which provider produced it.
-		_, err := newProvider(t, "").Get(t.Context(), "/nonexistent/path/secret.txt")
-
-		var notFound *kv.KeyNotFoundError
-		require.ErrorAs(t, err, &notFound)
 	})
 
 	t.Run("missing relative key under base_path returns kv.KeyNotFoundError", func(t *testing.T) {
 		t.Parallel()
 
+		// Cross-provider consistency: an absent key is a not-found, detectable
+		// via errors.As regardless of which provider produced it.
 		dir := t.TempDir() // exists, but contains no "absent" file
 		_, err := newProvider(t, dir).Get(t.Context(), "absent")
 
@@ -140,11 +116,13 @@ func TestProviderGet(t *testing.T) {
 		require.ErrorAs(t, err, &notFound)
 	})
 
-	t.Run("relative key without base_path errors", func(t *testing.T) {
+	t.Run("base_path is mandatory: every key is rejected when it is empty", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := newProvider(t, "").Get(t.Context(), "my-cert")
-		require.ErrorIs(t, err, file.ErrBasePathRequired)
+		for _, key := range []string{"my-cert", "/etc/passwd"} {
+			_, err := newProvider(t, "").Get(t.Context(), key)
+			require.ErrorIs(t, err, file.ErrBasePathRequired, "key %q", key)
+		}
 	})
 
 	t.Run("resolves a relative key under base_path", func(t *testing.T) {

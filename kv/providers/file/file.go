@@ -17,26 +17,31 @@ import (
 
 // Config is the file provider's configuration.
 type Config struct {
-	// BasePath, when set, is a security boundary: keys must be relative paths
-	// confined within it; absolute paths and ".." traversal are rejected.
-	// When empty, only absolute keys are accepted (no base to resolve against).
+	// BasePath is the mandatory security boundary for file references. When
+	// set, keys must be relative paths that resolve within this directory:
+	// absolute paths and ".." traversal are rejected, and symlinks that escape
+	// the directory after resolution are rejected. When empty, the provider
+	// resolves nothing — every key is rejected — so file references are
+	// effectively disabled until a base_path is configured.
 	BasePath string `json:"base_path"`
 }
 
 // NewFactory returns a ProviderFactory for filesystem-backed stores.
+//
+// An empty or absent config is accepted and yields a provider with no
+// base_path; that provider rejects every Get (see Config.BasePath). This lets
+// callers register the store unconditionally and treat "no base_path" as
+// "file references disabled" rather than a construction error.
 func NewFactory() kv.ProviderFactory {
 	return func(config json.RawMessage) (kv.Provider, error) {
-		// Empty config is accepted because config doesn't have mandatory
-		// fields.
 		if len(config) == 0 {
 			return &fileProvider{}, nil
 		}
 
 		var cfg Config
 
-		err := json.Unmarshal(config, &cfg)
-		if err != nil {
-			return nil, err
+		if err := json.Unmarshal(config, &cfg); err != nil {
+			return nil, fmt.Errorf("file: invalid config: %w", err)
 		}
 
 		return &fileProvider{basePath: cfg.BasePath}, nil
@@ -47,10 +52,15 @@ type fileProvider struct {
 	basePath string
 }
 
+// IsStandalone reports that the provider needs no cache wrapper: filesystem
+// reads are cheap.
 func (fp *fileProvider) IsStandalone() bool {
 	return true
 }
 
+// Get reads the file addressed by key and returns its contents with trailing
+// newlines trimmed. key must be a relative path confined to base_path (see
+// Config.BasePath). A missing file returns *kv.KeyNotFoundError.
 func (fp *fileProvider) Get(ctx context.Context, key string) (string, error) {
 	path, err := resolveKeyPath(fp.basePath, key)
 	if err != nil {
@@ -69,17 +79,15 @@ func (fp *fileProvider) Get(ctx context.Context, key string) (string, error) {
 
 	// Re-verify after symlink resolution: a symlink inside basePath can point
 	// outside (symlink escape).
-	if fp.basePath != "" {
-		canonicalBase, err := filepath.EvalSymlinks(fp.basePath)
-		// EvalSymlinks failure here requires a race (basePath symlink broken between
-		// resolving the file path above and this call). Not worth a flaky test.
-		if err != nil {
-			return "", fmt.Errorf("file: cannot resolve base_path %q: %w", fp.basePath, err)
-		}
+	canonicalBase, err := filepath.EvalSymlinks(fp.basePath)
+	// EvalSymlinks failure here requires a race (basePath symlink broken between
+	// resolving the file path above and this call). Not worth a flaky test.
+	if err != nil {
+		return "", fmt.Errorf("file: cannot resolve base_path %q: %w", fp.basePath, err)
+	}
 
-		if !confined(canonicalBase, resolved) {
-			return "", fmt.Errorf("%w: key %q resolved to %q", ErrSymlinkEscape, key, resolved)
-		}
+	if !confined(canonicalBase, resolved) {
+		return "", fmt.Errorf("%w: key %q resolved to %q", ErrSymlinkEscape, key, resolved)
 	}
 
 	data, err := os.ReadFile(resolved)
@@ -98,15 +106,11 @@ func (fp *fileProvider) Get(ctx context.Context, key string) (string, error) {
 // candidate file path.
 func resolveKeyPath(basePath, key string) (string, error) {
 	if basePath == "" {
-		if !filepath.IsAbs(key) {
-			return "", fmt.Errorf(
-				"%w: key %q (set base_path or use an absolute path)",
-				ErrBasePathRequired,
-				key,
-			)
-		}
-
-		return key, nil
+		return "", fmt.Errorf(
+			"%w: key %q (set base_path)",
+			ErrBasePathRequired,
+			key,
+		)
 	}
 
 	if filepath.IsAbs(key) {
