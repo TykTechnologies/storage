@@ -113,6 +113,10 @@ func resolveKeyPath(basePath, key string) (string, error) {
 		)
 	}
 
+	if key == "" {
+		return "", ErrEmptyKey
+	}
+
 	if filepath.IsAbs(key) {
 		return "", fmt.Errorf(
 			"%w: %q (use a path relative to base_path)",

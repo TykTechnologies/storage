@@ -125,6 +125,13 @@ func TestProviderGet(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects an empty key", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := newProvider(t, t.TempDir()).Get(t.Context(), "")
+		require.ErrorIs(t, err, file.ErrEmptyKey)
+	})
+
 	t.Run("resolves a relative key under base_path", func(t *testing.T) {
 		t.Parallel()
 
