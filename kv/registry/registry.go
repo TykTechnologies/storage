@@ -219,6 +219,24 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 	return nil
 }
 
+// set registers a factory, replacing any existing one. Unline Add, it permits
+// override - used by the composition layer so WithFactories wins over OSS defaults.
+func (r *Registry) set(pt kv.ProviderType, factory kv.ProviderFactory) error {
+	if pt == "" {
+		return errors.New("provider type cannot be empty")
+	}
+
+	if factory == nil {
+		return errors.New("factory cannot be nil")
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.factories[pt] = factory
+
+	return nil
+}
+
 // GetStore retrieves an initialized store by name.
 // Returns ErrStoreNotFound if no store with the given name was initialized.
 func (r *Registry) GetStore(name string) (kv.Provider, error) {

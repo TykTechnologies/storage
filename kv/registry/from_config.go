@@ -190,7 +190,7 @@ func newRegistryWithFactories(factories map[kv.ProviderType]kv.ProviderFactory) 
 	r := NewDefaultRegistry()
 
 	for providerType, factory := range factories {
-		if err := r.Add(providerType, factory); err != nil {
+		if err := r.set(providerType, factory); err != nil {
 			return nil, fmt.Errorf("kv: failed to register factory: %w", err)
 		}
 	}
