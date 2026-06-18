@@ -17,12 +17,16 @@ import (
 
 // Config is the file provider's configuration.
 type Config struct {
-	// BasePath is the mandatory security boundary for file references. When
-	// set, keys must be relative paths that resolve within this directory:
-	// absolute paths and ".." traversal are rejected, and symlinks that escape
-	// the directory after resolution are rejected. When empty, the provider
-	// resolves nothing — every key is rejected — so file references are
-	// effectively disabled until a base_path is configured.
+	// BasePath is the mandatory security boundary for file references.
+	//
+	// It must be an absolute path: a relative value is rejected at construction
+	// so the boundary's location is explicit and never depends on the process
+	// working directory. When set, keys must be relative paths that resolve
+	// within this directory — absolute keys and ".." traversal are rejected,
+	// and symlinks that escape the directory after resolution are rejected.
+	//
+	// When empty, the provider resolves nothing: every key is rejected, so file
+	// references are effectively disabled until a base_path is configured.
 	BasePath string `json:"base_path"`
 }
 
@@ -42,6 +46,10 @@ func NewFactory() kv.ProviderFactory {
 
 		if err := json.Unmarshal(config, &cfg); err != nil {
 			return nil, fmt.Errorf("file: invalid config: %w", err)
+		}
+
+		if cfg.BasePath != "" && !filepath.IsAbs(cfg.BasePath) {
+			return nil, fmt.Errorf("%w: %q", ErrBasePathNotAbsolute, cfg.BasePath)
 		}
 
 		return &fileProvider{basePath: cfg.BasePath}, nil

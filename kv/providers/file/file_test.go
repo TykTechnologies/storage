@@ -54,6 +54,13 @@ func TestNewFactory(t *testing.T) {
 		_, err := file.NewFactory()(json.RawMessage(`{not json`))
 		require.Error(t, err)
 	})
+
+	t.Run("rejects a relative base_path", func(t *testing.T) {
+		t.Parallel()
+
+		_, err := file.NewFactory()(json.RawMessage(`{"base_path":"secrets"}`))
+		require.ErrorIs(t, err, file.ErrBasePathNotAbsolute)
+	})
 }
 
 func TestProviderIsStandalone(t *testing.T) {
