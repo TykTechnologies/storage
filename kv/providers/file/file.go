@@ -6,6 +6,7 @@ package file
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -59,7 +60,11 @@ func (fp *fileProvider) Get(ctx context.Context, key string) (string, error) {
 	// Resolve K8s AtomicWriter symlinks (e.g. ..data -> ..2024_01_01_00_00_00).
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
-		return "", fmt.Errorf("file KV: cannot resolve path %q: %w", path, err)
+		if errors.Is(err, os.ErrNotExist) {
+			return "", &kv.KeyNotFoundError{KeyPath: key}
+		}
+
+		return "", fmt.Errorf("file: cannot resolve path %q: %w", path, err)
 	}
 
 	// Re-verify after symlink resolution: a symlink inside basePath can point
@@ -69,7 +74,7 @@ func (fp *fileProvider) Get(ctx context.Context, key string) (string, error) {
 		// EvalSymlinks failure here requires a race (basePath symlink broken between
 		// resolving the file path above and this call). Not worth a flaky test.
 		if err != nil {
-			return "", fmt.Errorf("file KV: cannot resolve base_path %q: %w", fp.basePath, err)
+			return "", fmt.Errorf("file: cannot resolve base_path %q: %w", fp.basePath, err)
 		}
 
 		if !confined(canonicalBase, resolved) {
@@ -79,7 +84,11 @@ func (fp *fileProvider) Get(ctx context.Context, key string) (string, error) {
 
 	data, err := os.ReadFile(resolved)
 	if err != nil {
-		return "", fmt.Errorf("file KV: cannot read file %q: %w", resolved, err)
+		if errors.Is(err, os.ErrNotExist) {
+			return "", &kv.KeyNotFoundError{KeyPath: key}
+		}
+
+		return "", fmt.Errorf("file: cannot read file %q: %w", resolved, err)
 	}
 
 	return strings.TrimRight(string(data), "\r\n"), nil

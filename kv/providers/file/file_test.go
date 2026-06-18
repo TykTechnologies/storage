@@ -75,7 +75,7 @@ func TestProviderGet(t *testing.T) {
 
 		dir := t.TempDir()
 		f := filepath.Join(dir, "secret.txt")
-		require.NoError(t, os.WriteFile(f, []byte("my-secret-value"), 0600))
+		require.NoError(t, os.WriteFile(f, []byte("my-secret-value"), 0o600))
 
 		got, err := newProvider(t, "").Get(t.Context(), f)
 		require.NoError(t, err)
@@ -87,7 +87,7 @@ func TestProviderGet(t *testing.T) {
 
 		dir := t.TempDir()
 		f := filepath.Join(dir, "secret.txt")
-		require.NoError(t, os.WriteFile(f, []byte("my-secret-value\n"), 0600))
+		require.NoError(t, os.WriteFile(f, []byte("my-secret-value\n"), 0o600))
 
 		got, err := newProvider(t, "").Get(t.Context(), f)
 		require.NoError(t, err)
@@ -99,7 +99,7 @@ func TestProviderGet(t *testing.T) {
 
 		dir := t.TempDir()
 		f := filepath.Join(dir, "secret.txt")
-		require.NoError(t, os.WriteFile(f, []byte("my-secret-value\r\n"), 0600))
+		require.NoError(t, os.WriteFile(f, []byte("my-secret-value\r\n"), 0o600))
 
 		got, err := newProvider(t, "").Get(t.Context(), f)
 		require.NoError(t, err)
@@ -112,18 +112,32 @@ func TestProviderGet(t *testing.T) {
 		dir := t.TempDir()
 		f := filepath.Join(dir, "cert.pem")
 		pem := "-----BEGIN CERTIFICATE-----\nMIIBkTCB+wIJ\n-----END CERTIFICATE-----\n"
-		require.NoError(t, os.WriteFile(f, []byte(pem), 0600))
+		require.NoError(t, os.WriteFile(f, []byte(pem), 0o600))
 
 		got, err := newProvider(t, "").Get(t.Context(), f)
 		require.NoError(t, err)
 		assert.Equal(t, "-----BEGIN CERTIFICATE-----\nMIIBkTCB+wIJ\n-----END CERTIFICATE-----", got)
 	})
 
-	t.Run("missing file errors", func(t *testing.T) {
+	t.Run("missing file returns kv.KeyNotFoundError", func(t *testing.T) {
 		t.Parallel()
 
+		// Cross-provider consistency: an absent key is a not-found, detectable
+		// via errors.As regardless of which provider produced it.
 		_, err := newProvider(t, "").Get(t.Context(), "/nonexistent/path/secret.txt")
-		require.Error(t, err)
+
+		var notFound *kv.KeyNotFoundError
+		require.ErrorAs(t, err, &notFound)
+	})
+
+	t.Run("missing relative key under base_path returns kv.KeyNotFoundError", func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir() // exists, but contains no "absent" file
+		_, err := newProvider(t, dir).Get(t.Context(), "absent")
+
+		var notFound *kv.KeyNotFoundError
+		require.ErrorAs(t, err, &notFound)
 	})
 
 	t.Run("relative key without base_path errors", func(t *testing.T) {
@@ -137,7 +151,7 @@ func TestProviderGet(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "api-key"), []byte("the-api-key"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "api-key"), []byte("the-api-key"), 0o600))
 
 		got, err := newProvider(t, dir).Get(t.Context(), "api-key")
 		require.NoError(t, err)
@@ -149,7 +163,7 @@ func TestProviderGet(t *testing.T) {
 
 		dir := t.TempDir()
 		f := filepath.Join(dir, "secret")
-		require.NoError(t, os.WriteFile(f, []byte("abs-value"), 0600))
+		require.NoError(t, os.WriteFile(f, []byte("abs-value"), 0o600))
 
 		_, err := newProvider(t, "/some/other/base").Get(t.Context(), f)
 		require.ErrorIs(t, err, file.ErrAbsoluteRejected)
@@ -160,7 +174,7 @@ func TestProviderGet(t *testing.T) {
 
 		dir := t.TempDir()
 		f := filepath.Join(dir, "secret")
-		require.NoError(t, os.WriteFile(f, []byte("abs-value"), 0600))
+		require.NoError(t, os.WriteFile(f, []byte("abs-value"), 0o600))
 
 		_, err := newProvider(t, dir).Get(t.Context(), f)
 		require.ErrorIs(t, err, file.ErrAbsoluteRejected)
@@ -185,7 +199,7 @@ func TestProviderGet(t *testing.T) {
 
 		base := t.TempDir()
 		target := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(target, "passwd"), []byte("root:x:0:0"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(target, "passwd"), []byte("root:x:0:0"), 0o600))
 		// A symlink inside base/ pointing outside to target/passwd.
 		require.NoError(t, os.Symlink(filepath.Join(target, "passwd"), filepath.Join(base, "evil-link")))
 
@@ -202,8 +216,8 @@ func TestProviderGet(t *testing.T) {
 		//   <dir>/my-key -> ..data/my-key
 		dir := t.TempDir()
 		dataDir := filepath.Join(dir, "..2024_01_01_00_00_00")
-		require.NoError(t, os.Mkdir(dataDir, 0700))
-		require.NoError(t, os.WriteFile(filepath.Join(dataDir, "my-key"), []byte("secret-from-k8s"), 0600))
+		require.NoError(t, os.Mkdir(dataDir, 0o700))
+		require.NoError(t, os.WriteFile(filepath.Join(dataDir, "my-key"), []byte("secret-from-k8s"), 0o600))
 		require.NoError(t, os.Symlink("..2024_01_01_00_00_00", filepath.Join(dir, "..data")))
 		require.NoError(t, os.Symlink("..data/my-key", filepath.Join(dir, "my-key")))
 
@@ -221,8 +235,8 @@ func TestProviderGet_PicksUpRotation(t *testing.T) {
 
 	dir := t.TempDir()
 	v1 := filepath.Join(dir, "..2024_01_01_00_00_00")
-	require.NoError(t, os.Mkdir(v1, 0700))
-	require.NoError(t, os.WriteFile(filepath.Join(v1, "my-key"), []byte("old-secret"), 0600))
+	require.NoError(t, os.Mkdir(v1, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(v1, "my-key"), []byte("old-secret"), 0o600))
 	require.NoError(t, os.Symlink("..2024_01_01_00_00_00", filepath.Join(dir, "..data")))
 	require.NoError(t, os.Symlink("..data/my-key", filepath.Join(dir, "my-key")))
 
@@ -234,8 +248,8 @@ func TestProviderGet_PicksUpRotation(t *testing.T) {
 
 	// Rotate: new version dir, atomic swap of the ..data symlink.
 	v2 := filepath.Join(dir, "..2024_06_01_00_00_00")
-	require.NoError(t, os.Mkdir(v2, 0700))
-	require.NoError(t, os.WriteFile(filepath.Join(v2, "my-key"), []byte("new-secret"), 0600))
+	require.NoError(t, os.Mkdir(v2, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(v2, "my-key"), []byte("new-secret"), 0o600))
 	require.NoError(t, os.Remove(filepath.Join(dir, "..data")))
 	require.NoError(t, os.Symlink("..2024_06_01_00_00_00", filepath.Join(dir, "..data")))
 
