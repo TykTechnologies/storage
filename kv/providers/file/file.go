@@ -73,11 +73,7 @@ func (fp *fileProvider) Get(ctx context.Context, key string) (string, error) {
 		}
 
 		if !confined(canonicalBase, resolved) {
-			return "", fmt.Errorf(
-				"file KV: symlink escape detected for key %q: resolved to %q which is outside base_path",
-				key,
-				resolved,
-			)
+			return "", fmt.Errorf("%w: key %q resolved to %q", ErrSymlinkEscape, key, resolved)
 		}
 	}
 
@@ -95,7 +91,8 @@ func resolveKeyPath(basePath, key string) (string, error) {
 	if basePath == "" {
 		if !filepath.IsAbs(key) {
 			return "", fmt.Errorf(
-				"file: key %q is relative but base_path is not set; set base_path or use an absolute path",
+				"%w: key %q (set base_path or use an absolute path)",
+				ErrBasePathRequired,
 				key,
 			)
 		}
@@ -105,14 +102,15 @@ func resolveKeyPath(basePath, key string) (string, error) {
 
 	if filepath.IsAbs(key) {
 		return "", fmt.Errorf(
-			"file: absolute path %q rejected because base_path is set; use a path relative to base_path",
+			"%w: %q (use a path relative to base_path)",
+			ErrAbsoluteRejected,
 			key,
 		)
 	}
 
 	joined := filepath.Join(basePath, key)
 	if !confined(basePath, joined) {
-		return "", fmt.Errorf("file: path traversal detected in key %q", key)
+		return "", fmt.Errorf("%w: key %q", ErrTraversal, key)
 	}
 
 	return joined, nil

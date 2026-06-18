@@ -126,12 +126,11 @@ func TestProviderGet(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	t.Run("relative key without base_path errors and mentions base_path", func(t *testing.T) {
+	t.Run("relative key without base_path errors", func(t *testing.T) {
 		t.Parallel()
 
 		_, err := newProvider(t, "").Get(t.Context(), "my-cert")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "base_path")
+		require.ErrorIs(t, err, file.ErrBasePathRequired)
 	})
 
 	t.Run("resolves a relative key under base_path", func(t *testing.T) {
@@ -153,8 +152,7 @@ func TestProviderGet(t *testing.T) {
 		require.NoError(t, os.WriteFile(f, []byte("abs-value"), 0600))
 
 		_, err := newProvider(t, "/some/other/base").Get(t.Context(), f)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "absolute path")
+		require.ErrorIs(t, err, file.ErrAbsoluteRejected)
 	})
 
 	t.Run("rejects an absolute path even when it points inside base_path", func(t *testing.T) {
@@ -165,24 +163,21 @@ func TestProviderGet(t *testing.T) {
 		require.NoError(t, os.WriteFile(f, []byte("abs-value"), 0600))
 
 		_, err := newProvider(t, dir).Get(t.Context(), f)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "absolute path")
+		require.ErrorIs(t, err, file.ErrAbsoluteRejected)
 	})
 
 	t.Run("rejects dotdot traversal when base_path is set", func(t *testing.T) {
 		t.Parallel()
 
 		_, err := newProvider(t, t.TempDir()).Get(t.Context(), "../etc/passwd")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "traversal")
+		require.ErrorIs(t, err, file.ErrTraversal)
 	})
 
 	t.Run("rejects embedded dotdot traversal", func(t *testing.T) {
 		t.Parallel()
 
 		_, err := newProvider(t, t.TempDir()).Get(t.Context(), "subdir/../../etc/passwd")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "traversal")
+		require.ErrorIs(t, err, file.ErrTraversal)
 	})
 
 	t.Run("rejects a symlink that escapes base_path after EvalSymlinks", func(t *testing.T) {
@@ -195,8 +190,7 @@ func TestProviderGet(t *testing.T) {
 		require.NoError(t, os.Symlink(filepath.Join(target, "passwd"), filepath.Join(base, "evil-link")))
 
 		_, err := newProvider(t, base).Get(t.Context(), "evil-link")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "symlink escape")
+		require.ErrorIs(t, err, file.ErrSymlinkEscape)
 	})
 
 	t.Run("follows K8s AtomicWriter symlinks", func(t *testing.T) {
