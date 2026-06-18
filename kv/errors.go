@@ -29,6 +29,10 @@ type KeyNotFoundError struct {
 }
 
 func (e *KeyNotFoundError) Error() string {
+	if e.StoreName == "" {
+		return fmt.Sprintf("key %q not found", e.KeyPath)
+	}
+
 	return fmt.Sprintf("key %q not found in store %q", e.KeyPath, e.StoreName)
 }
 
