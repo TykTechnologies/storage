@@ -10,6 +10,7 @@ import (
 
 	"github.com/TykTechnologies/storage/kv"
 	"github.com/TykTechnologies/storage/kv/internal/store"
+	"github.com/TykTechnologies/storage/kv/providers/env"
 	"github.com/TykTechnologies/storage/kv/providers/file"
 
 	"golang.org/x/sync/errgroup"
@@ -60,6 +61,13 @@ func NewDefaultRegistry(opts ...Option) *Registry {
 	err := r.Add(kv.File, file.NewFactory())
 	if err != nil {
 		r.logger.Warn("Failed to add default file factory", map[string]any{
+			"error": err,
+		})
+	}
+
+	err = r.Add(kv.Env, env.NewFactory())
+	if err != nil {
+		r.logger.Warn("Failed to add default env factory", map[string]any{
 			"error": err,
 		})
 	}
