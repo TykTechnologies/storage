@@ -28,10 +28,6 @@ import (
 // configured.
 var ErrPrefixRequired = errors.New("env: prefix is required")
 
-// FIX: still open — if a reference like kv://env/KEY#field reads a value that is
-// missing or not JSON, the resolver's field extraction errors. Decide whether
-// that is desired or env lookups with a fragment should fail soft to "".
-
 // Config is the env provider's configuration.
 type Config struct {
 	// Prefix is prepended literally to the (optionally uppercased) key before the
