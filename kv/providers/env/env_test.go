@@ -36,7 +36,7 @@ func TestNewFactory(t *testing.T) {
 		require.NotNil(t, p)
 	})
 
-	t.Run("empty or absent config builds a provider with zero Config", func(t *testing.T) {
+	t.Run("empty or absent config builds a provider (env refs rejected until prefix is set)", func(t *testing.T) {
 		t.Parallel()
 
 		for _, cfg := range []json.RawMessage{nil, {}, json.RawMessage(`{}`)} {
@@ -101,9 +101,9 @@ func TestProviderGet(t *testing.T) {
 	})
 
 	t.Run("uppercase false uses the key as-is (no case folding)", func(t *testing.T) {
-		t.Setenv("FOO", "bar")
+		t.Setenv("TYK_SECRET_FOO", "bar")
 
-		p := newProvider(t, env.Config{Uppercase: false})
+		p := newProvider(t, env.Config{Prefix: "TYK_SECRET_", Uppercase: false})
 
 		got, err := p.Get(t.Context(), "FOO")
 		require.NoError(t, err)
@@ -111,16 +111,18 @@ func TestProviderGet(t *testing.T) {
 
 		got, err = p.Get(t.Context(), "foo")
 		require.NoError(t, err)
-		assert.Equal(t, "", got, "no case folding: lowercase key must not match FOO")
+		assert.Equal(t, "", got, "no case folding: lowercase key must not match TYK_SECRET_FOO")
 	})
 
-	t.Run("empty prefix with uppercase reads the uppercased bare key", func(t *testing.T) {
+	t.Run("empty prefix is rejected: every key errors with ErrPrefixRequired", func(t *testing.T) {
 		t.Setenv("BARE_KEY", "bare-value")
 
-		got, err := newProvider(t, env.Config{Prefix: "", Uppercase: true}).
-			Get(t.Context(), "bare_key")
-		require.NoError(t, err)
-		assert.Equal(t, "bare-value", got)
+		p := newProvider(t, env.Config{Prefix: "", Uppercase: true})
+
+		for _, key := range []string{"bare_key", "BARE_KEY", ""} {
+			_, err := p.Get(t.Context(), key)
+			require.ErrorIs(t, err, env.ErrPrefixRequired, "key %q", key)
+		}
 	})
 
 	t.Run("prefix is literal: uppercase never applies to the prefix", func(t *testing.T) {
@@ -141,7 +143,7 @@ func TestProviderGet(t *testing.T) {
 		assert.Equal(t, "line\n", got)
 	})
 
-	t.Run("empty key returns empty string and no error (no guard)", func(t *testing.T) {
+	t.Run("empty key with a prefix set returns empty string and no error (no key guard)", func(t *testing.T) {
 		got, err := newProvider(t, env.Config{Prefix: "TYK_SECRET_", Uppercase: true}).
 			Get(t.Context(), "")
 		require.NoError(t, err)

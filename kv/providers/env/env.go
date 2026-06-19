@@ -5,16 +5,18 @@
 // A lookup name is built as Prefix + key, with the key optionally uppercased
 // (see Config).
 //
-// Security: a non-empty Prefix acts as a confinement boundary — every key is
-// read as Prefix+key, so a reference can only ever reach variables under that
-// prefix (there is no traversal escape for environment names). An empty Prefix
-// removes that boundary: keys are read verbatim, so the store can read any
-// variable in the process environment.
+// Security: the Prefix is a mandatory confinement boundary — the env analogue of
+// the file provider's base_path. Every key is read as Prefix+key, so a reference
+// can only ever reach variables under that prefix (there is no traversal escape
+// for environment names). A store with no prefix would let any reference read any
+// process variable (cloud credentials, tokens, PATH, …), so an unprefixed store
+// is disabled: every Get returns ErrPrefixRequired and resolves nothing.
 package env
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -22,19 +24,20 @@ import (
 	"github.com/TykTechnologies/storage/kv"
 )
 
-// FIX: I've asked Andy and Pete, waiting for the decision about next two:
-// 1. The prefix has the same meaning as base_path for the file provider. It restricts
-// attacker to access any env variables. It looks like we should force the prefix right?
-// Because otherwise its too permisive as well. I should ask Andy about it.
-// 2. If we have a reference like kv://env/KEY#field the resolver will try to find
-// the field within KEY JSON value and if its missing or not json, the error will
-// occurred. Is it desired or we should handle a specific case for env variable search
-// that is never failing just returning an empty value?
+// ErrPrefixRequired is returned by Get when the provider has no prefix
+// configured.
+var ErrPrefixRequired = errors.New("env: prefix is required")
+
+// FIX: still open — if a reference like kv://env/KEY#field reads a value that is
+// missing or not JSON, the resolver's field extraction errors. Decide whether
+// that is desired or env lookups with a fragment should fail soft to "".
 
 // Config is the env provider's configuration.
 type Config struct {
-	// Prefix is prepended literally to the key before the environment lookup.
-	// It is never uppercased itself. Empty is valid and reads the key with no prefix.
+	// Prefix is prepended literally to the (optionally uppercased) key before the
+	// environment lookup; it is never uppercased itself. It is mandatory: it is
+	// the store's security boundary, so a provider with an empty prefix rejects
+	// every Get with ErrPrefixRequired (see the package doc).
 	Prefix string `json:"prefix"`
 
 	// Uppercase, when true, uppercases the key — not the prefix — before lookup,
@@ -44,9 +47,8 @@ type Config struct {
 
 // NewFactory returns a ProviderFactory for environment-backed stores.
 //
-// An empty or absent config is valid and yields a zero-Config provider: no
-// prefix, no uppercasing, keys read verbatim from the environment. Invalid JSON
-// returns an error; that malformed config is the provider's only error path.
+// An empty or absent config still builds a provider, so the store can be
+// registered unconditionally.
 func NewFactory() kv.ProviderFactory {
 	return func(config json.RawMessage) (kv.Provider, error) {
 		if len(config) == 0 {
@@ -74,15 +76,16 @@ type envProvider struct {
 // Get reads the environment variable named Prefix + (uppercased key if
 // Uppercase) and returns its value.
 //
-// The result mirrors os.Getenv exactly: a missing variable and a variable set
-// to "" are indistinguishable, and both return ("", nil). An empty key reads
-// os.Getenv(Prefix) and likewise returns no error.
-//
-// Deliberate contrast with the file provider: env never returns
-// *kv.KeyNotFoundError. A not-found error would propagate as a fatal startup
-// failure in the caller's env resolution path, regressing any config that
-// tolerates an unset optional secret.
+// If no prefix is configured it returns ErrPrefixRequired for every key — the
+// prefix guard is checked first, so even an empty key is rejected before any
+// lookup. With a prefix set, the result mirrors os.Getenv exactly: a missing
+// variable and a variable set to "" are indistinguishable, and both return
+// ("", nil); an empty key reads os.Getenv(Prefix) and likewise returns no error.
 func (ep *envProvider) Get(_ context.Context, key string) (string, error) {
+	if ep.prefix == "" {
+		return "", ErrPrefixRequired
+	}
+
 	if ep.uppercase {
 		key = strings.ToUpper(key)
 	}
