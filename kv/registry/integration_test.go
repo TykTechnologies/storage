@@ -27,12 +27,14 @@ func promotedDefaults(t *testing.T, basePath string, secrets map[string]string) 
 	if basePath != "" {
 		fileCfg, err := json.Marshal(map[string]any{"base_path": basePath})
 		require.NoError(t, err)
+
 		stores["file"] = kv.StoreConfig{Type: kv.File, Config: fileCfg}
 	}
 
 	if secrets != nil {
 		inlineCfg, err := json.Marshal(map[string]any{"data": secrets})
 		require.NoError(t, err)
+
 		stores["secrets"] = kv.StoreConfig{Type: kv.Inline, Config: inlineCfg}
 	}
 
