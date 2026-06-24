@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -88,4 +89,25 @@ func TestOptions(t *testing.T) {
 			assert.Equal(t, tc.expectedBaseCfg, baseCfg)
 		})
 	}
+}
+
+func TestWithCredentialsProvider(t *testing.T) {
+	called := false
+	provider := func(_ context.Context) (string, string, error) {
+		called = true
+		return "default", "token123", nil
+	}
+
+	baseCfg := &BaseConfig{}
+	WithCredentialsProvider(provider).Apply(baseCfg)
+
+	if baseCfg.CredentialsProvider == nil {
+		t.Fatal("expected CredentialsProvider to be set on BaseConfig")
+	}
+
+	username, password, err := baseCfg.CredentialsProvider(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, "default", username)
+	assert.Equal(t, "token123", password)
+	assert.True(t, called, "expected provider to be invoked")
 }
