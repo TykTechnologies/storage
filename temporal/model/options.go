@@ -51,6 +51,19 @@ func WithOnConnect(onConnect func(context.Context) error) Option {
 	}
 }
 
+// WithCredentialsProvider supplies a function that returns the username and
+// password for each new Redis connection, instead of static credentials. Use
+// this for rotating, short-lived credentials such as cloud IAM auth tokens
+// (e.g. GCP Memorystore for Valkey, AWS ElastiCache). When set, it takes
+// precedence over RedisOptions.Username/Password.
+func WithCredentialsProvider(provider CredentialsProviderFunc) Option {
+	return &opts{
+		fn: func(bcfg *BaseConfig) {
+			bcfg.CredentialsProvider = provider
+		},
+	}
+}
+
 // WithTLS is a helper function to create a TLSOption for the storage.
 func WithTLS(config *TLS) Option {
 	return &opts{
