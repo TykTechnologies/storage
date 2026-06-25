@@ -132,17 +132,20 @@ type vaultProvider struct {
 	kvv2 bool
 }
 
-// FIX:
-// 1. I don't understand in what case provider can fulfill the "storeName" field
-// to the KeyNotFoundError
-// 2. Address warning with /data/ in path. Is it possible?
-// 3.
-
+// Get reads the secret at key and returns its data map serialized as JSON.
+// Field selection (the "#field" fragment) is the resolver's responsibility, so
+// Get returns the whole secret, never a single value.
+//
+// A missing secret returns *kv.KeyNotFoundError; a backend or transport failure
+// returns *kv.StoreUnavailableError.
 func (vp *vaultProvider) Get(ctx context.Context, key string) (string, error) {
 	logical := vp.client.Logical()
 
-	// WARN: Is it possible that key contains the /data/ already on the key?
-	// I should clarify this and check if its present before injecting /data.
+	// For KV v2 the caller passes the logical path (e.g. "secret/myapp/config");
+	// the engine stores it under "<mount>/data/<path>", so insert "/data" after
+	// the mount, assumed to be the first segment (as in the legacy client). The
+	// insertion is intentionally blind — a path segment legitimately named "data"
+	// must not be special-cased, so we never inspect the key for an existing one.
 	path := key
 
 	if vp.kvv2 {
@@ -164,10 +167,10 @@ func (vp *vaultProvider) Get(ctx context.Context, key string) (string, error) {
 
 	if vp.kvv2 {
 		var ok bool
-		// kvv2 wraps the contents of the secret within inner "data" field.
+		// KV v2 wraps the secret in an inner "data" field. Its absence means the
+		// path holds no v2 secret, which we treat as not-found.
 		data, ok = data["data"].(map[string]any)
 		if !ok {
-			// FIX: Do I have to return different error here? I don't think so
 			return "", &kv.KeyNotFoundError{KeyPath: key}
 		}
 	}
@@ -177,7 +180,7 @@ func (vp *vaultProvider) Get(ctx context.Context, key string) (string, error) {
 		return "", fmt.Errorf("vault: failed to encode secret %q: %w", key, err)
 	}
 
-	return string(b), err
+	return string(b), nil
 }
 
 func (vp *vaultProvider) Timeout() time.Duration {
