@@ -316,6 +316,93 @@ func TestGet_ReadsSecret(t *testing.T) {
 	}
 }
 
+func TestGet_MountPath(t *testing.T) {
+	tests := []struct {
+		name      string
+		mountPath string
+		key       string
+		kvVersion int
+		wantPath  string
+		wantErr   bool
+	}{
+		{
+			name:      "kv2 nested mount injects /data after the configured mount",
+			mountPath: "tenants/a/kv",
+			key:       "tenants/a/kv/myapp/config",
+			kvVersion: 2,
+			wantPath:  "GET /v1/tenants/a/kv/data/myapp/config",
+		},
+		{
+			name:      "kv2 single-segment mount matches the legacy result",
+			mountPath: "secret",
+			key:       "secret/myapp",
+			kvVersion: 2,
+			wantPath:  "GET /v1/secret/data/myapp",
+		},
+		{
+			name:      "kv2 trailing slash on mount_path is normalized",
+			mountPath: "tenants/a/kv/",
+			key:       "tenants/a/kv/myapp",
+			kvVersion: 2,
+			wantPath:  "GET /v1/tenants/a/kv/data/myapp",
+		},
+		{
+			name:      "kv1 ignores mount_path and reads the path as-is",
+			mountPath: "secret",
+			key:       "secret/myapp",
+			kvVersion: 1,
+			wantPath:  "GET /v1/secret/myapp",
+		},
+		{
+			name:      "kv2 key outside the mount is rejected before any request",
+			mountPath: "tenants/a/kv",
+			key:       "other/secret",
+			kvVersion: 2,
+			wantErr:   true,
+		},
+		{
+			name:      "kv2 key sharing a string prefix but not under the mount is rejected",
+			mountPath: "secret",
+			key:       "secrets/myapp",
+			kvVersion: 2,
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
+				if tt.kvVersion == 1 {
+					writeJSON(w, http.StatusOK, kvv1Envelope(map[string]any{"k": "v"}))
+					return
+				}
+
+				writeJSON(w, http.StatusOK, kvv2Envelope(map[string]any{"k": "v"}))
+			})
+
+			p := newVaultProvider(t, &vault.Config{
+				Address:   stub.url,
+				Token:     "root",
+				KVVersion: tt.kvVersion,
+				MountPath: tt.mountPath,
+			})
+
+			_, err := p.Get(t.Context(), tt.key)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				require.Empty(t, stub.requests(),
+					"a key outside mount_path must be rejected before any Vault request")
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, []string{tt.wantPath}, stub.requests())
+		})
+	}
+}
+
 func TestGet_ReturnsCompactJSONWithoutTrailingNewline(t *testing.T) {
 	stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, kvv2Envelope(map[string]any{"api_key": "abc123"}))

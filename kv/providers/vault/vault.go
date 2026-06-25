@@ -49,6 +49,20 @@ type Config struct {
 	// means v2 (the default): secrets live under "<mount>/data/<path>" and are
 	// wrapped in a "data" envelope. 1 selects v1, where the path is used as-is.
 	KVVersion int `json:"kv_version"`
+
+	// MountPath is the path the KV secrets engine is mounted at, e.g. "secret"
+	// or a nested "tenants/a/kv". It is OPTIONAL and only affects KV v2.
+	//
+	// The key passed to Get is always the full logical path under this mount
+	// (it must start with MountPath). When set, the provider inserts the v2
+	// "/data/" segment immediately after MountPath instead of assuming the mount
+	// is the first path segment — which is what makes nested mounts work. A key
+	// that is not under MountPath is rejected.
+	//
+	// When empty, the provider falls back to the legacy behavior of injecting
+	// "/data" after the first segment, so existing single-segment-mount configs
+	// are unaffected. Ignored for KV v1 (which has no data segment).
+	MountPath string `json:"mount_path"`
 }
 
 // NewFactory returns a kv.ProviderFactory for HashiCorp Vault stores.
@@ -125,10 +139,14 @@ func NewFactory() kv.ProviderFactory {
 
 		kvv2 := conf.KVVersion != 1
 
+		// trim trailing slash(es) so "tenants/a/kv/" and "tenants/a/kv" behave the same
+		mountPath := strings.TrimRight(conf.MountPath, "/")
+
 		return &vaultProvider{
-			client:  client,
-			timeout: timeout,
-			kvv2:    kvv2,
+			client:    client,
+			timeout:   timeout,
+			kvv2:      kvv2,
+			mountPath: mountPath,
 		}, nil
 	}
 }
@@ -148,31 +166,27 @@ type vaultProvider struct {
 	// mount and unwraps the v2 "data" envelope; when false it reads the path
 	// as-is (KV v1).
 	kvv2 bool
+
+	// mountPath is the normalized (trailing slash trimmed) Config.MountPath. When
+	// non-empty it overrides the legacy first-segment "/data" injection for KV v2
+	// and confines keys to that mount.
+	mountPath string
 }
 
 // Get reads the secret at key and returns its data map serialized as JSON.
 // Field selection (the "#field" fragment) is the resolver's responsibility, so
-// Get returns the whole secret, never a single value.
+// Get returns the whole secret, never a single value. When mount_path is
+// configured, key must be the full logical path under that mount.
 //
 // A missing secret returns *kv.KeyNotFoundError; a backend or transport failure
 // returns *kv.StoreUnavailableError.
 func (vp *vaultProvider) Get(ctx context.Context, key string) (string, error) {
-	logical := vp.client.Logical()
-
-	// For KV v2 the caller passes the logical path (e.g. "secret/myapp/config");
-	// the engine stores it under "<mount>/data/<path>", so insert "/data" after
-	// the mount, assumed to be the first segment (as in the legacy client). The
-	// insertion is intentionally blind — a path segment legitimately named "data"
-	// must not be special-cased, so we never inspect the key for an existing one.
-	path := key
-
-	if vp.kvv2 {
-		splitted := strings.Split(key, "/")
-		splitted[0] += "/data"
-		path = strings.Join(splitted, "/")
+	path, err := vp.physicalPath(key)
+	if err != nil {
+		return "", err
 	}
 
-	secret, err := logical.ReadWithContext(ctx, path)
+	secret, err := vp.client.Logical().ReadWithContext(ctx, path)
 	if err != nil {
 		return "", &kv.StoreUnavailableError{KeyPath: key, Err: err}
 	}
@@ -203,4 +217,35 @@ func (vp *vaultProvider) Get(ctx context.Context, key string) (string, error) {
 
 func (vp *vaultProvider) Timeout() time.Duration {
 	return vp.timeout
+}
+
+// physicalPath maps the caller's logical key to the physical path the Vault HTTP
+// API expects. For KV v1 the logical and physical paths are identical. For KV v2
+// the engine stores secrets under "<mount>/data/<path>", so the "/data/" segment
+// is inserted after the mount:
+//
+//   - With mount_path set, immediately after that (possibly multi-segment) mount.
+//     key must be the full logical path under the mount; otherwise it is rejected.
+//     The check is on the path-segment boundary (mountPath + "/"), so a mount of
+//     "secret" does not match an unrelated "secrets/..." key.
+//   - With mount_path empty, after the first path segment — the legacy assumption
+//     that the mount is a single top-level segment. The injection is intentionally
+//     blind: a segment legitimately named "data" must not be special-cased.
+func (vp *vaultProvider) physicalPath(key string) (string, error) {
+	if !vp.kvv2 {
+		return key, nil
+	}
+
+	if vp.mountPath != "" {
+		if !strings.HasPrefix(key, vp.mountPath+"/") {
+			return "", fmt.Errorf("vault: key %q is not under mount_path %q", key, vp.mountPath)
+		}
+
+		return vp.mountPath + "/data" + strings.TrimPrefix(key, vp.mountPath), nil
+	}
+
+	splitted := strings.Split(key, "/")
+	splitted[0] += "/data"
+
+	return strings.Join(splitted, "/"), nil
 }
