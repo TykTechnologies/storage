@@ -43,7 +43,7 @@ type Config struct {
 	Timeout string `json:"timeout"`
 
 	// Token authenticates requests to Vault. Required.
-	Token string `json:"token" structviewer:"obfuscate"`
+	Token string `json:"token"`
 
 	// KVVersion selects the KV secrets engine version. Any value other than 1
 	// means v2 (the default): secrets live under "<mount>/data/<path>" and are
