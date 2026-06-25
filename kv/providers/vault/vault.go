@@ -38,9 +38,24 @@ type Config struct {
 	KVVersion int `json:"kv_version"`
 }
 
+// NewFactory returns a kv.ProviderFactory for HashiCorp Vault stores.
+//
+// The factory parses the provider Config and constructs a Vault API client, but
+// performs no network I/O: the connection to Vault is established lazily on the
+// first Get. It returns an error only for config that is present but unusable:
+//   - malformed JSON,
+//   - an unparseable timeout (must be a Go duration string, e.g. "5s"),
+//   - a missing token. Vault has no usable zero value, so a token is required
+//     even when agent_address is set.
+//
+// The resulting provider is remote: it is NOT Standalone and exposes its timeout
+// via the Timeouter interface, so the registry wraps it in the caching /
+// singleflight SecretStore and bounds each Get with the configured timeout.
 func NewFactory() kv.ProviderFactory {
 	return func(rawJSON json.RawMessage) (kv.Provider, error) {
-		// We want to cover case when just empty "{}" string is provided
+		// Empty/absent config: json.Unmarshal would fail cryptically on it, so
+		// reject it with a clear message. A present-but-empty object ("{}") is
+		// left to the token check below.
 		if len(rawJSON) == 0 {
 			return nil, errors.New("vault: config is missing")
 		}
