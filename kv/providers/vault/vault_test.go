@@ -248,6 +248,18 @@ func TestGet_KVv2InjectsDataAndReturnsInnerSecretAsJSON(t *testing.T) {
 	require.Equal(t, []string{"GET /v1/secret/data/myapp/config"}, stub.requests())
 }
 
+func TestGet_ReturnsCompactJSONWithoutTrailingNewline(t *testing.T) {
+	stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, kvv2Envelope(map[string]any{"api_key": "abc123"}))
+	})
+
+	p := newVaultProvider(t, vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
+
+	got, err := p.Get(t.Context(), "secret/myapp/config")
+	require.NoError(t, err)
+	require.Equal(t, `{"api_key":"abc123"}`, got)
+}
+
 func TestGet_KVv2DefaultsWhenVersionUnset(t *testing.T) {
 	stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, kvv2Envelope(map[string]any{"api_key": "abc123"}))

@@ -172,17 +172,12 @@ func (vp *vaultProvider) Get(ctx context.Context, key string) (string, error) {
 		}
 	}
 
-	var sb strings.Builder
-
-	err = json.NewEncoder(&sb).Encode(data)
+	b, err := json.Marshal(data)
 	if err != nil {
-		// FIX: Do I have to return different error here? Not sure if
-		// caller should distinguish the error when the data couldn't be marshaled.
-		// Probably it should return just general error.
-		return "", &kv.KeyNotFoundError{KeyPath: key}
+		return "", fmt.Errorf("vault: failed to encode secret %q: %w", key, err)
 	}
 
-	return sb.String(), nil
+	return string(b), err
 }
 
 func (vp *vaultProvider) Timeout() time.Duration {
