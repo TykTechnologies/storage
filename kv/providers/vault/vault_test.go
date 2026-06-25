@@ -3,7 +3,6 @@ package vault_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -83,8 +82,8 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.WriteHeader(status)
 
 	if body != nil {
-		err := json.NewEncoder(w).Encode(body)
-		fmt.Println(err)
+		//nolint:errcheck
+		_ = json.NewEncoder(w).Encode(body)
 	}
 }
 
