@@ -107,7 +107,7 @@ func kvv1Envelope(data map[string]any) map[string]any {
 
 // newVaultProvider builds the provider through its factory, exactly as the
 // registry would, with a hermetic environment.
-func newVaultProvider(t *testing.T, cfg vault.Config) kv.Provider {
+func newVaultProvider(t *testing.T, cfg *vault.Config) kv.Provider {
 	t.Helper()
 
 	clearVaultEnv(t)
@@ -206,7 +206,7 @@ func TestNewFactory_RejectsInvalidTimeout(t *testing.T) {
 }
 
 func TestProvider_ReportsConfiguredTimeout(t *testing.T) {
-	p := newVaultProvider(t, vault.Config{Token: "root", Timeout: "7s"})
+	p := newVaultProvider(t, &vault.Config{Token: "root", Timeout: "7s"})
 
 	to, ok := kv.AsTimeouter(p)
 	require.True(t, ok, "vault must expose Timeouter so the registry can bound its operations")
@@ -214,7 +214,7 @@ func TestProvider_ReportsConfiguredTimeout(t *testing.T) {
 }
 
 func TestProvider_TimeoutUnsetReportsZero(t *testing.T) {
-	p := newVaultProvider(t, vault.Config{Token: "root"})
+	p := newVaultProvider(t, &vault.Config{Token: "root"})
 
 	to, ok := kv.AsTimeouter(p)
 	require.True(t, ok)
@@ -222,7 +222,7 @@ func TestProvider_TimeoutUnsetReportsZero(t *testing.T) {
 }
 
 func TestProvider_IsNotStandalone(t *testing.T) {
-	p := newVaultProvider(t, vault.Config{Token: "root"})
+	p := newVaultProvider(t, &vault.Config{Token: "root"})
 
 	// Vault is remote and must be wrapped in the registry's cache/singleflight
 	// decorator, so it must NOT report itself standalone.
@@ -239,7 +239,7 @@ func TestGet_KVv2InjectsDataAndReturnsInnerSecretAsJSON(t *testing.T) {
 		}))
 	})
 
-	p := newVaultProvider(t, vault.Config{
+	p := newVaultProvider(t, &vault.Config{
 		Address:   stub.url,
 		Token:     "root",
 		KVVersion: 2,
@@ -259,7 +259,7 @@ func TestGet_ReturnsCompactJSONWithoutTrailingNewline(t *testing.T) {
 		writeJSON(w, http.StatusOK, kvv2Envelope(map[string]any{"api_key": "abc123"}))
 	})
 
-	p := newVaultProvider(t, vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
+	p := newVaultProvider(t, &vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
 
 	got, err := p.Get(t.Context(), "secret/myapp/config")
 	require.NoError(t, err)
@@ -272,7 +272,7 @@ func TestGet_KVv2DefaultsWhenVersionUnset(t *testing.T) {
 	})
 
 	// KVVersion omitted (0) must behave as v2 — i.e. /data is injected.
-	p := newVaultProvider(t, vault.Config{Address: stub.url, Token: "root"})
+	p := newVaultProvider(t, &vault.Config{Address: stub.url, Token: "root"})
 
 	_, err := p.Get(t.Context(), "secret/myapp/config")
 	require.NoError(t, err)
@@ -284,7 +284,7 @@ func TestGet_KVv2SingleSegmentPathInjection(t *testing.T) {
 		writeJSON(w, http.StatusOK, kvv2Envelope(map[string]any{"api_key": "abc123"}))
 	})
 
-	p := newVaultProvider(t, vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
+	p := newVaultProvider(t, &vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
 
 	_, err := p.Get(t.Context(), "mysecret")
 	require.NoError(t, err)
@@ -296,7 +296,7 @@ func TestGet_KVv1UsesPathAsIs(t *testing.T) {
 		writeJSON(w, http.StatusOK, kvv1Envelope(map[string]any{"api_key": "abc123"}))
 	})
 
-	p := newVaultProvider(t, vault.Config{Address: stub.url, Token: "root", KVVersion: 1})
+	p := newVaultProvider(t, &vault.Config{Address: stub.url, Token: "root", KVVersion: 1})
 
 	got, err := p.Get(t.Context(), "secret/myapp")
 	require.NoError(t, err)
@@ -311,7 +311,7 @@ func TestGet_SecretNotFoundReturnsKeyNotFound(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 
-	p := newVaultProvider(t, vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
+	p := newVaultProvider(t, &vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
 
 	_, err := p.Get(t.Context(), "secret/missing")
 
@@ -329,7 +329,7 @@ func TestGet_KVv2MissingDataEnvelopeReturnsKeyNotFound(t *testing.T) {
 		})
 	})
 
-	p := newVaultProvider(t, vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
+	p := newVaultProvider(t, &vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
 
 	_, err := p.Get(t.Context(), "secret/myapp/config")
 
@@ -350,7 +350,7 @@ func TestGet_BackendErrorReturnsStoreUnavailable(t *testing.T) {
 		}
 	})
 
-	p := newVaultProvider(t, vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
+	p := newVaultProvider(t, &vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
 
 	_, err := p.Get(t.Context(), "secret/myapp/config")
 
@@ -364,7 +364,7 @@ func TestGet_PropagatesContextCancellation(t *testing.T) {
 		writeJSON(w, http.StatusOK, kvv2Envelope(map[string]any{"api_key": "abc123"}))
 	})
 
-	p := newVaultProvider(t, vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
+	p := newVaultProvider(t, &vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -380,7 +380,7 @@ func TestGet_AgentModeRoutesToAgentAddress(t *testing.T) {
 
 	// agent_address (with a token, per the legacy contract) must route requests
 	// to the agent, not the default server address.
-	p := newVaultProvider(t, vault.Config{AgentAddress: agent.url, Token: "root", KVVersion: 2})
+	p := newVaultProvider(t, &vault.Config{AgentAddress: agent.url, Token: "root", KVVersion: 2})
 
 	got, err := p.Get(t.Context(), "secret/myapp/config")
 	require.NoError(t, err)
