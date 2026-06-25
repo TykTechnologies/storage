@@ -367,6 +367,13 @@ func TestGet_MountPath(t *testing.T) {
 			kvVersion: 2,
 			wantErr:   true,
 		},
+		{
+			name:      "kv2 key using ../ to escape the mount is rejected",
+			mountPath: "tenants/a/kv",
+			key:       "tenants/a/kv/../../b/kv/secret",
+			kvVersion: 2,
+			wantErr:   true,
+		},
 	}
 
 	for _, tt := range tests {

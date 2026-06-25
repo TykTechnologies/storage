@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 	"strings"
 	"time"
 
@@ -181,12 +182,12 @@ type vaultProvider struct {
 // A missing secret returns *kv.KeyNotFoundError; a backend or transport failure
 // returns *kv.StoreUnavailableError.
 func (vp *vaultProvider) Get(ctx context.Context, key string) (string, error) {
-	path, err := vp.physicalPath(key)
+	apiPath, err := vp.physicalPath(key)
 	if err != nil {
 		return "", err
 	}
 
-	secret, err := vp.client.Logical().ReadWithContext(ctx, path)
+	secret, err := vp.client.Logical().ReadWithContext(ctx, apiPath)
 	if err != nil {
 		return "", &kv.StoreUnavailableError{KeyPath: key, Err: err}
 	}
@@ -237,11 +238,12 @@ func (vp *vaultProvider) physicalPath(key string) (string, error) {
 	}
 
 	if vp.mountPath != "" {
-		if !strings.HasPrefix(key, vp.mountPath+"/") {
+		clean := path.Clean(key)
+		if !strings.HasPrefix(clean, vp.mountPath+"/") {
 			return "", fmt.Errorf("vault: key %q is not under mount_path %q", key, vp.mountPath)
 		}
 
-		return vp.mountPath + "/data" + strings.TrimPrefix(key, vp.mountPath), nil
+		return vp.mountPath + "/data" + strings.TrimPrefix(clean, vp.mountPath), nil
 	}
 
 	splitted := strings.Split(key, "/")
