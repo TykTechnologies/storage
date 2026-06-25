@@ -27,6 +27,12 @@ import (
 // the KV v2 "/data" injection (asserted via the request path the stub records),
 // token handling, and response parsing — rather than a mock of it, while staying
 // hermetic and millisecond-fast.
+//
+// Note on t.Parallel: every test clears the VAULT_* environment via clearVaultEnv
+// (t.Setenv) so a developer's shell can't perturb client construction. t.Setenv is
+// incompatible with t.Parallel by design, so these tests are intentionally serial
+// — the suite runs in well under a second, so there is nothing to gain from
+// parallelism anyway.
 
 // clearVaultEnv blanks the VAULT_* environment so client construction is
 // hermetic.
@@ -130,78 +136,90 @@ func mustJSON(t *testing.T, v any) json.RawMessage {
 	return b
 }
 
-func TestNewFactory_ValidConfigBuildsProvider(t *testing.T) {
-	clearVaultEnv(t)
+func TestNewFactory(t *testing.T) {
+	tests := []struct {
+		name            string
+		config          string
+		wantErr         bool
+		wantErrContains string
+	}{
+		{
+			name:   "valid full config",
+			config: `{"address":"http://vault.test:8200","token":"root","kv_version":2}`,
+		},
+		{
+			name:   "token only (address is optional)",
+			config: `{"token":"root"}`,
+		},
+		{
+			name:   "agent_address with token",
+			config: `{"agent_address":"http://127.0.0.1:8100","token":"root"}`,
+		},
 
-	p, err := vault.NewFactory()(json.RawMessage(
-		`{"address":"http://vault.test:8200","token":"root","kv_version":2}`,
-	))
-	require.NoError(t, err)
-	require.NotNil(t, p)
-}
+		// Vault has no usable zero value: a token is required even in agent mode,
+		// so every tokenless config is rejected.
+		{
+			name:    "empty bytes",
+			config:  ``,
+			wantErr: true,
+		},
+		{
+			name:    "empty object",
+			config:  `{}`,
+			wantErr: true,
+		},
+		{
+			name:    "address without token",
+			config:  `{"address":"http://vault.test:8200"}`,
+			wantErr: true,
+		},
+		{
+			name:    "agent_address without token",
+			config:  `{"agent_address":"http://127.0.0.1:8100"}`,
+			wantErr: true,
+		},
+		{
+			name:    "address and agent_address without token",
+			config:  `{"address":"http://vault.test:8200","agent_address":"http://127.0.0.1:8100"}`,
+			wantErr: true,
+		},
 
-func TestNewFactory_RejectsEmptyConfig(t *testing.T) {
-	clearVaultEnv(t)
-
-	// Unlike env/file/inline, vault has no usable zero value: without a token it
-	// cannot authenticate (matching legacy newVault), so the factory rejects
-	// empty/absent config rather than building a disabled provider.
-	for _, cfg := range []json.RawMessage{nil, {}, json.RawMessage(`{}`)} {
-		p, err := vault.NewFactory()(cfg)
-		require.Error(t, err, "config %q", string(cfg))
-		require.Nil(t, p, "config %q", string(cfg))
+		// Present-but-invalid config. The factory namespaces these with "vault:".
+		{
+			name:            "invalid json",
+			config:          `{not json`,
+			wantErr:         true,
+			wantErrContains: "vault",
+		},
+		{
+			name:            "invalid timeout (not a duration string)",
+			config:          `{"token":"root","timeout":"5x"}`,
+			wantErr:         true,
+			wantErrContains: "vault",
+		},
 	}
-}
 
-func TestNewFactory_RejectsMissingToken(t *testing.T) {
-	clearVaultEnv(t)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearVaultEnv(t)
 
-	for _, cfg := range []json.RawMessage{
-		json.RawMessage(`{"address":"http://vault.test:8200"}`),
-		json.RawMessage(`{"agent_address":"http://127.0.0.1:8100"}`),
-		json.RawMessage(`{"address":"http://vault.test:8200","agent_address":"http://127.0.0.1:8100"}`),
-	} {
-		p, err := vault.NewFactory()(cfg)
-		require.Error(t, err, "config %q", string(cfg))
-		require.Nil(t, p, "config %q", string(cfg))
+			p, err := vault.NewFactory()(json.RawMessage(tt.config))
+
+			if tt.wantErr {
+				require.Error(t, err)
+				require.Nil(t, p)
+
+				if tt.wantErrContains != "" {
+					require.ErrorContains(t, err, tt.wantErrContains)
+				}
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, p)
+		})
 	}
-}
-
-func TestNewFactory_AgentAddressWithTokenBuilds(t *testing.T) {
-	clearVaultEnv(t)
-
-	p, err := vault.NewFactory()(json.RawMessage(
-		`{"agent_address":"http://127.0.0.1:8100","token":"root"}`,
-	))
-	require.NoError(t, err)
-	require.NotNil(t, p)
-}
-
-func TestNewFactory_TokenWithoutAddressBuilds(t *testing.T) {
-	clearVaultEnv(t)
-
-	p, err := vault.NewFactory()(json.RawMessage(`{"token":"root"}`))
-	require.NoError(t, err)
-	require.NotNil(t, p)
-}
-
-func TestNewFactory_RejectsInvalidJSON(t *testing.T) {
-	clearVaultEnv(t)
-
-	p, err := vault.NewFactory()(json.RawMessage(`{not json`))
-	require.Error(t, err)
-	require.Nil(t, p)
-	require.ErrorContains(t, err, "vault", "factory must namespace config errors with a vault: prefix")
-}
-
-func TestNewFactory_RejectsInvalidTimeout(t *testing.T) {
-	clearVaultEnv(t)
-
-	// timeout is a Go duration string; an unparseable value is present-but-invalid
-	// config and must fail at construction.
-	p, err := vault.NewFactory()(json.RawMessage(`{"token":"root","timeout":"5x"}`))
-	require.Error(t, err)
-	require.Nil(t, p)
 }
 
 func TestProvider_ReportsConfiguredTimeout(t *testing.T) {
@@ -230,27 +248,72 @@ func TestProvider_IsNotStandalone(t *testing.T) {
 		"vault must not be standalone (the registry must wrap it in the cache)")
 }
 
-func TestGet_KVv2InjectsDataAndReturnsInnerSecretAsJSON(t *testing.T) {
-	stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, kvv2Envelope(map[string]any{
-			"api_key":  "abc123",
-			"username": "bob",
-		}))
-	})
+func TestGet_ReadsSecret(t *testing.T) {
+	tests := []struct {
+		name      string
+		key       string
+		kvVersion int
+		secret    map[string]any
+		wantPath  string
+		wantJSON  string
+	}{
+		{
+			name:      "kv2 multi-segment path returns the whole data map",
+			key:       "secret/myapp/config",
+			kvVersion: 2,
+			secret:    map[string]any{"api_key": "abc123", "username": "bob"},
+			wantPath:  "GET /v1/secret/data/myapp/config",
+			wantJSON:  `{"api_key":"abc123","username":"bob"}`,
+		},
+		{
+			name:      "kv2 default version (0) injects /data",
+			key:       "secret/myapp/config",
+			kvVersion: 0,
+			secret:    map[string]any{"api_key": "abc123"},
+			wantPath:  "GET /v1/secret/data/myapp/config",
+			wantJSON:  `{"api_key":"abc123"}`,
+		},
+		{
+			name:      "kv2 single-segment path injects /data after the mount",
+			key:       "mysecret",
+			kvVersion: 2,
+			secret:    map[string]any{"api_key": "abc123"},
+			wantPath:  "GET /v1/mysecret/data",
+			wantJSON:  `{"api_key":"abc123"}`,
+		},
+		{
+			name:      "kv1 reads the path as-is with no unwrap",
+			key:       "secret/myapp",
+			kvVersion: 1,
+			secret:    map[string]any{"api_key": "abc123"},
+			wantPath:  "GET /v1/secret/myapp",
+			wantJSON:  `{"api_key":"abc123"}`,
+		},
+	}
 
-	p := newVaultProvider(t, &vault.Config{
-		Address:   stub.url,
-		Token:     "root",
-		KVVersion: 2,
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
+				if tt.kvVersion == 1 {
+					writeJSON(w, http.StatusOK, kvv1Envelope(tt.secret))
+					return
+				}
 
-	got, err := p.Get(t.Context(), "secret/myapp/config")
-	require.NoError(t, err)
-	// The whole secret data map is returned as JSON (field selection is the
-	// resolver's job); the KVv2 metadata envelope is unwrapped and excluded.
-	require.JSONEq(t, `{"api_key":"abc123","username":"bob"}`, got)
-	// /data is injected after the first path segment.
-	require.Equal(t, []string{"GET /v1/secret/data/myapp/config"}, stub.requests())
+				writeJSON(w, http.StatusOK, kvv2Envelope(tt.secret))
+			})
+
+			p := newVaultProvider(t, &vault.Config{
+				Address:   stub.url,
+				Token:     "root",
+				KVVersion: tt.kvVersion,
+			})
+
+			got, err := p.Get(t.Context(), tt.key)
+			require.NoError(t, err)
+			require.JSONEq(t, tt.wantJSON, got)
+			require.Equal(t, []string{tt.wantPath}, stub.requests())
+		})
+	}
 }
 
 func TestGet_ReturnsCompactJSONWithoutTrailingNewline(t *testing.T) {
@@ -263,45 +326,6 @@ func TestGet_ReturnsCompactJSONWithoutTrailingNewline(t *testing.T) {
 	got, err := p.Get(t.Context(), "secret/myapp/config")
 	require.NoError(t, err)
 	require.Equal(t, `{"api_key":"abc123"}`, got)
-}
-
-func TestGet_KVv2DefaultsWhenVersionUnset(t *testing.T) {
-	stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, kvv2Envelope(map[string]any{"api_key": "abc123"}))
-	})
-
-	// KVVersion omitted (0) must behave as v2 — i.e. /data is injected.
-	p := newVaultProvider(t, &vault.Config{Address: stub.url, Token: "root"})
-
-	_, err := p.Get(t.Context(), "secret/myapp/config")
-	require.NoError(t, err)
-	require.Equal(t, []string{"GET /v1/secret/data/myapp/config"}, stub.requests())
-}
-
-func TestGet_KVv2SingleSegmentPathInjection(t *testing.T) {
-	stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, kvv2Envelope(map[string]any{"api_key": "abc123"}))
-	})
-
-	p := newVaultProvider(t, &vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
-
-	_, err := p.Get(t.Context(), "mysecret")
-	require.NoError(t, err)
-	require.Equal(t, []string{"GET /v1/mysecret/data"}, stub.requests())
-}
-
-func TestGet_KVv1UsesPathAsIs(t *testing.T) {
-	stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, kvv1Envelope(map[string]any{"api_key": "abc123"}))
-	})
-
-	p := newVaultProvider(t, &vault.Config{Address: stub.url, Token: "root", KVVersion: 1})
-
-	got, err := p.Get(t.Context(), "secret/myapp")
-	require.NoError(t, err)
-	require.JSONEq(t, `{"api_key":"abc123"}`, got)
-	// No /data injection for KV v1.
-	require.Equal(t, []string{"GET /v1/secret/myapp"}, stub.requests())
 }
 
 func TestGet_SecretNotFoundReturnsKeyNotFound(t *testing.T) {
@@ -345,7 +369,7 @@ func TestGet_BackendErrorReturnsStoreUnavailable(t *testing.T) {
 
 		_, err := w.Write([]byte("{ this is not valid vault json"))
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
 		}
 	})
 
