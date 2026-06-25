@@ -17,11 +17,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TODO: Add comment explaining the logic behind tests where vaultStub type
-// is mocking a vault server and we can use its server Address and value
-// for Config.Address so vault library will send request to and get
-// the response. This comment can really help other devs to discover and understand the
-// code.
+// How these tests work:
+//
+// The provider is exercised through the real github.com/hashicorp/vault/api
+// client against an in-process HTTP server (vaultStub) that stands in for Vault.
+// Each test points Config.Address (or AgentAddress) at the stub's URL, so the
+// client builds genuine Vault requests and the stub returns canned KV responses.
+//
+// This means the tests cover the actual client wiring — URL/path construction,
+// the KV v2 "/data" injection (asserted via the request path the stub records),
+// token handling, and response parsing — rather than a mock of it, while staying
+// hermetic and millisecond-fast.
 
 // clearVaultEnv blanks the VAULT_* environment so client construction is
 // hermetic.

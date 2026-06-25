@@ -1,3 +1,11 @@
+// Package vault provides a kv.Provider backed by HashiCorp Vault. It reads
+// secrets from Vault's KV engine (v1 or v2) and returns each secret's data map
+// serialized as JSON, leaving field selection to the resolver's "#field" syntax.
+//
+// Unlike the local providers (env, file, inline), vault is remote: it is not
+// Standalone and exposes a Timeouter, so the registry wraps it in the caching /
+// singleflight SecretStore. The Vault client is created without any network I/O;
+// the connection is established lazily on the first Get.
 package vault
 
 import (
@@ -12,29 +20,34 @@ import (
 	"github.com/hashicorp/vault/api"
 )
 
-// TODO: Refine the doc comments for the Config type
-
-// Config is used to configure the creation of a client
-// This is a stripped down version of the config structure in vault's API client
+// Config is the JSON "config" block of a vault store.
 type Config struct {
-	// Address is the address of the Vault server. This should be a complete
-	// URL such as "http://vault.example.com".
+	// Address is the Vault server URL, e.g. "https://vault.example.com:8200".
+	// Optional: when empty the Vault client default is used (the VAULT_ADDR
+	// environment variable, otherwise https://127.0.0.1:8200).
 	Address string `json:"address"`
 
-	// AgentAddress is the address of the local Vault agent. This should be a
-	// complete URL such as "http://vault.example.com".
+	// AgentAddress is the URL of a local Vault Agent, e.g. "http://127.0.0.1:8100".
+	// When set, the client routes requests through the agent instead of Address.
+	// A token is still required.
 	AgentAddress string `json:"agent_address"`
 
-	// MaxRetries controls the maximum number of times to retry when a vault
-	// serer occurs
+	// MaxRetries caps how many times the client retries a request after a
+	// server (5xx) error. Applied only when > 0; otherwise the Vault client
+	// default is kept.
 	MaxRetries int `json:"max_retries"`
 
+	// Timeout bounds each Vault request. It is a Go duration string such as
+	// "5s" or "500ms"; an empty value means "unset", leaving the SecretStore to
+	// apply its own default.
 	Timeout string `json:"timeout"`
 
-	// Token is the vault root token
+	// Token authenticates requests to Vault. Required.
 	Token string `json:"token" structviewer:"obfuscate"`
 
-	// KVVersion is the version number of Vault. Defaults to 2
+	// KVVersion selects the KV secrets engine version. Any value other than 1
+	// means v2 (the default): secrets live under "<mount>/data/<path>" and are
+	// wrapped in a "data" envelope. 1 selects v1, where the path is used as-is.
 	KVVersion int `json:"kv_version"`
 }
 
@@ -120,15 +133,20 @@ func NewFactory() kv.ProviderFactory {
 	}
 }
 
-// TODO: Add easy to understand comments on the provider fields
+// vaultProvider is a kv.Provider backed by a configured Vault API client.
 type vaultProvider struct {
-	// The config is already attached to the client.
+	// client is the Vault API client. The resolved Config (address, token,
+	// retries, timeout) is already baked into it at construction.
 	client *api.Client
-	// Timeout will be used additionally at secret store
-	// to override default context timeout.
+
+	// timeout is the parsed Config.Timeout, surfaced via Timeout() so the
+	// SecretStore wrapper can bound each Get with it. 0 means "unset", letting
+	// the store use its own default.
 	timeout time.Duration
-	// kvv2 determines the version engine to use while retrieving
-	// values.
+
+	// kvv2 selects the read path: when true, Get injects "/data" after the
+	// mount and unwraps the v2 "data" envelope; when false it reads the path
+	// as-is (KV v1).
 	kvv2 bool
 }
 
