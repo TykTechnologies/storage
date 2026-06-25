@@ -2,8 +2,12 @@ package registry_test
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	"github.com/TykTechnologies/storage/kv"
@@ -39,6 +43,18 @@ func promotedDefaults(t *testing.T, basePath string, secrets map[string]string) 
 	}
 
 	return stores
+}
+
+func clearVaultEnv(t *testing.T) {
+	t.Helper()
+
+	for _, k := range []string{
+		"VAULT_ADDR", "VAULT_AGENT_ADDR", "VAULT_TOKEN",
+		"VAULT_CACERT", "VAULT_CAPATH", "VAULT_CLIENT_CERT",
+		"VAULT_CLIENT_KEY", "VAULT_SKIP_VERIFY", "VAULT_TLS_SERVER_NAME",
+	} {
+		t.Setenv(k, "")
+	}
 }
 
 // TestIntegrationResolveAllLocalProviders resolves a whole config document that
@@ -153,4 +169,85 @@ func TestIntegrationEnvEmptyPrefixRejectedThroughStack(t *testing.T) {
 
 	_, err = res.Resolve(t.Context(), "kv://openenv/PATH")
 	require.ErrorIs(t, err, env.ErrPrefixRequired)
+}
+
+func TestIntegrationVaultProviderResolvesThroughDefaultRegistry(t *testing.T) {
+	clearVaultEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// KV v2 envelope: {"data": {"data": <secret>, "metadata": {...}}}.
+		//nolint:errcheck
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"data":     map[string]any{"password": "s3cr3t"},
+				"metadata": map[string]any{"version": 1},
+			},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	doc := []byte(fmt.Sprintf(`{
+		"kv": {
+			"stores": {
+				"vault": {
+					"type": "hashicorp_vault",
+					"required": true,
+					"config": {"address": %q, "token": "root", "kv_version": 2}
+				}
+			}
+		}
+	}`, srv.URL))
+
+	reg := newRegistry(t, doc)
+	res := resolver.NewResolver(reg)
+
+	got, err := res.Resolve(t.Context(), "kv://vault/secret/myapp#password")
+	require.NoError(t, err)
+	assert.Equal(t, "s3cr3t", got)
+}
+
+func TestIntegrationVaultStoreServesRepeatedReadsFromCache(t *testing.T) {
+	clearVaultEnv(t)
+
+	var hits atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+
+		w.Header().Set("Content-Type", "application/json")
+		//nolint:errcheck
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"data":     map[string]any{"password": "s3cr3t"},
+				"metadata": map[string]any{"version": 1},
+			},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	doc := []byte(fmt.Sprintf(`{
+		"kv": {
+			"cache": {"enabled": true, "ttl": "1m"},
+			"stores": {
+				"vault": {
+					"type": "hashicorp_vault",
+					"required": true,
+					"config": {"address": %q, "token": "root", "kv_version": 2}
+				}
+			}
+		}
+	}`, srv.URL))
+
+	reg := newRegistry(t, doc)
+	res := resolver.NewResolver(reg)
+
+	for range 3 {
+		got, err := res.Resolve(t.Context(), "kv://vault/secret/myapp#password")
+		require.NoError(t, err)
+		assert.Equal(t, "s3cr3t", got)
+	}
+
+	assert.Equal(t, int32(1), hits.Load(),
+		"3 resolves of the same key must hit the vault backend only once (SecretStore cache)")
 }
