@@ -57,6 +57,40 @@ func clearVaultEnv(t *testing.T) {
 	}
 }
 
+func clearConsulEnv(t *testing.T) {
+	t.Helper()
+
+	for _, k := range []string{
+		"CONSUL_HTTP_ADDR", "CONSUL_HTTP_TOKEN", "CONSUL_HTTP_TOKEN_FILE",
+		"CONSUL_HTTP_AUTH", "CONSUL_HTTP_SSL", "CONSUL_HTTP_SSL_VERIFY",
+		"CONSUL_CACERT", "CONSUL_CAPATH", "CONSUL_CLIENT_CERT",
+		"CONSUL_CLIENT_KEY", "CONSUL_TLS_SERVER_NAME", "CONSUL_NAMESPACE",
+	} {
+		t.Setenv(k, "")
+	}
+}
+
+// consulKVResponse writes consul's KV GET wire shape: a JSON array with one
+// KVPair whose Value is base64-encoded (Go marshals a []byte field to base64,
+// exactly as consul does and consulapi decodes).
+func consulKVResponse(w http.ResponseWriter, key, value string) {
+	w.Header().Set("Content-Type", "application/json")
+
+	//nolint:errcheck
+	_ = json.NewEncoder(w).Encode([]struct {
+		Key   string `json:"Key"`
+		Value []byte `json:"Value"`
+	}{
+		{Key: key, Value: []byte(value)},
+	})
+}
+
+// consulAddr strips the scheme so the httptest URL is usable as a consul store
+// "address" (host:port), matching how the gateway promotes "consul.internal:8500".
+func consulAddr(url string) string {
+	return url[len("http://"):]
+}
+
 // TestIntegrationResolveAllLocalProviders resolves a whole config document that
 // mixes every local provider, both reference syntaxes, and a JSON-pointer
 // fragment — proving the providers cooperate through the resolver exactly as the
@@ -250,4 +284,111 @@ func TestIntegrationVaultStoreServesRepeatedReadsFromCache(t *testing.T) {
 
 	assert.Equal(t, int32(1), hits.Load(),
 		"3 resolves of the same key must hit the vault backend only once (SecretStore cache)")
+}
+
+func TestIntegrationConsulProviderResolvesThroughDefaultRegistry(t *testing.T) {
+	clearConsulEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		consulKVResponse(w, "services/redis", `{"host":"cache01","port":"6379"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	doc := []byte(fmt.Sprintf(`{
+		"kv": {
+			"stores": {
+				"consul": {
+					"type": "hashicorp_consul",
+					"required": true,
+					"config": {"address": %q}
+				}
+			}
+		}
+	}`, consulAddr(srv.URL)))
+
+	reg := newRegistry(t, doc)
+	res := resolver.NewResolver(reg)
+
+	whole, err := res.Resolve(t.Context(), "kv://consul/services/redis")
+	require.NoError(t, err)
+	assert.Equal(t, `{"host":"cache01","port":"6379"}`, whole)
+
+	got, err := res.Resolve(t.Context(), "kv://consul/services/redis#host")
+	require.NoError(t, err)
+	assert.Equal(t, "cache01", got)
+}
+
+func TestIntegrationConsulStoreServesRepeatedReadsFromCache(t *testing.T) {
+	clearConsulEnv(t)
+
+	var hits atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		consulKVResponse(w, "services/redis", "cache01")
+	}))
+	t.Cleanup(srv.Close)
+
+	doc := []byte(fmt.Sprintf(`{
+		"kv": {
+			"cache": {"enabled": true, "ttl": "1m"},
+			"stores": {
+				"consul": {
+					"type": "hashicorp_consul",
+					"required": true,
+					"config": {"address": %q}
+				}
+			}
+		}
+	}`, consulAddr(srv.URL)))
+
+	reg := newRegistry(t, doc)
+	res := resolver.NewResolver(reg)
+
+	for range 3 {
+		got, err := res.Resolve(t.Context(), "kv://consul/services/redis")
+		require.NoError(t, err)
+		assert.Equal(t, "cache01", got)
+	}
+
+	assert.Equal(t, int32(1), hits.Load(),
+		"3 resolves of the same key must hit the consul backend only once (SecretStore cache)")
+}
+
+func TestIntegrationConsulStoreNegativeCachesNotFound(t *testing.T) {
+	clearConsulEnv(t)
+
+	var hits atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(srv.Close)
+
+	doc := []byte(fmt.Sprintf(`{
+		"kv": {
+			"cache": {"enabled": true, "ttl": "1m", "negative_ttl_not_found": "1m"},
+			"stores": {
+				"consul": {
+					"type": "hashicorp_consul",
+					"required": true,
+					"config": {"address": %q}
+				}
+			}
+		}
+	}`, consulAddr(srv.URL)))
+
+	reg := newRegistry(t, doc)
+	res := resolver.NewResolver(reg)
+
+	for range 3 {
+		_, err := res.Resolve(t.Context(), "kv://consul/services/absent")
+
+		var notFound *kv.KeyNotFoundError
+		require.ErrorAs(t, err, &notFound)
+	}
+
+	assert.Equal(t, int32(1), hits.Load(),
+		"a not-found must be negatively cached (negative_ttl_not_found bucket), not re-fetched")
 }
