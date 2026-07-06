@@ -78,12 +78,11 @@ func NewFactory() kv.ProviderFactory {
 			defaultCfg.Datacenter = conf.Datacenter
 		}
 
-		if conf.HttpAuth.Username != "" {
-			defaultCfg.HttpAuth.Username = conf.HttpAuth.Username
-		}
-
-		if conf.HttpAuth.Password != "" {
-			defaultCfg.HttpAuth.Password = conf.HttpAuth.Password
+		if conf.HttpAuth.Username != "" || conf.HttpAuth.Password != "" {
+			defaultCfg.HttpAuth = &api.HttpBasicAuth{
+				Username: conf.HttpAuth.Username,
+				Password: conf.HttpAuth.Password,
+			}
 		}
 
 		var waitTime time.Duration
@@ -141,5 +140,16 @@ type consulProvider struct {
 }
 
 func (cp *consulProvider) Get(ctx context.Context, key string) (string, error) {
-	return "", nil
+	var queryOptions *api.QueryOptions
+
+	pair, _, err := cp.kvClient.KV().Get(key, queryOptions.WithContext(ctx))
+	if err != nil {
+		return "", &kv.StoreUnavailableError{KeyPath: key, Err: err}
+	}
+
+	if pair == nil {
+		return "", &kv.KeyNotFoundError{KeyPath: key}
+	}
+
+	return string(pair.Value), nil
 }

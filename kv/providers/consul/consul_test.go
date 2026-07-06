@@ -1,14 +1,18 @@
 package consul_test
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/TykTechnologies/storage/kv"
 	"github.com/TykTechnologies/storage/kv/providers/consul"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -236,281 +240,162 @@ func TestProvider_DoesNotExposeTimeouter(t *testing.T) {
 		"consul must not expose Timeouter; wait_time is a watch timeout, not a per-op timeout")
 }
 
-// func TestGet_ReadsValue(t *testing.T) {
-// 	tests := []struct {
-// 		name     string
-// 		key      string
-// 		value    string
-// 		wantPath string
-// 	}{
-// 		{
-// 			name:     "single-segment key",
-// 			key:      "mykey",
-// 			value:    "myvalue",
-// 			wantPath: "GET /v1/kv/mykey",
-// 		},
-// 		{
-// 			name:     "multi-segment key preserved verbatim (no transform)",
-// 			key:      "services/redis/host",
-// 			value:    "cache01.internal",
-// 			wantPath: "GET /v1/kv/services/redis/host",
-// 		},
-// 		{
-// 			name:     "value returned byte-exact with no trailing-newline trim",
-// 			key:      "raw",
-// 			value:    "line\n",
-// 			wantPath: "GET /v1/kv/raw",
-// 		},
-// 		{
-// 			name:     "binary-safe value (embedded NUL survives base64 round-trip)",
-// 			key:      "bin",
-// 			value:    "a\x00b",
-// 			wantPath: "GET /v1/kv/bin",
-// 		},
-// 	}
-//
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
-// 				writeConsulValue(w, tt.key, tt.value)
-// 			})
-//
-// 			p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
-//
-// 			got, err := p.Get(t.Context(), tt.key)
-// 			require.NoError(t, err)
-// 			require.Equal(t, tt.value, got)
-// 			require.Equal(t, []string{tt.wantPath}, stub.requests())
-// 		})
-// 	}
-// }
-//
-// func TestGet_MissingKeyReturnsKeyNotFound(t *testing.T) {
-// 	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
-// 		// consul returns 404 with an empty body for a missing key; consulapi
-// 		// then returns (nil, _, nil), which the provider maps to KeyNotFound.
-// 		w.WriteHeader(http.StatusNotFound)
-// 	})
-//
-// 	p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
-//
-// 	_, err := p.Get(t.Context(), "services/absent")
-//
-// 	var notFound *kv.KeyNotFoundError
-// 	require.ErrorAs(t, err, &notFound,
-// 		"a missing key must map to *kv.KeyNotFoundError for negative_ttl_not_found caching")
-// 	require.Equal(t, "services/absent", notFound.KeyPath)
-// }
-//
-// func TestGet_BackendErrorReturnsStoreUnavailable(t *testing.T) {
-// 	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
-// 		// Any non-200/404 code makes consulapi return an error.
-// 		w.WriteHeader(http.StatusInternalServerError)
-// 	})
-//
-// 	p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
-//
-// 	_, err := p.Get(t.Context(), "services/redis")
-//
-// 	var unavailable *kv.StoreUnavailableError
-// 	require.ErrorAs(t, err, &unavailable,
-// 		"a backend failure must map to *kv.StoreUnavailableError for negative_ttl_transient caching")
-// }
-//
-// func TestGet_UsesQueryContextForBasicAuth(t *testing.T) {
-// 	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
-// 		writeConsulValue(w, "k", "v")
-// 	})
-//
-// 	var cfg consul.Config
-// 	cfg.Address = addrOf(stub.url)
-// 	cfg.HttpAuth.Username = "user"
-// 	cfg.HttpAuth.Password = "pass"
-//
-// 	p := newConsulProvider(t, cfg)
-//
-// 	got, err := p.Get(t.Context(), "k")
-// 	require.NoError(t, err)
-// 	require.Equal(t, "v", got)
-//
-// 	// http_auth must be wired onto consulapi.Config and sent on the wire.
-// 	want := "Basic " + base64.StdEncoding.EncodeToString([]byte("user:pass"))
-// 	require.Equal(t, want, stub.lastAuth())
-// }
-//
-// func TestGet_PropagatesContextCancellation(t *testing.T) {
-// 	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
-// 		writeConsulValue(w, "k", "v")
-// 	})
-//
-// 	p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
-//
-// 	ctx, cancel := context.WithCancel(t.Context())
-// 	cancel()
-//
-// 	_, err := p.Get(ctx, "k")
-// 	require.Error(t, err)
-// 	require.ErrorIs(t, err, context.Canceled)
-// }
-//
-// func TestGet_HonorsContextDeadline(t *testing.T) {
-// 	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
-// 		// Sleep past the caller's deadline so the request is aborted in flight.
-// 		// The provider must attach ctx via QueryOptions.WithContext for the
-// 		// SecretStore's per-op deadline to actually bound the call.
-// 		time.Sleep(200 * time.Millisecond)
-// 		writeConsulValue(w, "k", "v")
-// 	})
-//
-// 	p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
-//
-// 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
-// 	defer cancel()
-//
-// 	_, err := p.Get(ctx, "k")
-// 	require.Error(t, err)
-// 	require.ErrorIs(t, err, context.DeadlineExceeded)
-// }
-//
-// // --- Resolver-driven fragment extraction (new capability, JSON values only) ---
-//
-// // newConsulResolver wires a single consul store into a registry and returns a
-// // resolver over it, mirroring the vault provider's resolver test.
-// func newConsulResolver(t *testing.T, stubURL string, cache kv.CacheConfig) resolver.Resolver {
-// 	t.Helper()
-//
-// 	clearConsulEnv(t)
-//
-// 	r := registry.NewRegistry()
-// 	require.NoError(t, r.Add(kv.Consul, consul.NewFactory()))
-//
-// 	ctx := context.Background()
-// 	require.NoError(t, r.InitStores(ctx, &kv.Config{
-// 		Cache: cache,
-// 		Stores: map[string]kv.StoreConfig{
-// 			"consul": {
-// 				Type:   kv.Consul,
-// 				Config: mustJSON(t, consul.Config{Address: addrOf(stubURL)}),
-// 			},
-// 		},
-// 	}))
-// 	t.Cleanup(func() { _ = r.Close(ctx) })
-//
-// 	return resolver.NewResolver(r)
-// }
-//
-// func TestResolver_WholeValueAndFragment(t *testing.T) {
-// 	t.Run("whole value returns the raw stored bytes", func(t *testing.T) {
-// 		stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
-// 			writeConsulValue(w, "services/redis/host", "cache01.internal")
-// 		})
-//
-// 		res := newConsulResolver(t, stub.url, kv.CacheConfig{})
-//
-// 		got, err := res.Resolve(t.Context(), "kv://consul/services/redis/host")
-// 		require.NoError(t, err)
-// 		require.Equal(t, "cache01.internal", got)
-// 	})
-//
-// 	t.Run("#field extracts from a JSON-valued key via JSON pointer", func(t *testing.T) {
-// 		stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
-// 			writeConsulValue(w, "services/redis", `{"host":"cache01","port":"6379"}`)
-// 		})
-//
-// 		res := newConsulResolver(t, stub.url, kv.CacheConfig{})
-//
-// 		got, err := res.Resolve(t.Context(), "kv://consul/services/redis#host")
-// 		require.NoError(t, err)
-// 		require.Equal(t, "cache01", got)
-// 	})
-//
-// 	t.Run("#field on a non-JSON value is a resolver extraction error", func(t *testing.T) {
-// 		stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
-// 			writeConsulValue(w, "services/redis", "not-json")
-// 		})
-//
-// 		res := newConsulResolver(t, stub.url, kv.CacheConfig{})
-//
-// 		_, err := res.Resolve(t.Context(), "kv://consul/services/redis#host")
-// 		require.Error(t, err)
-// 	})
-// }
-//
-// // --- Registry integration: caching / negative caching through SecretStore ---
-//
-// func TestRegistry_ServesRepeatedReadsFromCache(t *testing.T) {
-// 	var hits atomic.Int32
-//
-// 	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
-// 		hits.Add(1)
-// 		writeConsulValue(w, "services/redis", "cache01")
-// 	})
-//
-// 	res := newConsulResolver(t, stub.url, kv.CacheConfig{Enabled: true, TTL: "1m"})
-//
-// 	for range 3 {
-// 		got, err := res.Resolve(t.Context(), "kv://consul/services/redis")
-// 		require.NoError(t, err)
-// 		require.Equal(t, "cache01", got)
-// 	}
-//
-// 	require.Equal(t, int32(1), hits.Load(),
-// 		"3 resolves of the same key must hit consul only once (SecretStore cache)")
-// }
-//
-// func TestRegistry_NegativeCachesNotFound(t *testing.T) {
-// 	var hits atomic.Int32
-//
-// 	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
-// 		hits.Add(1)
-// 		w.WriteHeader(http.StatusNotFound)
-// 	})
-//
-// 	res := newConsulResolver(t, stub.url, kv.CacheConfig{
-// 		Enabled:             true,
-// 		TTL:                 "1m",
-// 		NegativeTTLNotFound: "1m",
-// 	})
-//
-// 	for range 3 {
-// 		_, err := res.Resolve(t.Context(), "kv://consul/services/absent")
-//
-// 		var notFound *kv.KeyNotFoundError
-// 		require.ErrorAs(t, err, &notFound)
-// 	}
-//
-// 	require.Equal(t, int32(1), hits.Load(),
-// 		"a not-found must be negatively cached (negative_ttl_not_found bucket), not re-fetched")
-// }
-//
-// // TestBackwardCompatParity_ConsulGet pins the legacy Consul.Get contract
-// // (KV_GATEWAY_BEHAVIOUR.md §"Test Coverage Requirements → Consul Get"): a key
-// // that exists returns its value; a key that does not exist reports not-found.
-// // The legacy store returned the ErrKeyNotFound sentinel; the new library
-// // reports the typed *kv.KeyNotFoundError instead.
-// func TestBackwardCompatParity_ConsulGet(t *testing.T) {
-// 	t.Run("key exists -> value returned", func(t *testing.T) {
-// 		stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
-// 			writeConsulValue(w, "tyk-apis/my_service_url", "https://upstream.internal")
-// 		})
-//
-// 		p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
-//
-// 		got, err := p.Get(t.Context(), "tyk-apis/my_service_url")
-// 		require.NoError(t, err)
-// 		require.Equal(t, "https://upstream.internal", got)
-// 	})
-//
-// 	t.Run("key absent -> not found", func(t *testing.T) {
-// 		stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
-// 			w.WriteHeader(http.StatusNotFound)
-// 		})
-//
-// 		p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
-//
-// 		_, err := p.Get(t.Context(), "tyk-apis/missing")
-//
-// 		var notFound *kv.KeyNotFoundError
-// 		require.ErrorAs(t, err, &notFound)
-// 	})
-// }
+func TestGet_ReadsValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		value    string
+		wantPath string
+	}{
+		{
+			name:     "single-segment key",
+			key:      "mykey",
+			value:    "myvalue",
+			wantPath: "GET /v1/kv/mykey",
+		},
+		{
+			name:     "multi-segment key preserved verbatim (no transform)",
+			key:      "services/redis/host",
+			value:    "cache01.internal",
+			wantPath: "GET /v1/kv/services/redis/host",
+		},
+		{
+			name:     "value returned byte-exact with no trailing-newline trim",
+			key:      "raw",
+			value:    "line\n",
+			wantPath: "GET /v1/kv/raw",
+		},
+		{
+			name:     "binary-safe value (embedded NUL survives base64 round-trip)",
+			key:      "bin",
+			value:    "a\x00b",
+			wantPath: "GET /v1/kv/bin",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+				writeConsulValue(w, tt.key, tt.value)
+			})
+
+			p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
+
+			got, err := p.Get(t.Context(), tt.key)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.value, got)
+			assert.Equal(t, []string{tt.wantPath}, stub.requests())
+		})
+	}
+}
+
+func TestGet_MissingKeyReturnsKeyNotFound(t *testing.T) {
+	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
+
+	_, err := p.Get(t.Context(), "services/absent")
+
+	var notFound *kv.KeyNotFoundError
+	require.ErrorAs(t, err, &notFound,
+		"a missing key must map to *kv.KeyNotFoundError for negative_ttl_not_found caching")
+	require.Equal(t, "services/absent", notFound.KeyPath)
+}
+
+func TestGet_BackendErrorReturnsStoreUnavailable(t *testing.T) {
+	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
+
+	_, err := p.Get(t.Context(), "services/redis")
+
+	var unavailable *kv.StoreUnavailableError
+	require.ErrorAs(t, err, &unavailable,
+		"a backend failure must map to *kv.StoreUnavailableError for negative_ttl_transient caching")
+}
+
+func TestGet_UsesQueryContextForBasicAuth(t *testing.T) {
+	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeConsulValue(w, "k", "v")
+	})
+
+	var cfg consul.Config
+	cfg.Address = addrOf(stub.url)
+	cfg.HttpAuth.Username = "user"
+	cfg.HttpAuth.Password = "pass"
+
+	p := newConsulProvider(t, cfg)
+
+	got, err := p.Get(t.Context(), "k")
+	require.NoError(t, err)
+	require.Equal(t, "v", got)
+
+	want := "Basic " + base64.StdEncoding.EncodeToString([]byte("user:pass"))
+	require.Equal(t, want, stub.lastAuth())
+}
+
+func TestGet_PropagatesContextCancellation(t *testing.T) {
+	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeConsulValue(w, "k", "v")
+	})
+
+	p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := p.Get(ctx, "k")
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestGet_HonorsContextDeadline(t *testing.T) {
+	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		// Sleep past the caller's deadline so the request is aborted in flight.
+		// The provider must attach ctx via QueryOptions.WithContext for the
+		// SecretStore's per-op deadline to actually bound the call.
+		time.Sleep(200 * time.Millisecond)
+		writeConsulValue(w, "k", "v")
+	})
+
+	p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
+
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+
+	_, err := p.Get(ctx, "k")
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestBackwardCompatParity_ConsulGet(t *testing.T) {
+	t.Run("key exists -> value returned", func(t *testing.T) {
+		stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+			writeConsulValue(w, "tyk-apis/my_service_url", "https://upstream.internal")
+		})
+
+		p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
+
+		got, err := p.Get(t.Context(), "tyk-apis/my_service_url")
+		require.NoError(t, err)
+		require.Equal(t, "https://upstream.internal", got)
+	})
+
+	t.Run("key absent -> not found", func(t *testing.T) {
+		stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		})
+
+		p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
+
+		_, err := p.Get(t.Context(), "tyk-apis/missing")
+
+		var notFound *kv.KeyNotFoundError
+		require.ErrorAs(t, err, &notFound)
+	})
+}
