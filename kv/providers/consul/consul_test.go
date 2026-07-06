@@ -113,7 +113,7 @@ func addrOf(url string) string {
 
 // newConsulProvider builds the provider through its factory, exactly as the
 // registry would, with a hermetic environment.
-func newConsulProvider(t *testing.T, cfg consul.Config) kv.Provider {
+func newConsulProvider(t *testing.T, cfg *consul.Config) kv.Provider {
 	t.Helper()
 
 	clearConsulEnv(t)
@@ -225,7 +225,7 @@ func TestNewFactory_InvalidTLSCAFileErrors(t *testing.T) {
 }
 
 func TestProvider_IsNotStandalone(t *testing.T) {
-	p := newConsulProvider(t, consul.Config{})
+	p := newConsulProvider(t, &consul.Config{})
 
 	s, ok := kv.AsStandalone(p)
 	require.False(t, ok && s.IsStandalone(),
@@ -233,7 +233,7 @@ func TestProvider_IsNotStandalone(t *testing.T) {
 }
 
 func TestProvider_DoesNotExposeTimeouter(t *testing.T) {
-	p := newConsulProvider(t, consul.Config{WaitTime: "30s"})
+	p := newConsulProvider(t, &consul.Config{WaitTime: "30s"})
 
 	_, ok := kv.AsTimeouter(p)
 	require.False(t, ok,
@@ -279,7 +279,7 @@ func TestGet_ReadsValue(t *testing.T) {
 				writeConsulValue(w, tt.key, tt.value)
 			})
 
-			p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
+			p := newConsulProvider(t, &consul.Config{Address: addrOf(stub.url)})
 
 			got, err := p.Get(t.Context(), tt.key)
 			require.NoError(t, err)
@@ -295,7 +295,7 @@ func TestGet_MissingKeyReturnsKeyNotFound(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 
-	p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
+	p := newConsulProvider(t, &consul.Config{Address: addrOf(stub.url)})
 
 	_, err := p.Get(t.Context(), "services/absent")
 
@@ -310,7 +310,7 @@ func TestGet_BackendErrorReturnsStoreUnavailable(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 
-	p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
+	p := newConsulProvider(t, &consul.Config{Address: addrOf(stub.url)})
 
 	_, err := p.Get(t.Context(), "services/redis")
 
@@ -329,7 +329,7 @@ func TestGet_UsesQueryContextForBasicAuth(t *testing.T) {
 	cfg.HttpAuth.Username = "user"
 	cfg.HttpAuth.Password = "pass"
 
-	p := newConsulProvider(t, cfg)
+	p := newConsulProvider(t, &cfg)
 
 	got, err := p.Get(t.Context(), "k")
 	require.NoError(t, err)
@@ -344,7 +344,7 @@ func TestGet_PropagatesContextCancellation(t *testing.T) {
 		writeConsulValue(w, "k", "v")
 	})
 
-	p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
+	p := newConsulProvider(t, &consul.Config{Address: addrOf(stub.url)})
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -363,7 +363,7 @@ func TestGet_HonorsContextDeadline(t *testing.T) {
 		writeConsulValue(w, "k", "v")
 	})
 
-	p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
+	p := newConsulProvider(t, &consul.Config{Address: addrOf(stub.url)})
 
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
 	defer cancel()
@@ -379,7 +379,7 @@ func TestBackwardCompatParity_ConsulGet(t *testing.T) {
 			writeConsulValue(w, "tyk-apis/my_service_url", "https://upstream.internal")
 		})
 
-		p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
+		p := newConsulProvider(t, &consul.Config{Address: addrOf(stub.url)})
 
 		got, err := p.Get(t.Context(), "tyk-apis/my_service_url")
 		require.NoError(t, err)
@@ -391,7 +391,7 @@ func TestBackwardCompatParity_ConsulGet(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 		})
 
-		p := newConsulProvider(t, consul.Config{Address: addrOf(stub.url)})
+		p := newConsulProvider(t, &consul.Config{Address: addrOf(stub.url)})
 
 		_, err := p.Get(t.Context(), "tyk-apis/missing")
 
