@@ -70,9 +70,6 @@ func clearConsulEnv(t *testing.T) {
 	}
 }
 
-// consulKVResponse writes consul's KV GET wire shape: a JSON array with one
-// KVPair whose Value is base64-encoded (Go marshals a []byte field to base64,
-// exactly as consul does and consulapi decodes).
 func consulKVResponse(w http.ResponseWriter, key, value string) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -85,8 +82,6 @@ func consulKVResponse(w http.ResponseWriter, key, value string) {
 	})
 }
 
-// consulAddr strips the scheme so the httptest URL is usable as a consul store
-// "address" (host:port), matching how the gateway promotes "consul.internal:8500".
 func consulAddr(url string) string {
 	return url[len("http://"):]
 }
