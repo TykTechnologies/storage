@@ -139,6 +139,15 @@ func newRegistry(t *testing.T, rawConfig []byte, opts ...registry.InitOption) *r
 	return reg
 }
 
+type mockLogger struct {
+	warnCalls atomic.Int32
+}
+
+func (l *mockLogger) Warn(_ string, _ map[string]any) {
+	l.warnCalls.Add(1)
+}
+func (*mockLogger) Warnf(_ string, _ ...any) {}
+
 func TestNewFromConfigInitializesStoresFromKVSection(t *testing.T) {
 	t.Parallel()
 
@@ -761,4 +770,42 @@ func TestNewFromConfigRejectsInvalidFactories(t *testing.T) {
 		require.Nil(t, reg)
 		require.ErrorContains(t, err, "factory cannot be nil")
 	})
+}
+
+func TestNewFromConfig_WithLogger_ForwardsSkipWarning(t *testing.T) {
+	t.Parallel()
+
+	doc := []byte(`{
+		"kv": {
+			"stores": {
+				"mystery": {"type": "does_not_exist", "required": false, "config": {}}
+			}
+		}
+	}`)
+
+	l := &mockLogger{}
+
+	reg, err := registry.NewFromConfig(t.Context(), doc,
+		registry.WithInitLogger(l),
+	)
+	require.NoError(t, err, "an optional store with an unknown type is skipped, not fatal")
+	require.NotNil(t, reg)
+
+	require.Positive(t, l.warnCalls.Load())
+}
+
+func TestNewFromConfig_NoLogger_DoesNotPanic(t *testing.T) {
+	t.Parallel()
+
+	doc := []byte(`{
+		"kv": {
+			"stores": {
+				"mystery": {"type": "does_not_exist", "required": false, "config": {}}
+			}
+		}
+	}`)
+
+	reg, err := registry.NewFromConfig(t.Context(), doc)
+	require.NoError(t, err)
+	require.NotNil(t, reg)
 }

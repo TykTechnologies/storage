@@ -48,11 +48,11 @@ func (m *mockProvider) IsStandalone() bool {
 }
 
 type mockLogger struct {
-	warnCalls int
+	warnCalls atomic.Int32
 }
 
 func (l *mockLogger) Warn(_ string, _ map[string]any) {
-	l.warnCalls++
+	l.warnCalls.Add(1)
 }
 func (*mockLogger) Warnf(_ string, _ ...any) {}
 
@@ -384,7 +384,7 @@ func TestInitStores_EdgeCases(t *testing.T) {
 			},
 		})
 		require.NoError(t, err)
-		require.Equal(t, 1, l.warnCalls)
+		require.Equal(t, int32(1), l.warnCalls.Load())
 	})
 
 	t.Run("should skip secret store wrapping if provider is standalone", func(t *testing.T) {

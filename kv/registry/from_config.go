@@ -15,6 +15,7 @@ import (
 type initOptions struct {
 	factories     map[kv.ProviderType]kv.ProviderFactory
 	defaultStores map[string]kv.StoreConfig
+	logger        kv.Logger
 }
 
 // InitOption configures NewFromConfig.
@@ -34,6 +35,12 @@ func WithFactories(f map[kv.ProviderType]kv.ProviderFactory) InitOption {
 func WithDefaultStores(s map[string]kv.StoreConfig) InitOption {
 	return func(o *initOptions) {
 		o.defaultStores = s
+	}
+}
+
+func WithInitLogger(l kv.Logger) InitOption {
+	return func(o *initOptions) {
+		o.logger = l
 	}
 }
 
@@ -97,12 +104,12 @@ func NewFromConfig(
 	maps.Copy(merged, config.KV.Stores)
 
 	// Phase 1: resolve references in store configs against local stores.
-	if err := resolveStoreConfigReferences(ctx, merged, options.factories); err != nil {
+	if err := resolveStoreConfigReferences(ctx, merged, options.factories, options.logger); err != nil {
 		return nil, err
 	}
 
 	// Phase 2: build the registry and initialize all stores.
-	full, err := newRegistryWithFactories(options.factories)
+	full, err := newRegistryWithFactories(options.factories, options.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +138,7 @@ func resolveStoreConfigReferences(
 	ctx context.Context,
 	merged map[string]kv.StoreConfig,
 	factories map[kv.ProviderType]kv.ProviderFactory,
+	logger kv.Logger,
 ) error {
 	locals := make(map[string]kv.StoreConfig)
 	var hasRemotes bool
@@ -149,7 +157,7 @@ func resolveStoreConfigReferences(
 		return nil
 	}
 
-	bootstrap, err := newRegistryWithFactories(factories)
+	bootstrap, err := newRegistryWithFactories(factories, logger)
 	if err != nil {
 		return err
 	}
@@ -186,8 +194,13 @@ func resolveStoreConfigReferences(
 	return nil
 }
 
-func newRegistryWithFactories(factories map[kv.ProviderType]kv.ProviderFactory) (*Registry, error) {
-	r := NewDefaultRegistry()
+func newRegistryWithFactories(factories map[kv.ProviderType]kv.ProviderFactory, logger kv.Logger) (*Registry, error) {
+	var rOpts []Option
+	if logger != nil {
+		rOpts = append(rOpts, WithLogger(logger))
+	}
+
+	r := NewDefaultRegistry(rOpts...)
 
 	for providerType, factory := range factories {
 		if err := r.set(providerType, factory); err != nil {
