@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/google/go-cmp v0.6.0
+	github.com/hashicorp/consul/api v1.31.2
 	github.com/hashicorp/vault/api v1.23.0
 	github.com/lib/pq v1.10.9
 	github.com/redis/go-redis/v9 v9.3.1
@@ -36,7 +37,6 @@ require (
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.1 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
-	github.com/hashicorp/consul/api v1.31.2 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
