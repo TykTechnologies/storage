@@ -81,6 +81,18 @@ type StoreGetter interface {
 //
 // The factory pattern allows the registry to create providers dynamically
 // without compile-time dependencies on specific provider implementations.
+//
+// Config validation convention. A factory returns an error only for config that
+// is present but invalid — a value that can never produce correct behavior
+// (malformed JSON, or a security-critical field set to an unusable value, e.g.
+// a relative path where an absolute one is required). It must NOT error for
+// merely-absent optional config: an unset value is a valid state, so the factory
+// builds a provider that runs in its default or disabled mode (e.g. an env
+// provider with no prefix, or a file provider with no base_path that then
+// rejects every Get). Whether to create a store at all for an unconfigured
+// feature is the caller's decision, not the factory's. The effect: configuration
+// mistakes surface once, at construction, while unused features stay quiet
+// instead of failing on every Get.
 type ProviderFactory func(config json.RawMessage) (Provider, error)
 
 // Initializer is an optional interface for providers that require network
