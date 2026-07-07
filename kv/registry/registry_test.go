@@ -80,6 +80,7 @@ func TestNewDefaultRegistry(t *testing.T) {
 	r := NewDefaultRegistry()
 	require.NotNil(t, r)
 	require.NotEmpty(t, r.factories[kv.File])
+	require.NotEmpty(t, r.factories[kv.Env])
 }
 
 func TestAddFactory(t *testing.T) {
