@@ -10,6 +10,7 @@ import (
 
 	"github.com/TykTechnologies/storage/kv"
 	"github.com/TykTechnologies/storage/kv/internal/store"
+	"github.com/TykTechnologies/storage/kv/providers/consul"
 	"github.com/TykTechnologies/storage/kv/providers/env"
 	"github.com/TykTechnologies/storage/kv/providers/file"
 	"github.com/TykTechnologies/storage/kv/providers/inline"
@@ -88,8 +89,12 @@ func NewDefaultRegistry(opts ...Option) *Registry {
 		})
 	}
 
-	// TODO: Uncomment provider registration when implementation is added
-	// r.Add(kv.Consul, consul.NewFactory())
+	err = r.Add(kv.Consul, consul.NewFactory())
+	if err != nil {
+		r.logger.Warn("Failed to add default consul factory", map[string]any{
+			"error": err,
+		})
+	}
 
 	return r
 }
