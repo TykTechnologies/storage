@@ -35,7 +35,7 @@ func (s *SecretStore) Get(ctx context.Context, path string) (string, error) {
 	}
 
 	val, exists, needsRefresh, err := s.cache.Get(path)
-	if exists {
+	if exists && !kv.IsCacheBypassed(ctx) {
 		// Fail fast on cached errors
 		if err != nil {
 			return "", err

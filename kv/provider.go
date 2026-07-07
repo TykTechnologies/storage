@@ -18,14 +18,14 @@ const (
 	// Inline resolves secrets from plain text in the configuration.
 	Inline ProviderType = "inline"
 
+	// File resolves secrets from files on the local filesystem.
+	File ProviderType = "file"
+
 	// Vault resolves secrets from HashiCorp Vault.
 	Vault ProviderType = "hashicorp_vault"
 
 	// Consul resolves secrets from HashiCorp Consul.
 	Consul ProviderType = "hashicorp_consul"
-
-	// K8s resolves secrets from Kubernetes Secrets mounted as files.
-	K8s ProviderType = "k8s_files"
 
 	// --- Enterprise Edition (EE) Providers ---
 
@@ -41,6 +41,18 @@ const (
 	// Conjur resolves secrets from CyberArk Conjur.
 	Conjur ProviderType = "cyberark_conjur"
 )
+
+// IsLocal reports whether this provider type resolves secrets from resources
+// available to the local process — environment variables, inline config data,
+// or the filesystem — requiring no network and a literal, reference-free config.
+func (t ProviderType) IsLocal() bool {
+	switch t {
+	case Env, Inline, File:
+		return true
+	default:
+		return false
+	}
+}
 
 // KeyValueRetriever defines the core read capability for retrieving values by key.
 type KeyValueRetriever interface {

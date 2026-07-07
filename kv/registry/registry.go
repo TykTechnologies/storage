@@ -61,7 +61,7 @@ func NewDefaultRegistry(opts ...Option) *Registry {
 	// r.Add(kv.Inline, inline.NewFactory())
 	// r.Add(kv.Vault, vault.NewFactory())
 	// r.Add(kv.Consul, consul.NewFactory())
-	// r.Add(kv.K8s, k8s.NewFactory())
+	// r.Add(kv.File, file.NewFactory())
 
 	return r
 }
@@ -215,6 +215,24 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 	for name, store := range tempStores {
 		r.stores[name] = store
 	}
+
+	return nil
+}
+
+// set registers a factory, replacing any existing one. Unline Add, it permits
+// override - used by the composition layer so WithFactories wins over OSS defaults.
+func (r *Registry) set(pt kv.ProviderType, factory kv.ProviderFactory) error {
+	if pt == "" {
+		return errors.New("provider type cannot be empty")
+	}
+
+	if factory == nil {
+		return errors.New("factory cannot be nil")
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.factories[pt] = factory
 
 	return nil
 }

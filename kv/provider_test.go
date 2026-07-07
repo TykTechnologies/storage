@@ -25,3 +25,32 @@ func TestAs_CircularDependencyWontFail(t *testing.T) {
 
 	require.False(t, ok)
 }
+
+func TestProviderType_IsLocal(t *testing.T) {
+	t.Parallel()
+
+	local := []ProviderType{
+		Env,
+		Inline,
+		File,
+	}
+
+	remote := []ProviderType{
+		Vault,
+		Consul,
+		AWS,
+		GCP,
+		Azure,
+		Conjur,
+		"unknown_provider",
+		"",
+	}
+
+	for _, pt := range local {
+		require.Truef(t, pt.IsLocal(), "%q must initialize in Phase 1", pt)
+	}
+
+	for _, pt := range remote {
+		require.Falsef(t, pt.IsLocal(), "%q must NOT be treated as a Phase 1 local store", pt)
+	}
+}
