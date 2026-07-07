@@ -13,6 +13,7 @@ import (
 	"github.com/TykTechnologies/storage/kv/providers/env"
 	"github.com/TykTechnologies/storage/kv/providers/file"
 	"github.com/TykTechnologies/storage/kv/providers/inline"
+	"github.com/TykTechnologies/storage/kv/providers/vault"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -80,8 +81,14 @@ func NewDefaultRegistry(opts ...Option) *Registry {
 		})
 	}
 
+	err = r.Add(kv.Vault, vault.NewFactory())
+	if err != nil {
+		r.logger.Warn("Failed to add default vault factory", map[string]any{
+			"error": err,
+		})
+	}
+
 	// TODO: Uncomment provider registration when implementation is added
-	// r.Add(kv.Vault, vault.NewFactory())
 	// r.Add(kv.Consul, consul.NewFactory())
 
 	return r

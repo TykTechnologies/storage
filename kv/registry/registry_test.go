@@ -82,6 +82,7 @@ func TestNewDefaultRegistry(t *testing.T) {
 	require.NotEmpty(t, r.factories[kv.File])
 	require.NotEmpty(t, r.factories[kv.Env])
 	require.NotEmpty(t, r.factories[kv.Inline])
+	require.NotEmpty(t, r.factories[kv.Vault])
 }
 
 func TestAddFactory(t *testing.T) {
