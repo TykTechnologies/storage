@@ -1,9 +1,10 @@
-package kv
+package kv_test
 
 import (
 	"context"
 	"testing"
 
+	"github.com/TykTechnologies/storage/kv"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,7 +14,7 @@ func (m *mockProvider) Get(ctx context.Context, path string) (string, error) {
 	return "", nil
 }
 
-func (m *mockProvider) Unwrap() Provider {
+func (m *mockProvider) Unwrap() kv.Provider {
 	return m
 }
 
@@ -21,7 +22,7 @@ func TestAs_CircularDependencyWontFail(t *testing.T) {
 	t.Parallel()
 
 	m := &mockProvider{}
-	_, ok := As[Closer](m)
+	_, ok := kv.As[kv.Closer](m)
 
 	require.False(t, ok)
 }
@@ -29,19 +30,19 @@ func TestAs_CircularDependencyWontFail(t *testing.T) {
 func TestProviderType_IsLocal(t *testing.T) {
 	t.Parallel()
 
-	local := []ProviderType{
-		Env,
-		Inline,
-		File,
+	local := []kv.ProviderType{
+		kv.Env,
+		kv.Inline,
+		kv.File,
 	}
 
-	remote := []ProviderType{
-		Vault,
-		Consul,
-		AWS,
-		GCP,
-		Azure,
-		Conjur,
+	remote := []kv.ProviderType{
+		kv.Vault,
+		kv.Consul,
+		kv.AWS,
+		kv.GCP,
+		kv.Azure,
+		kv.Conjur,
 		"unknown_provider",
 		"",
 	}

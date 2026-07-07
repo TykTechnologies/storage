@@ -76,7 +76,11 @@ func TestNewRegistry(t *testing.T) {
 
 // TODO: Update the test case when providers are set, to assert
 // that all OSS providers are registered.
-func TestNewDefaultRegistry(t *testing.T) {}
+func TestNewDefaultRegistry(t *testing.T) {
+	r := NewDefaultRegistry()
+	require.NotNil(t, r)
+	require.NotEmpty(t, r.factories[kv.File])
+}
 
 func TestAddFactory(t *testing.T) {
 	t.Parallel()
