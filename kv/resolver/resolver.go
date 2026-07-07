@@ -3,7 +3,8 @@ package resolver
 import (
 	"context"
 
-	"github.com/TykTechnologies/storage/kv/registry"
+	"github.com/TykTechnologies/storage/kv"
+	"github.com/TykTechnologies/storage/kv/internal/resolve"
 )
 
 // Resolver handles string replacement for KV references in configuration strings.
@@ -21,34 +22,40 @@ type Resolver interface {
 	// their resolved values from the configured stores.
 	//
 	// Returns the resolved string with all KV references replaced, or an error
-	// if any reference cannot be resolved.
+	// if any reference cannot be resolved. When several inline tokens fail,
+	// all failures are reported in a single joined error.
 	//
 	// If the input contains no KV references, it is returned unchanged.
+	//
+	// Precedence: an input starting with "kv://" is treated as a whole-value
+	// reference — everything after the store name is the path, including any
+	// "$kv{...}" text, which is NOT expanded. Inline tokens are only processed
+	// in strings that do not start with "kv://". An inline path cannot contain
+	// "}" — use the whole-value form for such keys.
 	Resolve(ctx context.Context, input string) (string, error)
+
+	// ResolveAll walks a raw JSON document recursively and applies Resolve to
+	// every string value found at any depth, including inside nested objects
+	// and arrays. Non-string scalars (numbers, booleans, null) are left as-is;
+	// number values preserve their exact representation (no float64 precision
+	// loss for large integers).
+	//
+	// Returns the re-serialized document with all KV references replaced, or an
+	// error if any reference cannot be resolved. On error the document is not
+	// partially written.
+	//
+	// If the input is not valid JSON, ErrInvalidJSON is returned. A valid
+	// document containing no KV syntax (no "kv://" or "$kv{" substrings) is
+	// returned byte-for-byte unchanged. Documents that do contain KV syntax
+	// are re-serialized: the output normalizes formatting (object keys sorted,
+	// insignificant whitespace removed) while preserving all values.
+	// HTML characters (&, <, >) are NOT escaped in the output.
+	ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, error)
 }
 
-// ResolveConfig processes an entire configuration and resolves any
-// KV references found within string fields.
-//
-// This function enables config-level resolution during component startup,
-// allowing any string field in any configuration structure to contain
-// KV references that will be resolved before the config is used.
-//
-// The resolver traverses the JSON structure recursively, applying Resolve()
-// to all string values while preserving the overall structure and non-string
-// fields unchanged.
-func ResolveConfig(ctx context.Context, resolver Resolver, rawConfig []byte) ([]byte, error) {
-	return nil, nil
-}
-
-type resolver struct {
-	registry *registry.Registry
-}
-
-func NewResolver(registry *registry.Registry) Resolver {
-	return &resolver{registry: registry}
-}
-
-func (r *resolver) Resolve(ctx context.Context, input string) (string, error) {
-	return "", nil
+// NewResolver returns a Resolver that resolves references against the given
+// store getter (typically *registry.Registry). Unresolvable references are
+// always errors.
+func NewResolver(registry kv.StoreGetter) Resolver {
+	return resolve.NewResolver(registry)
 }
