@@ -150,7 +150,7 @@ func TestProviderGet(t *testing.T) {
 		assert.Equal(t, "the-api-key", got)
 	})
 
-	t.Run("rejects an absolute path when base_path is set", func(t *testing.T) {
+	t.Run("rejects an absolute path", func(t *testing.T) {
 		t.Parallel()
 
 		dir := t.TempDir()
