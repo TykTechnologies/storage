@@ -324,13 +324,13 @@ func buildSingleStore(
 ) (kv.Provider, error) {
 	provider, err := factory(storeCfg.Config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create provider %q (type: %s): %w", name, storeCfg.Type, err)
+		return nil, fmt.Errorf("failed to create provider: %w", err)
 	}
 
 	if initializer, ok := kv.AsInitializer(provider); ok {
 		err := initializer.Init(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to initialize store %q (type: %s): %w", name, storeCfg.Type, err)
+			return nil, fmt.Errorf("failed to initialize store %q: %w", name, err)
 		}
 	}
 
