@@ -83,6 +83,17 @@ func (r *Resolver) Resolve(ctx context.Context, input string) (string, error) {
 		return res, err
 	}
 
+	// The token regex requires a closing brace, so an unclosed "$kv{" can
+	// never match — without this check a typo'd reference would silently pass
+	// through as a literal value.
+	if idx := unclosedInlineToken(input); idx >= 0 {
+		return "", fmt.Errorf(
+			"%w: unclosed $kv{ reference in %q",
+			ErrMalformedReference,
+			input,
+		)
+	}
+
 	var resolveErrs []error
 	result := inlineRe.ReplaceAllStringFunc(input, func(match string) string {
 		// strip "$kv{" prefix and "}" suffix
@@ -192,6 +203,32 @@ func (r *Resolver) fetchAndExtract(ctx context.Context, storeName, path, fragmen
 	}
 
 	return extractJSONPointer(raw, fragment)
+}
+
+// unclosedInlineToken returns the index of the first "$kv{" occurrence in
+// input that is not the start of a well-formed $kv{...} token, or -1 when
+// every occurrence is properly closed.
+func unclosedInlineToken(input string) int {
+	starts := make(map[int]struct{})
+	for _, m := range inlineRe.FindAllStringIndex(input, -1) {
+		starts[m[0]] = struct{}{}
+	}
+
+	offset := 0
+
+	for {
+		i := strings.Index(input[offset:], "$kv{")
+		if i < 0 {
+			return -1
+		}
+
+		abs := offset + i
+		if _, ok := starts[abs]; !ok {
+			return abs
+		}
+
+		offset = abs + len("$kv{")
+	}
 }
 
 func (r *Resolver) walkAndResolve(ctx context.Context, node any) (any, error) {

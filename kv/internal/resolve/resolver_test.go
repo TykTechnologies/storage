@@ -203,6 +203,28 @@ func TestResolve(t *testing.T) {
 			input:  "kv://vault/$kv{env:SUFFIX}",
 			want:   "resolved",
 		},
+		{
+			name:    "malformed $kv{} unclosed token",
+			input:   "$kv{unclosed",
+			wantErr: resolve.ErrMalformedReference,
+		},
+		{
+			name:    "malformed $kv{} unclosed token after a valid token",
+			stores:  map[string]kv.Provider{"env": &mockProvider{value: "v"}},
+			input:   "$kv{env:KEY} and then $kv{oops",
+			wantErr: resolve.ErrMalformedReference,
+		},
+		{
+			name:    "malformed $kv{} unclosed token inside a larger string",
+			input:   "https://$kv{unclosed/path",
+			wantErr: resolve.ErrMalformedReference,
+		},
+		{
+			name:   "resolved value containing an unclosed marker is not an error",
+			stores: map[string]kv.Provider{"vault": &mockProvider{value: "literal-$kv{-inside"}},
+			input:  "x-$kv{vault:secret}-y",
+			want:   "x-literal-$kv{-inside-y",
+		},
 	}
 
 	for _, tc := range tests {
