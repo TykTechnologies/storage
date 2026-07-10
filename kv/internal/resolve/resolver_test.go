@@ -3,6 +3,7 @@ package resolve_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/TykTechnologies/storage/kv"
@@ -650,4 +651,52 @@ func BenchmarkResolve_ThreeInlineTokensWithFragment(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+}
+
+// BenchmarkResolveAll measures the whole-document resolution cost the caller
+// pays at startup as a function of reference count. Providers are
+// in-memory mocks, so the numbers isolate the library's own overhead
+// — parse, walk, substitute, re-serialize — from backend latency.
+func BenchmarkResolveAll(b *testing.B) {
+	getter := newGetter(map[string]kv.Provider{
+		"env":   &mockProvider{value: "resolved-value"},
+		"vault": &mockProvider{value: `{"username":"admin","password":"hunter2"}`},
+	})
+	r := resolve.NewResolver(getter)
+	ctx := context.Background()
+
+	for _, n := range []int{20, 50, 100} {
+		doc := buildBenchDoc(b, n)
+
+		b.Run(fmt.Sprintf("refs=%d", n), func(b *testing.B) {
+			for b.Loop() {
+				if _, err := r.ResolveAll(ctx, doc); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func buildBenchDoc(b *testing.B, n int) []byte {
+	b.Helper()
+
+	fields := make(map[string]any, n*2)
+	for i := 0; i < n; i++ {
+		key := fmt.Sprintf("field_%d", i)
+		switch i % 3 {
+		case 0:
+			fields[key] = "kv://env/SOME_KEY"
+		case 1:
+			fields[key] = fmt.Sprintf("https://$kv{env:HOST_%d}/v1", i)
+		case 2:
+			fields[key] = "kv://vault/db/creds#password"
+		}
+		fields[fmt.Sprintf("plain_%d", i)] = "no reference here"
+	}
+
+	doc, err := json.Marshal(map[string]any{"config": fields})
+	require.NoError(b, err)
+
+	return doc
 }

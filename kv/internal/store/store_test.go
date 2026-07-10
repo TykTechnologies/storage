@@ -667,3 +667,47 @@ func newTestStore(t *testing.T, provider kv.Provider, cfg kv.CacheConfig) *Secre
 
 	return store
 }
+
+// BenchmarkSecretStoreGet measures the per-request cost of a Get through the
+// SecretStore wrapper — the "no measurable per-request latency when values are
+// cache-resident" acceptance criterion.
+func BenchmarkSecretStoreGet(b *testing.B) {
+	ctx := context.Background()
+
+	b.Run("cache-hit", func(b *testing.B) {
+		s, err := NewSecretStore("bench", &mockProvider{}, kv.CacheConfig{Enabled: true, TTL: "1h"})
+		if err != nil {
+			b.Fatal(err)
+		}
+		defer s.Close(ctx)
+
+		// Warm the cache so every measured Get is a hit.
+		if _, err := s.Get(ctx, "path"); err != nil {
+			b.Fatal(err)
+		}
+
+		b.ResetTimer()
+
+		for b.Loop() {
+			if _, err := s.Get(ctx, "path"); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("cache-disabled", func(b *testing.B) {
+		s, err := NewSecretStore("bench", &mockProvider{}, kv.CacheConfig{Enabled: false})
+		if err != nil {
+			b.Fatal(err)
+		}
+		defer s.Close(ctx)
+
+		b.ResetTimer()
+
+		for b.Loop() {
+			if _, err := s.Get(ctx, "path"); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
