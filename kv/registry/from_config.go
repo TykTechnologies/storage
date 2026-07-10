@@ -38,6 +38,8 @@ func WithDefaultStores(s map[string]kv.StoreConfig) InitOption {
 	}
 }
 
+// WithInitLogger sets the logger that receives warnings emitted during
+// registry initialization.
 func WithInitLogger(l kv.Logger) InitOption {
 	return func(o *initOptions) {
 		o.logger = l

@@ -398,6 +398,7 @@ func TestIntegrationConsulStoreNegativeCachesNotFound(t *testing.T) {
 func BenchmarkVaultStoreGet(b *testing.B) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		// nolint:errcheck
 		_, _ = w.Write([]byte(`{"data":{"data":{"password":"hunter2"}}}`))
 	}))
 	defer srv.Close()

@@ -34,6 +34,7 @@ type Registry struct {
 
 type Option func(r *Registry)
 
+// WithLogger sets the logger the registry emits warnings.
 func WithLogger(l kv.Logger) Option {
 	return func(r *Registry) {
 		if l != nil {

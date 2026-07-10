@@ -682,8 +682,10 @@ func buildBenchDoc(b *testing.B, n int) []byte {
 	b.Helper()
 
 	fields := make(map[string]any, n*2)
+
 	for i := 0; i < n; i++ {
 		key := fmt.Sprintf("field_%d", i)
+
 		switch i % 3 {
 		case 0:
 			fields[key] = "kv://env/SOME_KEY"
@@ -692,6 +694,7 @@ func buildBenchDoc(b *testing.B, n int) []byte {
 		case 2:
 			fields[key] = "kv://vault/db/creds#password"
 		}
+
 		fields[fmt.Sprintf("plain_%d", i)] = "no reference here"
 	}
 
