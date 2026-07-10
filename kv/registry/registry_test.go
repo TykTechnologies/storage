@@ -332,7 +332,7 @@ func TestInitStores_EdgeCases(t *testing.T) {
 				},
 			})
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "failed to initialize store")
+			require.Contains(t, err.Error(), "initialize store")
 
 			if validInitialized {
 				require.True(
@@ -363,7 +363,7 @@ func TestInitStores_EdgeCases(t *testing.T) {
 			},
 		})
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to wrap store")
+		require.Contains(t, err.Error(), `secret store "valid-1"`)
 		require.False(t, r.isInitialized.Load())
 	})
 

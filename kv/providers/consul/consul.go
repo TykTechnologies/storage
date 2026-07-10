@@ -114,7 +114,7 @@ func NewFactory() kv.ProviderFactory {
 
 		client, err := api.NewClient(clientCfg)
 		if err != nil {
-			return nil, fmt.Errorf("consul: failed to create client: %w", err)
+			return nil, fmt.Errorf("consul: create client: %w", err)
 		}
 
 		return &consulProvider{kvClient: client.KV()}, nil

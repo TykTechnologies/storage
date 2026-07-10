@@ -62,7 +62,7 @@ func TestNewSecretStore(t *testing.T) {
 		})
 		require.Error(t, err)
 		require.Nil(t, store)
-		require.Contains(t, err.Error(), "failed to create secret store")
+		require.Contains(t, err.Error(), `secret store "test"`)
 	})
 
 	t.Run("negative TTL", func(t *testing.T) {

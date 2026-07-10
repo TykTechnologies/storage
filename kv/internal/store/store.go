@@ -155,12 +155,12 @@ func NewSecretStore(
 	opts ...Option,
 ) (*SecretStore, error) {
 	if provider == nil {
-		return nil, fmt.Errorf("failed to create a secret store with name %q: provider cannot be nil", name)
+		return nil, fmt.Errorf("secret store %q: provider cannot be nil", name)
 	}
 
 	cache, err := cache.NewCache(cacheConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create secret store: %w", err)
+		return nil, fmt.Errorf("secret store %q: %w", name, err)
 	}
 
 	s := &SecretStore{

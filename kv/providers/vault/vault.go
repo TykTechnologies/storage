@@ -133,7 +133,7 @@ func NewFactory() kv.ProviderFactory {
 
 		client, err := api.NewClient(defaultCfg)
 		if err != nil {
-			return nil, fmt.Errorf("vault: failed to create a client: %w", err)
+			return nil, fmt.Errorf("vault: create client: %w", err)
 		}
 
 		client.SetToken(conf.Token)
@@ -210,7 +210,7 @@ func (vp *vaultProvider) Get(ctx context.Context, key string) (string, error) {
 
 	b, err := json.Marshal(data)
 	if err != nil {
-		return "", fmt.Errorf("vault: failed to encode secret %q: %w", key, err)
+		return "", fmt.Errorf("vault: encode secret %q: %w", key, err)
 	}
 
 	return string(b), nil

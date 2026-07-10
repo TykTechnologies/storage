@@ -304,7 +304,7 @@ func (r *Registry) Close(ctx context.Context) error {
 			if closer, ok := kv.AsCloser(store); ok {
 				if err := closer.Close(ctx); err != nil {
 					mu.Lock()
-					errs = append(errs, fmt.Errorf("failed to close store %q: %w", name, err))
+					errs = append(errs, fmt.Errorf("close store %q: %w", name, err))
 					mu.Unlock()
 				}
 			}
@@ -325,13 +325,13 @@ func buildSingleStore(
 ) (kv.Provider, error) {
 	provider, err := factory(storeCfg.Config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create provider: %w", err)
+		return nil, fmt.Errorf("create provider for %q store: %w", name, err)
 	}
 
 	if initializer, ok := kv.AsInitializer(provider); ok {
 		err := initializer.Init(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to initialize store %q: %w", name, err)
+			return nil, fmt.Errorf("initialize store %q: %w", name, err)
 		}
 	}
 
@@ -351,7 +351,7 @@ func buildSingleStore(
 		store.WithTimeout(timeout),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to wrap store %q: %w", name, err)
+		return nil, err
 	}
 
 	return ss, nil

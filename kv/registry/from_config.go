@@ -97,7 +97,7 @@ func NewFromConfig(
 
 	if len(rawConfig) > 0 {
 		if err := json.Unmarshal(rawConfig, &config); err != nil {
-			return nil, fmt.Errorf("kv: failed to parse config: %w", err)
+			return nil, fmt.Errorf("kv: parse config: %w", err)
 		}
 	}
 
@@ -119,7 +119,7 @@ func NewFromConfig(
 	if len(merged) > 0 {
 		err := full.InitStores(ctx, &kv.Config{Stores: merged, Cache: config.KV.Cache})
 		if err != nil {
-			return nil, fmt.Errorf("kv: failed to initialize stores: %w", err)
+			return nil, fmt.Errorf("kv: initialize stores: %w", err)
 		}
 	}
 
@@ -170,7 +170,7 @@ func resolveStoreConfigReferences(
 
 	if len(locals) > 0 {
 		if err := bootstrap.InitStores(ctx, &kv.Config{Stores: locals}); err != nil {
-			return fmt.Errorf("kv: failed to initialize local stores for bootstrap: %w", err)
+			return fmt.Errorf("kv: initialize bootstrap local stores: %w", err)
 		}
 	}
 
@@ -186,7 +186,7 @@ func resolveStoreConfigReferences(
 
 		resolved, err := lenient.ResolveAll(ctx, storeCfg.Config)
 		if err != nil {
-			return fmt.Errorf("kv: failed to resolve config of store %q: %w", name, err)
+			return fmt.Errorf("kv: resolve config of store %q: %w", name, err)
 		}
 
 		storeCfg.Config = resolved
@@ -206,7 +206,7 @@ func newRegistryWithFactories(factories map[kv.ProviderType]kv.ProviderFactory, 
 
 	for providerType, factory := range factories {
 		if err := r.set(providerType, factory); err != nil {
-			return nil, fmt.Errorf("kv: failed to register factory: %w", err)
+			return nil, fmt.Errorf("kv: register factory: %w", err)
 		}
 	}
 
