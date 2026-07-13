@@ -44,6 +44,7 @@ func withMemo(ctx context.Context) context.Context {
 // direct Resolve call outside ResolveAll), in which case fetches are not
 // memoized.
 func memoFrom(ctx context.Context) *memo {
+	//nolint:errcheck
 	m, _ := ctx.Value(memoCtxKey{}).(*memo)
 	return m
 }

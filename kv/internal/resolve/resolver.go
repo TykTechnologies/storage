@@ -159,8 +159,11 @@ func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, erro
 	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
 }
 
-// prefetch resolves every distinct reference in doc concurrently, populating
-// the per-call memo.
+// prefetch resolves every distinct reference in doc concurrently, warming the
+// per-call memo so the substitution walk reads them without further I/O.
+//
+// It is best-effort and deliberately non-cancelling. Each goroutine returns nil
+// even on failure — to keep one reference's failure from poisoning the others.
 func (r *Resolver) prefetch(ctx context.Context, doc any) {
 	refs := collectRefs(doc)
 
@@ -173,13 +176,13 @@ func (r *Resolver) prefetch(ctx context.Context, doc any) {
 
 	for ref := range refs {
 		g.Go(func() error {
-			// Errors are intentionally swallowed: walkAndResolve re-resolves
-			// (via the memo) and is the single source of truth for failures.
+			//nolint:errcheck
 			_, _ = r.fetchAndExtract(gctx, ref.store, ref.path, ref.fragment)
 			return nil
 		})
 	}
 
+	//nolint:errcheck
 	_ = g.Wait()
 }
 

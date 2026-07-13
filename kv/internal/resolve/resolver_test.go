@@ -633,11 +633,13 @@ func TestResolveAll_DistinctReferencesEachResolvedOnce(t *testing.T) {
 	paths := []string{"secret/a", "secret/b", "secret/c"}
 
 	var fields []string
+
 	for i := 0; i < repeatEach; i++ {
 		for j, p := range paths {
 			fields = append(fields, fmt.Sprintf(`"h%d_%d":"kv://vault/%s"`, i, j, p))
 		}
 	}
+
 	doc := []byte("{" + strings.Join(fields, ",") + "}")
 
 	_, err := r.ResolveAll(t.Context(), doc)
@@ -647,6 +649,7 @@ func TestResolveAll_DistinctReferencesEachResolvedOnce(t *testing.T) {
 		require.Equal(t, 1, provider.callsFor(p),
 			"each distinct reference must resolve exactly once (path %q)", p)
 	}
+
 	require.EqualValues(t, len(paths), provider.total.Load(),
 		"total backend calls must equal the number of unique references")
 }
@@ -678,6 +681,7 @@ type mutableProvider struct {
 func (m *mutableProvider) Get(_ context.Context, _ string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.calls++
 
 	return m.value, nil
@@ -723,6 +727,7 @@ func TestResolveAll_ResolvesDistinctReferencesConcurrently(t *testing.T) {
 	for i := range fields {
 		fields[i] = fmt.Sprintf(`"h%d":"kv://vault/secret/%d"`, i, i)
 	}
+
 	doc := []byte("{" + strings.Join(fields, ",") + "}")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -812,9 +817,11 @@ func newBarrierProvider(n int, value string) *barrierProvider {
 func (b *barrierProvider) Get(ctx context.Context, _ string) (string, error) {
 	b.mu.Lock()
 	b.arrived++
+
 	if b.arrived > b.peak {
 		b.peak = b.arrived
 	}
+
 	reached := b.arrived >= b.n
 	b.mu.Unlock()
 
