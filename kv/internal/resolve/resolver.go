@@ -57,23 +57,43 @@ func NewResolver(registry kv.StoreGetter, opts ...Option) *Resolver {
 var inlineRe = regexp.MustCompile(`\$kv\{([^}]+)\}`)
 
 func (r *Resolver) Resolve(ctx context.Context, input string) (string, error) {
-	if ref, ok, err := parseWholeValue(input); ok {
-		if err != nil {
-			return "", err
-		}
-
-		res, err := r.fetchAndExtract(ctx, ref.store, ref.path, ref.fragment)
-		if r.lenient && errors.Is(err, kv.ErrStoreNotFound) {
-			return input, nil
-		}
-
-		return res, err
+	ref, ok, err := parseWholeValue(input)
+	if err != nil {
+		return "", err
 	}
 
-	// The token regex requires a closing brace, so an unclosed "$kv{" can
-	// never match — without this check a typo'd reference would silently pass
-	// through as a literal value.
-	if idx := unclosedInlineToken(input); idx >= 0 {
+	if ok {
+		return r.resolveRef(ctx, ref, input)
+	}
+
+	return r.resolveInline(ctx, input)
+}
+
+// resolveRef resolves a single reference. literal is the original text to emit
+// unchanged when lenient mode tolerates a missing store — the whole input for a
+// kv:// reference, or the matched token for a $kv{} one. It is the single place
+// the lenient store-not-found rule lives.
+func (r *Resolver) resolveRef(ctx context.Context, ref refKey, literal string) (string, error) {
+	val, err := r.fetchAndExtract(ctx, ref.store, ref.path, ref.fragment)
+	if err != nil {
+		if r.lenient && errors.Is(err, kv.ErrStoreNotFound) {
+			return literal, nil
+		}
+
+		return "", err
+	}
+
+	return val, nil
+}
+
+// resolveInline replaces every $kv{...} token in input. A malformed or
+// unresolvable token is left in place and its error collected; all failures are
+// returned joined so the caller sees every problem at once.
+func (r *Resolver) resolveInline(ctx context.Context, input string) (string, error) {
+	// The token regex requires a closing brace, so an unclosed "$kv{" can never
+	// match — without this check a typo'd reference would silently pass through
+	// as a literal value.
+	if unclosedInlineToken(input) >= 0 {
 		return "", fmt.Errorf(
 			"%w: unclosed $kv{ reference in %q",
 			ErrMalformedReference,
@@ -81,22 +101,19 @@ func (r *Resolver) Resolve(ctx context.Context, input string) (string, error) {
 		)
 	}
 
-	var resolveErrs []error
+	var errs []error
+
 	result := inlineRe.ReplaceAllStringFunc(input, func(match string) string {
 		ref, err := parseInlineToken(match)
 		if err != nil {
-			resolveErrs = append(resolveErrs, err)
+			errs = append(errs, err)
 
 			return match
 		}
 
-		val, err := r.fetchAndExtract(ctx, ref.store, ref.path, ref.fragment)
+		val, err := r.resolveRef(ctx, ref, match)
 		if err != nil {
-			if r.lenient && errors.Is(err, kv.ErrStoreNotFound) {
-				return match
-			}
-
-			resolveErrs = append(resolveErrs, err)
+			errs = append(errs, err)
 
 			return match
 		}
@@ -104,8 +121,8 @@ func (r *Resolver) Resolve(ctx context.Context, input string) (string, error) {
 		return val
 	})
 
-	if len(resolveErrs) > 0 {
-		return "", errors.Join(resolveErrs...)
+	if len(errs) > 0 {
+		return "", errors.Join(errs...)
 	}
 
 	return result, nil
