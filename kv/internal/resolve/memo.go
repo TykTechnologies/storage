@@ -5,13 +5,6 @@ import (
 	"sync"
 )
 
-// refKey identifies a resolution target.
-type refKey struct {
-	store    string
-	path     string
-	fragment string
-}
-
 // memoResult is a memoized resolution outcome (value or error).
 type memoResult struct {
 	val string

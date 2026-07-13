@@ -57,31 +57,12 @@ func NewResolver(registry kv.StoreGetter, opts ...Option) *Resolver {
 var inlineRe = regexp.MustCompile(`\$kv\{([^}]+)\}`)
 
 func (r *Resolver) Resolve(ctx context.Context, input string) (string, error) {
-	if strings.HasPrefix(input, "kv://") {
-		trimmed := strings.TrimPrefix(input, "kv://")
-
-		slashIdx := strings.IndexByte(trimmed, '/')
-		if slashIdx < 0 {
-			return "", fmt.Errorf(
-				"%w: missing path separator in %q",
-				ErrMalformedReference,
-				input,
-			)
+	if ref, ok, err := parseWholeValue(input); ok {
+		if err != nil {
+			return "", err
 		}
 
-		storeName := trimmed[:slashIdx]
-		rest := trimmed[slashIdx+1:]
-		path, fragment, _ := strings.Cut(rest, "#")
-
-		if storeName == "" || path == "" {
-			return "", fmt.Errorf(
-				"%w: empty store name or path in %q",
-				ErrMalformedReference,
-				input,
-			)
-		}
-
-		res, err := r.fetchAndExtract(ctx, storeName, path, fragment)
+		res, err := r.fetchAndExtract(ctx, ref.store, ref.path, ref.fragment)
 		if r.lenient && errors.Is(err, kv.ErrStoreNotFound) {
 			return input, nil
 		}
@@ -102,35 +83,14 @@ func (r *Resolver) Resolve(ctx context.Context, input string) (string, error) {
 
 	var resolveErrs []error
 	result := inlineRe.ReplaceAllStringFunc(input, func(match string) string {
-		// strip "$kv{" prefix and "}" suffix
-		inner := match[4 : len(match)-1]
-
-		colonIdx := strings.IndexByte(inner, ':')
-		if colonIdx < 0 {
-			resolveErrs = append(resolveErrs, fmt.Errorf(
-				"%w: missing store separator in %q",
-				ErrMalformedReference,
-				match,
-			))
+		ref, err := parseInlineToken(match)
+		if err != nil {
+			resolveErrs = append(resolveErrs, err)
 
 			return match
 		}
 
-		storeName := inner[:colonIdx]
-		rest := inner[colonIdx+1:]
-		path, fragment, _ := strings.Cut(rest, "#")
-
-		if storeName == "" || path == "" {
-			resolveErrs = append(resolveErrs, fmt.Errorf(
-				"%w: empty store name or path in %q",
-				ErrMalformedReference,
-				match,
-			))
-
-			return match
-		}
-
-		val, err := r.fetchAndExtract(ctx, storeName, path, fragment)
+		val, err := r.fetchAndExtract(ctx, ref.store, ref.path, ref.fragment)
 		if err != nil {
 			if r.lenient && errors.Is(err, kv.ErrStoreNotFound) {
 				return match
@@ -202,8 +162,7 @@ func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, erro
 // prefetch resolves every distinct reference in doc concurrently, populating
 // the per-call memo.
 func (r *Resolver) prefetch(ctx context.Context, doc any) {
-	refs := make(map[refKey]struct{})
-	collectRefs(doc, refs)
+	refs := collectRefs(doc)
 
 	if len(refs) <= 1 {
 		return
@@ -222,61 +181,6 @@ func (r *Resolver) prefetch(ctx context.Context, doc any) {
 	}
 
 	_ = g.Wait()
-}
-
-// collectRefs walks a decoded JSON document and gathers every distinct,
-// well-formed reference target.
-func collectRefs(node any, into map[refKey]struct{}) {
-	switch v := node.(type) {
-	case string:
-		collectRefsFromString(v, into)
-	case map[string]any:
-		for _, value := range v {
-			collectRefs(value, into)
-		}
-	case []any:
-		for _, value := range v {
-			collectRefs(value, into)
-		}
-	}
-}
-
-func collectRefsFromString(input string, into map[refKey]struct{}) {
-	if strings.HasPrefix(input, "kv://") {
-		trimmed := strings.TrimPrefix(input, "kv://")
-
-		slashIdx := strings.IndexByte(trimmed, '/')
-		if slashIdx < 0 {
-			return
-		}
-
-		store := trimmed[:slashIdx]
-		path, fragment, _ := strings.Cut(trimmed[slashIdx+1:], "#")
-		if store == "" || path == "" {
-			return
-		}
-
-		into[refKey{store: store, path: path, fragment: fragment}] = struct{}{}
-
-		return
-	}
-
-	for _, m := range inlineRe.FindAllStringSubmatch(input, -1) {
-		inner := m[1]
-
-		colonIdx := strings.IndexByte(inner, ':')
-		if colonIdx < 0 {
-			continue
-		}
-
-		store := inner[:colonIdx]
-		path, fragment, _ := strings.Cut(inner[colonIdx+1:], "#")
-		if store == "" || path == "" {
-			continue
-		}
-
-		into[refKey{store: store, path: path, fragment: fragment}] = struct{}{}
-	}
 }
 
 // fetchAndExtract resolves a single target, consulting the per-call memo (when
