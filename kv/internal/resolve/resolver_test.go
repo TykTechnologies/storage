@@ -4,41 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/TykTechnologies/storage/kv"
 	"github.com/TykTechnologies/storage/kv/internal/resolve"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-type mockProvider struct {
-	value   string
-	err     error
-	lastKey string
-}
-
-func (m *mockProvider) Get(_ context.Context, key string) (string, error) {
-	m.lastKey = key
-	return m.value, m.err
-}
-
-type mockStoreGetter struct {
-	stores map[string]kv.Provider
-}
-
-func (m *mockStoreGetter) GetStore(name string) (kv.Provider, error) {
-	p, ok := m.stores[name]
-	if !ok {
-		return nil, kv.NewStoreNotFoundError(name)
-	}
-
-	return p, nil
-}
-
-func newGetter(stores map[string]kv.Provider) kv.StoreGetter {
-	return &mockStoreGetter{stores: stores}
-}
 
 func TestResolve(t *testing.T) {
 	t.Parallel()
@@ -629,77 +605,243 @@ func TestResolveAll_NoHTMLEscaping(t *testing.T) {
 	assert.NotContains(t, string(got), `\u003c`)
 }
 
-// --------------------------------------------------------------------------
-// Benchmarks
-// --------------------------------------------------------------------------
+func TestResolveAll_DeduplicatesIdenticalReferences(t *testing.T) {
+	const n = 100
 
-func BenchmarkResolve_ThreeInlineTokensWithFragment(b *testing.B) {
-	payload := `{"host":"db.internal","port":"5432"}`
-	getter := newGetter(map[string]kv.Provider{
-		"vault": &mockProvider{value: payload},
-		"env":   &mockProvider{value: "simple-value"},
-	})
-	r := resolve.NewResolver(getter)
-	input := "postgres://$kv{vault:db/creds#host}:$kv{vault:db/creds#port}/$kv{env:DB_NAME}"
-	ctx := context.Background()
+	provider := newCountingProvider("s3cr3t")
+	r := resolve.NewResolver(newGetter(map[string]kv.Provider{"vault": provider}))
 
-	b.ResetTimer()
+	// Whole-value ref with no #fragment, so the raw value is returned as-is
+	// (no JSON extraction needed for the mock value).
+	doc := buildDoc("kv://vault/secret/data/app", n)
 
-	for b.Loop() {
-		_, err := r.Resolve(ctx, input)
-		if err != nil {
-			b.Fatal(err)
+	_, err := r.ResolveAll(t.Context(), doc)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, provider.callsFor("secret/data/app"),
+		"identical references in one document must hit the backend once, not per-occurrence")
+	require.EqualValues(t, 1, provider.total.Load(),
+		"total backend calls must equal the number of UNIQUE references (1), not occurrences (%d)", n)
+}
+
+func TestResolveAll_DistinctReferencesEachResolvedOnce(t *testing.T) {
+	const repeatEach = 10
+
+	provider := newCountingProvider("v")
+	r := resolve.NewResolver(newGetter(map[string]kv.Provider{"vault": provider}))
+
+	paths := []string{"secret/a", "secret/b", "secret/c"}
+
+	var fields []string
+	for i := 0; i < repeatEach; i++ {
+		for j, p := range paths {
+			fields = append(fields, fmt.Sprintf(`"h%d_%d":"kv://vault/%s"`, i, j, p))
 		}
+	}
+	doc := []byte("{" + strings.Join(fields, ",") + "}")
+
+	_, err := r.ResolveAll(t.Context(), doc)
+	require.NoError(t, err)
+
+	for _, p := range paths {
+		require.Equal(t, 1, provider.callsFor(p),
+			"each distinct reference must resolve exactly once (path %q)", p)
+	}
+	require.EqualValues(t, len(paths), provider.total.Load(),
+		"total backend calls must equal the number of unique references")
+}
+
+func TestResolveAll_DedupsAcrossSyntaxForms(t *testing.T) {
+	provider := newCountingProvider("s3cr3t")
+	r := resolve.NewResolver(newGetter(map[string]kv.Provider{"vault": provider}))
+
+	doc := []byte(`{
+		"whole": "kv://vault/secret/data/app",
+		"inline": "prefix-$kv{vault:secret/data/app}-suffix"
+	}`)
+
+	_, err := r.ResolveAll(context.Background(), doc)
+	require.NoError(t, err)
+
+	require.EqualValues(t, int32(1), provider.total.Load(),
+		"the same target via different syntax forms must resolve the backend once")
+}
+
+// mutableProvider returns whatever value it currently holds, and counts calls.
+// It lets a test change the backing secret between resolutions.
+type mutableProvider struct {
+	mu    sync.Mutex
+	value string
+	calls int
+}
+
+func (m *mutableProvider) Get(_ context.Context, _ string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.calls++
+
+	return m.value, nil
+}
+
+func (m *mutableProvider) set(v string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.value = v
+}
+
+func TestResolveAll_MemoIsPerCallNotPersistent(t *testing.T) {
+	provider := &mutableProvider{value: "old"}
+	r := resolve.NewResolver(newGetter(map[string]kv.Provider{"vault": provider}))
+
+	doc := []byte(`{"a":"kv://vault/secret/data/app","b":"kv://vault/secret/data/app"}`)
+
+	first, err := r.ResolveAll(t.Context(), doc)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"a":"old","b":"old"}`, string(first))
+	require.Equal(t, 1, provider.calls, "duplicate refs collapse to one backend call within a call")
+
+	// Secret rotates between reloads.
+	provider.set("new")
+
+	second, err := r.ResolveAll(t.Context(), doc)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"a":"new","b":"new"}`, string(second),
+		"a later ResolveAll must see the rotated value, not a memo from the previous call")
+	require.Equal(t, 2, provider.calls,
+		"the second call must re-hit the backend — the memo must not persist across calls")
+}
+
+func TestResolveAll_ResolvesDistinctReferencesConcurrently(t *testing.T) {
+	const n = 8
+
+	provider := newBarrierProvider(n, "v")
+	r := resolve.NewResolver(newGetter(map[string]kv.Provider{"vault": provider}))
+
+	// n DISTINCT references so dedup does not collapse them — we want n
+	// independent fetches that can only complete if run concurrently.
+	fields := make([]string, n)
+	for i := range fields {
+		fields[i] = fmt.Sprintf(`"h%d":"kv://vault/secret/%d"`, i, i)
+	}
+	doc := []byte("{" + strings.Join(fields, ",") + "}")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	_, err := r.ResolveAll(ctx, doc)
+	require.NoError(t, err,
+		"distinct references must resolve concurrently; serial resolution never reaches the barrier and times out")
+	require.Equal(t, n, provider.peakConcurrency(),
+		"all %d distinct fetches must be in flight simultaneously", n)
+}
+
+type mockProvider struct {
+	value   string
+	err     error
+	lastKey string
+}
+
+func (m *mockProvider) Get(_ context.Context, key string) (string, error) {
+	m.lastKey = key
+	return m.value, m.err
+}
+
+type mockStoreGetter struct {
+	stores map[string]kv.Provider
+}
+
+func (m *mockStoreGetter) GetStore(name string) (kv.Provider, error) {
+	p, ok := m.stores[name]
+	if !ok {
+		return nil, kv.NewStoreNotFoundError(name)
+	}
+
+	return p, nil
+}
+
+func newGetter(stores map[string]kv.Provider) kv.StoreGetter {
+	return &mockStoreGetter{stores: stores}
+}
+
+type countingProvider struct {
+	value string
+	mu    sync.Mutex
+	calls map[string]int
+	total atomic.Int32
+}
+
+func newCountingProvider(value string) *countingProvider {
+	return &countingProvider{value: value, calls: map[string]int{}}
+}
+
+func (c *countingProvider) Get(_ context.Context, key string) (string, error) {
+	c.total.Add(1)
+
+	c.mu.Lock()
+	c.calls[key]++
+	c.mu.Unlock()
+
+	return c.value, nil
+}
+
+func (c *countingProvider) callsFor(key string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.calls[key]
+}
+
+// barrierProvider blocks every Get until exactly n calls are simultaneously
+// in-flight, then releases them all.
+type barrierProvider struct {
+	n     int
+	value string
+
+	mu      sync.Mutex
+	arrived int
+	peak    int
+
+	gate chan struct{}
+	once sync.Once
+}
+
+func newBarrierProvider(n int, value string) *barrierProvider {
+	return &barrierProvider{n: n, value: value, gate: make(chan struct{})}
+}
+
+func (b *barrierProvider) Get(ctx context.Context, _ string) (string, error) {
+	b.mu.Lock()
+	b.arrived++
+	if b.arrived > b.peak {
+		b.peak = b.arrived
+	}
+	reached := b.arrived >= b.n
+	b.mu.Unlock()
+
+	if reached {
+		b.once.Do(func() { close(b.gate) })
+	}
+
+	select {
+	case <-b.gate:
+		return b.value, nil
+	case <-ctx.Done():
+		return "", ctx.Err()
 	}
 }
 
-// BenchmarkResolveAll measures the whole-document resolution cost the caller
-// pays at startup as a function of reference count. Providers are
-// in-memory mocks, so the numbers isolate the library's own overhead
-// — parse, walk, substitute, re-serialize — from backend latency.
-func BenchmarkResolveAll(b *testing.B) {
-	getter := newGetter(map[string]kv.Provider{
-		"env":   &mockProvider{value: "resolved-value"},
-		"vault": &mockProvider{value: `{"username":"admin","password":"hunter2"}`},
-	})
-	r := resolve.NewResolver(getter)
-	ctx := context.Background()
+func (b *barrierProvider) peakConcurrency() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
-	for _, n := range []int{20, 50, 100} {
-		doc := buildBenchDoc(b, n)
-
-		b.Run(fmt.Sprintf("refs=%d", n), func(b *testing.B) {
-			for b.Loop() {
-				if _, err := r.ResolveAll(ctx, doc); err != nil {
-					b.Fatal(err)
-				}
-			}
-		})
-	}
+	return b.peak
 }
 
-func buildBenchDoc(b *testing.B, n int) []byte {
-	b.Helper()
-
-	fields := make(map[string]any, n*2)
-
-	for i := 0; i < n; i++ {
-		key := fmt.Sprintf("field_%d", i)
-
-		switch i % 3 {
-		case 0:
-			fields[key] = "kv://env/SOME_KEY"
-		case 1:
-			fields[key] = fmt.Sprintf("https://$kv{env:HOST_%d}/v1", i)
-		case 2:
-			fields[key] = "kv://vault/db/creds#password"
-		}
-
-		fields[fmt.Sprintf("plain_%d", i)] = "no reference here"
+func buildDoc(ref string, count int) []byte {
+	fields := make([]string, count)
+	for i := range fields {
+		fields[i] = fmt.Sprintf(`"h%d":%q`, i, ref)
 	}
 
-	doc, err := json.Marshal(map[string]any{"config": fields})
-	require.NoError(b, err)
-
-	return doc
+	return []byte("{" + strings.Join(fields, ",") + "}")
 }
