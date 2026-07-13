@@ -8,13 +8,74 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/TykTechnologies/storage/kv"
 )
 
+// maxConcurrentResolves bounds how many references are fetched at once during
+// the prefetch phase.
+const maxConcurrentResolves = 16
+
 type Resolver struct {
 	registry kv.StoreGetter
 	lenient  bool
+}
+
+// refKey identifies a resolution target.
+type refKey struct {
+	store    string
+	path     string
+	fragment string
+}
+
+// memoResult is a memoized resolution outcome (value or error).
+type memoResult struct {
+	val string
+	err error
+}
+
+// memo is the per-document resolution cache. It is concurrency-safe because the
+// prefetch phase populates it from multiple goroutines at once.
+type memo struct {
+	m  map[refKey]memoResult
+	mu sync.Mutex
+}
+
+func (mm *memo) get(k refKey) (memoResult, bool) {
+	mm.mu.Lock()
+	defer mm.mu.Unlock()
+
+	v, ok := mm.m[k]
+
+	return v, ok
+}
+
+func (mm *memo) set(k refKey, v memoResult) {
+	mm.mu.Lock()
+	defer mm.mu.Unlock()
+
+	mm.m[k] = v
+}
+
+type memoCtxKey struct{}
+
+// withMemo attaches a fresh, per-call resolution memo to ctx. The memo lives
+// only for the duration of one ResolveAll — it MUST NOT be stored on the
+// Resolver, which is long-lived and reused across reloads; a persistent memo
+// would serve stale secrets after rotation.
+func withMemo(ctx context.Context) context.Context {
+	return context.WithValue(ctx, memoCtxKey{}, &memo{m: make(map[refKey]memoResult)})
+}
+
+// memoFrom returns the per-call memo, or nil when ctx carries none (e.g. a
+// direct Resolve call outside ResolveAll), in which case fetches are not
+// memoized.
+func memoFrom(ctx context.Context) *memo {
+	m, _ := ctx.Value(memoCtxKey{}).(*memo)
+	return m
 }
 
 type Option func(*Resolver)
@@ -169,6 +230,14 @@ func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, erro
 		return nil, fmt.Errorf("%w: %w", ErrInvalidJSON, err)
 	}
 
+	ctx = withMemo(ctx)
+
+	// Prefetch every distinct reference concurrently into the memo, so the
+	// sequential substitution walk below reads them without further I/O.
+	// Best-effort: prefetch errors are ignored here and surfaced (or, in
+	// lenient mode, tolerated) by walkAndResolve, which remains authoritative.
+	r.prefetch(ctx, doc)
+
 	resolved, err := r.walkAndResolve(ctx, doc)
 	if err != nil {
 		return nil, err
@@ -187,7 +256,110 @@ func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, erro
 	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
 }
 
+// prefetch resolves every distinct reference in doc concurrently, populating
+// the per-call memo.
+func (r *Resolver) prefetch(ctx context.Context, doc any) {
+	refs := make(map[refKey]struct{})
+	collectRefs(doc, refs)
+
+	if len(refs) <= 1 {
+		// Nothing to parallelize
+		return
+	}
+
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(maxConcurrentResolves)
+
+	for ref := range refs {
+		g.Go(func() error {
+			// Errors are intentionally swallowed: walkAndResolve re-resolves
+			// (via the memo) and is the single source of truth for failures.
+			_, _ = r.fetchAndExtract(gctx, ref.store, ref.path, ref.fragment)
+			return nil
+		})
+	}
+
+	_ = g.Wait()
+}
+
+// collectRefs walks a decoded JSON document and gathers every distinct,
+// well-formed reference target.
+func collectRefs(node any, into map[refKey]struct{}) {
+	switch v := node.(type) {
+	case string:
+		collectRefsFromString(v, into)
+	case map[string]any:
+		for _, value := range v {
+			collectRefs(value, into)
+		}
+	case []any:
+		for _, value := range v {
+			collectRefs(value, into)
+		}
+	}
+}
+
+func collectRefsFromString(input string, into map[refKey]struct{}) {
+	if strings.HasPrefix(input, "kv://") {
+		trimmed := strings.TrimPrefix(input, "kv://")
+
+		slashIdx := strings.IndexByte(trimmed, '/')
+		if slashIdx < 0 {
+			return
+		}
+
+		store := trimmed[:slashIdx]
+		path, fragment, _ := strings.Cut(trimmed[slashIdx+1:], "#")
+		if store == "" || path == "" {
+			return
+		}
+
+		into[refKey{store: store, path: path, fragment: fragment}] = struct{}{}
+
+		return
+	}
+
+	for _, m := range inlineRe.FindAllStringSubmatch(input, -1) {
+		inner := m[1]
+
+		colonIdx := strings.IndexByte(inner, ':')
+		if colonIdx < 0 {
+			continue
+		}
+
+		store := inner[:colonIdx]
+		path, fragment, _ := strings.Cut(inner[colonIdx+1:], "#")
+		if store == "" || path == "" {
+			continue
+		}
+
+		into[refKey{store: store, path: path, fragment: fragment}] = struct{}{}
+	}
+}
+
+// fetchAndExtract resolves a single target, consulting the per-call memo (when
+// ctx carries one) so repeated references — in either syntax form — resolve the
+// backend at most once per document.
 func (r *Resolver) fetchAndExtract(ctx context.Context, storeName, path, fragment string) (string, error) {
+	mm := memoFrom(ctx)
+
+	key := refKey{store: storeName, path: path, fragment: fragment}
+	if mm != nil {
+		if hit, ok := mm.get(key); ok {
+			return hit.val, hit.err
+		}
+	}
+
+	val, err := r.fetch(ctx, storeName, path, fragment)
+
+	if mm != nil {
+		mm.set(key, memoResult{val: val, err: err})
+	}
+
+	return val, err
+}
+
+func (r *Resolver) fetch(ctx context.Context, storeName, path, fragment string) (string, error) {
 	store, err := r.registry.GetStore(storeName)
 	if err != nil {
 		return "", err
