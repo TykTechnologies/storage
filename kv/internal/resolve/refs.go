@@ -12,6 +12,13 @@ type refKey struct {
 	fragment string
 }
 
+// ParseWholeValue is the exported boundary over parseWholeValue for callers
+// outside the resolve engine that must parse a kv:// reference without resolving it.
+func ParseWholeValue(input string) (store, path, fragment string, ok bool, err error) {
+	rk, ok, err := parseWholeValue(input)
+	return rk.store, rk.path, rk.fragment, ok, err
+}
+
 // parseWholeValue parses a whole-value reference of the form
 // "kv://store/path#frag".
 //
