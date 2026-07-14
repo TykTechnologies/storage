@@ -101,6 +101,12 @@ type Initializer interface {
 	Init(ctx context.Context) error
 }
 
+// Setter is an optional interface for providers that support writing values
+// back to their backend.
+type Setter interface {
+	Set(ctx context.Context, key, value string) error
+}
+
 // Lister is an optional interface for providers that support enumerating
 // keys & values by prefix. This enables dynamic discovery of available secrets
 // and operational tooling.
@@ -124,6 +130,12 @@ type Standalone interface {
 // duration configuration for operations.
 type Timeouter interface {
 	Timeout() time.Duration
+}
+
+// AsSetter attempts to extract a Setter from a Provider,
+// automatically unwrapping decorators.
+func AsSetter(p Provider) (Setter, bool) {
+	return As[Setter](p)
 }
 
 // AsLister attempts to extract a Lister from a Provider,

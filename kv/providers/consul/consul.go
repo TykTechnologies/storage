@@ -196,6 +196,7 @@ func (cp *consulProvider) List(ctx context.Context, prefix string) (map[string]s
 	}
 
 	out := make(map[string]string, len(pairs))
+
 	for _, p := range pairs {
 		if strings.HasSuffix(p.Key, "/") {
 			continue
