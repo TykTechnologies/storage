@@ -137,6 +137,32 @@ func mustJSON(t *testing.T, v any) json.RawMessage {
 	return b
 }
 
+func writeConsulPairs(w http.ResponseWriter, pairs []struct{ Key, Value string }) {
+	w.Header().Set("Content-Type", "application/json")
+
+	type kvp struct {
+		Key   string `json:"Key"`
+		Value []byte `json:"Value"`
+	}
+
+	arr := make([]kvp, 0, len(pairs))
+	for _, p := range pairs {
+		arr = append(arr, kvp{Key: p.Key, Value: []byte(p.Value)})
+	}
+
+	//nolint:errcheck
+	_ = json.NewEncoder(w).Encode(arr)
+}
+
+func lister(t *testing.T, p kv.Provider) kv.Lister {
+	t.Helper()
+
+	l, ok := kv.AsLister(p)
+	require.True(t, ok, "consul provider must implement kv.Lister")
+
+	return l
+}
+
 func TestNewFactory(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -398,4 +424,64 @@ func TestBackwardCompatParity_ConsulGet(t *testing.T) {
 		var notFound *kv.KeyNotFoundError
 		require.ErrorAs(t, err, &notFound)
 	})
+}
+
+func TestList_ReturnsPairsUnderPrefix(t *testing.T) {
+	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeConsulPairs(w, []struct{ Key, Value string }{
+			{Key: "tyk-apis/", Value: ""}, // directory marker — must be skipped
+			{Key: "tyk-apis/c2_value", Value: "http://up/"},
+			{Key: "tyk-apis/auth_header", Value: "X-From-Consul"},
+		})
+	})
+
+	p := newConsulProvider(t, &consul.Config{Address: addrOf(stub.url)})
+
+	got, err := lister(t, p).List(t.Context(), "tyk-apis")
+	require.NoError(t, err)
+
+	require.Equal(t, map[string]string{
+		"tyk-apis/c2_value":    "http://up/",
+		"tyk-apis/auth_header": "X-From-Consul",
+	}, got, "returns full keys, directory marker skipped")
+
+	assert.Contains(t, stub.requests(), "GET /v1/kv/tyk-apis")
+}
+
+func TestList_EmptyPrefixErrorsWithoutRequest(t *testing.T) {
+	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("List must not hit the backend for an empty prefix")
+	})
+
+	p := newConsulProvider(t, &consul.Config{Address: addrOf(stub.url)})
+
+	_, err := lister(t, p).List(t.Context(), "")
+	require.Error(t, err, "empty prefix must be rejected to avoid a whole-store scan")
+	require.Empty(t, stub.requests())
+}
+
+func TestList_EmptyResultIsNotError(t *testing.T) {
+	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeConsulPairs(w, nil) // 200 with an empty array
+	})
+
+	p := newConsulProvider(t, &consul.Config{Address: addrOf(stub.url)})
+
+	got, err := lister(t, p).List(t.Context(), "tyk-apis")
+	require.NoError(t, err, "a prefix that matches nothing is not an error")
+	require.Empty(t, got)
+}
+
+func TestList_BackendErrorReturnsStoreUnavailable(t *testing.T) {
+	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	p := newConsulProvider(t, &consul.Config{Address: addrOf(stub.url)})
+
+	_, err := lister(t, p).List(t.Context(), "tyk-apis")
+
+	var unavailable *kv.StoreUnavailableError
+	require.ErrorAs(t, err, &unavailable,
+		"a backend failure must map to *kv.StoreUnavailableError, like Get")
 }

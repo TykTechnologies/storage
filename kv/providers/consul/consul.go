@@ -10,7 +10,9 @@ package consul
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/TykTechnologies/storage/kv"
@@ -174,4 +176,33 @@ func (cp *consulProvider) Get(ctx context.Context, key string) (string, error) {
 	}
 
 	return string(pair.Value), nil
+}
+
+// List returns every key/value pair under prefix, keyed by the FULL consul key
+// (the caller strips the prefix if it wants relative keys). Consul directory
+// markers — keys ending in "/" — are skipped; they are not real entries.
+//
+// An empty prefix is rejected: consul would treat it as "list the entire KV
+// store", which is never what a reference resolver wants and is an easy footgun.
+// A prefix that matches nothing is not an error — it returns an empty map.
+func (cp *consulProvider) List(ctx context.Context, prefix string) (map[string]string, error) {
+	if prefix == "" {
+		return nil, errors.New("consul: list requires a non-empty prefix")
+	}
+
+	pairs, _, err := cp.kvClient.List(prefix, (&api.QueryOptions{}).WithContext(ctx))
+	if err != nil {
+		return nil, &kv.StoreUnavailableError{KeyPath: prefix, Err: err}
+	}
+
+	out := make(map[string]string, len(pairs))
+	for _, p := range pairs {
+		if strings.HasSuffix(p.Key, "/") {
+			continue
+		}
+
+		out[p.Key] = string(p.Value)
+	}
+
+	return out, nil
 }

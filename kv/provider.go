@@ -102,10 +102,10 @@ type Initializer interface {
 }
 
 // Lister is an optional interface for providers that support enumerating
-// keys by prefix. This enables dynamic discovery of available secrets
+// keys & values by prefix. This enables dynamic discovery of available secrets
 // and operational tooling.
 type Lister interface {
-	List(ctx context.Context, prefix string) ([]string, error)
+	List(ctx context.Context, prefix string) (map[string]string, error)
 }
 
 // Closer is an optional interface for providers that need graceful shutdown
