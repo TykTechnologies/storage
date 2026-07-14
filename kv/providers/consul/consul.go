@@ -178,6 +178,23 @@ func (cp *consulProvider) Get(ctx context.Context, key string) (string, error) {
 	return string(pair.Value), nil
 }
 
+// Set writes value verbatim as the raw bytes at key (PUT /v1/kv/<key>), with no
+// key transformation or interpretation.
+// A transport or backend failure returns *kv.StoreUnavailableError.
+func (cp *consulProvider) Set(ctx context.Context, key, value string) error {
+	pair := &api.KVPair{
+		Key:   key,
+		Value: []byte(value),
+	}
+
+	_, err := cp.kvClient.Put(pair, (&api.WriteOptions{}).WithContext(ctx))
+	if err != nil {
+		return &kv.StoreUnavailableError{KeyPath: key, Err: err}
+	}
+
+	return nil
+}
+
 // List returns every key/value pair under prefix, keyed by the FULL consul key
 // (the caller strips the prefix if it wants relative keys). Consul directory
 // markers — keys ending in "/" — are skipped; they are not real entries.

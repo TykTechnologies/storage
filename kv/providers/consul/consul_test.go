@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -45,10 +46,11 @@ func clearConsulEnv(t *testing.T) {
 // consulStub is an httptest server that records the requests it receives and
 // delegates response construction to a per-test handler.
 type consulStub struct {
-	url  string
-	mu   sync.Mutex
-	got  []string
-	auth []string
+	url    string
+	mu     sync.Mutex
+	got    []string
+	auth   []string
+	bodies []string
 }
 
 // requests returns a copy of the recorded "METHOD /path" entries.
@@ -71,14 +73,32 @@ func (s *consulStub) lastAuth() string {
 	return s.auth[len(s.auth)-1]
 }
 
+// lastBody returns the raw request body of the most recent request. It is
+// recorded centrally (under the mutex) so write tests can assert on it without
+// racing the server goroutine.
+func (s *consulStub) lastBody() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.bodies) == 0 {
+		return ""
+	}
+
+	return s.bodies[len(s.bodies)-1]
+}
+
 func newConsulStub(t *testing.T, handler http.HandlerFunc) *consulStub {
 	t.Helper()
 
 	s := &consulStub{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+
 		s.mu.Lock()
 		s.got = append(s.got, r.Method+" "+r.URL.Path)
 		s.auth = append(s.auth, r.Header.Get("Authorization"))
+		s.bodies = append(s.bodies, string(body))
 		s.mu.Unlock()
 
 		handler(w, r)
@@ -161,6 +181,15 @@ func lister(t *testing.T, p kv.Provider) kv.Lister {
 	require.True(t, ok, "consul provider must implement kv.Lister")
 
 	return l
+}
+
+func setter(t *testing.T, p kv.Provider) kv.Setter {
+	t.Helper()
+
+	s, ok := kv.AsSetter(p)
+	require.True(t, ok, "consul provider must implement kv.Setter")
+
+	return s
 }
 
 func TestNewFactory(t *testing.T) {
@@ -484,4 +513,129 @@ func TestList_BackendErrorReturnsStoreUnavailable(t *testing.T) {
 	var unavailable *kv.StoreUnavailableError
 	require.ErrorAs(t, err, &unavailable,
 		"a backend failure must map to *kv.StoreUnavailableError, like Get")
+}
+
+func TestProvider_ImplementsSetter(t *testing.T) {
+	p := newConsulProvider(t, &consul.Config{})
+
+	_, ok := kv.AsSetter(p)
+	require.True(t, ok, "consul must implement kv.Setter for the write-back path")
+}
+
+func TestSet_WritesValueVerbatim(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		value    string
+		wantPath string
+	}{
+		{
+			name:     "single-segment key",
+			key:      "mykey",
+			value:    "myvalue",
+			wantPath: "PUT /v1/kv/mykey",
+		},
+		{
+			name:     "multi-segment key preserved verbatim (no transform)",
+			key:      "tyk-apis/rotated_key",
+			value:    "abc123",
+			wantPath: "PUT /v1/kv/tyk-apis/rotated_key",
+		},
+		{
+			name:     "value written byte-exact with no trailing-newline trim",
+			key:      "raw",
+			value:    "line\n",
+			wantPath: "PUT /v1/kv/raw",
+		},
+		{
+			name:     "binary-safe value (embedded NUL survives)",
+			key:      "bin",
+			value:    "a\x00b",
+			wantPath: "PUT /v1/kv/bin",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+				// Consul answers a successful PUT with 200 and the literal "true".
+				_, err := w.Write([]byte("true"))
+				require.NoError(t, err)
+			})
+
+			p := newConsulProvider(t, &consul.Config{Address: addrOf(stub.url)})
+
+			err := setter(t, p).Set(t.Context(), tt.key, tt.value)
+			require.NoError(t, err)
+
+			assert.Equal(t, []string{tt.wantPath}, stub.requests())
+			assert.Equal(t, tt.value, stub.lastBody(),
+				"value must be written to consul verbatim, no transform")
+		})
+	}
+}
+
+func TestSet_BackendErrorReturnsStoreUnavailable(t *testing.T) {
+	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	p := newConsulProvider(t, &consul.Config{Address: addrOf(stub.url)})
+
+	err := setter(t, p).Set(t.Context(), "tyk-apis/key", "v")
+
+	var unavailable *kv.StoreUnavailableError
+	require.ErrorAs(t, err, &unavailable,
+		"a backend write failure must map to *kv.StoreUnavailableError")
+	require.Equal(t, "tyk-apis/key", unavailable.KeyPath)
+}
+
+func TestSet_PropagatesContextCancellation(t *testing.T) {
+	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, err := w.Write([]byte("true"))
+		require.NoError(t, err)
+	})
+
+	p := newConsulProvider(t, &consul.Config{Address: addrOf(stub.url)})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	err := setter(t, p).Set(ctx, "k", "v")
+	require.Error(t, err,
+		"a cancelled context must abort the write (WriteOptions.WithContext)")
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestSet_UsesBasicAuth(t *testing.T) {
+	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, err := w.Write([]byte("true"))
+		require.NoError(t, err)
+	})
+
+	var cfg consul.Config
+	cfg.Address = addrOf(stub.url)
+	cfg.HttpAuth.Username = "user"
+	cfg.HttpAuth.Password = "pass"
+
+	p := newConsulProvider(t, &cfg)
+
+	require.NoError(t, setter(t, p).Set(t.Context(), "k", "v"))
+
+	want := "Basic " + base64.StdEncoding.EncodeToString([]byte("user:pass"))
+	require.Equal(t, want, stub.lastAuth())
+}
+
+func TestBackwardCompatParity_ConsulPut(t *testing.T) {
+	stub := newConsulStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, err := w.Write([]byte("true"))
+		require.NoError(t, err)
+	})
+
+	p := newConsulProvider(t, &consul.Config{Address: addrOf(stub.url)})
+
+	require.NoError(t, setter(t, p).Set(t.Context(), "tyk-apis/edge_api_key", "rotated-secret"))
+
+	require.Equal(t, []string{"PUT /v1/kv/tyk-apis/edge_api_key"}, stub.requests())
+	require.Equal(t, "rotated-secret", stub.lastBody())
 }
