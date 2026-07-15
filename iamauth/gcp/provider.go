@@ -74,6 +74,7 @@ func baseTokenSource(ctx context.Context, serviceAccount string) (oauth2.TokenSo
 		if err != nil {
 			return nil, fmt.Errorf("gcp iam: configuring impersonation for %q: %w", serviceAccount, err)
 		}
+
 		return ts, nil
 	}
 
@@ -81,6 +82,7 @@ func baseTokenSource(ctx context.Context, serviceAccount string) (oauth2.TokenSo
 	if err != nil {
 		return nil, fmt.Errorf("gcp iam: resolving application default credentials: %w", err)
 	}
+
 	return ts, nil
 }
 
@@ -92,6 +94,7 @@ func providerFromTokenSource(ts oauth2.TokenSource) func(context.Context) (strin
 		if err != nil {
 			return "", "", fmt.Errorf("gcp iam: fetching access token: %w", err)
 		}
+
 		return "default", tok.AccessToken, nil
 	}
 }

@@ -32,6 +32,7 @@ import (
 func TestIAMCredentialsProvider_Integration(t *testing.T) {
 	addr := os.Getenv("TEST_IAM_REDIS_ADDR")
 	initialPass := os.Getenv("TEST_IAM_REDIS_PASS")
+
 	if addr == "" || initialPass == "" {
 		t.Skip("set TEST_IAM_REDIS_ADDR and TEST_IAM_REDIS_PASS to run the IAM integration test")
 	}
@@ -39,13 +40,13 @@ func TestIAMCredentialsProvider_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// token holds the value the provider will hand out; we rotate it mid-test.
-	var token atomic.Value
-	token.Store(initialPass)
+	var token atomic.Pointer[string]
+	token.Store(&initialPass)
 
 	providerCalls := int32(0)
 	provider := func(_ context.Context) (string, string, error) {
 		atomic.AddInt32(&providerCalls, 1)
-		return "default", token.Load().(string), nil
+		return "default", *token.Load(), nil
 	}
 
 	// 1. Correct credentials via the provider authenticate successfully.
@@ -64,22 +65,26 @@ func TestIAMCredentialsProvider_Integration(t *testing.T) {
 	)
 	require.NoError(t, err)
 	assert.Error(t, bad.Ping(ctx), "wrong password must be rejected")
-	_ = bad.Disconnect(ctx)
+	assert.NoError(t, bad.Disconnect(ctx))
 
 	// 3. Rotate the server password and the provider's value, then a NEW connector
 	//    must authenticate with the rotated token — no static credential could.
 	rotated := "tokenBBB-rotated"
+
 	admin := redis.NewClient(&redis.Options{Addr: addr, Password: initialPass})
 	require.NoError(t, admin.ConfigSet(ctx, "requirepass", rotated).Err())
+
 	admin2 := redis.NewClient(&redis.Options{Addr: addr, Password: rotated})
+
 	defer func() {
 		// restore for any reruns
-		_ = admin2.ConfigSet(ctx, "requirepass", initialPass).Err()
-		_ = admin.Close()
-		_ = admin2.Close()
+		assert.NoError(t, admin2.ConfigSet(ctx, "requirepass", initialPass).Err())
+		assert.NoError(t, admin.Close())
+		assert.NoError(t, admin2.Close())
 	}()
 
-	token.Store(rotated)
+	token.Store(&rotated)
+
 	conn2, err := connector.NewConnector(model.RedisV9Type,
 		model.WithRedisConfig(&model.RedisOptions{Addrs: []string{addr}}),
 		model.WithCredentialsProvider(provider),

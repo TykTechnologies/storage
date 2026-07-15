@@ -31,5 +31,6 @@ func TestNewProvider_GCPRoutesToGCP(t *testing.T) {
 		assert.NotContains(t, err.Error(), "unsupported")
 		return
 	}
+
 	assert.NotNil(t, provider)
 }
