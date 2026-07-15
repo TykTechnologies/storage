@@ -62,3 +62,22 @@ tasks:
           DB_VERSION: "{{.DB_VERSION}}"
       - mkdir -p coverage/temporal
       - cp temporal/*.cov coverage/temporal/
+
+  test-iamauth:
+    desc: "Run hermetic IAM auth unit tests (provider selection + GCP token minting against fake endpoints; no external infra)"
+    cmds:
+      - task: run-tests
+        vars:
+          STORAGE_TYPE: iamauth
+          DB: "none"
+          DB_VERSION: "n/a"
+
+  test-iam:
+    desc: "Run the IAM credentials-provider integration test against an auth-enabled Redis (provider consulted on connect + rotation). Skips unless TEST_IAM_REDIS_ADDR/TEST_IAM_REDIS_PASS are set."
+    cmds:
+      - |
+        go test -failfast -timeout $TEST_TIMEOUT -race -cover \
+          -coverpkg=./temporal/... -coverprofile=iam-integration.cov \
+          -run TestIAMCredentialsProvider_Integration -v ./temporal/connector/
+        mkdir -p coverage/temporal
+        mv iam-integration.cov coverage/temporal/iam-integration.cov

@@ -22,6 +22,11 @@ tasks:
       - docker run -d -p 7000-7050:7000-7050 -p 5000-5010:5000-5010 -e IP='0.0.0.0' --name redis-cluster grokzen/redis-cluster:{{.REDIS_VERSION}}
       - sleep 5 # wait for cluster to start
 
+  start-redis-iam:
+    cmds:
+      - echo "Starting auth-enabled Redis (IAM credentials-provider stand-in)..."
+      - docker run --name redis-iam -d -p 6379:6379 redis:{{.REDIS_VERSION}} redis-server --requirepass tokenAAA
+
   start-redis-TLS:
     cmds:
       - echo "Starting Redis with TLS..."
