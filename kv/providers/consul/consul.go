@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/TykTechnologies/storage/kv"
-	"github.com/hashicorp/consul/api"
+	consulsdk "github.com/hashicorp/consul/api"
 )
 
 // Config is the JSON "config" block of a consul store.
@@ -76,7 +76,7 @@ func NewFactory() kv.ProviderFactory {
 			}
 		}
 
-		clientCfg := api.DefaultConfig()
+		clientCfg := consulsdk.DefaultConfig()
 
 		if conf.Address != "" {
 			clientCfg.Address = conf.Address
@@ -91,7 +91,7 @@ func NewFactory() kv.ProviderFactory {
 		}
 
 		if conf.HttpAuth.Username != "" || conf.HttpAuth.Password != "" {
-			clientCfg.HttpAuth = &api.HttpBasicAuth{
+			clientCfg.HttpAuth = &consulsdk.HttpBasicAuth{
 				Username: conf.HttpAuth.Username,
 				Password: conf.HttpAuth.Password,
 			}
@@ -114,7 +114,7 @@ func NewFactory() kv.ProviderFactory {
 
 		applyTLSConfig(clientCfg, &conf)
 
-		client, err := api.NewClient(clientCfg)
+		client, err := consulsdk.NewClient(clientCfg)
 		if err != nil {
 			return nil, fmt.Errorf("consul: create client: %w", err)
 		}
@@ -123,7 +123,7 @@ func NewFactory() kv.ProviderFactory {
 	}
 }
 
-func applyTLSConfig(clientCfg *api.Config, conf *Config) {
+func applyTLSConfig(clientCfg *consulsdk.Config, conf *Config) {
 	tls := conf.TLSConfig
 
 	if tls.Address != "" {
@@ -155,7 +155,7 @@ func applyTLSConfig(clientCfg *api.Config, conf *Config) {
 type consulProvider struct {
 	// kvClient is consul's KV endpoint, with the resolved Config already baked
 	// into the underlying client.
-	kvClient *api.KV
+	kvClient *consulsdk.KV
 }
 
 // Get reads the value at key and returns it verbatim: no trimming, no key
@@ -166,7 +166,7 @@ type consulProvider struct {
 // distinguishes. ctx bounds the request via QueryOptions, so the SecretStore's
 // per-operation deadline is honored.
 func (cp *consulProvider) Get(ctx context.Context, key string) (string, error) {
-	pair, _, err := cp.kvClient.Get(key, (&api.QueryOptions{}).WithContext(ctx))
+	pair, _, err := cp.kvClient.Get(key, (&consulsdk.QueryOptions{}).WithContext(ctx))
 	if err != nil {
 		return "", &kv.StoreUnavailableError{KeyPath: key, Err: err}
 	}
@@ -182,12 +182,12 @@ func (cp *consulProvider) Get(ctx context.Context, key string) (string, error) {
 // key transformation or interpretation.
 // A transport or backend failure returns *kv.StoreUnavailableError.
 func (cp *consulProvider) Set(ctx context.Context, key, value string) error {
-	pair := &api.KVPair{
+	pair := &consulsdk.KVPair{
 		Key:   key,
 		Value: []byte(value),
 	}
 
-	_, err := cp.kvClient.Put(pair, (&api.WriteOptions{}).WithContext(ctx))
+	_, err := cp.kvClient.Put(pair, (&consulsdk.WriteOptions{}).WithContext(ctx))
 	if err != nil {
 		return &kv.StoreUnavailableError{KeyPath: key, Err: err}
 	}
@@ -207,7 +207,7 @@ func (cp *consulProvider) List(ctx context.Context, prefix string) (map[string]s
 		return nil, errors.New("consul: list requires a non-empty prefix")
 	}
 
-	pairs, _, err := cp.kvClient.List(prefix, (&api.QueryOptions{}).WithContext(ctx))
+	pairs, _, err := cp.kvClient.List(prefix, (&consulsdk.QueryOptions{}).WithContext(ctx))
 	if err != nil {
 		return nil, &kv.StoreUnavailableError{KeyPath: prefix, Err: err}
 	}

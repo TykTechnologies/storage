@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/TykTechnologies/storage/kv"
-	"github.com/hashicorp/vault/api"
+	vaultsdk "github.com/hashicorp/vault/api"
 )
 
 // Config is the JSON "config" block of a vault store.
@@ -98,7 +98,7 @@ func NewFactory() kv.ProviderFactory {
 			return nil, errors.New("vault: token is required")
 		}
 
-		defaultCfg := api.DefaultConfig()
+		defaultCfg := vaultsdk.DefaultConfig()
 
 		if conf.Address != "" {
 			defaultCfg.Address = conf.Address
@@ -131,7 +131,7 @@ func NewFactory() kv.ProviderFactory {
 			defaultCfg.Timeout = timeout
 		}
 
-		client, err := api.NewClient(defaultCfg)
+		client, err := vaultsdk.NewClient(defaultCfg)
 		if err != nil {
 			return nil, fmt.Errorf("vault: create client: %w", err)
 		}
@@ -156,7 +156,7 @@ func NewFactory() kv.ProviderFactory {
 type vaultProvider struct {
 	// client is the Vault API client. The resolved Config (address, token,
 	// retries, timeout) is already baked into it at construction.
-	client *api.Client
+	client *vaultsdk.Client
 
 	// timeout is the parsed Config.Timeout, surfaced via Timeout() so the
 	// SecretStore wrapper can bound each Get with it. 0 means "unset", letting
