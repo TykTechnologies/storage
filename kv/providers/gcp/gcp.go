@@ -3,6 +3,9 @@ package gcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"slices"
 	"time"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
@@ -67,10 +70,84 @@ type Config struct {
 	Transport string `json:"transport"`
 }
 
+var (
+	allowedCredentialsTypes = []string{"service_account", "authorized_user", "external_account"}
+	allowedTransports       = []string{"grpc", "rest"}
+)
+
 func NewFactory() kv.ProviderFactory {
-	return func(config json.RawMessage) (kv.Provider, error) {
-		return nil, nil
+	return func(raw json.RawMessage) (kv.Provider, error) {
+		if len(raw) == 0 {
+			return nil, errors.New("gcp: config is missing")
+		}
+
+		var config Config
+		if err := json.Unmarshal(raw, &config); err != nil {
+			return nil, fmt.Errorf("gcp: invalid config: %w", err)
+		}
+
+		if config.ProjectID == "" {
+			return nil, errors.New("gcp: project_id is required")
+		}
+
+		hasFile := config.CredentialsFile != ""
+		hasJSON := config.CredentialsJSON != ""
+
+		if hasFile && hasJSON {
+			return nil, errors.New("gcp: credentials_file and credentials_json are mutually exclusive")
+		}
+
+		if hasFile || hasJSON {
+			if config.CredentialsType == "" {
+				return nil, errors.New("gcp: credentials_type is required with credentials_file/credentials_json")
+			}
+
+			if !slices.Contains(allowedCredentialsTypes, config.CredentialsType) {
+				return nil, fmt.Errorf("gcp: unsupported or insecure credentials_type: %q", config.CredentialsType)
+			}
+
+			if config.CredentialsType == "external_account" {
+				err := validateExternalAccount(&config)
+				if err != nil {
+					return nil, err
+				}
+			}
+		} else if config.CredentialsType != "" {
+			return nil, errors.New("gcp: credentials_type set without credentials_file or credentials_json")
+		}
+
+		if len(config.ImpersonateDelegates) > 0 && config.ImpersonateServiceAccount == "" {
+			return nil, errors.New("gcp: impersonate_delegates set without impersonate_service_account")
+		}
+
+		if config.Transport != "" && !slices.Contains(allowedTransports, config.Transport) {
+			return nil, fmt.Errorf(`gcp: unsupported transport %q (want "grpc" or "rest")`, config.Transport)
+		}
+
+		var timeout time.Duration
+
+		if config.Timeout != "" {
+			d, err := time.ParseDuration(config.Timeout)
+			if err != nil {
+				return nil, fmt.Errorf("gcp: invalid timeout %q: %w", config.Timeout, err)
+			}
+
+			if d > 0 {
+				timeout = d
+			}
+		}
+
+		return &gcpProvider{
+			cfg:     &config,
+			timeout: timeout,
+		}, nil
 	}
+}
+
+// TODO: Add implementation with using constraints from:
+// https://docs.cloud.google.com/docs/authentication/client-libraries#validate_other_credential_configurations
+func validateExternalAccount(config *Config) error {
+	return nil
 }
 
 var (
@@ -82,10 +159,9 @@ var (
 )
 
 type gcpProvider struct {
-	cfg     *Config
-	client  *secretmanager.Client
-	timeout time.Duration
-	// INFO: Not sure if I need testOpts field at all.
+	cfg      *Config
+	client   *secretmanager.Client
+	timeout  time.Duration
 	testOpts []option.ClientOption
 }
 
