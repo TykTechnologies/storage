@@ -141,8 +141,8 @@ func startFakeServer(t *testing.T, fake *fakeSecretManager) []option.ClientOptio
 	pb.RegisterSecretManagerServiceServer(srv, fake)
 
 	go func() {
-		err := srv.Serve(lis)
-		require.NoError(t, err)
+		//nolint:errcheck
+		_ = srv.Serve(lis)
 	}()
 	t.Cleanup(srv.Stop)
 

@@ -98,6 +98,7 @@ func TestClassify(t *testing.T) {
 
 			var notFound *kv.KeyNotFoundError
 			var unavailable *kv.StoreUnavailableError
+
 			switch tt.kind {
 			case kindNotFound:
 				require.ErrorAs(t, err, &notFound)
@@ -210,7 +211,9 @@ func TestGet_HonorsContextDeadline(t *testing.T) {
 	t.Parallel()
 
 	fake := newFakeSecretManager()
-	fake.accessHook = func(ctx context.Context, _ *pb.AccessSecretVersionRequest) (*pb.AccessSecretVersionResponse, error) {
+	fake.accessHook = func(
+		ctx context.Context, _ *pb.AccessSecretVersionRequest,
+	) (*pb.AccessSecretVersionResponse, error) {
 		<-ctx.Done() // block until the caller's deadline fires
 		return nil, status.FromContextError(ctx.Err()).Err()
 	}
