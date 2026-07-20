@@ -60,6 +60,16 @@ func NewCredentialsProvider(ctx context.Context, cfg Config) (func(context.Conte
 	// before its actual expiry, giving us proactive rotation for free.
 	ts := oauth2.ReuseTokenSourceWithExpiry(nil, base, refresh)
 
+	// Fail fast: mint the first token now so IAM misconfiguration (missing
+	// permissions, an unreachable metadata server, a bad service account)
+	// surfaces here at startup with a clear error, instead of later as an
+	// opaque Redis AUTH failure on the first connection. The token is cached by
+	// the reuse source, so the first real connection reuses it rather than
+	// minting again.
+	if _, err := ts.Token(); err != nil {
+		return nil, fmt.Errorf("gcp iam: minting initial access token: %w", err)
+	}
+
 	return providerFromTokenSource(ts), nil
 }
 
