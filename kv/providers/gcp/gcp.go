@@ -5,15 +5,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"slices"
 	"strings"
 	"time"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
+	secretmanagerpb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"github.com/TykTechnologies/storage/kv"
 	"google.golang.org/api/impersonate"
 	"google.golang.org/api/option"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
+
+const versionsPath = "/versions/"
+
+var castagnoli = crc32.MakeTable(crc32.Castagnoli)
 
 // Config is the JSON "config" block of a gcp_secret_manager store.
 type Config struct {
@@ -228,12 +236,64 @@ func (gp *gcpProvider) Init(ctx context.Context) error {
 }
 
 func (gp *gcpProvider) Get(ctx context.Context, key string) (string, error) {
-	return "", nil
+	err := gp.validateSecretKey(key)
+	if err != nil {
+		return "", err
+	}
+
+	req := &secretmanagerpb.AccessSecretVersionRequest{
+		Name: gp.versionName(key),
+	}
+
+	resp, err := gp.client.AccessSecretVersion(ctx, req)
+	if err != nil {
+		return "", gp.classify(key, err)
+	}
+
+	payload := resp.GetPayload()
+	if payload == nil {
+		return "", &kv.StoreUnavailableError{KeyPath: key, Err: errors.New("gcp: nil payload")}
+	}
+
+	data := payload.GetData()
+
+	if payload.DataCrc32C != nil {
+		requestCrc32C := crc32.Checksum(data, castagnoli)
+
+		if int64(requestCrc32C) != payload.GetDataCrc32C() {
+			return "", &kv.StoreUnavailableError{KeyPath: key, Err: errors.New("gcp: payload checksum mismatch")}
+		}
+	}
+
+	out := string(data)
+
+	if gp.cfg.TrimTrailingNewline {
+		out = strings.TrimSuffix(out, "\n")
+	}
+
+	return out, nil
+}
+
+func (gp *gcpProvider) validateSecretKey(key string) error {
+	id := key
+
+	if i := strings.Index(id, versionsPath); i >= 0 {
+		id = id[:i]
+	}
+
+	if id == "" {
+		return errors.New("gcp: empty secret key")
+	}
+
+	if strings.Contains(id, "/") {
+		return fmt.Errorf("gcp: secret key %q must be a bare secret ID; "+
+			"cross-project/full resource names are not allowed (configure a separate store per project)", key)
+	}
+
+	return nil
 }
 
 func (gp *gcpProvider) versionName(key string) string {
-	const versionsPath = "/versions/"
-
 	base := gp.secretName(key)
 
 	if strings.Contains(base, versionsPath) {
@@ -255,6 +315,19 @@ func (gp *gcpProvider) projectParent() string {
 	return "projects/" + gp.cfg.ProjectID
 }
 
+func (gp *gcpProvider) classify(key string, err error) error {
+	switch status.Code(err) {
+	case codes.NotFound:
+		return &kv.KeyNotFoundError{KeyPath: key}
+	case codes.FailedPrecondition:
+		return fmt.Errorf("gcp: secret version disabled or destroyed for %q: %w", key, err)
+	case codes.InvalidArgument:
+		return fmt.Errorf("gcp: invalid secret request for %q: %w", key, err)
+	default:
+		return &kv.StoreUnavailableError{KeyPath: key, Err: err}
+	}
+}
+
 func (gp *gcpProvider) Set(ctx context.Context, key, value string) error {
 	return nil
 }
@@ -267,7 +340,7 @@ func (gp *gcpProvider) Close(_ context.Context) error {
 	if gp.client != nil {
 		err := gp.client.Close()
 		if err != nil {
-			return fmt.Errorf("gpc: close client: %w", err)
+			return fmt.Errorf("gcp: close client: %w", err)
 		}
 	}
 

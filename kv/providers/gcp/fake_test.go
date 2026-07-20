@@ -21,8 +21,6 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 )
 
-var castagnoliTable = crc32.MakeTable(crc32.Castagnoli)
-
 type fakeSecretManager struct {
 	pb.UnimplementedSecretManagerServiceServer
 
@@ -82,7 +80,7 @@ func (f *fakeSecretManager) AccessSecretVersion(
 		data = versions[n-1]
 	}
 
-	crc := int64(crc32.Checksum(data, castagnoliTable))
+	crc := int64(crc32.Checksum(data, castagnoli))
 
 	return &pb.AccessSecretVersionResponse{
 		Name:    req.GetName(),
