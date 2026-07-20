@@ -55,3 +55,11 @@ func TestClose_NilClientIsSafe(t *testing.T) {
 	p := &gcpProvider{cfg: &Config{ProjectID: "proj"}}
 	require.NoError(t, p.Close(t.Context()))
 }
+
+func TestClose_ClosesInitializedClient(t *testing.T) {
+	t.Parallel()
+
+	p := &gcpProvider{cfg: &Config{ProjectID: "proj"}, testOpts: startFakeServer(t, newFakeSecretManager())}
+	require.NoError(t, p.Init(t.Context()))
+	require.NoError(t, p.Close(t.Context()))
+}
