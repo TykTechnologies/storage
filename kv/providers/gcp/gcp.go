@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
@@ -169,9 +170,29 @@ func (gp *gcpProvider) Get(ctx context.Context, key string) (string, error) {
 	return "", nil
 }
 
-func (gp *gcpProvider) projectParent() string         { return "" }
-func (gp *gcpProvider) secretName(id string) string   { return "" }
-func (gp *gcpProvider) versionName(key string) string { return "" }
+func (gp *gcpProvider) versionName(key string) string {
+	const versionsPath = "/versions/"
+
+	base := gp.secretName(key)
+
+	if strings.Contains(base, versionsPath) {
+		return base
+	}
+
+	return base + versionsPath + "latest"
+}
+
+func (gp *gcpProvider) secretName(id string) string {
+	return gp.projectParent() + "/secrets/" + id
+}
+
+func (gp *gcpProvider) projectParent() string {
+	if gp.cfg.Location != "" {
+		return fmt.Sprintf("projects/%s/locations/%s", gp.cfg.ProjectID, gp.cfg.Location)
+	}
+
+	return "projects/" + gp.cfg.ProjectID
+}
 
 func (gp *gcpProvider) Set(ctx context.Context, key, value string) error {
 	return nil
