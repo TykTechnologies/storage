@@ -63,8 +63,10 @@ func TestGet_ReturnsPayloadVerbatim(t *testing.T) {
 	})
 }
 
-func TestGet_ErrorClassification(t *testing.T) {
+func TestClassify(t *testing.T) {
 	t.Parallel()
+
+	p := &gcpProvider{}
 
 	const (
 		kindNotFound    = "notfound"    // *kv.KeyNotFoundError
@@ -91,31 +93,37 @@ func TestGet_ErrorClassification(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			fake := newFakeSecretManager()
-			fake.accessHook = func(context.Context, *pb.AccessSecretVersionRequest) (*pb.AccessSecretVersionResponse, error) {
-				return nil, status.Error(tt.code, "boom")
-			}
-			p := newInitializedProvider(t, &Config{ProjectID: "proj"}, fake)
-
-			_, err := p.Get(t.Context(), "db")
+			err := p.classify("db", status.Error(tt.code, "boom"))
 			require.Error(t, err)
 
-			var (
-				notFound    *kv.KeyNotFoundError
-				unavailable *kv.StoreUnavailableError
-			)
-
+			var notFound *kv.KeyNotFoundError
+			var unavailable *kv.StoreUnavailableError
 			switch tt.kind {
 			case kindNotFound:
 				require.ErrorAs(t, err, &notFound)
 			case kindUnavailable:
 				require.ErrorAs(t, err, &unavailable)
 			case kindPlain:
-				require.False(t, errors.As(err, &notFound), "must not be KeyNotFoundError")
-				require.False(t, errors.As(err, &unavailable), "must not be StoreUnavailableError")
+				require.False(t, errors.As(err, &notFound))
+				require.False(t, errors.As(err, &unavailable))
 			}
 		})
 	}
+}
+
+func TestGet_MapsRPCErrorThroughClassify(t *testing.T) {
+	t.Parallel()
+
+	fake := newFakeSecretManager()
+	fake.accessHook = func(context.Context, *pb.AccessSecretVersionRequest) (*pb.AccessSecretVersionResponse, error) {
+		return nil, status.Error(codes.NotFound, "gone")
+	}
+	p := newInitializedProvider(t, &Config{ProjectID: "proj"}, fake)
+
+	_, err := p.Get(t.Context(), "db")
+
+	var notFound *kv.KeyNotFoundError
+	require.ErrorAs(t, err, &notFound)
 }
 
 func TestGet_CRC32C(t *testing.T) {
