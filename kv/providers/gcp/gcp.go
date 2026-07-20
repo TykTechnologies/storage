@@ -11,6 +11,7 @@ import (
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/TykTechnologies/storage/kv"
+	"google.golang.org/api/impersonate"
 	"google.golang.org/api/option"
 )
 
@@ -72,6 +73,8 @@ type Config struct {
 }
 
 var (
+	// TODO: the option package exposes  type CredentialsType = credentialstype.CredType, mb I should use this type?
+	// Why yes/ why not?
 	allowedCredentialsTypes = []string{"service_account", "authorized_user", "external_account"}
 	allowedTransports       = []string{"grpc", "rest"}
 )
@@ -166,6 +169,64 @@ type gcpProvider struct {
 	testOpts []option.ClientOption
 }
 
+// INFO: QUESTIONS:
+// 1. Do we have to expose custom scopes passing for client? It looks like
+// we need scopes for impersonation, the question is if we want to hardcode it
+// or expose to client. Why yes/ why not?
+// 2.
+func (gp *gcpProvider) Init(ctx context.Context) error {
+	var opts []option.ClientOption
+
+	if len(gp.testOpts) > 0 {
+		opts = gp.testOpts
+	} else {
+		// TODO: Before all of this we have to process with ADC. Or we don't have to do anything?
+
+		if gp.cfg.CredentialsFile != "" {
+			opts = append(opts, option.WithAuthCredentialsFile(option.CredentialsType(gp.cfg.CredentialsType), gp.cfg.CredentialsFile))
+		}
+
+		if gp.cfg.CredentialsJSON != "" {
+			opts = append(opts, option.WithAuthCredentialsJSON(option.CredentialsType(gp.cfg.CredentialsType), []byte(gp.cfg.CredentialsJSON)))
+		}
+
+		// TODO: Finish the impersonation
+		if gp.cfg.ImpersonateServiceAccount != "" {
+			cs := impersonate.CredentialsConfig{
+				TargetPrincipal: gp.cfg.ImpersonateServiceAccount,
+				Delegates:       gp.cfg.ImpersonateDelegates,
+				// FIX: Scopes are required. What are they?
+				// Scopes:
+			}
+			// TODO: Do I need to pass any Client Options here?
+			impersonateCTS, err := impersonate.CredentialsTokenSource(ctx, cs)
+			if err != nil {
+				return fmt.Errorf("gcp: create credentials token source: %w", err)
+			}
+
+			opts = append(opts, option.WithTokenSource(impersonateCTS))
+		}
+
+		if gp.cfg.QuotaProjectID != "" {
+			opts = append(opts, option.WithQuotaProject(gp.cfg.QuotaProjectID))
+		}
+	}
+
+	newClient := secretmanager.NewClient
+	if gp.cfg.Transport == "rest" {
+		newClient = secretmanager.NewRESTClient
+	}
+
+	c, err := newClient(ctx, opts...)
+	if err != nil {
+		return fmt.Errorf("gcp: create client: %w", err)
+	}
+
+	gp.client = c
+
+	return nil
+}
+
 func (gp *gcpProvider) Get(ctx context.Context, key string) (string, error) {
 	return "", nil
 }
@@ -202,10 +263,13 @@ func (gp *gcpProvider) Timeout() time.Duration {
 	return gp.timeout
 }
 
-func (gp *gcpProvider) Init(ctx context.Context) error {
-	return nil
-}
+func (gp *gcpProvider) Close(_ context.Context) error {
+	if gp.client != nil {
+		err := gp.client.Close()
+		if err != nil {
+			return fmt.Errorf("gpc: close client: %w", err)
+		}
+	}
 
-func (gp *gcpProvider) Close(ctx context.Context) error {
 	return nil
 }
