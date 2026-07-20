@@ -189,13 +189,14 @@ func (gp *gcpProvider) Init(ctx context.Context) error {
 		opts = gp.testOpts
 	} else {
 		// TODO: Before all of this we have to process with ADC. Or we don't have to do anything?
+		credType := option.CredentialsType(gp.cfg.CredentialsType)
 
 		if gp.cfg.CredentialsFile != "" {
-			opts = append(opts, option.WithAuthCredentialsFile(option.CredentialsType(gp.cfg.CredentialsType), gp.cfg.CredentialsFile))
+			opts = append(opts, option.WithAuthCredentialsFile(credType, gp.cfg.CredentialsFile))
 		}
 
 		if gp.cfg.CredentialsJSON != "" {
-			opts = append(opts, option.WithAuthCredentialsJSON(option.CredentialsType(gp.cfg.CredentialsType), []byte(gp.cfg.CredentialsJSON)))
+			opts = append(opts, option.WithAuthCredentialsJSON(credType, []byte(gp.cfg.CredentialsJSON)))
 		}
 
 		// TODO: Finish the impersonation
@@ -274,6 +275,88 @@ func (gp *gcpProvider) Get(ctx context.Context, key string) (string, error) {
 	return out, nil
 }
 
+func (gp *gcpProvider) Set(ctx context.Context, key, value string) error {
+	err := gp.validateSecretKey(key)
+	if err != nil {
+		return err
+	}
+
+	if strings.Contains(key, versionsPath) {
+		return fmt.Errorf("gcp: set does not accept version in the key %q", key)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, gp.getTimeout())
+	defer cancel()
+
+	data := []byte(value)
+	crc := int64(crc32.Checksum(data, castagnoli))
+	payload := &secretmanagerpb.SecretPayload{
+		Data:       data,
+		DataCrc32C: &crc,
+	}
+
+	secretName := gp.secretName(key)
+
+	addReq := &secretmanagerpb.AddSecretVersionRequest{
+		Parent:  secretName,
+		Payload: payload,
+	}
+
+	_, err = gp.client.AddSecretVersion(ctx, addReq)
+	if err == nil {
+		return nil
+	}
+
+	// Not found is not an error in this case, it means the process should
+	// create the secret first.
+	if status.Code(err) != codes.NotFound {
+		return gp.classify(key, err)
+	}
+
+	secret := &secretmanagerpb.Secret{}
+
+	if gp.cfg.Location == "" {
+		// Adding replication policy to replicate secret payload across
+		// multiple regions globally.
+		secret.Replication = &secretmanagerpb.Replication{
+			Replication: &secretmanagerpb.Replication_Automatic_{
+				Automatic: &secretmanagerpb.Replication_Automatic{},
+			},
+		}
+	}
+
+	createReq := &secretmanagerpb.CreateSecretRequest{
+		Parent:   gp.projectParent(),
+		SecretId: key,
+		Secret:   secret,
+	}
+
+	if _, err = gp.client.CreateSecret(ctx, createReq); err != nil && status.Code(err) != codes.AlreadyExists {
+		return gp.classify(key, err)
+	}
+
+	if _, err = gp.client.AddSecretVersion(ctx, addReq); err != nil {
+		return gp.classify(key, err)
+	}
+
+	return nil
+}
+
+func (gp *gcpProvider) Timeout() time.Duration {
+	return gp.timeout
+}
+
+func (gp *gcpProvider) Close(_ context.Context) error {
+	if gp.client != nil {
+		err := gp.client.Close()
+		if err != nil {
+			return fmt.Errorf("gcp: close client: %w", err)
+		}
+	}
+
+	return nil
+}
+
 func (gp *gcpProvider) validateSecretKey(key string) error {
 	id := key
 
@@ -328,21 +411,11 @@ func (gp *gcpProvider) classify(key string, err error) error {
 	}
 }
 
-func (gp *gcpProvider) Set(ctx context.Context, key, value string) error {
-	return nil
-}
-
-func (gp *gcpProvider) Timeout() time.Duration {
-	return gp.timeout
-}
-
-func (gp *gcpProvider) Close(_ context.Context) error {
-	if gp.client != nil {
-		err := gp.client.Close()
-		if err != nil {
-			return fmt.Errorf("gcp: close client: %w", err)
-		}
+func (gp *gcpProvider) getTimeout() time.Duration {
+	if gp.timeout > 0 {
+		return gp.timeout
 	}
 
-	return nil
+	// TODO: Do I have to create some const and share it across internal/store and gcp provider?
+	return 5 * time.Second
 }
