@@ -12,17 +12,21 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/auth"
 	"cloud.google.com/go/auth/credentials"
+	"cloud.google.com/go/auth/credentials/impersonate"
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	secretmanagerpb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"github.com/TykTechnologies/storage/kv"
-	"google.golang.org/api/impersonate"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-const versionsPath = "/versions/"
+const (
+	versionsPath       = "/versions/"
+	cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
+)
 
 var castagnoli = crc32.MakeTable(crc32.Castagnoli)
 
@@ -260,52 +264,15 @@ type gcpProvider struct {
 	testOpts []option.ClientOption
 }
 
-// INFO: QUESTIONS:
-// 1. Do we have to expose custom scopes passing for client? It looks like
-// we need scopes for impersonation, the question is if we want to hardcode it
-// or expose to client. Why yes/ why not?
-// 2.
 func (gp *gcpProvider) Init(ctx context.Context) error {
-	var opts []option.ClientOption
-
-	if len(gp.testOpts) > 0 {
-		opts = gp.testOpts
-	} else {
-		_, err := credentials.DetectDefault(&credentials.DetectOptions{})
+	opts := gp.testOpts
+	if len(opts) == 0 {
+		built, err := gp.buildAuthOptions(ctx)
 		if err != nil {
-			return fmt.Errorf("gcp: detect ADC: %w", err)
+			return err
 		}
 
-		credType := option.CredentialsType(gp.cfg.CredentialsType)
-
-		if gp.cfg.CredentialsFile != "" {
-			opts = append(opts, option.WithAuthCredentialsFile(credType, gp.cfg.CredentialsFile))
-		}
-
-		if gp.cfg.CredentialsJSON != "" {
-			opts = append(opts, option.WithAuthCredentialsJSON(credType, []byte(gp.cfg.CredentialsJSON)))
-		}
-
-		// TODO: Finish the impersonation
-		if gp.cfg.ImpersonateServiceAccount != "" {
-			cs := impersonate.CredentialsConfig{
-				TargetPrincipal: gp.cfg.ImpersonateServiceAccount,
-				Delegates:       gp.cfg.ImpersonateDelegates,
-				// FIX: Scopes are required. What are they?
-				// Scopes:
-			}
-			// TODO: Do I need to pass any Client Options here?
-			impersonateCTS, err := impersonate.CredentialsTokenSource(ctx, cs)
-			if err != nil {
-				return fmt.Errorf("gcp: create credentials token source: %w", err)
-			}
-
-			opts = append(opts, option.WithTokenSource(impersonateCTS))
-		}
-
-		if gp.cfg.QuotaProjectID != "" {
-			opts = append(opts, option.WithQuotaProject(gp.cfg.QuotaProjectID))
-		}
+		opts = built
 	}
 
 	newClient := secretmanager.NewClient
@@ -321,6 +288,67 @@ func (gp *gcpProvider) Init(ctx context.Context) error {
 	gp.client = c
 
 	return nil
+}
+
+func (gp *gcpProvider) buildAuthOptions(ctx context.Context) ([]option.ClientOption, error) {
+	var opts []option.ClientOption
+
+	if gp.cfg.Location != "" {
+		// TODO: Clarify where is this URL scheme comes from?
+		opts = append(opts, option.WithEndpoint("secretmanager."+gp.cfg.Location+".rep.googleapis.com:443"))
+	}
+
+	if gp.cfg.QuotaProjectID != "" {
+		opts = append(opts, option.WithQuotaProject(gp.cfg.QuotaProjectID))
+	}
+
+	hasFile := gp.cfg.CredentialsFile != ""
+	hasJSON := gp.cfg.CredentialsJSON != ""
+
+	switch {
+	case gp.cfg.ImpersonateServiceAccount != "":
+		var base *auth.Credentials
+
+		// At first we want to get Base creds for impersonation
+		if hasFile || hasJSON {
+			var err error
+
+			base, err = credentials.DetectDefault(&credentials.DetectOptions{
+				CredentialsFile: gp.cfg.CredentialsFile,
+				CredentialsJSON: []byte(gp.cfg.CredentialsJSON),
+				Scopes:          []string{cloudPlatformScope},
+			})
+			if err != nil {
+				return nil, fmt.Errorf("gcp: build impersonation base credentials: %w", err)
+			}
+		}
+
+		creds, err := impersonate.NewCredentials(&impersonate.CredentialsOptions{
+			TargetPrincipal: gp.cfg.ImpersonateServiceAccount,
+			Delegates:       gp.cfg.ImpersonateDelegates,
+			Scopes:          []string{cloudPlatformScope},
+			Credentials:     base,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("gcp: build impersonated credentials: %w", err)
+		}
+
+		opts = append(opts, option.WithAuthCredentials(creds))
+
+	case hasFile:
+		opts = append(opts, option.WithAuthCredentialsFile(
+			option.CredentialsType(gp.cfg.CredentialsType),
+			gp.cfg.CredentialsFile,
+		))
+	case hasJSON:
+		opts = append(opts, option.WithAuthCredentialsJSON(
+			option.CredentialsType(gp.cfg.CredentialsType),
+			[]byte(gp.cfg.CredentialsJSON),
+		))
+	}
+	// default: ADC is resolved lazily by the client
+
+	return opts, nil
 }
 
 func (gp *gcpProvider) Get(ctx context.Context, key string) (string, error) {
