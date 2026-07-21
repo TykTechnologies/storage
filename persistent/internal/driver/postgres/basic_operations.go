@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"reflect"
+	"sort"
 	"strings"
 
 	"golang.org/x/text/cases"
@@ -287,7 +289,7 @@ func (d *driver) UpdateAll(ctx context.Context, row model.DBObject, query, updat
 		}
 	}()
 
-	db := d.db.WithContext(ctx).Table(tableName)
+	db := tx.Table(tableName)
 
 	hasFilter := false
 
@@ -353,6 +355,12 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 		}
 	}()
 
+	// pg_advisory_xact_lock serializes concurrent upserts; released automatically when tx ends.
+	if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", upsertLockKey(tableName, query)).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
 	originalID := row.GetObjectID()
 	updateDB := tx.Table(tableName)
 
@@ -380,7 +388,6 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 			return err
 		}
 
-		// Preserve original ID
 		if originalID != "" {
 			row.SetObjectID(originalID)
 		}
@@ -516,6 +523,27 @@ func copyStructValues(src, dst interface{}) {
 			}
 		}
 	}
+}
+
+// upsertLockKey returns a stable int64 advisory-lock key for a table+query pair.
+// Sorting query keys ensures the key is deterministic regardless of map iteration order.
+func upsertLockKey(tableName string, query model.DBM) int64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(tableName))
+
+	keys := make([]string, 0, len(query))
+	for k := range query {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		_, _ = h.Write([]byte(k))
+		_, _ = h.Write([]byte(fmt.Sprint(query[k])))
+	}
+
+	return int64(h.Sum64())
 }
 
 func applySetOperatorToObject(obj model.DBObject, update model.DBM) {

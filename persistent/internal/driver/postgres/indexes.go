@@ -270,6 +270,28 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
 		idx.IsTTLIndex = false
 	}
 
+	// index_metadata may not exist (only created on first TTL index); ignore errors.
+	if quotedTable, qErr := sanitizeIdentifier(tableName); qErr == nil {
+		type ttlMeta struct {
+			IndexName  string
+			TtlSeconds int
+		}
+
+		var metas []ttlMeta
+
+		ttlQ := `SELECT index_name, ttl_seconds FROM index_metadata WHERE table_name = ?`
+		if d.db.WithContext(ctx).Raw(ttlQ, quotedTable).Scan(&metas).Error == nil {
+			for _, m := range metas {
+				// pq.QuoteIdentifier wraps names in double-quotes; strip before map lookup.
+				key := strings.Trim(m.IndexName, `"`)
+				if idx, found := indexMap[key]; found {
+					idx.IsTTLIndex = true
+					idx.TTL = m.TtlSeconds
+				}
+			}
+		}
+	}
+
 	// Convert the map to a slice
 	indexes := make([]model.Index, 0, len(indexMap))
 	for _, idx := range indexMap {

@@ -282,10 +282,11 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 			continue
 		}
 
-		// Handle $or operator
 		if k == "$or" {
 			if nested, ok := v.([]model.DBM); ok {
-				for ni, n := range nested {
+				// Sub-session per element so GORM wraps each group's ANDed conditions in parentheses.
+				for i, n := range nested {
+					sub := db.Session(&gorm.Session{NewDB: true})
 					for nk, nv := range n {
 						val := ""
 						if o, ok := nv.(model.ObjectID); ok {
@@ -293,12 +294,12 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 						} else {
 							val = fmt.Sprint(nv)
 						}
-
-						if ni == 0 {
-							db = db.Where(nk+" = ?", val)
-						} else {
-							db = db.Or(nk+" = ?", val)
-						}
+						sub = sub.Where(nk+" = ?", val)
+					}
+					if i == 0 {
+						db = db.Where(sub)
+					} else {
+						db = db.Or(sub)
 					}
 				}
 			}

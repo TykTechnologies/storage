@@ -1354,6 +1354,18 @@ func TestTranslateQuery(t *testing.T) {
 			expectedCount: 3,
 		},
 		{
+			// Regression: multi-field elements inside $or must be ANDed within the element,
+			// not ORed. {category:A, value:10} should match only Test 1, not all A-category.
+			name: "OR Operator multi-field elements",
+			query: model.DBM{
+				"$or": []model.DBM{
+					{"category": "A", "value": 10}, // only Test 1 matches both
+					{"value": 20},                  // Test 2
+				},
+			},
+			expectedCount: 2,
+		},
+		{
 			name: "Not Equal Operator",
 			query: model.DBM{
 				"category": model.DBM{
