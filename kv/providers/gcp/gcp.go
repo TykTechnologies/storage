@@ -159,7 +159,7 @@ func NewFactory() kv.ProviderFactory {
 	}
 }
 
-// Validation rules were grabbed from:
+// Validation rules source:
 // https://docs.cloud.google.com/docs/authentication/client-libraries#validate_other_credential_configurations
 func validateExternalAccount(config *Config) error {
 	raw := []byte(config.CredentialsJSON)
@@ -178,7 +178,11 @@ func validateExternalAccount(config *Config) error {
 		TokenURL                       string `json:"token_url"`
 		ServiceAccountImpersonationURL string `json:"service_account_impersonation_url"`
 		CredentialSource               struct {
-			Executable json.RawMessage `json:"executable"`
+			URL                   string          `json:"url"`
+			Executable            json.RawMessage `json:"executable"`
+			EnvironmentID         string          `json:"environment_id"`
+			RegionURL             string          `json:"region_url"`
+			IMDSv2SessionTokenURL string          `json:"imdsv2_session_token_url"`
 		} `json:"credential_source"`
 	}
 
@@ -205,6 +209,15 @@ func validateExternalAccount(config *Config) error {
 		return errors.New("gcp: external_account executable credential source is not permitted")
 	}
 
+	cs := ea.CredentialSource
+	if strings.HasPrefix(cs.EnvironmentID, "aws") {
+		for _, u := range []string{cs.URL, cs.RegionURL, cs.IMDSv2SessionTokenURL} {
+			if u != "" && !isAWSIMDSHost(u) {
+				return fmt.Errorf("gcp: external_account aws credential source url %q is not the AWS IMDS endpoint", u)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -216,7 +229,20 @@ func isGoogleHost(rawURL string) bool {
 
 	host := u.Hostname()
 
+	// Source: https://docs.cloud.google.com/docs/authentication/client-libraries#validate_other_credential_configurations
 	return host == "googleapis.com" || strings.HasSuffix(host, ".googleapis.com")
+}
+
+func isAWSIMDSHost(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+
+	host := u.Hostname()
+
+	// Source: https://docs.cloud.google.com/docs/authentication/client-libraries#validate_other_credential_configurations
+	return host == "169.254.169.254" || host == "fd00:ec2::254"
 }
 
 var (
@@ -234,11 +260,6 @@ type gcpProvider struct {
 	testOpts []option.ClientOption
 }
 
-//   - [ ] **T8 — Auth paths.** Wire `impersonate.NewCredentials` (ADC + explicit `DetectDefault`
-//     base), WIF via `external_account` + `validateExternalAccount` (§15.8), and
-//     `quota_project_id` (`WithQuotaProject`); confirm the nil-base note (§8.2).
-//     _Verify:_ factory + external-account-validation + option-assembly tests + real-E2E smoke.
-//
 // INFO: QUESTIONS:
 // 1. Do we have to expose custom scopes passing for client? It looks like
 // we need scopes for impersonation, the question is if we want to hardcode it
