@@ -27,6 +27,11 @@ const (
 	awsIMDSHostIPv6 = "fd00:ec2::254"
 )
 
+var (
+	allowedCredentialsTypes = []string{"service_account", "authorized_user", "external_account"}
+	allowedTransports       = []string{"grpc", "rest"}
+)
+
 // Config is the JSON "config" block of a gcp_secret_manager store.
 type Config struct {
 	// ProjectID is the GCP project that owns the secrets. Required.
@@ -127,30 +132,8 @@ func (cfg *Config) validate() error {
 		return errors.New("gcp: project_id is required")
 	}
 
-	hasFile := cfg.CredentialsFile != ""
-	hasJSON := cfg.CredentialsJSON != ""
-
-	if hasFile && hasJSON {
-		return errors.New("gcp: credentials_file and credentials_json are mutually exclusive")
-	}
-
-	if hasFile || hasJSON {
-		if cfg.CredentialsType == "" {
-			return errors.New("gcp: credentials_type is required with credentials_file/credentials_json")
-		}
-
-		if !slices.Contains(allowedCredentialsTypes, cfg.CredentialsType) {
-			return fmt.Errorf("gcp: unsupported or insecure credentials_type: %q", cfg.CredentialsType)
-		}
-
-		if cfg.CredentialsType == "external_account" {
-			err := cfg.validateExternalAccount()
-			if err != nil {
-				return err
-			}
-		}
-	} else if cfg.CredentialsType != "" {
-		return errors.New("gcp: credentials_type set without credentials_file or credentials_json")
+	if err := cfg.validateCredentials(); err != nil {
+		return err
 	}
 
 	if len(cfg.ImpersonateDelegates) > 0 && cfg.ImpersonateServiceAccount == "" {
@@ -159,6 +142,37 @@ func (cfg *Config) validate() error {
 
 	if cfg.Transport != "" && !slices.Contains(allowedTransports, cfg.Transport) {
 		return fmt.Errorf(`gcp: unsupported transport %q (want "grpc" or "rest")`, cfg.Transport)
+	}
+
+	return nil
+}
+
+func (cfg *Config) validateCredentials() error {
+	hasFile := cfg.CredentialsFile != ""
+	hasJSON := cfg.CredentialsJSON != ""
+
+	if hasFile && hasJSON {
+		return errors.New("gcp: credentials_file and credentials_json are mutually exclusive")
+	}
+
+	if !hasFile && !hasJSON {
+		if cfg.CredentialsType != "" {
+			return errors.New("gcp: credentials_type set without credentials_file or credentials_json")
+		}
+
+		return nil
+	}
+
+	if cfg.CredentialsType == "" {
+		return errors.New("gcp: credentials_type is required with credentials_file/credentials_json")
+	}
+
+	if !slices.Contains(allowedCredentialsTypes, cfg.CredentialsType) {
+		return fmt.Errorf("gcp: unsupported or insecure credentials_type: %q", cfg.CredentialsType)
+	}
+
+	if cfg.CredentialsType == "external_account" {
+		return cfg.validateExternalAccount()
 	}
 
 	return nil
