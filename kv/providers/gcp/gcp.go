@@ -293,9 +293,8 @@ func (gp *gcpProvider) Init(ctx context.Context) error {
 func (gp *gcpProvider) buildAuthOptions(ctx context.Context) ([]option.ClientOption, error) {
 	var opts []option.ClientOption
 
-	if gp.cfg.Location != "" {
-		// TODO: Clarify where is this URL scheme comes from?
-		opts = append(opts, option.WithEndpoint("secretmanager."+gp.cfg.Location+".rep.googleapis.com:443"))
+	if ep := gp.endpoint(); ep != "" {
+		opts = append(opts, option.WithEndpoint(ep))
 	}
 
 	if gp.cfg.QuotaProjectID != "" {
@@ -349,6 +348,19 @@ func (gp *gcpProvider) buildAuthOptions(ctx context.Context) ([]option.ClientOpt
 	// default: ADC is resolved lazily by the client
 
 	return opts, nil
+}
+
+func (gp *gcpProvider) endpoint() string {
+	if gp.cfg.Location == "" {
+		return ""
+	}
+
+	host := "secretmanager." + gp.cfg.Location + ".rep.googleapis.com"
+	if gp.cfg.Transport == "rest" {
+		return "https://" + host
+	}
+
+	return host + ":443"
 }
 
 func (gp *gcpProvider) Get(ctx context.Context, key string) (string, error) {
