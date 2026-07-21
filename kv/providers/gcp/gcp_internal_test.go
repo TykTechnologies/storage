@@ -796,10 +796,11 @@ func TestValidateExternalAccount(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := validateExternalAccount(&Config{
+			cfg := &Config{
 				CredentialsType: "external_account",
 				CredentialsJSON: tt.json,
-			})
+			}
+			err := cfg.validateExternalAccount()
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -822,19 +823,21 @@ func TestValidateExternalAccount_FileSource(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "wif.json")
 		require.NoError(t, os.WriteFile(path, []byte(validWIF), 0o600))
 
-		require.NoError(t, validateExternalAccount(&Config{
+		cfg := &Config{
 			CredentialsType: "external_account",
 			CredentialsFile: path,
-		}))
+		}
+		require.NoError(t, cfg.validateExternalAccount())
 	})
 
 	t.Run("unreadable credentials_file is an error", func(t *testing.T) {
 		t.Parallel()
 
-		err := validateExternalAccount(&Config{
+		cfg := &Config{
 			CredentialsType: "external_account",
 			CredentialsFile: filepath.Join(t.TempDir(), "missing.json"),
-		})
+		}
+		err := cfg.validateExternalAccount()
 		require.Error(t, err)
 	})
 }
