@@ -61,6 +61,18 @@ func TestGet_ReturnsPayloadVerbatim(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "v1", got)
 	})
+
+	t.Run("regional store resolves the /locations/-scoped name", func(t *testing.T) {
+		t.Parallel()
+
+		fake := newFakeSecretManager()
+		fake.seed("projects/proj/locations/europe-west1/secrets/db-password", []byte("regional-secret"))
+		p := newInitializedProvider(t, &Config{ProjectID: "proj", Location: "europe-west1"}, fake)
+
+		got, err := p.Get(t.Context(), "db-password")
+		require.NoError(t, err)
+		require.Equal(t, "regional-secret", got)
+	})
 }
 
 func TestClassify(t *testing.T) {
