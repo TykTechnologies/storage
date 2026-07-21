@@ -25,9 +25,7 @@ const (
 )
 
 var (
-	allowedCredentialsTypes = []string{"service_account", "authorized_user", "external_account"}
-	allowedTransports       = []string{"grpc", "rest"}
-	castagnoli              = crc32.MakeTable(crc32.Castagnoli)
+	castagnoli = crc32.MakeTable(crc32.Castagnoli)
 
 	_ kv.Setter      = (*gcpProvider)(nil)
 	_ kv.Initializer = (*gcpProvider)(nil)
