@@ -24,11 +24,14 @@ tasks:
           echo "STORAGE_TYPE and DB must be set."
           exit 1
         fi
+        tags=""
+        if [[ "{{.DB}}" != "none" && -n "{{.DB}}" ]]; then
+          tags="-tags {{.DB}}{{.DB_VERSION}}"
+        fi
         for pkg in $(go list ./{{.STORAGE_TYPE}}/...); do
           pkg_base=$(basename $pkg)
           coveragefile="${pkg_base}.cov"
-          tags=$([[ ${pkg} == *"driver"* ]] && echo "-tags {{.DB}}{{.DB_VERSION}} " || echo "")
-          go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -coverprofile=${coveragefile} -v ${pkg}
+          go test -failfast -timeout $TEST_TIMEOUT -race -cover -coverpkg=./{{.STORAGE_TYPE}}/... $tags -coverprofile=${coveragefile} -v ${pkg}
           if [ -f "${coveragefile}" ]; then
             mkdir -p "coverage/$(dirname ${pkg})"
             mv ${coveragefile} "coverage/${pkg}.cov"

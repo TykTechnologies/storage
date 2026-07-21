@@ -2,7 +2,6 @@ package testutil
 
 import (
 	"context"
-	"sync"
 	"testing"
 
 	"github.com/TykTechnologies/storage/persistent/internal/types"
@@ -31,7 +30,11 @@ func RunSuite(t *testing.T, s Suite) {
 	// setup drops and recreates the table to guarantee a clean state.
 	setup := func(t *testing.T) {
 		t.Helper()
-		_ = s.Storage.Drop(ctx, s.NewObject())
+
+		if err := s.Storage.Drop(ctx, s.NewObject()); err != nil {
+			t.Logf("Drop (pre-test cleanup): %v", err)
+		}
+
 		err := s.Storage.Migrate(ctx, []model.DBObject{s.NewObject()})
 		require.NoError(t, err, "Migrate must succeed before each test")
 	}
@@ -42,7 +45,10 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("HasTable", func(t *testing.T) {
 		obj := s.NewObject()
-		_ = s.Storage.Drop(ctx, obj)
+
+		if err := s.Storage.Drop(ctx, obj); err != nil {
+			t.Logf("Drop (pre-test cleanup): %v", err)
+		}
 
 		exists, err := s.Storage.HasTable(ctx, obj.TableName())
 		require.NoError(t, err)
@@ -83,16 +89,12 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("InsertMultiple", func(t *testing.T) {
 		setup(t)
-		n := 3
-		objs := make([]model.DBObject, n)
-		for i := range objs {
-			objs[i] = s.NewObject()
-		}
+		objs := []model.DBObject{s.NewObject(), s.NewObject(), s.NewObject()}
 		require.NoError(t, s.Storage.Insert(ctx, objs...))
 
 		count, err := s.Storage.Count(ctx, s.NewObject())
 		require.NoError(t, err)
-		assert.Equal(t, n, count)
+		assert.Equal(t, len(objs), count)
 	})
 
 	t.Run("DeleteByID", func(t *testing.T) {
@@ -100,7 +102,6 @@ func RunSuite(t *testing.T, s Suite) {
 		obj := s.NewObject()
 		require.NoError(t, s.Storage.Insert(ctx, obj))
 
-		// Delete using the object's own ID (no explicit filter)
 		require.NoError(t, s.Storage.Delete(ctx, obj))
 
 		count, err := s.Storage.Count(ctx, s.NewObject())
@@ -111,7 +112,7 @@ func RunSuite(t *testing.T, s Suite) {
 	t.Run("DeleteNonExistentReturnsError", func(t *testing.T) {
 		setup(t)
 		obj := s.NewObject()
-		obj.SetObjectID(model.NewObjectID()) // random ID, nothing in the table
+		obj.SetObjectID(model.NewObjectID())
 
 		err := s.Storage.Delete(ctx, obj)
 		assert.Error(t, err, "deleting a non-existent record must return an error")
@@ -122,7 +123,6 @@ func RunSuite(t *testing.T, s Suite) {
 		obj := s.NewObject()
 		require.NoError(t, s.Storage.Insert(ctx, obj))
 
-		// Update with the same values — must not return an error.
 		err := s.Storage.Update(ctx, obj)
 		assert.NoError(t, err)
 
@@ -148,7 +148,6 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("UpdateAllNoMatchReturnsError", func(t *testing.T) {
 		setup(t)
-		// No records inserted; any filter produces 0 affected rows.
 		err := s.Storage.UpdateAll(ctx, s.NewObject(),
 			model.DBM{"name": "nonexistent-xyzzy"},
 			model.DBM{"$set": model.DBM{"name": "new-value"}})
@@ -175,7 +174,6 @@ func RunSuite(t *testing.T, s Suite) {
 		require.NoError(t, s.Storage.Insert(ctx, obj))
 		id := obj.GetObjectID()
 
-		// Upsert the same record again — must update, not insert.
 		err := s.Storage.Upsert(ctx, obj, s.IDFilter(id), model.DBM{"$set": model.DBM{}})
 		require.NoError(t, err)
 
@@ -188,24 +186,18 @@ func RunSuite(t *testing.T, s Suite) {
 		setup(t)
 		freshID := model.NewObjectID()
 		concurrency := 5
+		errs := make(chan error, concurrency)
 
-		errs := make([]error, concurrency)
-		var wg sync.WaitGroup
-
-		for i := range concurrency {
-			wg.Add(1)
-			go func(idx int) {
-				defer wg.Done()
+		for range concurrency {
+			go func() {
 				o := s.NewObject()
 				o.SetObjectID(freshID)
-				errs[idx] = s.Storage.Upsert(ctx, o, s.IDFilter(freshID), model.DBM{"$set": model.DBM{}})
-			}(i)
+				errs <- s.Storage.Upsert(ctx, o, s.IDFilter(freshID), model.DBM{"$set": model.DBM{}})
+			}()
 		}
 
-		wg.Wait()
-
-		for _, err := range errs {
-			assert.NoError(t, err)
+		for range concurrency {
+			assert.NoError(t, <-errs)
 		}
 
 		count, err := s.Storage.Count(ctx, s.NewObject())
@@ -227,14 +219,12 @@ func RunSuite(t *testing.T, s Suite) {
 		indexes, err := s.Storage.GetIndexes(ctx, obj)
 		require.NoError(t, err)
 
-		found := false
+		names := make([]string, 0, len(indexes))
 		for _, ix := range indexes {
-			if ix.Name == "conformance_idx" {
-				found = true
-				break
-			}
+			names = append(names, ix.Name)
 		}
-		assert.True(t, found, "created index must be returned by GetIndexes")
+
+		assert.Contains(t, names, "conformance_idx", "created index must be returned by GetIndexes")
 	})
 
 	t.Run("CleanIndexes", func(t *testing.T) {

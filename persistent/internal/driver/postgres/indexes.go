@@ -247,26 +247,20 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
 	// Map to store indexes by name to group columns
 	indexMap := make(map[string]*model.Index)
 
-	// Process each row
-	for _, row := range rows {
-		// Get or create the index in the map
-		idx, exists := indexMap[row.IndexName]
+	for _, idxRow := range rows {
+		idx, exists := indexMap[idxRow.IndexName]
 		if !exists {
 			idx = &model.Index{
-				Name:       row.IndexName,
-				Background: false, // PostgreSQL doesn't store this information
+				Name:       idxRow.IndexName,
+				Background: false,
 				Keys:       []model.DBM{},
 				IsTTLIndex: false,
 				TTL:        0,
 			}
-			indexMap[row.IndexName] = idx
+			indexMap[idxRow.IndexName] = idx
 		}
 
-		// Add the column to the index keys
-		columnDBM := model.DBM{
-			row.ColumnName: row.Direction,
-		}
-		idx.Keys = append(idx.Keys, columnDBM)
+		idx.Keys = append(idx.Keys, model.DBM{idxRow.ColumnName: idxRow.Direction})
 		idx.IsTTLIndex = false
 	}
 

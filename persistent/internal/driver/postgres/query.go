@@ -284,18 +284,25 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 
 		if k == "$or" {
 			if nested, ok := v.([]model.DBM); ok {
-				// Sub-session per element so GORM wraps each group's ANDed conditions in parentheses.
 				for i, n := range nested {
 					sub := db.Session(&gorm.Session{NewDB: true})
+
 					for nk, nv := range n {
+						col, colErr := sanitizeIdentifier(nk)
+						if colErr != nil {
+							return nil, fmt.Errorf("invalid field in $or: %w", colErr)
+						}
+
 						val := ""
 						if o, ok := nv.(model.ObjectID); ok {
 							val = o.Hex()
 						} else {
 							val = fmt.Sprint(nv)
 						}
-						sub = sub.Where(nk+" = ?", val)
+
+						sub = sub.Where(col+" = ?", val)
 					}
+
 					if i == 0 {
 						db = db.Where(sub)
 					} else {

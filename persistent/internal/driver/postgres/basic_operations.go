@@ -529,7 +529,7 @@ func copyStructValues(src, dst interface{}) {
 // Sorting query keys ensures the key is deterministic regardless of map iteration order.
 func upsertLockKey(tableName string, query model.DBM) int64 {
 	h := fnv.New64a()
-	_, _ = h.Write([]byte(tableName))
+	h.Write([]byte(tableName))
 
 	keys := make([]string, 0, len(query))
 	for k := range query {
@@ -539,8 +539,8 @@ func upsertLockKey(tableName string, query model.DBM) int64 {
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		_, _ = h.Write([]byte(k))
-		_, _ = h.Write([]byte(fmt.Sprint(query[k])))
+		h.Write([]byte(k))
+		h.Write([]byte(fmt.Sprint(query[k])))
 	}
 
 	return int64(h.Sum64())
