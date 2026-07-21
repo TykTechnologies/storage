@@ -790,6 +790,21 @@ func TestValidateExternalAccount(t *testing.T) {
 				`"token_url":"https://sts.googleapis.com/v1/token",` +
 				`"credential_source":{"url":"https://my-idp.example.com/token"}}`,
 		},
+		{
+			name: "malformed token_url fails closed",
+			json: `{"type":"external_account",` +
+				`"token_url":"http://[::1","credential_source":{"file":"/t"}}`,
+			wantErr:     true,
+			errContains: "token_url",
+		},
+		{
+			name: "malformed aws credential source url fails closed",
+			json: `{"type":"external_account",` +
+				`"token_url":"https://sts.googleapis.com/v1/token",` +
+				`"credential_source":{"environment_id":"aws1","url":"http://[::1"}}`,
+			wantErr:     true,
+			errContains: "IMDS",
+		},
 	}
 
 	for _, tt := range tests {
