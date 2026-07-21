@@ -400,7 +400,7 @@ func (gp *gcpProvider) Set(ctx context.Context, key, value string) error {
 		return fmt.Errorf("gcp: set does not accept version in the key %q", key)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, gp.getTimeout())
+	ctx, cancel := context.WithTimeout(ctx, gp.setTimeout())
 	defer cancel()
 
 	data := []byte(value)
@@ -526,7 +526,7 @@ func (gp *gcpProvider) classify(key string, err error) error {
 	}
 }
 
-func (gp *gcpProvider) getTimeout() time.Duration {
+func (gp *gcpProvider) setTimeout() time.Duration {
 	if gp.timeout > 0 {
 		return gp.timeout
 	}
