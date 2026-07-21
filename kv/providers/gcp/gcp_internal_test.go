@@ -108,3 +108,17 @@ func TestProjectParent(t *testing.T) {
 		)
 	})
 }
+
+func TestBuildAuthOptions_ImpersonationRejectsBadBase(t *testing.T) {
+	t.Parallel()
+
+	p := &gcpProvider{cfg: &Config{
+		ProjectID:                 "proj",
+		ImpersonateServiceAccount: "target@proj.iam.gserviceaccount.com",
+		CredentialsType:           "service_account",
+		CredentialsJSON:           `{"type":"service_account"}`,
+	}}
+
+	_, err := p.buildAuthOptions(t.Context())
+	require.Error(t, err)
+}
