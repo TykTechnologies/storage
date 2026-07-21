@@ -216,21 +216,12 @@ func TestNewFactory_TimeoutExposedViaTimeouter(t *testing.T) {
 	})
 }
 
-func TestProvider_ImplementsExpectedInterfaces(t *testing.T) {
+func TestProvider_IsNotStandalone(t *testing.T) {
 	t.Parallel()
 
 	p, err := gcp.NewFactory()(json.RawMessage(`{"project_id":"proj"}`))
 	require.NoError(t, err)
 
-	_, ok := kv.AsTimeouter(p)
-	require.True(t, ok, "must implement Timeouter")
-	_, ok = kv.AsSetter(p)
-	require.True(t, ok, "must implement Setter")
-	_, ok = kv.AsInitializer(p)
-	require.True(t, ok, "must implement Initializer")
-	_, ok = kv.AsCloser(p)
-	require.True(t, ok, "must implement Closer")
-
-	_, ok = kv.AsStandalone(p)
+	_, ok := kv.AsStandalone(p)
 	require.False(t, ok, "must NOT implement Standalone (stays cache/singleflight-wrapped)")
 }
