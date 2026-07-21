@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
-	"net/url"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -28,7 +26,17 @@ const (
 	cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
 )
 
-var castagnoli = crc32.MakeTable(crc32.Castagnoli)
+var (
+	allowedCredentialsTypes = []string{"service_account", "authorized_user", "external_account"}
+	allowedTransports       = []string{"grpc", "rest"}
+	castagnoli              = crc32.MakeTable(crc32.Castagnoli)
+
+	_ kv.Provider    = (*gcpProvider)(nil)
+	_ kv.Setter      = (*gcpProvider)(nil)
+	_ kv.Initializer = (*gcpProvider)(nil)
+	_ kv.Timeouter   = (*gcpProvider)(nil)
+	_ kv.Closer      = (*gcpProvider)(nil)
+)
 
 // Config is the JSON "config" block of a gcp_secret_manager store.
 type Config struct {
@@ -87,13 +95,9 @@ type Config struct {
 	Transport string `json:"transport"`
 }
 
-var (
-	// TODO: the option package exposes  type CredentialsType = credentialstype.CredType, mb I should use this type?
-	// Why yes/ why not?
-	allowedCredentialsTypes = []string{"service_account", "authorized_user", "external_account"}
-	allowedTransports       = []string{"grpc", "rest"}
-)
-
+// NewFactory returns the factory that validates a store's config and builds the
+// provider. Validation is exhaustive and fails loud here;
+// the client is built later in Init, and no network call is made.
 func NewFactory() kv.ProviderFactory {
 	return func(raw json.RawMessage) (kv.Provider, error) {
 		if len(raw) == 0 {
@@ -163,100 +167,9 @@ func NewFactory() kv.ProviderFactory {
 	}
 }
 
-// Validation rules source:
-// https://docs.cloud.google.com/docs/authentication/client-libraries#validate_other_credential_configurations
-func validateExternalAccount(config *Config) error {
-	raw := []byte(config.CredentialsJSON)
-
-	if config.CredentialsFile != "" {
-		b, err := os.ReadFile(config.CredentialsFile)
-		if err != nil {
-			return fmt.Errorf("gcp: read external_account credentials_file: %w", err)
-		}
-
-		raw = b
-	}
-
-	var ea struct {
-		Type                           string `json:"type"`
-		TokenURL                       string `json:"token_url"`
-		ServiceAccountImpersonationURL string `json:"service_account_impersonation_url"`
-		CredentialSource               struct {
-			URL                   string          `json:"url"`
-			Executable            json.RawMessage `json:"executable"`
-			EnvironmentID         string          `json:"environment_id"`
-			RegionURL             string          `json:"region_url"`
-			IMDSv2SessionTokenURL string          `json:"imdsv2_session_token_url"`
-		} `json:"credential_source"`
-	}
-
-	if err := json.Unmarshal(raw, &ea); err != nil {
-		return fmt.Errorf("gcp: invalid external_account config: %w", err)
-	}
-
-	if ea.Type != "external_account" {
-		return fmt.Errorf("gcp: external_account config type is %q, want external_account", ea.Type)
-	}
-
-	if ea.TokenURL != "" && !isGoogleHost(ea.TokenURL) {
-		return fmt.Errorf("gcp: external_account token_url %q is not a Google endpoint", ea.TokenURL)
-	}
-
-	if ea.ServiceAccountImpersonationURL != "" && !isGoogleHost(ea.ServiceAccountImpersonationURL) {
-		return fmt.Errorf(
-			"gcp: external_account service_account_impersonation_url %q is not a Google endpoint",
-			ea.ServiceAccountImpersonationURL,
-		)
-	}
-
-	if len(ea.CredentialSource.Executable) > 0 {
-		return errors.New("gcp: external_account executable credential source is not permitted")
-	}
-
-	cs := ea.CredentialSource
-	if strings.HasPrefix(cs.EnvironmentID, "aws") {
-		for _, u := range []string{cs.URL, cs.RegionURL, cs.IMDSv2SessionTokenURL} {
-			if u != "" && !isAWSIMDSHost(u) {
-				return fmt.Errorf("gcp: external_account aws credential source url %q is not the AWS IMDS endpoint", u)
-			}
-		}
-	}
-
-	return nil
-}
-
-func isGoogleHost(rawURL string) bool {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return false
-	}
-
-	host := u.Hostname()
-
-	// Source: https://docs.cloud.google.com/docs/authentication/client-libraries#validate_other_credential_configurations
-	return host == "googleapis.com" || strings.HasSuffix(host, ".googleapis.com")
-}
-
-func isAWSIMDSHost(rawURL string) bool {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return false
-	}
-
-	host := u.Hostname()
-
-	// Source: https://docs.cloud.google.com/docs/authentication/client-libraries#validate_other_credential_configurations
-	return host == "169.254.169.254" || host == "fd00:ec2::254"
-}
-
-var (
-	_ kv.Provider    = (*gcpProvider)(nil)
-	_ kv.Setter      = (*gcpProvider)(nil)
-	_ kv.Initializer = (*gcpProvider)(nil)
-	_ kv.Timeouter   = (*gcpProvider)(nil)
-	_ kv.Closer      = (*gcpProvider)(nil)
-)
-
+// gcpProvider is one configured store: a single Secret Manager client (built in
+// Init, reused across concurrent calls) plus its resolved config and timeout.
+// testOpts, when set, replaces the assembled client options in tests.
 type gcpProvider struct {
 	cfg      *Config
 	client   *secretmanager.Client
@@ -264,6 +177,8 @@ type gcpProvider struct {
 	testOpts []option.ClientOption
 }
 
+// Init builds the one client. The client dials lazily and Init runs no
+// reachability check, so a transient outage at boot doesn't disable the store.
 func (gp *gcpProvider) Init(ctx context.Context) error {
 	opts := gp.testOpts
 	if len(opts) == 0 {
@@ -290,79 +205,9 @@ func (gp *gcpProvider) Init(ctx context.Context) error {
 	return nil
 }
 
-func (gp *gcpProvider) buildAuthOptions(ctx context.Context) ([]option.ClientOption, error) {
-	var opts []option.ClientOption
-
-	if ep := gp.endpoint(); ep != "" {
-		opts = append(opts, option.WithEndpoint(ep))
-	}
-
-	if gp.cfg.QuotaProjectID != "" {
-		opts = append(opts, option.WithQuotaProject(gp.cfg.QuotaProjectID))
-	}
-
-	hasFile := gp.cfg.CredentialsFile != ""
-	hasJSON := gp.cfg.CredentialsJSON != ""
-
-	switch {
-	case gp.cfg.ImpersonateServiceAccount != "":
-		var base *auth.Credentials
-
-		// At first we want to get Base creds for impersonation
-		if hasFile || hasJSON {
-			var err error
-
-			base, err = credentials.DetectDefault(&credentials.DetectOptions{
-				CredentialsFile: gp.cfg.CredentialsFile,
-				CredentialsJSON: []byte(gp.cfg.CredentialsJSON),
-				Scopes:          []string{cloudPlatformScope},
-			})
-			if err != nil {
-				return nil, fmt.Errorf("gcp: build impersonation base credentials: %w", err)
-			}
-		}
-
-		creds, err := impersonate.NewCredentials(&impersonate.CredentialsOptions{
-			TargetPrincipal: gp.cfg.ImpersonateServiceAccount,
-			Delegates:       gp.cfg.ImpersonateDelegates,
-			Scopes:          []string{cloudPlatformScope},
-			Credentials:     base,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("gcp: build impersonated credentials: %w", err)
-		}
-
-		opts = append(opts, option.WithAuthCredentials(creds))
-
-	case hasFile:
-		opts = append(opts, option.WithAuthCredentialsFile(
-			option.CredentialsType(gp.cfg.CredentialsType),
-			gp.cfg.CredentialsFile,
-		))
-	case hasJSON:
-		opts = append(opts, option.WithAuthCredentialsJSON(
-			option.CredentialsType(gp.cfg.CredentialsType),
-			[]byte(gp.cfg.CredentialsJSON),
-		))
-	}
-	// default: ADC is resolved lazily by the client
-
-	return opts, nil
-}
-
-func (gp *gcpProvider) endpoint() string {
-	if gp.cfg.Location == "" {
-		return ""
-	}
-
-	host := "secretmanager." + gp.cfg.Location + ".rep.googleapis.com"
-	if gp.cfg.Transport == "rest" {
-		return "https://" + host
-	}
-
-	return host + ":443"
-}
-
+// Get fetches a secret version's payload and returns it verbatim. It verifies the
+// server CRC32C when present, then optionally trims one trailing newline; RPC
+// errors are mapped to typed kv errors.
 func (gp *gcpProvider) Get(ctx context.Context, key string) (string, error) {
 	err := gp.validateSecretKey(key)
 	if err != nil {
@@ -402,6 +247,10 @@ func (gp *gcpProvider) Get(ctx context.Context, key string) (string, error) {
 	return out, nil
 }
 
+// Set adds a new secret version, creating the secret container first if it does
+// not exist (the normal first write). It self-bounds with a timeout because it is
+// reached outside the SecretStore wrapper, and rejects version-pinned keys since
+// versions are server-assigned.
 func (gp *gcpProvider) Set(ctx context.Context, key, value string) error {
 	err := gp.validateSecretKey(key)
 	if err != nil {
@@ -469,10 +318,14 @@ func (gp *gcpProvider) Set(ctx context.Context, key, value string) error {
 	return nil
 }
 
+// Timeout is the per-call bound the SecretStore wrapper applies to Get; 0 means
+// the wrapper's default.
 func (gp *gcpProvider) Timeout() time.Duration {
 	return gp.timeout
 }
 
+// Close closes the client. It is nil-safe so the registry can call it after a
+// partial init.
 func (gp *gcpProvider) Close(_ context.Context) error {
 	if gp.client != nil {
 		err := gp.client.Close()
@@ -484,6 +337,87 @@ func (gp *gcpProvider) Close(_ context.Context) error {
 	return nil
 }
 
+// buildAuthOptions assembles the client options for the real (non-test) path:
+// regional endpoint, quota project, and exactly one credential source —
+// impersonation, an explicit key, or (the default) ADC resolved lazily.
+func (gp *gcpProvider) buildAuthOptions(ctx context.Context) ([]option.ClientOption, error) {
+	var opts []option.ClientOption
+
+	if ep := gp.endpoint(); ep != "" {
+		opts = append(opts, option.WithEndpoint(ep))
+	}
+
+	if gp.cfg.QuotaProjectID != "" {
+		opts = append(opts, option.WithQuotaProject(gp.cfg.QuotaProjectID))
+	}
+
+	hasFile := gp.cfg.CredentialsFile != ""
+	hasJSON := gp.cfg.CredentialsJSON != ""
+
+	switch {
+	case gp.cfg.ImpersonateServiceAccount != "":
+		var base *auth.Credentials
+
+		// At first we want to get Base creds for impersonation
+		if hasFile || hasJSON {
+			var err error
+
+			base, err = credentials.DetectDefault(&credentials.DetectOptions{
+				CredentialsFile: gp.cfg.CredentialsFile,
+				CredentialsJSON: []byte(gp.cfg.CredentialsJSON),
+				Scopes:          []string{cloudPlatformScope},
+			})
+			if err != nil {
+				return nil, fmt.Errorf("gcp: build impersonation base credentials: %w", err)
+			}
+		}
+
+		creds, err := impersonate.NewCredentials(&impersonate.CredentialsOptions{
+			TargetPrincipal: gp.cfg.ImpersonateServiceAccount,
+			Delegates:       gp.cfg.ImpersonateDelegates,
+			Scopes:          []string{cloudPlatformScope},
+			Credentials:     base,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("gcp: build impersonated credentials: %w", err)
+		}
+
+		opts = append(opts, option.WithAuthCredentials(creds))
+
+	case hasFile:
+		opts = append(opts, option.WithAuthCredentialsFile(
+			option.CredentialsType(gp.cfg.CredentialsType),
+			gp.cfg.CredentialsFile,
+		))
+	case hasJSON:
+		opts = append(opts, option.WithAuthCredentialsJSON(
+			option.CredentialsType(gp.cfg.CredentialsType),
+			[]byte(gp.cfg.CredentialsJSON),
+		))
+	}
+	// default: ADC is resolved lazily by the client
+
+	return opts, nil
+}
+
+// endpoint returns the regional endpoint override, or "" for a global store
+// (which uses the SDK default). Only the format differs by transport: gRPC dials
+// host:443, REST needs an https URL.
+func (gp *gcpProvider) endpoint() string {
+	if gp.cfg.Location == "" {
+		return ""
+	}
+
+	host := "secretmanager." + gp.cfg.Location + ".rep.googleapis.com"
+	if gp.cfg.Transport == "rest" {
+		return "https://" + host
+	}
+
+	return host + ":443"
+}
+
+// validateSecretKey rejects an empty key and any full or multi-segment resource
+// name. A key is always a bare secret ID scoped to the configured project.
 func (gp *gcpProvider) validateSecretKey(key string) error {
 	id := key
 
@@ -503,6 +437,8 @@ func (gp *gcpProvider) validateSecretKey(key string) error {
 	return nil
 }
 
+// versionName builds the AccessSecretVersion resource name, defaulting to the
+// latest version when the key pins none.
 func (gp *gcpProvider) versionName(key string) string {
 	base := gp.secretName(key)
 
@@ -525,6 +461,10 @@ func (gp *gcpProvider) projectParent() string {
 	return "projects/" + gp.cfg.ProjectID
 }
 
+// classify maps a gRPC status to a kv error in three buckets: NotFound is a
+// missing key; FailedPrecondition (disabled/destroyed version) and InvalidArgument
+// (malformed request) are permanent caller errors returned plainly, so the cache
+// can't hide the real cause behind a retry; everything else is a transient outage.
 func (gp *gcpProvider) classify(key string, err error) error {
 	switch status.Code(err) {
 	case codes.NotFound:
@@ -538,11 +478,15 @@ func (gp *gcpProvider) classify(key string, err error) error {
 	}
 }
 
+// setTimeout is the per-call deadline for Set, which runs outside the
+// SecretStore wrapper that bounds Get and so must bound itself.
 func (gp *gcpProvider) setTimeout() time.Duration {
+	// Fallback mirrors the SecretStore default, so an unconfigured Set behaves like Get.
+	const defaultTimeout = 5 * time.Second
+
 	if gp.timeout > 0 {
 		return gp.timeout
 	}
 
-	// TODO: Do I have to create some const and share it across internal/store and gcp provider?
-	return 5 * time.Second
+	return defaultTimeout
 }
