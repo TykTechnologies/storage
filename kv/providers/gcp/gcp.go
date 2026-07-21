@@ -31,7 +31,6 @@ var (
 	allowedTransports       = []string{"grpc", "rest"}
 	castagnoli              = crc32.MakeTable(crc32.Castagnoli)
 
-	_ kv.Provider    = (*gcpProvider)(nil)
 	_ kv.Setter      = (*gcpProvider)(nil)
 	_ kv.Initializer = (*gcpProvider)(nil)
 	_ kv.Timeouter   = (*gcpProvider)(nil)
