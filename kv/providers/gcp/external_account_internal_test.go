@@ -72,6 +72,37 @@ func TestValidateExternalAccount(t *testing.T) {
 			wantErr:     true,
 			errContains: "invalid external_account",
 		},
+		{
+			name: "valid aws imds source",
+			json: `{"type":"external_account",` +
+				`"token_url":"https://sts.googleapis.com/v1/token",` +
+				`"credential_source":{"environment_id":"aws1",` +
+				`"region_url":"http://169.254.169.254/latest/meta-data/placement/availability-zone",` +
+				`"url":"http://169.254.169.254/latest/meta-data/iam/security-credentials",` +
+				`"imdsv2_session_token_url":"http://169.254.169.254/latest/api/token"}}`,
+		},
+		{
+			name: "valid aws imds source over ipv6",
+			json: `{"type":"external_account",` +
+				`"token_url":"https://sts.googleapis.com/v1/token",` +
+				`"credential_source":{"environment_id":"aws1",` +
+				`"url":"http://[fd00:ec2::254]/latest/meta-data/iam/security-credentials"}}`,
+		},
+		{
+			name: "tampered aws credential source url",
+			json: `{"type":"external_account",` +
+				`"token_url":"https://sts.googleapis.com/v1/token",` +
+				`"credential_source":{"environment_id":"aws1",` +
+				`"url":"http://evil.example.com/latest/meta-data/iam/security-credentials"}}`,
+			wantErr:     true,
+			errContains: "IMDS",
+		},
+		{
+			name: "non-aws url source is not imds-restricted",
+			json: `{"type":"external_account",` +
+				`"token_url":"https://sts.googleapis.com/v1/token",` +
+				`"credential_source":{"url":"https://my-idp.example.com/token"}}`,
+		},
 	}
 
 	for _, tt := range tests {
