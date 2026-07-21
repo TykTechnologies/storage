@@ -73,6 +73,7 @@ func validateExternalAccount(config *Config) error {
 
 	return nil
 }
+
 func isGoogleHost(rawURL string) bool {
 	u, err := url.Parse(rawURL)
 	if err != nil {
