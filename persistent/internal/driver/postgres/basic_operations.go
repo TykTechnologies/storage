@@ -383,13 +383,23 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 		return err
 	}
 
-	result := updateDB.Updates(updateMap)
-	if result.Error != nil {
+	// Use COUNT to determine existence rather than RowsAffected from Updates.
+	// Updates({}) produces 0 RowsAffected when updateMap is empty, which would
+	// incorrectly fall through to the INSERT branch for an existing record.
+	var count int64
+	if err := updateDB.Count(&count).Error; err != nil {
 		tx.Rollback()
-		return result.Error
+		return err
 	}
 
-	if result.RowsAffected > 0 {
+	if count > 0 {
+		if len(updateMap) > 0 {
+			if result := updateDB.Updates(updateMap); result.Error != nil {
+				tx.Rollback()
+				return result.Error
+			}
+		}
+
 		if err := d.fetchUpdatedRow(tx, tableName, query, row); err != nil {
 			tx.Rollback()
 			return err
