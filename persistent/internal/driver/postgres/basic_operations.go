@@ -137,14 +137,21 @@ func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 		}
 	}
 
-	// Save replaces all fields with the object’s values
-	result := tx.Save(object)
-	if result.Error != nil {
-		return result.Error
+	// Verify the record exists before saving. GORM’s Save has upsert semantics:
+	// it INSERTs when the WHERE condition matches nothing, which would make the
+	// RowsAffected check unreliable. A pre-count lets us surface sql.ErrNoRows
+	// correctly without changing the all-fields update behaviour of Save.
+	var count int64
+	if err := tx.Count(&count).Error; err != nil {
+		return err
 	}
 
-	if result.RowsAffected == 0 {
+	if count == 0 {
 		return sql.ErrNoRows
+	}
+
+	if err := tx.Save(object).Error; err != nil {
+		return err
 	}
 
 	return nil
