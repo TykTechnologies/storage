@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"net/url"
+	"os"
 	"slices"
 	"strings"
 	"time"
 
+	"cloud.google.com/go/auth/credentials"
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	secretmanagerpb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"github.com/TykTechnologies/storage/kv"
@@ -156,10 +159,64 @@ func NewFactory() kv.ProviderFactory {
 	}
 }
 
-// TODO: Add implementation with using constraints from:
+// Validation rules were grabbed from:
 // https://docs.cloud.google.com/docs/authentication/client-libraries#validate_other_credential_configurations
 func validateExternalAccount(config *Config) error {
+	raw := []byte(config.CredentialsJSON)
+
+	if config.CredentialsFile != "" {
+		b, err := os.ReadFile(config.CredentialsFile)
+		if err != nil {
+			return fmt.Errorf("gcp: read external_account credentials_file: %w", err)
+		}
+
+		raw = b
+	}
+
+	var ea struct {
+		Type                           string `json:"type"`
+		TokenURL                       string `json:"token_url"`
+		ServiceAccountImpersonationURL string `json:"service_account_impersonation_url"`
+		CredentialSource               struct {
+			Executable json.RawMessage `json:"executable"`
+		} `json:"credential_source"`
+	}
+
+	if err := json.Unmarshal(raw, &ea); err != nil {
+		return fmt.Errorf("gcp: invalid external_account config: %w", err)
+	}
+
+	if ea.Type != "external_account" {
+		return fmt.Errorf("gcp: external_account config type is %q, want external_account", ea.Type)
+	}
+
+	if ea.TokenURL != "" && !isGoogleHost(ea.TokenURL) {
+		return fmt.Errorf("gcp: external_account token_url %q is not a Google endpoint", ea.TokenURL)
+	}
+
+	if ea.ServiceAccountImpersonationURL != "" && !isGoogleHost(ea.ServiceAccountImpersonationURL) {
+		return fmt.Errorf(
+			"gcp: external_account service_account_impersonation_url %q is not a Google endpoint",
+			ea.ServiceAccountImpersonationURL,
+		)
+	}
+
+	if len(ea.CredentialSource.Executable) > 0 {
+		return errors.New("gcp: external_account executable credential source is not permitted")
+	}
+
 	return nil
+}
+
+func isGoogleHost(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+
+	host := u.Hostname()
+
+	return host == "googleapis.com" || strings.HasSuffix(host, ".googleapis.com")
 }
 
 var (
@@ -177,6 +234,11 @@ type gcpProvider struct {
 	testOpts []option.ClientOption
 }
 
+//   - [ ] **T8 — Auth paths.** Wire `impersonate.NewCredentials` (ADC + explicit `DetectDefault`
+//     base), WIF via `external_account` + `validateExternalAccount` (§15.8), and
+//     `quota_project_id` (`WithQuotaProject`); confirm the nil-base note (§8.2).
+//     _Verify:_ factory + external-account-validation + option-assembly tests + real-E2E smoke.
+//
 // INFO: QUESTIONS:
 // 1. Do we have to expose custom scopes passing for client? It looks like
 // we need scopes for impersonation, the question is if we want to hardcode it
@@ -188,7 +250,11 @@ func (gp *gcpProvider) Init(ctx context.Context) error {
 	if len(gp.testOpts) > 0 {
 		opts = gp.testOpts
 	} else {
-		// TODO: Before all of this we have to process with ADC. Or we don't have to do anything?
+		_, err := credentials.DetectDefault(&credentials.DetectOptions{})
+		if err != nil {
+			return fmt.Errorf("gcp: detect ADC: %w", err)
+		}
+
 		credType := option.CredentialsType(gp.cfg.CredentialsType)
 
 		if gp.cfg.CredentialsFile != "" {
