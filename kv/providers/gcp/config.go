@@ -13,6 +13,20 @@ import (
 	"github.com/TykTechnologies/storage/kv"
 )
 
+const (
+	// googleAPIDomain is the apex host for Google APIs. A WIF token_url and
+	// service_account_impersonation_url must be this host or a subdomain
+	// (covers sts., iamcredentials., and their regional forms).
+	// Source: https://docs.cloud.google.com/docs/authentication/client-libraries#validate_other_credential_configurations
+	googleAPIDomain = "googleapis.com"
+
+	// awsIMDSHostIPv4 and awsIMDSHostIPv6 are the AWS Instance Metadata Service
+	// (IMDS) endpoints. An AWS-sourced WIF config must fetch credentials from
+	// these, never an attacker-chosen host (SSRF).
+	awsIMDSHostIPv4 = "169.254.169.254"
+	awsIMDSHostIPv6 = "fd00:ec2::254"
+)
+
 // Config is the JSON "config" block of a gcp_secret_manager store.
 type Config struct {
 	// ProjectID is the GCP project that owns the secrets. Required.
@@ -260,8 +274,7 @@ func isGoogleHost(rawURL string) bool {
 
 	host := u.Hostname()
 
-	// Source: https://docs.cloud.google.com/docs/authentication/client-libraries#validate_other_credential_configurations
-	return host == "googleapis.com" || strings.HasSuffix(host, ".googleapis.com")
+	return host == googleAPIDomain || strings.HasSuffix(host, "."+googleAPIDomain)
 }
 
 func isAWSIMDSHost(rawURL string) bool {
@@ -272,6 +285,5 @@ func isAWSIMDSHost(rawURL string) bool {
 
 	host := u.Hostname()
 
-	// Source: https://docs.cloud.google.com/docs/authentication/client-libraries#validate_other_credential_configurations
-	return host == "169.254.169.254" || host == "fd00:ec2::254"
+	return host == awsIMDSHostIPv4 || host == awsIMDSHostIPv6
 }
