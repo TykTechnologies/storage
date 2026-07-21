@@ -261,7 +261,6 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
 		}
 
 		idx.Keys = append(idx.Keys, model.DBM{idxRow.ColumnName: idxRow.Direction})
-		idx.IsTTLIndex = false
 	}
 
 	// index_metadata may not exist (only created on first TTL index); ignore errors.

@@ -288,7 +288,10 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 					sub := db.Session(&gorm.Session{NewDB: true})
 
 					for nk, nv := range n {
-						col, colErr := sanitizeIdentifier(nk)
+						// Apply the same dot-to-underscore conversion as the non-$or path
+						// (line below the $or block) so nested field names like "user.name"
+						// remain valid before sanitization.
+						col, colErr := sanitizeIdentifier(strings.ReplaceAll(nk, ".", "_"))
 						if colErr != nil {
 							return nil, fmt.Errorf("invalid field in $or: %w", colErr)
 						}
