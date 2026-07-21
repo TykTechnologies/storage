@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -141,6 +142,7 @@ func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 	// it INSERTs when the WHERE condition matches nothing, which would make the
 	// RowsAffected check unreliable. A pre-count lets us surface sql.ErrNoRows
 	// correctly without changing the all-fields update behaviour of Save.
+	// Trade-off: one extra round-trip per Update call.
 	var count int64
 	if err := tx.Count(&count).Error; err != nil {
 		return err
@@ -386,6 +388,7 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 	// Use COUNT to determine existence rather than RowsAffected from Updates.
 	// Updates({}) produces 0 RowsAffected when updateMap is empty, which would
 	// incorrectly fall through to the INSERT branch for an existing record.
+	// Trade-off: one extra round-trip per Upsert call inside the advisory lock.
 	var count int64
 	if err := updateDB.Count(&count).Error; err != nil {
 		tx.Rollback()
@@ -543,7 +546,8 @@ func copyStructValues(src, dst interface{}) {
 }
 
 // upsertLockKey returns a stable int64 advisory-lock key for a table+query pair.
-// Sorting query keys ensures the key is deterministic regardless of map iteration order.
+// Keys are sorted so the result is independent of map iteration order.
+// Values are JSON-marshaled for a canonical, type-safe string representation.
 func upsertLockKey(tableName string, query model.DBM) int64 {
 	h := fnv.New64a()
 	h.Write([]byte(tableName))
@@ -557,7 +561,14 @@ func upsertLockKey(tableName string, query model.DBM) int64 {
 
 	for _, k := range keys {
 		h.Write([]byte(k))
-		h.Write([]byte(fmt.Sprint(query[k])))
+
+		b, err := json.Marshal(query[k])
+		if err != nil {
+			// Fall back to fmt representation for non-JSON-serialisable values.
+			b = []byte(fmt.Sprintf("%v", query[k]))
+		}
+
+		h.Write(b)
 	}
 
 	return int64(h.Sum64())

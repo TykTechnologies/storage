@@ -28,6 +28,8 @@ func postgresConnStr() string {
 		return dsn
 	}
 
+	// Fallback matches the Docker credentials set by bin/Taskfile-db.yml start-postgres.
+	// In CI, postgres_test_dsn is set explicitly in the workflow env.
 	return "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable"
 }
 

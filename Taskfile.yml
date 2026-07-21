@@ -28,7 +28,12 @@ tasks:
         if [[ "{{.DB}}" != "none" && -n "{{.DB}}" ]]; then
           tags="-tags {{.DB}}{{.DB_VERSION}}"
         fi
-        for pkg in $(go list ./{{.STORAGE_TYPE}}/...); do
+        # Only iterate packages that have test files under the active build tag.
+        # Packages with no tests under the current tag still get coverage via
+        # -coverpkg instrumentation from other packages' test runs, but we avoid
+        # generating zero-run coverage files that can contain empty lines and
+        # break gocovmerge.
+        for pkg in $(go list $tags -f '{{`{{`}}if or .TestGoFiles .XTestGoFiles{{`}}`}}{{`{{`}}.ImportPath{{`}}`}}{{`{{`}}end{{`}}`}}' ./{{.STORAGE_TYPE}}/...); do
           pkg_base=$(basename $pkg)
           coveragefile="${pkg_base}.cov"
           go test -failfast -timeout $TEST_TIMEOUT -race -cover -coverpkg=./{{.STORAGE_TYPE}}/... $tags -coverprofile=${coveragefile} -v ${pkg}
@@ -42,6 +47,12 @@ tasks:
     desc: "Merge coverage files into a single file"
     cmds:
       - |
+        # Strip empty lines from coverage files before merging. Go 1.25 can write
+        # them for packages with zero test runs when -coverpkg is active, which
+        # causes gocovmerge's cover.ParseProfiles to fail on the empty line.
+        find . -name '*.cov' -type f | while read -r f; do
+          grep -v '^$' "$f" > "${f}.clean" && mv "${f}.clean" "$f" || true
+        done
         find . -name '*.cov' -type f -exec gocovmerge {} + > merged-coverage.cov
 
   test-persistent:
