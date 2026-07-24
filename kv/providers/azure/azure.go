@@ -73,7 +73,26 @@ func (ap *azureProvider) Get(ctx context.Context, key string) (string, error) {
 	return out, nil
 }
 
+// Set writes value as a new version of the secret, creating the secret on first write:
+// azsecrets.SetSecret is a single-call upsert, so there is no create-on-missing dance.
+// A key carrying a "/<version>" is rejected — versions are server-assigned.
 func (ap *azureProvider) Set(ctx context.Context, key, value string) error {
+	name, version, err := validateSecretKey(key)
+	if err != nil {
+		return err
+	}
+
+	if version != "" {
+		return fmt.Errorf("azure: set does not accept a version in the key %q", key)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, kv.EffectiveTimeout(ap.timeout))
+	defer cancel()
+
+	if _, err := ap.client.SetSecret(ctx, name, azsecrets.SetSecretParameters{Value: &value}, nil); err != nil {
+		return ap.classify(key, err)
+	}
+
 	return nil
 }
 

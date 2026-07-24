@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 	"github.com/TykTechnologies/storage/kv"
@@ -241,7 +242,7 @@ func TestGet(t *testing.T) {
 		require.Equal(t, "token\n", got)
 	})
 
-	t.Run("routes RPC errors through classify (404 -> KeyNotFoundError)", func(t *testing.T) {
+	t.Run("routes call errors through classify (404 -> KeyNotFoundError)", func(t *testing.T) {
 		t.Parallel()
 
 		fake := &fakeSecretsClient{getErr: newResponseError(http.StatusNotFound, "SecretNotFound", "", "")}
@@ -251,6 +252,79 @@ func TestGet(t *testing.T) {
 
 		var knf *kv.KeyNotFoundError
 		require.ErrorAs(t, err, &knf)
+	})
+}
+
+func TestSet(t *testing.T) {
+	t.Parallel()
+
+	t.Run("upsert writes the value in a single call", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{}
+		p := &azureProvider{client: fake, cfg: &Config{}}
+
+		err := p.Set(context.Background(), "db-password", "s3cr3t")
+		require.NoError(t, err)
+		require.Equal(t, "db-password", fake.gotSetName)
+		require.Equal(t, "s3cr3t", fake.gotSetValue)
+		require.Equal(t, 1, fake.setCalls) // no create-on-missing dance (D11)
+	})
+
+	t.Run("version-pinned key rejected before any client call", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{}
+		p := &azureProvider{client: fake, cfg: &Config{}}
+
+		err := p.Set(context.Background(), "db-password/abc123", "x")
+		require.ErrorContains(t, err, "does not accept a version")
+		require.Zero(t, fake.setCalls)
+	})
+
+	t.Run("invalid key rejected before any client call", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{}
+		p := &azureProvider{client: fake, cfg: &Config{}}
+
+		err := p.Set(context.Background(), "https://evil.vault.azure.net/x", "x")
+		require.Error(t, err)
+		require.Zero(t, fake.setCalls)
+	})
+
+	t.Run("soft-delete 409 surfaces plainly via classify", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{
+			setErr: newResponseError(http.StatusConflict, "Conflict", "ObjectIsDeletedButRecoverable", ""),
+		}
+		p := &azureProvider{client: fake, cfg: &Config{}}
+
+		err := p.Set(context.Background(), "db-password", "x")
+		require.ErrorContains(t, err, "soft-deleted")
+		requireNotTyped(t, err)
+	})
+
+	t.Run("transient backend error -> StoreUnavailableError", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{
+			setErr: newResponseError(http.StatusInternalServerError, "InternalError", "", ""),
+		}
+		p := &azureProvider{client: fake, cfg: &Config{}}
+
+		requireStoreUnavailable(t, p.Set(context.Background(), "db-password", "x"))
+	})
+
+	t.Run("self-bounds its deadline on a deadline-less context", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{blockSet: true}
+		p := &azureProvider{client: fake, cfg: &Config{}, timeout: 20 * time.Millisecond}
+
+		err := p.Set(context.Background(), "db-password", "x")
+		requireStoreUnavailable(t, err)
 	})
 }
 

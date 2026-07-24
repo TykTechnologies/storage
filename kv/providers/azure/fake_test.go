@@ -20,10 +20,14 @@ type fakeSecretsClient struct {
 	setResp azsecrets.SetSecretResponse
 	setErr  error
 
+	// blockSet makes SetSecret block until the context is cancelled, then return ctx.Err()
+	blockSet bool
+
 	gotGetName    string
 	gotGetVersion string
 	gotSetName    string
 	gotSetValue   string
+	setCalls      int
 }
 
 var _ secretsClient = (*fakeSecretsClient)(nil)
@@ -38,11 +42,19 @@ func (f *fakeSecretsClient) GetSecret(
 }
 
 func (f *fakeSecretsClient) SetSecret(
-	_ context.Context, name string, p azsecrets.SetSecretParameters, _ *azsecrets.SetSecretOptions,
+	ctx context.Context, name string, p azsecrets.SetSecretParameters, _ *azsecrets.SetSecretOptions,
 ) (azsecrets.SetSecretResponse, error) {
+	f.setCalls++
 	f.gotSetName = name
+
 	if p.Value != nil {
 		f.gotSetValue = *p.Value
+	}
+
+	if f.blockSet {
+		<-ctx.Done()
+
+		return azsecrets.SetSecretResponse{}, ctx.Err()
 	}
 
 	return f.setResp, f.setErr
