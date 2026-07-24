@@ -210,6 +210,9 @@ func (cp *consulProvider) List(ctx context.Context, prefix string) (map[string]s
 		return nil, errors.New("consul: list requires a non-empty prefix")
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, kv.DefaultOperationTimeout)
+	defer cancel()
+
 	pairs, _, err := cp.kvClient.List(prefix, (&consulsdk.QueryOptions{}).WithContext(ctx))
 	if err != nil {
 		return nil, &kv.StoreUnavailableError{KeyPath: prefix, Err: err}
