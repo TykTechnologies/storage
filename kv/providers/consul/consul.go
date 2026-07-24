@@ -187,6 +187,9 @@ func (cp *consulProvider) Set(ctx context.Context, key, value string) error {
 		Value: []byte(value),
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, kv.DefaultOperationTimeout)
+	defer cancel()
+
 	_, err := cp.kvClient.Put(pair, (&consulsdk.WriteOptions{}).WithContext(ctx))
 	if err != nil {
 		return &kv.StoreUnavailableError{KeyPath: key, Err: err}

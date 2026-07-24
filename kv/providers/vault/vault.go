@@ -244,6 +244,9 @@ func (vp *vaultProvider) Set(ctx context.Context, key, value string) error {
 		data = map[string]any{"data": fields}
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, kv.EffectiveTimeout(vp.timeout))
+	defer cancel()
+
 	_, err = vp.client.Logical().WriteWithContext(ctx, apiPath, data)
 	if err != nil {
 		return &kv.StoreUnavailableError{KeyPath: key, Err: err}
