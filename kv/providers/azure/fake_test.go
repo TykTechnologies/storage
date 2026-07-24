@@ -3,8 +3,13 @@ package azure
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 	"github.com/stretchr/testify/require"
 )
@@ -45,6 +50,31 @@ func (f *fakeSecretsClient) SetSecret(
 
 func getSecretResponse(value string) azsecrets.GetSecretResponse {
 	return azsecrets.GetSecretResponse{Secret: azsecrets.Secret{Value: &value}}
+}
+
+// newResponseError builds an *azcore.ResponseError shaped like a real Key Vault error: the
+// given HTTP status, the outer code echoed in the x-ms-error-code header, a body carrying
+// error.code + error.innererror.code, and (when non-empty) an x-ms-request-id header.
+func newResponseError(statusCode int, errorCode, innerCode, requestID string) *azcore.ResponseError {
+	body := fmt.Sprintf(
+		`{"error":{"code":%q,"message":"test error","innererror":{"code":%q}}}`, errorCode, innerCode)
+
+	header := http.Header{}
+	header.Set("x-ms-error-code", errorCode)
+
+	if requestID != "" {
+		header.Set("x-ms-request-id", requestID)
+	}
+
+	return &azcore.ResponseError{
+		StatusCode: statusCode,
+		ErrorCode:  errorCode,
+		RawResponse: &http.Response{
+			StatusCode: statusCode,
+			Header:     header,
+			Body:       io.NopCloser(strings.NewReader(body)),
+		},
+	}
 }
 
 func TestFakeSecretsClient_Seam(t *testing.T) {

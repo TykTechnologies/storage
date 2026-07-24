@@ -1,8 +1,13 @@
 package azure
 
 import (
+	"context"
+	"errors"
+	"net/http"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
+	"github.com/TykTechnologies/storage/kv"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,4 +58,218 @@ func TestValidateSecretKey(t *testing.T) {
 			require.Equal(t, tt.wantVersion, version)
 		})
 	}
+}
+
+func TestClassify(t *testing.T) {
+	t.Parallel()
+
+	const key = "db-password"
+
+	p := &azureProvider{}
+
+	t.Run("404 SecretNotFound -> KeyNotFoundError", func(t *testing.T) {
+		t.Parallel()
+
+		err := p.classify(key, newResponseError(http.StatusNotFound, "SecretNotFound", "", ""))
+
+		var knf *kv.KeyNotFoundError
+		require.ErrorAs(t, err, &knf)
+	})
+
+	t.Run("403 SecretDisabled -> plain, not typed", func(t *testing.T) {
+		t.Parallel()
+
+		err := p.classify(key, newResponseError(http.StatusForbidden, "Forbidden", "SecretDisabled", ""))
+		require.ErrorContains(t, err, "disabled")
+		requireNotTyped(t, err)
+	})
+
+	t.Run("400 BadParameter -> plain, not typed", func(t *testing.T) {
+		t.Parallel()
+
+		err := p.classify(key, newResponseError(http.StatusBadRequest, "BadParameter", "", ""))
+		require.ErrorContains(t, err, "invalid")
+		requireNotTyped(t, err)
+	})
+
+	t.Run("409 ObjectIsDeletedButRecoverable -> plain, not typed", func(t *testing.T) {
+		t.Parallel()
+
+		err := p.classify(key, newResponseError(http.StatusConflict, "Conflict", "ObjectIsDeletedButRecoverable", ""))
+		require.ErrorContains(t, err, "soft-deleted")
+		requireNotTyped(t, err)
+	})
+
+	t.Run("401 -> StoreUnavailableError", func(t *testing.T) {
+		t.Parallel()
+
+		requireStoreUnavailable(t, p.classify(key, newResponseError(http.StatusUnauthorized, "Unauthorized", "", "")))
+	})
+
+	t.Run("403 access denied (no inner code) -> StoreUnavailableError", func(t *testing.T) {
+		t.Parallel()
+
+		requireStoreUnavailable(t, p.classify(key, newResponseError(http.StatusForbidden, "Forbidden", "", "")))
+	})
+
+	t.Run("429 -> StoreUnavailableError", func(t *testing.T) {
+		t.Parallel()
+
+		requireStoreUnavailable(t, p.classify(key, newResponseError(http.StatusTooManyRequests, "Throttled", "", "")))
+	})
+
+	t.Run("500 -> StoreUnavailableError", func(t *testing.T) {
+		t.Parallel()
+
+		err := p.classify(key, newResponseError(http.StatusInternalServerError, "InternalError", "", ""))
+		requireStoreUnavailable(t, err)
+	})
+
+	t.Run("non-HTTP error -> StoreUnavailableError", func(t *testing.T) {
+		t.Parallel()
+
+		requireStoreUnavailable(t, p.classify(key, errors.New("dial tcp: i/o timeout")))
+	})
+
+	t.Run("x-ms-request-id surfaced in the transient error", func(t *testing.T) {
+		t.Parallel()
+
+		err := p.classify(key, newResponseError(http.StatusInternalServerError, "InternalError", "", "req-abc123"))
+		require.ErrorContains(t, err, "req-abc123")
+	})
+}
+
+func TestGet(t *testing.T) {
+	t.Parallel()
+
+	t.Run("valid value returned verbatim", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{getResp: getSecretResponse("hunter2")}
+		p := &azureProvider{client: fake, cfg: &Config{}}
+
+		got, err := p.Get(context.Background(), "db-password")
+		require.NoError(t, err)
+		require.Equal(t, "hunter2", got)
+	})
+
+	t.Run("empty value is a successful empty string", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{getResp: getSecretResponse("")}
+		p := &azureProvider{client: fake, cfg: &Config{}}
+
+		got, err := p.Get(context.Background(), "k")
+		require.NoError(t, err)
+		require.Empty(t, got)
+	})
+
+	t.Run("nil value -> StoreUnavailableError", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{getResp: azsecrets.GetSecretResponse{Secret: azsecrets.Secret{Value: nil}}}
+		p := &azureProvider{client: fake, cfg: &Config{}}
+
+		_, err := p.Get(context.Background(), "k")
+		requireStoreUnavailable(t, err)
+	})
+
+	t.Run("pinned version is passed to the client", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{getResp: getSecretResponse("v")}
+		p := &azureProvider{client: fake, cfg: &Config{}}
+
+		_, err := p.Get(context.Background(), "db-password/abc123")
+		require.NoError(t, err)
+		require.Equal(t, "db-password", fake.gotGetName)
+		require.Equal(t, "abc123", fake.gotGetVersion)
+	})
+
+	t.Run("bare name passes empty version", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{getResp: getSecretResponse("v")}
+		p := &azureProvider{client: fake, cfg: &Config{}}
+
+		_, err := p.Get(context.Background(), "db-password")
+		require.NoError(t, err)
+		require.Empty(t, fake.gotGetVersion)
+	})
+
+	t.Run("invalid key rejected before any client call", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{}
+		p := &azureProvider{client: fake, cfg: &Config{}}
+
+		_, err := p.Get(context.Background(), "https://evil.vault.azure.net/x")
+		require.Error(t, err)
+		require.Empty(t, fake.gotGetName)
+	})
+
+	t.Run("empty key rejected before any client call", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{}
+		p := &azureProvider{client: fake, cfg: &Config{}}
+
+		_, err := p.Get(context.Background(), "")
+		require.ErrorContains(t, err, "empty secret key")
+		require.Empty(t, fake.gotGetName)
+	})
+
+	t.Run("trim_trailing_newline strips exactly one newline", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{getResp: getSecretResponse("token\n\n")}
+		p := &azureProvider{client: fake, cfg: &Config{TrimTrailingNewline: true}}
+
+		got, err := p.Get(context.Background(), "k")
+		require.NoError(t, err)
+		require.Equal(t, "token\n", got)
+	})
+
+	t.Run("trim off preserves the newline", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{getResp: getSecretResponse("token\n")}
+		p := &azureProvider{client: fake, cfg: &Config{}}
+
+		got, err := p.Get(context.Background(), "k")
+		require.NoError(t, err)
+		require.Equal(t, "token\n", got)
+	})
+
+	t.Run("routes RPC errors through classify (404 -> KeyNotFoundError)", func(t *testing.T) {
+		t.Parallel()
+
+		fake := &fakeSecretsClient{getErr: newResponseError(http.StatusNotFound, "SecretNotFound", "", "")}
+		p := &azureProvider{client: fake, cfg: &Config{}}
+
+		_, err := p.Get(context.Background(), "missing")
+
+		var knf *kv.KeyNotFoundError
+		require.ErrorAs(t, err, &knf)
+	})
+}
+
+func requireNotTyped(t *testing.T, err error) {
+	t.Helper()
+
+	var (
+		knf *kv.KeyNotFoundError
+		sue *kv.StoreUnavailableError
+	)
+
+	require.Error(t, err)
+	require.False(t, errors.As(err, &knf), "must not be *kv.KeyNotFoundError")
+	require.False(t, errors.As(err, &sue), "must not be *kv.StoreUnavailableError")
+}
+
+func requireStoreUnavailable(t *testing.T, err error) {
+	t.Helper()
+
+	var sue *kv.StoreUnavailableError
+	require.ErrorAs(t, err, &sue)
 }
