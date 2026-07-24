@@ -362,6 +362,28 @@ func TestNewFactory_TimeoutExposedViaTimeouter(t *testing.T) {
 	}
 }
 
+func TestProvider_InterfaceContract(t *testing.T) {
+	t.Parallel()
+
+	provider, err := azure.NewFactory()(json.RawMessage(cfgJSON(&azure.Config{VaultURL: validVaultURL})))
+	require.NoError(t, err)
+
+	_, isSetter := kv.AsSetter(provider)
+	require.True(t, isSetter, "must implement Setter")
+
+	_, isTimeouter := kv.AsTimeouter(provider)
+	require.True(t, isTimeouter, "must implement Timeouter")
+
+	_, isStandalone := kv.AsStandalone(provider)
+	require.False(t, isStandalone, "must NOT implement Standalone (stays cache/singleflight-wrapped)")
+
+	_, isInitializer := kv.AsInitializer(provider)
+	require.False(t, isInitializer, "must NOT implement Initializer (client built in factory, D5)")
+
+	_, isCloser := kv.AsCloser(provider)
+	require.False(t, isCloser, "must NOT implement Closer (no resource to release, D5)")
+}
+
 func cfgJSON(c *azure.Config) string {
 	b, err := json.Marshal(c)
 	if err != nil {

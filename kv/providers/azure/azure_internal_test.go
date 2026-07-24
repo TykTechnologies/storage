@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 	"github.com/TykTechnologies/storage/kv"
 	"github.com/stretchr/testify/require"
@@ -346,4 +347,60 @@ func requireStoreUnavailable(t *testing.T, err error) {
 
 	var sue *kv.StoreUnavailableError
 	require.ErrorAs(t, err, &sue)
+}
+
+func TestCredential(t *testing.T) {
+	t.Parallel()
+
+	const (
+		tenant = "11111111-1111-1111-1111-111111111111"
+		client = "22222222-2222-2222-2222-222222222222"
+	)
+
+	tests := []struct {
+		name string
+		cfg  *Config
+		want any
+	}{
+		{
+			name: "managed_identity system-assigned",
+			cfg:  &Config{CredentialType: "managed_identity"},
+			want: &azidentity.ManagedIdentityCredential{},
+		},
+		{
+			name: "managed_identity user-assigned",
+			cfg:  &Config{CredentialType: "managed_identity", ClientID: client},
+			want: &azidentity.ManagedIdentityCredential{},
+		},
+		{
+			name: "workload_identity",
+			cfg: &Config{
+				CredentialType:     "workload_identity",
+				TenantID:           tenant,
+				ClientID:           client,
+				FederatedTokenFile: "/var/run/secrets/azure/tokens/token",
+			},
+			want: &azidentity.WorkloadIdentityCredential{},
+		},
+		{
+			name: "client_secret",
+			cfg: &Config{
+				CredentialType: "client_secret",
+				TenantID:       tenant,
+				ClientID:       client,
+				ClientSecret:   "s3cr3t",
+			},
+			want: &azidentity.ClientSecretCredential{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cred, err := tt.cfg.credential()
+			require.NoError(t, err)
+			require.IsType(t, tt.want, cred)
+		})
+	}
 }
