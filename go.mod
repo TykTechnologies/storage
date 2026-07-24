@@ -5,6 +5,11 @@ go 1.25.0
 require (
 	cloud.google.com/go/auth v0.20.0
 	cloud.google.com/go/secretmanager v1.20.0
+	github.com/aws/aws-sdk-go-v2 v1.42.1
+	github.com/aws/aws-sdk-go-v2/config v1.32.30
+	github.com/aws/aws-sdk-go-v2/credentials v1.19.29
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.43.1
+	github.com/aws/aws-sdk-go-v2/service/sts v1.44.1
 	github.com/google/go-cmp v0.7.0
 	github.com/hashicorp/consul/api v1.31.2
 	github.com/hashicorp/vault/api v1.23.0
@@ -35,11 +40,17 @@ require (
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/iam v1.12.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.22.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/internal v1.12.0 // indirect
-	github.com/AzureAD/microsoft-authentication-library-for-go v1.7.2 // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.30 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.30 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.30 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.31 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.13 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.30 // indirect
+	github.com/aws/aws-sdk-go-v2/service/signin v1.4.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.32.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.37.1 // indirect
+	github.com/aws/smithy-go v1.27.3 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -49,10 +60,8 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.17 // indirect
 	github.com/googleapis/gax-go/v2 v2.23.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
@@ -69,13 +78,11 @@ require (
 	github.com/hashicorp/hcl v1.0.1-vault-7 // indirect
 	github.com/hashicorp/serf v0.10.1 // indirect
 	github.com/klauspost/compress v1.13.6 // indirect
-	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/montanaflynn/stats v0.7.0 // indirect
-	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
