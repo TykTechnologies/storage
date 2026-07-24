@@ -42,6 +42,10 @@ const (
 	Conjur ProviderType = "cyberark_conjur"
 )
 
+// DefaultOperationTimeout bounds a single provider Get/Set when neither the store
+// config nor the SecretStore wrapper supplies one.
+const DefaultOperationTimeout = 5 * time.Second
+
 // IsLocal reports whether this provider type resolves secrets from resources
 // available to the local process — environment variables, inline config data,
 // or the filesystem — requiring no network and a literal, reference-free config.
@@ -178,4 +182,14 @@ func As[T any](p Provider) (T, bool) {
 	}
 
 	return zero, false
+}
+
+// EffectiveTimeout resolves a configured timeout to the value actually used:
+// the configured value when positive, else the default.
+func EffectiveTimeout(configured time.Duration) time.Duration {
+	if configured > 0 {
+		return configured
+	}
+
+	return DefaultOperationTimeout
 }
