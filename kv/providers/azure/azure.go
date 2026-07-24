@@ -1,6 +1,22 @@
 package azure
 
-// FIX:
-// 1. I have to check the difference between pkcs12 and pem formats
-// for certificates. Also ask Andy if we want to convert the pkcs12
-// to PEM on provider if config option is provided.
+import (
+	"context"
+	"time"
+)
+
+type azureProvider struct {
+	timeout time.Duration
+}
+
+func (ap *azureProvider) Get(ctx context.Context, key string) (string, error) {
+	return "", nil
+}
+
+func (ap *azureProvider) Set(ctx context.Context, key, value string) error {
+	return nil
+}
+
+func (ap *azureProvider) Timeout() time.Duration {
+	return time.Second
+}
