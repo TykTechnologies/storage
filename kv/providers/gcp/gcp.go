@@ -127,7 +127,7 @@ func (gp *gcpProvider) Set(ctx context.Context, key, value string) error {
 		return fmt.Errorf("gcp: set does not accept version in the key %q", key)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, gp.setTimeout())
+	ctx, cancel := context.WithTimeout(ctx, kv.EffectiveTimeout(gp.timeout))
 	defer cancel()
 
 	data := []byte(value)
@@ -342,17 +342,4 @@ func (gp *gcpProvider) classify(key string, err error) error {
 	default:
 		return &kv.StoreUnavailableError{KeyPath: key, Err: err}
 	}
-}
-
-// setTimeout is the per-call deadline for Set, which runs outside the
-// SecretStore wrapper that bounds Get and so must bound itself.
-func (gp *gcpProvider) setTimeout() time.Duration {
-	// Fallback mirrors the SecretStore default, so an unconfigured Set behaves like Get.
-	const defaultTimeout = 5 * time.Second
-
-	if gp.timeout > 0 {
-		return gp.timeout
-	}
-
-	return defaultTimeout
 }
