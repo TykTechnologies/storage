@@ -18,5 +18,5 @@ func (ap *azureProvider) Set(ctx context.Context, key, value string) error {
 }
 
 func (ap *azureProvider) Timeout() time.Duration {
-	return time.Second
+	return ap.timeout
 }
