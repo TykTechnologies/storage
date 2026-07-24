@@ -152,7 +152,7 @@ func (ap *awsProvider) Set(ctx context.Context, key, value string) error {
 		return fmt.Errorf("aws: cannot write %q through a version-pinned store", key)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, ap.setTimeout())
+	ctx, cancel := context.WithTimeout(ctx, kv.EffectiveTimeout(ap.timeout))
 	defer cancel()
 
 	err := ap.putSecretValue(ctx, key, value)
@@ -201,16 +201,6 @@ func (ap *awsProvider) putSecretValue(ctx context.Context, key, value string) er
 // the wrapper's default.
 func (ap *awsProvider) Timeout() time.Duration {
 	return ap.timeout
-}
-
-func (ap *awsProvider) setTimeout() time.Duration {
-	const defaultTimeout = 5 * time.Second
-
-	if ap.timeout > 0 {
-		return ap.timeout
-	}
-
-	return defaultTimeout
 }
 
 // validateSecretKey rejects keys that can never resolve: empty keys and ARNs
