@@ -29,6 +29,42 @@ func NewRedisV9WithOpts(options ...model.Option) (*RedisV9, error) {
 		opt.Apply(baseConfig)
 	}
 
+	universalOpts, err := buildUniversalOptions(baseConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	opts := baseConfig.RedisConfig
+	driver := &RedisV9{cfg: opts}
+
+	if baseConfig.RetryConfig != nil {
+		driver.retryCfg = baseConfig.RetryConfig
+	}
+
+	if baseConfig.OnConnect != nil {
+		driver.onConnect = baseConfig.OnConnect
+	}
+
+	var client redis.UniversalClient
+
+	switch {
+	case opts.MasterName != "":
+		client = redis.NewFailoverClient(universalOpts.Failover())
+	case opts.EnableCluster:
+		client = redis.NewClusterClient(universalOpts.Cluster())
+	default:
+		client = redis.NewClient(universalOpts.Simple())
+	}
+
+	driver.client = client
+
+	return driver, nil
+}
+
+// buildUniversalOptions maps a BaseConfig into go-redis UniversalOptions. It is
+// kept separate from client construction so the option mapping (in particular
+// the credentials-provider wiring) can be unit tested without a live Redis.
+func buildUniversalOptions(baseConfig *model.BaseConfig) (*redis.UniversalOptions, error) {
 	opts := baseConfig.RedisConfig
 	if opts == nil {
 		return nil, temperr.InvalidOptionsType
@@ -45,17 +81,15 @@ func NewRedisV9WithOpts(options ...model.Option) (*RedisV9, error) {
 		timeout = time.Duration(opts.Timeout) * time.Second
 	}
 
-	var err error
 	var tlsConfig *tls.Config
 
 	if baseConfig.TLS != nil && baseConfig.TLS.Enable {
+		var err error
 		tlsConfig, err = tlsconfig.HandleTLS(baseConfig.TLS)
 		if err != nil {
 			return nil, err
 		}
 	}
-
-	var client redis.UniversalClient
 
 	universalOpts := &redis.UniversalOptions{
 		Addrs:            helper.GetRedisAddrs(opts),
@@ -72,36 +106,31 @@ func NewRedisV9WithOpts(options ...model.Option) (*RedisV9, error) {
 		TLSConfig:        tlsConfig,
 	}
 
-	driver := &RedisV9{cfg: opts}
-
 	if baseConfig.RetryConfig != nil {
-		driver.retryCfg = baseConfig.RetryConfig
-
 		universalOpts.MaxRetries = baseConfig.RetryConfig.MaxRetries
 		universalOpts.MinRetryBackoff = baseConfig.RetryConfig.MinRetryBackoff
 		universalOpts.MaxRetryBackoff = baseConfig.RetryConfig.MaxRetryBackoff
 	}
 
 	if baseConfig.OnConnect != nil {
-		driver.onConnect = baseConfig.OnConnect
-
-		universalOpts.OnConnect = func(ctx context.Context, conn *redis.Conn) error {
+		universalOpts.OnConnect = func(ctx context.Context, _ *redis.Conn) error {
 			return baseConfig.OnConnect(ctx)
 		}
 	}
 
-	switch {
-	case opts.MasterName != "":
-		client = redis.NewFailoverClient(universalOpts.Failover())
-	case opts.EnableCluster:
-		client = redis.NewClusterClient(universalOpts.Cluster())
-	default:
-		client = redis.NewClient(universalOpts.Simple())
+	// A credentials provider supplies rotating, short-lived credentials (e.g.
+	// cloud IAM auth tokens) on each new connection. It takes precedence over
+	// the static username/password, which are cleared to avoid ambiguity.
+	if baseConfig.CredentialsProvider != nil {
+		provider := baseConfig.CredentialsProvider
+		universalOpts.CredentialsProviderContext = func(ctx context.Context) (string, string, error) {
+			return provider(ctx)
+		}
+		universalOpts.Username = ""
+		universalOpts.Password = ""
 	}
 
-	driver.client = client
-
-	return driver, nil
+	return universalOpts, nil
 }
 
 // NewRedisV9WithConnection returns a new redisv8List instance with a custom redis connection.

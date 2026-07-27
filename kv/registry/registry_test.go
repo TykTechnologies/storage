@@ -48,13 +48,22 @@ func (m *mockProvider) IsStandalone() bool {
 }
 
 type mockLogger struct {
-	warnCalls atomic.Int32
+	debugCalls atomic.Int32
+	warnCalls  atomic.Int32
+	errorCalls atomic.Int32
+}
+
+func (l *mockLogger) Debug(_ string, _ map[string]any) {
+	l.debugCalls.Add(1)
 }
 
 func (l *mockLogger) Warn(_ string, _ map[string]any) {
 	l.warnCalls.Add(1)
 }
-func (*mockLogger) Warnf(_ string, _ ...any) {}
+
+func (l *mockLogger) Error(_ string, _ map[string]any) {
+	l.errorCalls.Add(1)
+}
 
 func newFactory(initFunc, closeFunc func(ctx context.Context) error) kv.ProviderFactory {
 	return func(config json.RawMessage) (kv.Provider, error) {

@@ -118,6 +118,19 @@ jobs:
             database: none
             version: none
             instancetype: none
+          # Hermetic IAM auth unit tests (root-level iamauth/ pkgs) — no infra.
+          # These live outside ./temporal and ./persistent, so without this row
+          # they run in no CI job at all.
+          - storagetype: iamauth
+            database: none
+          # IAM credentials-provider integration: proves the provider is
+          # consulted on connect and that rotation re-auths new connections,
+          # against an auth-enabled Redis (opaque-token stand-in for Memorystore
+          # IAM; Google-side token verification stays a nightly/manual E2E).
+          - storagetype: iam
+            database: redis
+            version: 7.2.0
+            instancetype: iam
 
     steps:
       - name: Generate GitHub App token
@@ -175,6 +188,10 @@ jobs:
           DB: ${{ matrix.database }}
           DB_SETUP: ${{ matrix.instancetype }}
           DB_VERSION: ${{ matrix.version }}
+          # Only the 'iam' row points the integration test at the auth-enabled
+          # Redis; empty elsewhere so the test self-skips.
+          TEST_IAM_REDIS_ADDR: ${{ matrix.storagetype == 'iam' && 'localhost:6379' || '' }}
+          TEST_IAM_REDIS_PASS: ${{ matrix.storagetype == 'iam' && 'tokenAAA' || '' }}
         run: task test-${{ matrix.storagetype }}
       - uses: actions/upload-artifact@v4
         with:

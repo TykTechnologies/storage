@@ -118,9 +118,9 @@ type Closer interface {
 	Close(ctx context.Context) error
 }
 
-// Standalone is an optional interface for providers that do not need
+// Standaloner is an optional interface for providers that do not need
 // to be combined with caching or singleflight mechanisms.
-type Standalone interface {
+type Standaloner interface {
 	IsStandalone() bool
 }
 
@@ -148,9 +148,9 @@ func AsCloser(p Provider) (Closer, bool) {
 	return As[Closer](p)
 }
 
-// AsStandalone attempts to extract a Standalone from a Provider.
-func AsStandalone(p Provider) (Standalone, bool) {
-	return As[Standalone](p)
+// AsStandaloner attempts to extract a Standaloner from a Provider.
+func AsStandaloner(p Provider) (Standaloner, bool) {
+	return As[Standaloner](p)
 }
 
 // AsTimeouter attempts to extract a Timeouter from a Provider.

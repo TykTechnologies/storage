@@ -54,12 +54,12 @@ func TestNewFactory(t *testing.T) {
 	})
 }
 
-func TestProviderIsStandalone(t *testing.T) {
+func TestProviderIsStandaloner(t *testing.T) {
 	t.Parallel()
 
 	p := newProvider(t, env.Config{})
 
-	standalone, ok := kv.AsStandalone(p)
+	standalone, ok := kv.AsStandaloner(p)
 	require.True(t, ok, "env provider must implement Standalone")
 	require.True(t, standalone.IsStandalone(),
 		"env reads are in-process and cheap — no cache wrapper")
