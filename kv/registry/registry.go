@@ -129,74 +129,92 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 	var tempMu sync.Mutex
 	tempStores := make(map[string]kv.Provider, len(config.Stores))
 
+	collect := func(name string, store kv.Provider) {
+		tempMu.Lock()
+		tempStores[name] = store
+		tempMu.Unlock()
+	}
+
 	// This defer block guarantees cleanup of partially initialized stores if the
 	// overall initialization process fails, preventing resource leaks.
 	defer func() {
 		if err != nil {
 			r.isInitialized.Store(false)
 
-			cleanupCtx := context.WithoutCancel(ctx)
-
 			tempMu.Lock()
-			defer tempMu.Unlock()
-
-			for _, store := range tempStores {
-				if closer, ok := kv.AsCloser(store); ok {
-					_ = closer.Close(cleanupCtx)
-				}
-			}
+			closeStores(ctx, tempStores)
+			tempMu.Unlock()
 		}
 	}()
 
 	eg, egCtx := errgroup.WithContext(ctx)
 
 	for name, storeCfg := range config.Stores {
-		r.mu.RLock()
-		factory, ok := r.factories[storeCfg.Type]
-		r.mu.RUnlock()
-
-		if !ok {
-			initErr := fmt.Errorf("unknown provider type %q for store %q", storeCfg.Type, name)
-			if storeCfg.Required {
-				return initErr
-			}
-
-			r.logger.Warn("Skipping optional store initialization", map[string]any{
-				"store": name,
-				"error": initErr,
-			})
-
-			continue
+		if scheduleErr := r.scheduleStoreInit(egCtx, eg, name, storeCfg, config.Cache, collect); scheduleErr != nil {
+			return scheduleErr
 		}
-
-		eg.Go(func() error {
-			store, initErr := buildSingleStore(egCtx, name, storeCfg, config.Cache, factory)
-			if initErr != nil {
-				if storeCfg.Required {
-					return initErr
-				}
-
-				r.logger.Warn("Skipping optional store initialization", map[string]any{
-					"store": name,
-					"error": initErr,
-				})
-
-				return nil
-			}
-
-			tempMu.Lock()
-			tempStores[name] = store
-			tempMu.Unlock()
-
-			return nil
-		})
 	}
 
-	err = eg.Wait()
-	if err != nil {
+	if err = eg.Wait(); err != nil {
 		return err
 	}
 
+	return r.commitStores(tempStores)
+}
+
+// scheduleStoreInit looks up the factory for a single store and, when found,
+// schedules its (potentially blocking) initialization on the errgroup. It
+// returns a non-nil error only when a required store cannot be scheduled;
+// optional-store failures are logged and swallowed.
+func (r *Registry) scheduleStoreInit(
+	ctx context.Context,
+	eg *errgroup.Group,
+	name string,
+	storeCfg kv.StoreConfig,
+	cacheCfg kv.CacheConfig,
+	collect func(name string, store kv.Provider),
+) error {
+	r.mu.RLock()
+	factory, ok := r.factories[storeCfg.Type]
+	r.mu.RUnlock()
+
+	if !ok {
+		return r.handleStoreInitError(name, storeCfg.Required,
+			fmt.Errorf("unknown provider type %q for store %q", storeCfg.Type, name))
+	}
+
+	eg.Go(func() error {
+		store, initErr := buildSingleStore(ctx, name, storeCfg, cacheCfg, factory)
+		if initErr != nil {
+			return r.handleStoreInitError(name, storeCfg.Required, initErr)
+		}
+
+		collect(name, store)
+
+		return nil
+	})
+
+	return nil
+}
+
+// handleStoreInitError propagates initialization errors for required stores and
+// logs-and-swallows them for optional ones.
+func (r *Registry) handleStoreInitError(name string, required bool, err error) error {
+	if required {
+		return err
+	}
+
+	r.logger.Warn("Skipping optional store initialization", map[string]any{
+		"store": name,
+		"error": err,
+	})
+
+	return nil
+}
+
+// commitStores publishes the successfully initialized stores into the registry,
+// unless the registry was closed while initialization was in flight.
+func (r *Registry) commitStores(tempStores map[string]kv.Provider) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -210,6 +228,18 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 	}
 
 	return nil
+}
+
+// closeStores closes any store that implements Closer, using a cancellation-free
+// context so cleanup runs even when the original context is already done.
+func closeStores(ctx context.Context, stores map[string]kv.Provider) {
+	cleanupCtx := context.WithoutCancel(ctx)
+
+	for _, store := range stores {
+		if closer, ok := kv.AsCloser(store); ok {
+			_ = closer.Close(cleanupCtx)
+		}
+	}
 }
 
 // GetStore retrieves an initialized store by name.
