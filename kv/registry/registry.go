@@ -56,13 +56,6 @@ func NewRegistry(opts ...Option) *Registry {
 func NewDefaultRegistry(opts ...Option) *Registry {
 	r := NewRegistry(opts...)
 
-	// TODO: Uncomment provider registration when implementation is added
-	// r.Add(kv.Env, env.NewFactory())
-	// r.Add(kv.Inline, inline.NewFactory())
-	// r.Add(kv.Vault, vault.NewFactory())
-	// r.Add(kv.Consul, consul.NewFactory())
-	// r.Add(kv.K8s, k8s.NewFactory())
-
 	return r
 }
 
@@ -283,7 +276,7 @@ func buildSingleStore(
 		}
 	}
 
-	if s, ok := kv.AsStandalone(provider); ok && s.IsStandalone() {
+	if s, ok := kv.AsStandaloner(provider); ok && s.IsStandalone() {
 		return provider, nil
 	}
 

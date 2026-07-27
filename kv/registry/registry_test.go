@@ -83,8 +83,6 @@ func TestNewRegistry(t *testing.T) {
 	require.NotNil(t, registry.factories)
 }
 
-// TODO: Update the test case when providers are set, to assert
-// that all OSS providers are registered.
 func TestNewDefaultRegistry(t *testing.T) {}
 
 func TestAddFactory(t *testing.T) {

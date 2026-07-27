@@ -8,6 +8,17 @@ type Logger interface {
 
 type NoopLogger struct{}
 
-func (NoopLogger) Debug(_ string, _ map[string]any) {}
-func (NoopLogger) Warn(_ string, _ map[string]any)  {}
-func (NoopLogger) Error(_ string, _ map[string]any) {}
+func (NoopLogger) Debug(_ string, _ map[string]any) {
+	// Intentionally empty: NoopLogger discards all logs so the library
+	// works without a caller-provided logger.
+}
+
+func (NoopLogger) Warn(_ string, _ map[string]any) {
+	// Intentionally empty: NoopLogger discards all logs so the library
+	// works without a caller-provided logger.
+}
+
+func (NoopLogger) Error(_ string, _ map[string]any) {
+	// Intentionally empty: NoopLogger discards all logs so the library
+	// works without a caller-provided logger.
+}
