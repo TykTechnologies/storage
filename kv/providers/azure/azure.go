@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	azruntime "github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 	"github.com/TykTechnologies/storage/kv"
 )
@@ -174,11 +174,13 @@ func annotateRequestID(respErr *azcore.ResponseError, err error) error {
 // stable machine signal that distinguishes a disabled secret (SecretDisabled) from an
 // access denial — both surface as 403 Forbidden.
 func innerErrorCode(respErr *azcore.ResponseError) string {
-	if respErr.RawResponse == nil || respErr.RawResponse.Body == nil {
+	if respErr.RawResponse == nil {
 		return ""
 	}
 
-	body, err := io.ReadAll(respErr.RawResponse.Body)
+	// runtime.Payload returns the buffered response body and leaves it intact for other
+	// readers. So this neither consumes the body nor holds a live connection to close.
+	body, err := azruntime.Payload(respErr.RawResponse)
 	if err != nil {
 		return ""
 	}
