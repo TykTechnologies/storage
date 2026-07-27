@@ -236,13 +236,9 @@ func (cfg *Config) credential() (azcore.TokenCredential, error) {
 }
 
 func (cfg *Config) managedIdentityCredential() (azcore.TokenCredential, error) {
-	opts := &azidentity.ManagedIdentityCredentialOptions{}
-	// System-assigned if not provided
-	if cfg.ClientID != "" {
-		opts.ID = azidentity.ClientID(cfg.ClientID)
-	}
-
-	cred, err := azidentity.NewManagedIdentityCredential(opts)
+	cred, err := azidentity.NewManagedIdentityCredential(&azidentity.ManagedIdentityCredentialOptions{
+		ID: cfg.managedIdentityID(),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("azure: build managed_identity credential: %w", err)
 	}
@@ -250,17 +246,29 @@ func (cfg *Config) managedIdentityCredential() (azcore.TokenCredential, error) {
 	return cred, nil
 }
 
+func (cfg *Config) managedIdentityID() azidentity.ManagedIDKind {
+	if cfg.ClientID == "" {
+		return nil
+	}
+
+	return azidentity.ClientID(cfg.ClientID)
+}
+
 func (cfg *Config) workloadIdentityCredential() (azcore.TokenCredential, error) {
-	cred, err := azidentity.NewWorkloadIdentityCredential(&azidentity.WorkloadIdentityCredentialOptions{
-		TenantID:      cfg.TenantID,
-		ClientID:      cfg.ClientID,
-		TokenFilePath: cfg.FederatedTokenFile,
-	})
+	cred, err := azidentity.NewWorkloadIdentityCredential(cfg.workloadIdentityOptions())
 	if err != nil {
 		return nil, fmt.Errorf("azure: build workload_identity credential: %w", err)
 	}
 
 	return cred, nil
+}
+
+func (cfg *Config) workloadIdentityOptions() *azidentity.WorkloadIdentityCredentialOptions {
+	return &azidentity.WorkloadIdentityCredentialOptions{
+		TenantID:      cfg.TenantID,
+		ClientID:      cfg.ClientID,
+		TokenFilePath: cfg.FederatedTokenFile,
+	}
 }
 
 func (cfg *Config) clientSecretCredential() (azcore.TokenCredential, error) {

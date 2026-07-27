@@ -404,3 +404,35 @@ func TestCredential(t *testing.T) {
 		})
 	}
 }
+
+func TestManagedIdentityID(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty client_id selects system-assigned (nil ID)", func(t *testing.T) {
+		t.Parallel()
+
+		require.Nil(t, (&Config{}).managedIdentityID())
+	})
+
+	t.Run("client_id selects that user-assigned identity", func(t *testing.T) {
+		t.Parallel()
+
+		const id = "22222222-2222-2222-2222-222222222222"
+		require.Equal(t, azidentity.ClientID(id), (&Config{ClientID: id}).managedIdentityID())
+	})
+}
+
+func TestWorkloadIdentityOptions(t *testing.T) {
+	t.Parallel()
+
+	cfg := &Config{
+		TenantID:           "11111111-1111-1111-1111-111111111111",
+		ClientID:           "22222222-2222-2222-2222-222222222222",
+		FederatedTokenFile: "/var/run/secrets/azure/tokens/token",
+	}
+
+	opts := cfg.workloadIdentityOptions()
+	require.Equal(t, cfg.TenantID, opts.TenantID)
+	require.Equal(t, cfg.ClientID, opts.ClientID)
+	require.Equal(t, cfg.FederatedTokenFile, opts.TokenFilePath)
+}
