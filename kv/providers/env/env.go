@@ -5,12 +5,14 @@
 // A lookup name is built as Prefix + key, with the key optionally uppercased
 // (see Config).
 //
-// Security: the Prefix is a mandatory confinement boundary — the env analogue of
-// the file provider's base_path. Every key is read as Prefix+key, so a reference
-// can only ever reach variables under that prefix (there is no traversal escape
-// for environment names). A store with no prefix would let any reference read any
-// process variable (cloud credentials, tokens, PATH, …), so an unprefixed store
-// is disabled: every Get returns ErrPrefixRequired and resolves nothing.
+// Security: the Prefix is a confinement boundary. Every key is read as
+// Prefix+key, so a reference can only reach variables the operator deliberately
+// placed under that prefix — never arbitrary process variables (cloud
+// credentials, tokens, PATH, …). This matters when references come from a
+// less-trusted source than the host. An empty prefix removes that boundary,
+// so it is rejected by default: every Get returns ErrPrefixRequired.
+// Setting AllowNoPrefix opts back into reading process env directly,
+// and is only safe when every reference source is as trusted as the host.
 package env
 
 import (
@@ -24,21 +26,27 @@ import (
 	"github.com/TykTechnologies/storage/kv"
 )
 
-// ErrPrefixRequired is returned by Get when the provider has no prefix
-// configured.
+// ErrPrefixRequired is returned by Get when the provider has an empty prefix and
+// AllowNoPrefix is not set.
 var ErrPrefixRequired = errors.New("env: prefix is required")
 
 // Config is the env provider's configuration.
 type Config struct {
 	// Prefix is prepended literally to the (optionally uppercased) key before the
-	// environment lookup; it is never uppercased itself. It is mandatory: it is
-	// the store's security boundary, so a provider with an empty prefix rejects
-	// every Get with ErrPrefixRequired (see the package doc).
+	// environment lookup; it is never uppercased itself. By default it is
+	// required: it is the store's security boundary, so a provider with an empty
+	// prefix rejects every Get with ErrPrefixRequired unless AllowNoPrefix is set.
 	Prefix string `json:"prefix"`
 
 	// Uppercase, when true, uppercases the key — not the prefix — before lookup,
 	// so Get("my_key") with prefix "TYK_SECRET_" reads "TYK_SECRET_MY_KEY".
 	Uppercase bool `json:"uppercase"`
+
+	// AllowNoPrefix permits an empty prefix, reading process environment
+	// variables directly with no confinement. It defaults to false so a forgotten
+	// prefix stays fail-closed rather than silently exposing every process
+	// variable.
+	AllowNoPrefix bool `json:"allow_no_prefix"`
 }
 
 // NewFactory returns a ProviderFactory for environment-backed stores.
@@ -58,27 +66,30 @@ func NewFactory() kv.ProviderFactory {
 		}
 
 		return &envProvider{
-			prefix:    cfg.Prefix,
-			uppercase: cfg.Uppercase,
+			prefix:        cfg.Prefix,
+			uppercase:     cfg.Uppercase,
+			allowNoPrefix: cfg.AllowNoPrefix,
 		}, nil
 	}
 }
 
 type envProvider struct {
-	prefix    string
-	uppercase bool
+	prefix        string
+	uppercase     bool
+	allowNoPrefix bool
 }
 
 // Get reads the environment variable named Prefix + (uppercased key if
 // Uppercase) and returns its value.
 //
-// If no prefix is configured it returns ErrPrefixRequired for every key — the
-// prefix guard is checked first, so even an empty key is rejected before any
-// lookup. With a prefix set, the result mirrors os.Getenv exactly: a missing
-// variable and a variable set to "" are indistinguishable, and both return
-// ("", nil); an empty key reads os.Getenv(Prefix) and likewise returns no error.
+// If the prefix is empty and AllowNoPrefix is not set it returns
+// ErrPrefixRequired for every key — the prefix guard is checked first, so even
+// an empty key is rejected before any lookup. Otherwise the result mirrors
+// os.Getenv exactly: a missing variable and a variable set to "" are
+// indistinguishable, and both return ("", nil); an empty key reads
+// os.Getenv(Prefix) and likewise returns no error.
 func (ep *envProvider) Get(_ context.Context, key string) (string, error) {
-	if ep.prefix == "" {
+	if ep.prefix == "" && !ep.allowNoPrefix {
 		return "", ErrPrefixRequired
 	}
 

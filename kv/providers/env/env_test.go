@@ -114,15 +114,63 @@ func TestProviderGet(t *testing.T) {
 		assert.Equal(t, "", got, "no case folding: lowercase key must not match TYK_SECRET_FOO")
 	})
 
-	t.Run("empty prefix is rejected: every key errors with ErrPrefixRequired", func(t *testing.T) {
+	t.Run("empty prefix is rejected by default: every key errors with ErrPrefixRequired", func(t *testing.T) {
 		t.Setenv("BARE_KEY", "bare-value")
 
+		// AllowNoPrefix defaults to false — the fail-closed guard.
 		p := newProvider(t, env.Config{Prefix: "", Uppercase: true})
 
 		for _, key := range []string{"bare_key", "BARE_KEY", ""} {
 			_, err := p.Get(t.Context(), key)
 			require.ErrorIs(t, err, env.ErrPrefixRequired, "key %q", key)
 		}
+	})
+
+	t.Run("allow_no_prefix reads raw process env when the prefix is empty", func(t *testing.T) {
+		t.Setenv("BARE_KEY", "bare-value")
+
+		got, err := newProvider(t, env.Config{Prefix: "", Uppercase: true, AllowNoPrefix: true}).
+			Get(t.Context(), "bare_key")
+		require.NoError(t, err)
+		assert.Equal(t, "bare-value", got)
+	})
+
+	t.Run("allow_no_prefix with uppercase false uses the key verbatim", func(t *testing.T) {
+		t.Setenv("raw_lower", "x")
+
+		got, err := newProvider(t, env.Config{AllowNoPrefix: true}).
+			Get(t.Context(), "raw_lower")
+		require.NoError(t, err)
+		assert.Equal(t, "x", got)
+	})
+
+	t.Run("allow_no_prefix still returns empty string and no error for a missing var", func(t *testing.T) {
+		got, err := newProvider(t, env.Config{AllowNoPrefix: true, Uppercase: true}).
+			Get(t.Context(), "definitely_not_set_var")
+		require.NoError(t, err)
+		assert.Equal(t, "", got)
+	})
+
+	t.Run("allow_no_prefix is inert when a prefix is set: the prefix still confines", func(t *testing.T) {
+		t.Setenv("TYK_SECRET_K", "confined")
+		t.Setenv("K", "bare")
+
+		got, err := newProvider(t, env.Config{Prefix: "TYK_SECRET_", Uppercase: true, AllowNoPrefix: true}).
+			Get(t.Context(), "k")
+		require.NoError(t, err)
+		assert.Equal(t, "confined", got,
+			"AllowNoPrefix must not disable a configured prefix")
+	})
+
+	t.Run("allow_no_prefix json tag is wired to the raw config", func(t *testing.T) {
+		t.Setenv("RAW_TAG_KEY", "ok")
+
+		p, err := env.NewFactory()(json.RawMessage(`{"allow_no_prefix":true,"uppercase":true}`))
+		require.NoError(t, err)
+
+		got, err := p.Get(t.Context(), "raw_tag_key")
+		require.NoError(t, err)
+		assert.Equal(t, "ok", got)
 	})
 
 	t.Run("prefix is literal: uppercase never applies to the prefix", func(t *testing.T) {
