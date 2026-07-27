@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"regexp"
-	"slices"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -17,8 +16,6 @@ import (
 )
 
 const defaultCredentialType = "managed_identity"
-
-var allowedCredentialTypes = []string{"managed_identity", "workload_identity", "client_secret", "client_certificate"}
 
 // guidRe matches the 36-char canonical UUID.
 var guidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
@@ -117,6 +114,14 @@ func parseConfig(raw json.RawMessage, cfg *Config) error {
 }
 
 func (cfg *Config) validate() error {
+	if err := cfg.validateVaultURL(); err != nil {
+		return err
+	}
+
+	return cfg.validateCredential()
+}
+
+func (cfg *Config) validateVaultURL() error {
 	if cfg.VaultURL == "" {
 		return errors.New("azure: vault_url is required")
 	}
@@ -126,57 +131,76 @@ func (cfg *Config) validate() error {
 		return errors.New("azure: vault_url must be an https URL")
 	}
 
+	return nil
+}
+
+func (cfg *Config) validateCredential() error {
 	ct := cfg.effectiveCredentialType()
-	if !slices.Contains(allowedCredentialTypes, ct) {
-		return fmt.Errorf("azure: unsupported or insecure credential_type %q", ct)
-	}
 
 	switch ct {
-	case "client_secret":
-		if err := requireGUID("tenant_id", cfg.TenantID); err != nil {
-			return err
-		}
-
-		if err := requireGUID("client_id", cfg.ClientID); err != nil {
-			return err
-		}
-
-		if cfg.ClientSecret == "" {
-			return errors.New("azure: client_secret is required for the client_secret credential_type")
-		}
-	case "client_certificate":
-		if err := requireGUID("tenant_id", cfg.TenantID); err != nil {
-			return err
-		}
-
-		if err := requireGUID("client_id", cfg.ClientID); err != nil {
-			return err
-		}
-
-		if cfg.ClientCertificateFile == "" {
-			return errors.New("azure: client_certificate_file is required for the client_certificate credential_type")
-		}
-	case "workload_identity":
-		if err := requireGUID("tenant_id", cfg.TenantID); err != nil {
-			return err
-		}
-
-		if err := requireGUID("client_id", cfg.ClientID); err != nil {
-			return err
-		}
-
-		if cfg.FederatedTokenFile == "" {
-			return errors.New("azure: federated_token_file is required for the workload_identity credential_type")
-		}
 	case "managed_identity":
-		if cfg.ClientID != "" {
-			if err := requireGUID("client_id", cfg.ClientID); err != nil {
-				return err
-			}
-		}
+		return cfg.validateManagedIdentity()
+	case "workload_identity":
+		return cfg.validateWorkloadIdentity()
+	case "client_secret":
+		return cfg.validateClientSecret()
+	case "client_certificate":
+		return cfg.validateClientCertificate()
+	default:
+		return fmt.Errorf("azure: unsupported or insecure credential_type %q", ct)
+	}
+}
+
+func (cfg *Config) validateManagedIdentity() error {
+	if cfg.ClientID == "" {
+		return nil
+	}
+
+	return requireGUID("client_id", cfg.ClientID)
+}
+
+func (cfg *Config) validateWorkloadIdentity() error {
+	if err := cfg.requireTenantAndClient(); err != nil {
+		return err
+	}
+
+	if cfg.FederatedTokenFile == "" {
+		return errors.New("azure: federated_token_file is required for the workload_identity credential_type")
 	}
 
 	return nil
+}
+
+func (cfg *Config) validateClientSecret() error {
+	if err := cfg.requireTenantAndClient(); err != nil {
+		return err
+	}
+
+	if cfg.ClientSecret == "" {
+		return errors.New("azure: client_secret is required for the client_secret credential_type")
+	}
+
+	return nil
+}
+
+func (cfg *Config) validateClientCertificate() error {
+	if err := cfg.requireTenantAndClient(); err != nil {
+		return err
+	}
+
+	if cfg.ClientCertificateFile == "" {
+		return errors.New("azure: client_certificate_file is required for the client_certificate credential_type")
+	}
+
+	return nil
+}
+
+func (cfg *Config) requireTenantAndClient() error {
+	if err := requireGUID("tenant_id", cfg.TenantID); err != nil {
+		return err
+	}
+
+	return requireGUID("client_id", cfg.ClientID)
 }
 
 func (cfg *Config) parsedTimeout() (time.Duration, error) {
@@ -196,64 +220,80 @@ func (cfg *Config) parsedTimeout() (time.Duration, error) {
 	return d, nil
 }
 
-// credential maps the selected mode to an azidentity constructor.
 func (cfg *Config) credential() (azcore.TokenCredential, error) {
 	switch cfg.effectiveCredentialType() {
 	case "managed_identity":
-		opts := &azidentity.ManagedIdentityCredentialOptions{}
-		if cfg.ClientID != "" {
-			opts.ID = azidentity.ClientID(cfg.ClientID)
-		}
-
-		cred, err := azidentity.NewManagedIdentityCredential(opts)
-		if err != nil {
-			return nil, fmt.Errorf("azure: build managed_identity credential: %w", err)
-		}
-
-		return cred, nil
+		return cfg.managedIdentityCredential()
 	case "workload_identity":
-		cred, err := azidentity.NewWorkloadIdentityCredential(&azidentity.WorkloadIdentityCredentialOptions{
-			TenantID:      cfg.TenantID,
-			ClientID:      cfg.ClientID,
-			TokenFilePath: cfg.FederatedTokenFile,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("azure: build workload_identity credential: %w", err)
-		}
-
-		return cred, nil
+		return cfg.workloadIdentityCredential()
 	case "client_secret":
-		cred, err := azidentity.NewClientSecretCredential(cfg.TenantID, cfg.ClientID, cfg.ClientSecret, nil)
-		if err != nil {
-			return nil, fmt.Errorf("azure: build client_secret credential: %w", err)
-		}
-
-		return cred, nil
+		return cfg.clientSecretCredential()
 	case "client_certificate":
-		data, err := os.ReadFile(cfg.ClientCertificateFile)
-		if err != nil {
-			return nil, fmt.Errorf("azure: read client_certificate_file: %w", err)
-		}
-
-		var pwd []byte
-		if cfg.ClientCertificatePassword != "" {
-			pwd = []byte(cfg.ClientCertificatePassword)
-		}
-
-		certs, key, err := azidentity.ParseCertificates(data, pwd)
-		if err != nil {
-			return nil, fmt.Errorf("azure: parse client_certificate_file: %w", err)
-		}
-
-		cred, err := azidentity.NewClientCertificateCredential(cfg.TenantID, cfg.ClientID, certs, key, nil)
-		if err != nil {
-			return nil, fmt.Errorf("azure: build client_certificate credential: %w", err)
-		}
-
-		return cred, nil
+		return cfg.clientCertificateCredential()
 	default:
 		return nil, fmt.Errorf("azure: unsupported credential_type %q", cfg.CredentialType)
 	}
+}
+
+func (cfg *Config) managedIdentityCredential() (azcore.TokenCredential, error) {
+	opts := &azidentity.ManagedIdentityCredentialOptions{}
+	// System-assigned if not provided
+	if cfg.ClientID != "" {
+		opts.ID = azidentity.ClientID(cfg.ClientID)
+	}
+
+	cred, err := azidentity.NewManagedIdentityCredential(opts)
+	if err != nil {
+		return nil, fmt.Errorf("azure: build managed_identity credential: %w", err)
+	}
+
+	return cred, nil
+}
+
+func (cfg *Config) workloadIdentityCredential() (azcore.TokenCredential, error) {
+	cred, err := azidentity.NewWorkloadIdentityCredential(&azidentity.WorkloadIdentityCredentialOptions{
+		TenantID:      cfg.TenantID,
+		ClientID:      cfg.ClientID,
+		TokenFilePath: cfg.FederatedTokenFile,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("azure: build workload_identity credential: %w", err)
+	}
+
+	return cred, nil
+}
+
+func (cfg *Config) clientSecretCredential() (azcore.TokenCredential, error) {
+	cred, err := azidentity.NewClientSecretCredential(cfg.TenantID, cfg.ClientID, cfg.ClientSecret, nil)
+	if err != nil {
+		return nil, fmt.Errorf("azure: build client_secret credential: %w", err)
+	}
+
+	return cred, nil
+}
+
+func (cfg *Config) clientCertificateCredential() (azcore.TokenCredential, error) {
+	data, err := os.ReadFile(cfg.ClientCertificateFile)
+	if err != nil {
+		return nil, fmt.Errorf("azure: read client_certificate_file: %w", err)
+	}
+
+	var pwd []byte
+	if cfg.ClientCertificatePassword != "" {
+		pwd = []byte(cfg.ClientCertificatePassword)
+	}
+
+	certs, key, err := azidentity.ParseCertificates(data, pwd)
+	if err != nil {
+		return nil, fmt.Errorf("azure: parse client_certificate_file: %w", err)
+	}
+
+	cred, err := azidentity.NewClientCertificateCredential(cfg.TenantID, cfg.ClientID, certs, key, nil)
+	if err != nil {
+		return nil, fmt.Errorf("azure: build client_certificate credential: %w", err)
+	}
+
+	return cred, nil
 }
 
 func (cfg *Config) newClient(cred azcore.TokenCredential) (secretsClient, error) {

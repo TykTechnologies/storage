@@ -170,6 +170,18 @@ func annotateRequestID(respErr *azcore.ResponseError, err error) error {
 	return fmt.Errorf("x-ms-request-id %s: %w", id, err)
 }
 
+type keyVaultErrorResponse struct {
+	Error keyVaultErrorInfo `json:"error"`
+}
+
+type keyVaultErrorInfo struct {
+	InnerError keyVaultInnerError `json:"innererror"`
+}
+
+type keyVaultInnerError struct {
+	Code string `json:"code"`
+}
+
 // innerErrorCode extracts error.innererror.code from a Key Vault error body. It is the
 // stable machine signal that distinguishes a disabled secret (SecretDisabled) from an
 // access denial — both surface as 403 Forbidden.
@@ -185,14 +197,7 @@ func innerErrorCode(respErr *azcore.ResponseError) string {
 		return ""
 	}
 
-	var parsed struct {
-		Error struct {
-			InnerError struct {
-				Code string `json:"code"`
-			} `json:"innererror"`
-		} `json:"error"`
-	}
-
+	var parsed keyVaultErrorResponse
 	if json.Unmarshal(body, &parsed) != nil {
 		return ""
 	}
