@@ -49,7 +49,7 @@ type azureProvider struct {
 }
 
 // Get fetches the current enabled version (or a pinned version) of a secret and returns its
-// value verbatim, optionally trimming one trailing newline
+// value verbatim, optionally trimming one trailing newline.
 func (ap *azureProvider) Get(ctx context.Context, key string) (string, error) {
 	name, version, err := validateSecretKey(key)
 	if err != nil {
@@ -107,7 +107,7 @@ func validateSecretKey(key string) (name, version string, err error) {
 
 	switch {
 	case name == "":
-		return "", "", fmt.Errorf("azure: empty secret key")
+		return "", "", errors.New("azure: empty secret key")
 	case !secretNameRe.MatchString(name):
 		return "", "", fmt.Errorf(
 			"azure: secret key %q must be a bare secret name ([A-Za-z0-9-]); full URLs and paths are not allowed", key)

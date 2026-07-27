@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -131,7 +132,24 @@ func (cfg *Config) validateVaultURL() error {
 		return errors.New("azure: vault_url must be an https URL")
 	}
 
+	if (u.Path != "" && u.Path != "/") || u.RawQuery != "" {
+		return fmt.Errorf("azure: vault_url must be a bare host with no path or query, got %q", cfg.VaultURL)
+	}
+
+	if isSovereignVaultHost(u.Host) {
+		return fmt.Errorf(
+			"azure: vault_url %q targets a sovereign cloud but only Azure Public is supported",
+			cfg.VaultURL)
+	}
+
 	return nil
+}
+
+func isSovereignVaultHost(host string) bool {
+	host = strings.ToLower(host)
+
+	return strings.HasSuffix(host, ".vault.usgovcloudapi.net") ||
+		strings.HasSuffix(host, ".vault.azure.cn")
 }
 
 func (cfg *Config) validateCredential() error {

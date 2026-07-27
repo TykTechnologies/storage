@@ -72,6 +72,34 @@ func TestNewFactory_Validation(t *testing.T) {
 			errContains: "vault_url",
 		},
 		{
+			name:        "vault_url with a path rejected",
+			config:      cfgJSON(&azure.Config{VaultURL: "https://myvault.vault.azure.net/secrets/foo"}),
+			wantErr:     true,
+			errContains: "path or query",
+		},
+		{
+			name:        "vault_url with a query rejected",
+			config:      cfgJSON(&azure.Config{VaultURL: "https://myvault.vault.azure.net/?api-version=1"}),
+			wantErr:     true,
+			errContains: "path or query",
+		},
+		{
+			name:        "government cloud vault_url rejected",
+			config:      cfgJSON(&azure.Config{VaultURL: "https://myvault.vault.usgovcloudapi.net"}),
+			wantErr:     true,
+			errContains: "sovereign",
+		},
+		{
+			name:        "china cloud vault_url rejected",
+			config:      cfgJSON(&azure.Config{VaultURL: "https://myvault.vault.azure.cn"}),
+			wantErr:     true,
+			errContains: "sovereign",
+		},
+		{
+			name:   "vault_url without trailing slash accepted",
+			config: cfgJSON(&azure.Config{VaultURL: "https://myvault.vault.azure.net"}),
+		},
+		{
 			name:        "unsupported credential_type",
 			config:      cfgJSON(&azure.Config{VaultURL: validVaultURL, CredentialType: "bogus"}),
 			wantErr:     true,
