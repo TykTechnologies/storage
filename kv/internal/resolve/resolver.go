@@ -81,7 +81,7 @@ func (r *Resolver) resolveInline(ctx context.Context, input string) (string, err
 	// The token regex requires a closing brace, so an unclosed "$kv{" can
 	// never match — without this check a typo'd reference would silently pass
 	// through as a literal value.
-	if idx := unclosedInlineToken(input); idx >= 0 {
+	if unclosedInlineToken(input) >= 0 {
 		return "", fmt.Errorf(
 			"%w: unclosed $kv{ reference in %q",
 			ErrMalformedReference,
