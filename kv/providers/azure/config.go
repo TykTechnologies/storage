@@ -94,9 +94,9 @@ func NewFactory() kv.ProviderFactory {
 		}
 
 		return &azureProvider{
-			cfg:     &config,
-			timeout: timeout,
-			client:  client,
+			timeout:             timeout,
+			client:              client,
+			trimTrailingNewline: config.TrimTrailingNewline,
 		}, nil
 	}
 }

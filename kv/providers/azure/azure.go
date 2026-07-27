@@ -43,9 +43,9 @@ type secretsClient interface {
 }
 
 type azureProvider struct {
-	cfg     *Config
-	client  secretsClient
-	timeout time.Duration
+	client              secretsClient
+	timeout             time.Duration
+	trimTrailingNewline bool
 }
 
 // Get fetches the current enabled version (or a pinned version) of a secret and returns its
@@ -66,7 +66,7 @@ func (ap *azureProvider) Get(ctx context.Context, key string) (string, error) {
 	}
 
 	out := *resp.Value
-	if ap.cfg.TrimTrailingNewline {
+	if ap.trimTrailingNewline {
 		out = strings.TrimSuffix(out, "\n")
 	}
 

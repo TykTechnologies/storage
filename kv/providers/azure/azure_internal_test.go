@@ -148,7 +148,7 @@ func TestGet(t *testing.T) {
 		t.Parallel()
 
 		fake := &fakeSecretsClient{getResp: getSecretResponse("hunter2")}
-		p := &azureProvider{client: fake, cfg: &Config{}}
+		p := &azureProvider{client: fake}
 
 		got, err := p.Get(context.Background(), "db-password")
 		require.NoError(t, err)
@@ -159,7 +159,7 @@ func TestGet(t *testing.T) {
 		t.Parallel()
 
 		fake := &fakeSecretsClient{getResp: getSecretResponse("")}
-		p := &azureProvider{client: fake, cfg: &Config{}}
+		p := &azureProvider{client: fake}
 
 		got, err := p.Get(context.Background(), "k")
 		require.NoError(t, err)
@@ -170,7 +170,7 @@ func TestGet(t *testing.T) {
 		t.Parallel()
 
 		fake := &fakeSecretsClient{getResp: azsecrets.GetSecretResponse{Secret: azsecrets.Secret{Value: nil}}}
-		p := &azureProvider{client: fake, cfg: &Config{}}
+		p := &azureProvider{client: fake}
 
 		_, err := p.Get(context.Background(), "k")
 		requireStoreUnavailable(t, err)
@@ -180,7 +180,7 @@ func TestGet(t *testing.T) {
 		t.Parallel()
 
 		fake := &fakeSecretsClient{getResp: getSecretResponse("v")}
-		p := &azureProvider{client: fake, cfg: &Config{}}
+		p := &azureProvider{client: fake}
 
 		_, err := p.Get(context.Background(), "db-password/abc123")
 		require.NoError(t, err)
@@ -192,7 +192,7 @@ func TestGet(t *testing.T) {
 		t.Parallel()
 
 		fake := &fakeSecretsClient{getResp: getSecretResponse("v")}
-		p := &azureProvider{client: fake, cfg: &Config{}}
+		p := &azureProvider{client: fake}
 
 		_, err := p.Get(context.Background(), "db-password")
 		require.NoError(t, err)
@@ -203,7 +203,7 @@ func TestGet(t *testing.T) {
 		t.Parallel()
 
 		fake := &fakeSecretsClient{}
-		p := &azureProvider{client: fake, cfg: &Config{}}
+		p := &azureProvider{client: fake}
 
 		_, err := p.Get(context.Background(), "https://evil.vault.azure.net/x")
 		require.Error(t, err)
@@ -214,7 +214,7 @@ func TestGet(t *testing.T) {
 		t.Parallel()
 
 		fake := &fakeSecretsClient{}
-		p := &azureProvider{client: fake, cfg: &Config{}}
+		p := &azureProvider{client: fake}
 
 		_, err := p.Get(context.Background(), "")
 		require.ErrorContains(t, err, "empty secret key")
@@ -225,7 +225,7 @@ func TestGet(t *testing.T) {
 		t.Parallel()
 
 		fake := &fakeSecretsClient{getResp: getSecretResponse("token\n\n")}
-		p := &azureProvider{client: fake, cfg: &Config{TrimTrailingNewline: true}}
+		p := &azureProvider{client: fake, trimTrailingNewline: true}
 
 		got, err := p.Get(context.Background(), "k")
 		require.NoError(t, err)
@@ -236,7 +236,7 @@ func TestGet(t *testing.T) {
 		t.Parallel()
 
 		fake := &fakeSecretsClient{getResp: getSecretResponse("token\n")}
-		p := &azureProvider{client: fake, cfg: &Config{}}
+		p := &azureProvider{client: fake}
 
 		got, err := p.Get(context.Background(), "k")
 		require.NoError(t, err)
@@ -247,7 +247,7 @@ func TestGet(t *testing.T) {
 		t.Parallel()
 
 		fake := &fakeSecretsClient{getErr: newResponseError(http.StatusNotFound, "SecretNotFound", "", "")}
-		p := &azureProvider{client: fake, cfg: &Config{}}
+		p := &azureProvider{client: fake}
 
 		_, err := p.Get(context.Background(), "missing")
 
@@ -263,7 +263,7 @@ func TestSet(t *testing.T) {
 		t.Parallel()
 
 		fake := &fakeSecretsClient{}
-		p := &azureProvider{client: fake, cfg: &Config{}}
+		p := &azureProvider{client: fake}
 
 		err := p.Set(context.Background(), "db-password", "s3cr3t")
 		require.NoError(t, err)
@@ -276,7 +276,7 @@ func TestSet(t *testing.T) {
 		t.Parallel()
 
 		fake := &fakeSecretsClient{}
-		p := &azureProvider{client: fake, cfg: &Config{}}
+		p := &azureProvider{client: fake}
 
 		err := p.Set(context.Background(), "db-password/abc123", "x")
 		require.ErrorContains(t, err, "does not accept a version")
@@ -287,7 +287,7 @@ func TestSet(t *testing.T) {
 		t.Parallel()
 
 		fake := &fakeSecretsClient{}
-		p := &azureProvider{client: fake, cfg: &Config{}}
+		p := &azureProvider{client: fake}
 
 		err := p.Set(context.Background(), "https://evil.vault.azure.net/x", "x")
 		require.Error(t, err)
@@ -300,7 +300,7 @@ func TestSet(t *testing.T) {
 		fake := &fakeSecretsClient{
 			setErr: newResponseError(http.StatusConflict, "Conflict", "ObjectIsDeletedButRecoverable", ""),
 		}
-		p := &azureProvider{client: fake, cfg: &Config{}}
+		p := &azureProvider{client: fake}
 
 		err := p.Set(context.Background(), "db-password", "x")
 		require.ErrorContains(t, err, "soft-deleted")
@@ -313,7 +313,7 @@ func TestSet(t *testing.T) {
 		fake := &fakeSecretsClient{
 			setErr: newResponseError(http.StatusInternalServerError, "InternalError", "", ""),
 		}
-		p := &azureProvider{client: fake, cfg: &Config{}}
+		p := &azureProvider{client: fake}
 
 		requireStoreUnavailable(t, p.Set(context.Background(), "db-password", "x"))
 	})
@@ -322,7 +322,7 @@ func TestSet(t *testing.T) {
 		t.Parallel()
 
 		fake := &fakeSecretsClient{blockSet: true}
-		p := &azureProvider{client: fake, cfg: &Config{}, timeout: 20 * time.Millisecond}
+		p := &azureProvider{client: fake, timeout: 20 * time.Millisecond}
 
 		err := p.Set(context.Background(), "db-password", "x")
 		requireStoreUnavailable(t, err)
