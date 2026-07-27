@@ -114,6 +114,10 @@ jobs:
             database: redis
             version: 7.0.0
             instancetype: TLS
+          - storagetype: kv
+            database: none
+            version: none
+            instancetype: none
           # Hermetic IAM auth unit tests (root-level iamauth/ pkgs) — no infra.
           # These live outside ./temporal and ./persistent, so without this row
           # they run in no CI job at all.

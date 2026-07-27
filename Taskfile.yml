@@ -63,6 +63,14 @@ tasks:
       - mkdir -p coverage/temporal
       - cp temporal/*.cov coverage/temporal/
 
+  test-kv:
+    desc: "Run tests for kv storage"
+    cmds:
+      - task: run-tests
+        vars:
+          STORAGE_TYPE: kv
+          DB: "none"
+
   test-iamauth:
     desc: "Run hermetic IAM auth unit tests (provider selection + GCP token minting against fake endpoints; no external infra)"
     cmds:
