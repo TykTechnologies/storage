@@ -10,12 +10,16 @@ tasks:
     desc: "Run Go tests for temporal storage"
     cmds:
       - |
+        # -covermode=atomic keeps these profiles mode-consistent with the rest
+        # of the suite (persistent + iamauth run with -race, which is atomic), so
+        # gocovmerge can merge them for SonarCloud instead of failing on
+        # "cannot merge profiles with different modes".
         if [ "{{.DB_SETUP}}" = "cluster" ]; then
-          TEST_REDIS_ADDRS=localhost:7000 TEST_ENABLE_CLUSTER=true go test -p 1 -v -coverprofile=temporal-cluster.cov -cover -coverpkg=./... ./...
+          TEST_REDIS_ADDRS=localhost:7000 TEST_ENABLE_CLUSTER=true go test -p 1 -v -covermode=atomic -coverprofile=temporal-cluster.cov -cover -coverpkg=./... ./...
         elif [ "{{.DB_SETUP}}" = "TLS" ]; then
-          TEST_ENABLE_TLS=true TEST_TLS_CERT_FILE=$(pwd)/../bin/redis_TLS/cert.pem TEST_TLS_KEY_FILE=$(pwd)/../bin/redis_TLS/key.pem TEST_TLS_CA_FILE=$(pwd)/../bin/redis_TLS/cert.pem TEST_TLS_INSECURE_SKIP_VERIFY=true go test -p 1 -v -coverprofile=temporal-tls.cov -cover -coverpkg=./... ./...
+          TEST_ENABLE_TLS=true TEST_TLS_CERT_FILE=$(pwd)/../bin/redis_TLS/cert.pem TEST_TLS_KEY_FILE=$(pwd)/../bin/redis_TLS/key.pem TEST_TLS_CA_FILE=$(pwd)/../bin/redis_TLS/cert.pem TEST_TLS_INSECURE_SKIP_VERIFY=true go test -p 1 -v -covermode=atomic -coverprofile=temporal-tls.cov -cover -coverpkg=./... ./...
         else
-          go test -p 1 -v -coverprofile=temporal-standalone.cov -cover -coverpkg=./... ./...
+          go test -p 1 -v -covermode=atomic -coverprofile=temporal-standalone.cov -cover -coverpkg=./... ./...
         fi
 
         test_exit_status=$?
@@ -38,4 +42,4 @@ tasks:
     status:
       - type mockery
     cmds:
-      - go install github.com/vektra/mockery/v2@v2.38.0
+      - go install github.com/vektra/mockery/v2@v2.53.6
