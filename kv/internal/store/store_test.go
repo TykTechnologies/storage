@@ -82,7 +82,7 @@ func TestNewSecretStore(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.NotNil(t, store)
-		require.Equal(t, defaultProviderTimeout, store.timeout)
+		require.Equal(t, kv.DefaultOperationTimeout, store.timeout)
 	})
 
 	t.Run("cache disabled", func(t *testing.T) {

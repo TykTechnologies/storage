@@ -48,6 +48,18 @@ func TestConnectors(t *testing.T) []model.Connector {
 	return connectors
 }
 
+// IsClusterMode reports whether the temporal tests are running against a Redis
+// Cluster (TEST_ENABLE_CLUSTER=true) rather than a single node.
+//
+// It exists so tests can account for cluster-only semantics. Notably, PUBLISH's
+// reply counts only subscribers connected to the same node as the publisher;
+// go-redis v9.11+ treats PUBLISH as keyless and routes it to a random node
+// (while subscribers bind to the channel's slot node), so with subscribers
+// present that count is non-deterministic even though delivery is unaffected.
+func IsClusterMode() bool {
+	return os.Getenv("TEST_ENABLE_CLUSTER") == "true"
+}
+
 func newRedisConnector(t *testing.T) model.Connector {
 	t.Helper()
 
@@ -62,13 +74,9 @@ func newRedisConnector(t *testing.T) model.Connector {
 
 	addrs = append(addrs, addrsEnv)
 
-	enableCluster := false
-	enableClusterEnv := os.Getenv("TEST_ENABLE_CLUSTER")
-
-	if enableClusterEnv == "true" {
+	enableCluster := IsClusterMode()
+	if enableCluster {
 		log.Println("TEST_ENABLE_CLUSTER is set, using cluster mode")
-
-		enableCluster = true
 	}
 
 	var tlsConfig *model.TLS

@@ -42,6 +42,10 @@ const (
 	Conjur ProviderType = "cyberark_conjur"
 )
 
+// DefaultOperationTimeout bounds a single provider Get/Set when neither the store
+// config nor the SecretStore wrapper supplies one.
+const DefaultOperationTimeout = 5 * time.Second
+
 // IsLocal reports whether this provider type resolves secrets from resources
 // available to the local process — environment variables, inline config data,
 // or the filesystem — requiring no network and a literal, reference-free config.
@@ -114,9 +118,9 @@ type Closer interface {
 	Close(ctx context.Context) error
 }
 
-// Standalone is an optional interface for providers that do not need
+// Standaloner is an optional interface for providers that do not need
 // to be combined with caching or singleflight mechanisms.
-type Standalone interface {
+type Standaloner interface {
 	IsStandalone() bool
 }
 
@@ -144,9 +148,9 @@ func AsCloser(p Provider) (Closer, bool) {
 	return As[Closer](p)
 }
 
-// AsStandalone attempts to extract a Standalone from a Provider.
-func AsStandalone(p Provider) (Standalone, bool) {
-	return As[Standalone](p)
+// AsStandaloner attempts to extract a Standaloner from a Provider.
+func AsStandaloner(p Provider) (Standaloner, bool) {
+	return As[Standaloner](p)
 }
 
 // AsTimeouter attempts to extract a Timeouter from a Provider.
@@ -178,4 +182,14 @@ func As[T any](p Provider) (T, bool) {
 	}
 
 	return zero, false
+}
+
+// EffectiveTimeout resolves a configured timeout to the value actually used:
+// the configured value when positive, else the default.
+func EffectiveTimeout(configured time.Duration) time.Duration {
+	if configured > 0 {
+		return configured
+	}
+
+	return DefaultOperationTimeout
 }

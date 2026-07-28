@@ -238,12 +238,12 @@ func TestProvider_TimeoutUnsetReportsZero(t *testing.T) {
 	require.Zero(t, to.Timeout(), "an unset timeout must report 0 so the store applies its own default")
 }
 
-func TestProvider_IsNotStandalone(t *testing.T) {
+func TestProvider_IsNotStandaloner(t *testing.T) {
 	p := newVaultProvider(t, &vault.Config{Token: "root"})
 
 	// Vault is remote and must be wrapped in the registry's cache/singleflight
-	// decorator, so it must NOT report itself standalone.
-	s, ok := kv.AsStandalone(p)
+	// decorator, so it must NOT report itself standaloner.
+	s, ok := kv.AsStandaloner(p)
 	require.False(t, ok && s.IsStandalone(),
 		"vault must not be standalone (the registry must wrap it in the cache)")
 }

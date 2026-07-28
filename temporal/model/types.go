@@ -58,6 +58,9 @@ type KeyValue interface {
 	// SetIfNotExist sets the string value of a key if the key does not exist.
 	// Returns true if the key was set, false otherwise.
 	SetIfNotExist(ctx context.Context, key, value string, expiration time.Duration) (bool, error)
+	// SetIfExist sets the string value of a key if the key exists.
+	// Returns true if the key was set, false otherwise.
+	SetIfExist(ctx context.Context, key, value string, expiration time.Duration) (bool, error)
 	// Delete removes the specified keys
 	Delete(ctx context.Context, key string) error
 	// Increment atomically increments the integer value of a key by one
