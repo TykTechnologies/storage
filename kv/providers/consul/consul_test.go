@@ -279,10 +279,10 @@ func TestNewFactory_InvalidTLSCAFileErrors(t *testing.T) {
 	require.ErrorContains(t, err, "consul")
 }
 
-func TestProvider_IsNotStandalone(t *testing.T) {
+func TestProvider_IsNotStandaloner(t *testing.T) {
 	p := newConsulProvider(t, &consul.Config{})
 
-	s, ok := kv.AsStandalone(p)
+	s, ok := kv.AsStandaloner(p)
 	require.False(t, ok && s.IsStandalone(),
 		"consul must not be standalone (the registry must wrap it in the cache)")
 }

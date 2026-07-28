@@ -63,12 +63,12 @@ func TestNewFactory(t *testing.T) {
 	})
 }
 
-func TestProviderIsStandalone(t *testing.T) {
+func TestProviderIsStandaloner(t *testing.T) {
 	t.Parallel()
 
 	p := newProvider(t, "")
 
-	standalone, ok := kv.AsStandalone(p)
+	standalone, ok := kv.AsStandaloner(p)
 	require.True(t, ok, "file provider must implement Standalone")
 	require.True(t, standalone.IsStandalone(),
 		"file reads are cheap and must reflect rotation immediately — no cache wrapper")

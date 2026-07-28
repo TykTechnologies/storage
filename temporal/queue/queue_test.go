@@ -148,6 +148,17 @@ func TestQueue_Publish(t *testing.T) {
 				}
 
 				assert.Nil(t, err)
+
+				// In Redis Cluster, PUBLISH's reply counts only subscribers on
+				// the publisher's own node. go-redis v9.11+ treats PUBLISH as
+				// keyless and routes it to a random node, while subscribers bind
+				// to the channel's slot node — so with subscribers present the
+				// returned count is non-deterministic. Delivery is unaffected and
+				// is covered by TestQueue_Subscribe. Zero-subscriber publishes
+				// still deterministically return 0, so those keep the exact check.
+				if testutil.IsClusterMode() && tc.wantResult > 0 {
+					return
+				}
 				assert.Equal(t, tc.wantResult, result)
 			})
 		}

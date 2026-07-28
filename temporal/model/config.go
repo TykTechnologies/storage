@@ -10,7 +10,17 @@ type BaseConfig struct {
 	RetryConfig *RetryOptions
 	OnConnect   func(context.Context) error
 	TLS         *TLS
+	// CredentialsProvider, when set, supplies the username and password for each
+	// new connection instead of the static RedisConfig.Username/Password. It is
+	// used for short-lived, rotating credentials such as cloud IAM auth tokens
+	// (e.g. GCP Memorystore for Valkey, AWS ElastiCache).
+	CredentialsProvider CredentialsProviderFunc
 }
+
+// CredentialsProviderFunc returns the username and password to authenticate a
+// Redis connection. It is invoked by the driver on each new connection, allowing
+// callers to supply rotating credentials such as cloud IAM tokens.
+type CredentialsProviderFunc func(ctx context.Context) (username, password string, err error)
 
 // RedisOptions contains options specific to Redis storage.
 type RedisOptions struct {

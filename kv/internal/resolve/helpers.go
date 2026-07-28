@@ -18,6 +18,15 @@ func extractJSONPointer(raw, fragment string) (string, error) {
 		return "", fmt.Errorf("%w: %w", ErrInvalidJSON, err)
 	}
 
+	node, err := walkJSONPointer(doc, fragment)
+	if err != nil {
+		return "", err
+	}
+
+	return stringifyLeaf(node)
+}
+
+func walkJSONPointer(doc any, fragment string) (any, error) {
 	// Normalize fragment with leading "/"
 	if !strings.HasPrefix(fragment, "/") {
 		fragment = "/" + fragment
@@ -33,29 +42,42 @@ func extractJSONPointer(raw, fragment string) (string, error) {
 		seg = strings.ReplaceAll(seg, "~1", "/")
 		seg = strings.ReplaceAll(seg, "~0", "~")
 
-		switch v := current.(type) {
-		case map[string]any:
-			val, ok := v[seg]
-			if !ok {
-				return "", fieldNotFoundError(seg)
-			}
-
-			current = val
-
-		case []any:
-			idx, err := strconv.Atoi(seg)
-			if err != nil || idx < 0 || idx >= len(v) {
-				return "", fieldNotFoundError(seg)
-			}
-
-			current = v[idx]
-
-		default:
-			return "", fieldNotFoundError(seg)
+		next, err := pointerChild(current, seg)
+		if err != nil {
+			return nil, err
 		}
+
+		current = next
 	}
 
-	switch v := current.(type) {
+	return current, nil
+}
+
+func pointerChild(node any, seg string) (any, error) {
+	switch v := node.(type) {
+	case map[string]any:
+		val, ok := v[seg]
+		if !ok {
+			return nil, fieldNotFoundError(seg)
+		}
+
+		return val, nil
+
+	case []any:
+		idx, err := strconv.Atoi(seg)
+		if err != nil || idx < 0 || idx >= len(v) {
+			return nil, fieldNotFoundError(seg)
+		}
+
+		return v[idx], nil
+
+	default:
+		return nil, fieldNotFoundError(seg)
+	}
+}
+
+func stringifyLeaf(node any) (string, error) {
+	switch v := node.(type) {
 	case string:
 		return v, nil
 	case json.Number:

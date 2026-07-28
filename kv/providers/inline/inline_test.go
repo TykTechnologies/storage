@@ -59,7 +59,7 @@ func TestProviderIsStandalone(t *testing.T) {
 
 	p := newProvider(t, inline.Config{})
 
-	standalone, ok := kv.AsStandalone(p)
+	standalone, ok := kv.AsStandaloner(p)
 	require.True(t, ok, "inline provider must implement Standalone")
 	require.True(t, standalone.IsStandalone(),
 		"inline data is in-memory and literal — no cache wrapper")
