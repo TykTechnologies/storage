@@ -203,10 +203,10 @@ func TestProvider_Capabilities(t *testing.T) {
 		require.True(t, ok)
 	})
 
-	t.Run("is not standalone, so the registry wraps it in the caching store", func(t *testing.T) {
+	t.Run("is not standaloner, so the registry wraps it in the caching store", func(t *testing.T) {
 		t.Parallel()
 
-		_, ok := kv.AsStandalone(p)
+		_, ok := kv.AsStandaloner(p)
 		require.False(t, ok)
 	})
 

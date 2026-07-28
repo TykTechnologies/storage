@@ -52,41 +52,36 @@ var inlineRe = regexp.MustCompile(`\$kv\{([^}]+)\}`)
 
 func (r *Resolver) Resolve(ctx context.Context, input string) (string, error) {
 	if strings.HasPrefix(input, "kv://") {
-		trimmed := strings.TrimPrefix(input, "kv://")
-
-		slashIdx := strings.IndexByte(trimmed, '/')
-		if slashIdx < 0 {
-			return "", fmt.Errorf(
-				"%w: missing path separator in %q",
-				ErrMalformedReference,
-				input,
-			)
-		}
-
-		storeName := trimmed[:slashIdx]
-		rest := trimmed[slashIdx+1:]
-		path, fragment, _ := strings.Cut(rest, "#")
-
-		if storeName == "" || path == "" {
-			return "", fmt.Errorf(
-				"%w: empty store name or path in %q",
-				ErrMalformedReference,
-				input,
-			)
-		}
-
-		res, err := r.fetchAndExtract(ctx, storeName, path, fragment)
-		if r.lenient && errors.Is(err, kv.ErrStoreNotFound) {
-			return input, nil
-		}
-
-		return res, err
+		return r.resolveURI(ctx, input)
 	}
 
+	return r.resolveInline(ctx, input)
+}
+
+// resolveURI resolves a whole-value "kv://store/path#fragment" reference.
+func (r *Resolver) resolveURI(ctx context.Context, input string) (string, error) {
+	body := strings.TrimPrefix(input, "kv://")
+
+	storeName, path, fragment, err := parseReference(body, '/', input)
+	if err != nil {
+		return "", err
+	}
+
+	res, err := r.fetchAndExtract(ctx, storeName, path, fragment)
+	if r.lenient && errors.Is(err, kv.ErrStoreNotFound) {
+		return input, nil
+	}
+
+	return res, err
+}
+
+// resolveInline resolves every embedded "$kv{store:path#fragment}" token in a
+// larger string, accumulating errors so a single call reports all failures.
+func (r *Resolver) resolveInline(ctx context.Context, input string) (string, error) {
 	// The token regex requires a closing brace, so an unclosed "$kv{" can
 	// never match — without this check a typo'd reference would silently pass
 	// through as a literal value.
-	if idx := unclosedInlineToken(input); idx >= 0 {
+	if unclosedInlineToken(input) >= 0 {
 		return "", fmt.Errorf(
 			"%w: unclosed $kv{ reference in %q",
 			ErrMalformedReference,
@@ -95,44 +90,11 @@ func (r *Resolver) Resolve(ctx context.Context, input string) (string, error) {
 	}
 
 	var resolveErrs []error
+
 	result := inlineRe.ReplaceAllStringFunc(input, func(match string) string {
-		// strip "$kv{" prefix and "}" suffix
-		inner := match[4 : len(match)-1]
-
-		colonIdx := strings.IndexByte(inner, ':')
-		if colonIdx < 0 {
-			resolveErrs = append(resolveErrs, fmt.Errorf(
-				"%w: missing store separator in %q",
-				ErrMalformedReference,
-				match,
-			))
-
-			return match
-		}
-
-		storeName := inner[:colonIdx]
-		rest := inner[colonIdx+1:]
-		path, fragment, _ := strings.Cut(rest, "#")
-
-		if storeName == "" || path == "" {
-			resolveErrs = append(resolveErrs, fmt.Errorf(
-				"%w: empty store name or path in %q",
-				ErrMalformedReference,
-				match,
-			))
-
-			return match
-		}
-
-		val, err := r.fetchAndExtract(ctx, storeName, path, fragment)
+		val, err := r.resolveInlineToken(ctx, match)
 		if err != nil {
-			if r.lenient && errors.Is(err, kv.ErrStoreNotFound) {
-				return match
-			}
-
 			resolveErrs = append(resolveErrs, err)
-
-			return match
 		}
 
 		return val
@@ -143,6 +105,53 @@ func (r *Resolver) Resolve(ctx context.Context, input string) (string, error) {
 	}
 
 	return result, nil
+}
+
+func (r *Resolver) resolveInlineToken(ctx context.Context, match string) (string, error) {
+	// strip "$kv{" prefix and "}" suffix
+	inner := match[4 : len(match)-1]
+
+	storeName, path, fragment, err := parseReference(inner, ':', match)
+	if err != nil {
+		return match, err
+	}
+
+	val, err := r.fetchAndExtract(ctx, storeName, path, fragment)
+	if err != nil {
+		if r.lenient && errors.Is(err, kv.ErrStoreNotFound) {
+			return match, nil
+		}
+
+		return match, err
+	}
+
+	return val, nil
+}
+
+// parseReference splits "store<sep>path#fragment" into its parts. raw is the
+// original reference text, used only for error messages.
+func parseReference(body string, sep byte, raw string) (storeName, path, fragment string, err error) {
+	sepIdx := strings.IndexByte(body, sep)
+	if sepIdx < 0 {
+		return "", "", "", fmt.Errorf(
+			"%w: missing store/path separator in %q",
+			ErrMalformedReference,
+			raw,
+		)
+	}
+
+	storeName = body[:sepIdx]
+	path, fragment, _ = strings.Cut(body[sepIdx+1:], "#")
+
+	if storeName == "" || path == "" {
+		return "", "", "", fmt.Errorf(
+			"%w: empty store name or path in %q",
+			ErrMalformedReference,
+			raw,
+		)
+	}
+
+	return storeName, path, fragment, nil
 }
 
 func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, error) {
