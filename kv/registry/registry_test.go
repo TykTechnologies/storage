@@ -48,21 +48,21 @@ func (m *mockProvider) IsStandalone() bool {
 }
 
 type mockLogger struct {
-	debugCalls int
-	warnCalls  int
-	errorCalls int
+	debugCalls atomic.Int32
+	warnCalls  atomic.Int32
+	errorCalls atomic.Int32
 }
 
 func (l *mockLogger) Debug(_ string, _ map[string]any) {
-	l.debugCalls++
+	l.debugCalls.Add(1)
 }
 
 func (l *mockLogger) Warn(_ string, _ map[string]any) {
-	l.warnCalls++
+	l.warnCalls.Add(1)
 }
 
 func (l *mockLogger) Error(_ string, _ map[string]any) {
-	l.errorCalls++
+	l.errorCalls.Add(1)
 }
 
 func newFactory(initFunc, closeFunc func(ctx context.Context) error) kv.ProviderFactory {
@@ -83,7 +83,16 @@ func TestNewRegistry(t *testing.T) {
 	require.NotNil(t, registry.factories)
 }
 
-func TestNewDefaultRegistry(t *testing.T) {}
+func TestNewDefaultRegistry(t *testing.T) {
+	r := NewDefaultRegistry()
+
+	require.NotNil(t, r)
+	require.NotEmpty(t, r.factories[kv.File])
+	require.NotEmpty(t, r.factories[kv.Env])
+	require.NotEmpty(t, r.factories[kv.Inline])
+	require.NotEmpty(t, r.factories[kv.Vault])
+	require.NotEmpty(t, r.factories[kv.Consul])
+}
 
 func TestAddFactory(t *testing.T) {
 	t.Parallel()
@@ -332,7 +341,7 @@ func TestInitStores_EdgeCases(t *testing.T) {
 				},
 			})
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "failed to initialize store")
+			require.Contains(t, err.Error(), "initialize store")
 
 			if validInitialized {
 				require.True(
@@ -363,7 +372,7 @@ func TestInitStores_EdgeCases(t *testing.T) {
 			},
 		})
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to wrap store")
+		require.Contains(t, err.Error(), `secret store "valid-1"`)
 		require.False(t, r.isInitialized.Load())
 	})
 
@@ -384,7 +393,7 @@ func TestInitStores_EdgeCases(t *testing.T) {
 			},
 		})
 		require.NoError(t, err)
-		require.Equal(t, 1, l.warnCalls)
+		require.Equal(t, int32(1), l.warnCalls.Load())
 	})
 
 	t.Run("should skip secret store wrapping if provider is standalone", func(t *testing.T) {

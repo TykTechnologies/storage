@@ -10,6 +10,11 @@ import (
 
 	"github.com/TykTechnologies/storage/kv"
 	"github.com/TykTechnologies/storage/kv/internal/store"
+	"github.com/TykTechnologies/storage/kv/providers/consul"
+	"github.com/TykTechnologies/storage/kv/providers/env"
+	"github.com/TykTechnologies/storage/kv/providers/file"
+	"github.com/TykTechnologies/storage/kv/providers/inline"
+	"github.com/TykTechnologies/storage/kv/providers/vault"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -29,6 +34,7 @@ type Registry struct {
 
 type Option func(r *Registry)
 
+// WithLogger sets the logger the registry emits warnings.
 func WithLogger(l kv.Logger) Option {
 	return func(r *Registry) {
 		if l != nil {
@@ -55,6 +61,41 @@ func NewRegistry(opts ...Option) *Registry {
 // NewDefaultRegistry creates a registry with added OSS providers.
 func NewDefaultRegistry(opts ...Option) *Registry {
 	r := NewRegistry(opts...)
+
+	err := r.Add(kv.File, file.NewFactory())
+	if err != nil {
+		r.logger.Warn("Failed to add default file factory", map[string]any{
+			"error": err,
+		})
+	}
+
+	err = r.Add(kv.Env, env.NewFactory())
+	if err != nil {
+		r.logger.Warn("Failed to add default env factory", map[string]any{
+			"error": err,
+		})
+	}
+
+	err = r.Add(kv.Inline, inline.NewFactory())
+	if err != nil {
+		r.logger.Warn("Failed to add default inline factory", map[string]any{
+			"error": err,
+		})
+	}
+
+	err = r.Add(kv.Vault, vault.NewFactory())
+	if err != nil {
+		r.logger.Warn("Failed to add default vault factory", map[string]any{
+			"error": err,
+		})
+	}
+
+	err = r.Add(kv.Consul, consul.NewFactory())
+	if err != nil {
+		r.logger.Warn("Failed to add default consul factory", map[string]any{
+			"error": err,
+		})
+	}
 
 	return r
 }
@@ -230,6 +271,24 @@ func (r *Registry) commitStores(tempStores map[string]kv.Provider) error {
 	return nil
 }
 
+// set registers a factory, replacing any existing one. Unline Add, it permits
+// override - used by the composition layer so WithFactories wins over OSS defaults.
+func (r *Registry) set(pt kv.ProviderType, factory kv.ProviderFactory) error {
+	if pt == "" {
+		return errors.New("provider type cannot be empty")
+	}
+
+	if factory == nil {
+		return errors.New("factory cannot be nil")
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.factories[pt] = factory
+
+	return nil
+}
+
 // closeStores closes any store that implements Closer, using a cancellation-free
 // context so cleanup runs even when the original context is already done.
 func closeStores(ctx context.Context, stores map[string]kv.Provider) {
@@ -275,7 +334,7 @@ func (r *Registry) Close(ctx context.Context) error {
 			if closer, ok := kv.AsCloser(store); ok {
 				if err := closer.Close(ctx); err != nil {
 					mu.Lock()
-					errs = append(errs, fmt.Errorf("failed to close store %q: %w", name, err))
+					errs = append(errs, fmt.Errorf("close store %q: %w", name, err))
 					mu.Unlock()
 				}
 			}
@@ -296,13 +355,13 @@ func buildSingleStore(
 ) (kv.Provider, error) {
 	provider, err := factory(storeCfg.Config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create provider %q (type: %s): %w", name, storeCfg.Type, err)
+		return nil, fmt.Errorf("create provider for %q store: %w", name, err)
 	}
 
 	if initializer, ok := kv.AsInitializer(provider); ok {
 		err := initializer.Init(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to initialize store %q (type: %s): %w", name, storeCfg.Type, err)
+			return nil, fmt.Errorf("initialize store %q: %w", name, err)
 		}
 	}
 
@@ -322,7 +381,7 @@ func buildSingleStore(
 		store.WithTimeout(timeout),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to wrap store %q: %w", name, err)
+		return nil, err
 	}
 
 	return ss, nil

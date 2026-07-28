@@ -18,14 +18,14 @@ const (
 	// Inline resolves secrets from plain text in the configuration.
 	Inline ProviderType = "inline"
 
+	// File resolves secrets from files on the local filesystem.
+	File ProviderType = "file"
+
 	// Vault resolves secrets from HashiCorp Vault.
 	Vault ProviderType = "hashicorp_vault"
 
 	// Consul resolves secrets from HashiCorp Consul.
 	Consul ProviderType = "hashicorp_consul"
-
-	// K8s resolves secrets from Kubernetes Secrets mounted as files.
-	K8s ProviderType = "k8s_files"
 
 	// --- Enterprise Edition (EE) Providers ---
 
@@ -41,6 +41,22 @@ const (
 	// Conjur resolves secrets from CyberArk Conjur.
 	Conjur ProviderType = "cyberark_conjur"
 )
+
+// DefaultOperationTimeout bounds a single provider Get/Set when neither the store
+// config nor the SecretStore wrapper supplies one.
+const DefaultOperationTimeout = 5 * time.Second
+
+// IsLocal reports whether this provider type resolves secrets from resources
+// available to the local process — environment variables, inline config data,
+// or the filesystem — requiring no network and a literal, reference-free config.
+func (t ProviderType) IsLocal() bool {
+	switch t {
+	case Env, Inline, File:
+		return true
+	default:
+		return false
+	}
+}
 
 // KeyValueRetriever defines the core read capability for retrieving values by key.
 type KeyValueRetriever interface {
@@ -69,6 +85,18 @@ type StoreGetter interface {
 //
 // The factory pattern allows the registry to create providers dynamically
 // without compile-time dependencies on specific provider implementations.
+//
+// Config validation convention. A factory returns an error only for config that
+// is present but invalid — a value that can never produce correct behavior
+// (malformed JSON, or a security-critical field set to an unusable value, e.g.
+// a relative path where an absolute one is required). It must NOT error for
+// merely-absent optional config: an unset value is a valid state, so the factory
+// builds a provider that runs in its default or disabled mode (e.g. an env
+// provider with no prefix, or a file provider with no base_path that then
+// rejects every Get). Whether to create a store at all for an unconfigured
+// feature is the caller's decision, not the factory's. The effect: configuration
+// mistakes surface once, at construction, while unused features stay quiet
+// instead of failing on every Get.
 type ProviderFactory func(config json.RawMessage) (Provider, error)
 
 // Initializer is an optional interface for providers that require network
@@ -154,4 +182,14 @@ func As[T any](p Provider) (T, bool) {
 	}
 
 	return zero, false
+}
+
+// EffectiveTimeout resolves a configured timeout to the value actually used:
+// the configured value when positive, else the default.
+func EffectiveTimeout(configured time.Duration) time.Duration {
+	if configured > 0 {
+		return configured
+	}
+
+	return DefaultOperationTimeout
 }

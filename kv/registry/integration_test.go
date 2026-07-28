@@ -1,0 +1,447 @@
+package registry_test
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"sync/atomic"
+	"testing"
+
+	"github.com/TykTechnologies/storage/kv"
+	"github.com/TykTechnologies/storage/kv/providers/env"
+	"github.com/TykTechnologies/storage/kv/registry"
+	"github.com/TykTechnologies/storage/kv/resolver"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func promotedDefaults(t *testing.T, basePath string, secrets map[string]string) map[string]kv.StoreConfig {
+	t.Helper()
+
+	envCfg, err := json.Marshal(map[string]any{"prefix": "TYK_SECRET_", "uppercase": true})
+	require.NoError(t, err)
+
+	stores := map[string]kv.StoreConfig{
+		"env": {Type: kv.Env, Config: envCfg},
+	}
+
+	if basePath != "" {
+		fileCfg, err := json.Marshal(map[string]any{"base_path": basePath})
+		require.NoError(t, err)
+
+		stores["file"] = kv.StoreConfig{Type: kv.File, Config: fileCfg}
+	}
+
+	if secrets != nil {
+		inlineCfg, err := json.Marshal(map[string]any{"data": secrets})
+		require.NoError(t, err)
+
+		stores["secrets"] = kv.StoreConfig{Type: kv.Inline, Config: inlineCfg}
+	}
+
+	return stores
+}
+
+func clearVaultEnv(t *testing.T) {
+	t.Helper()
+
+	for _, k := range []string{
+		"VAULT_ADDR", "VAULT_AGENT_ADDR", "VAULT_TOKEN",
+		"VAULT_CACERT", "VAULT_CAPATH", "VAULT_CLIENT_CERT",
+		"VAULT_CLIENT_KEY", "VAULT_SKIP_VERIFY", "VAULT_TLS_SERVER_NAME",
+	} {
+		t.Setenv(k, "")
+	}
+}
+
+func clearConsulEnv(t *testing.T) {
+	t.Helper()
+
+	for _, k := range []string{
+		"CONSUL_HTTP_ADDR", "CONSUL_HTTP_TOKEN", "CONSUL_HTTP_TOKEN_FILE",
+		"CONSUL_HTTP_AUTH", "CONSUL_HTTP_SSL", "CONSUL_HTTP_SSL_VERIFY",
+		"CONSUL_CACERT", "CONSUL_CAPATH", "CONSUL_CLIENT_CERT",
+		"CONSUL_CLIENT_KEY", "CONSUL_TLS_SERVER_NAME", "CONSUL_NAMESPACE",
+	} {
+		t.Setenv(k, "")
+	}
+}
+
+func consulKVResponse(w http.ResponseWriter, key, value string) {
+	w.Header().Set("Content-Type", "application/json")
+
+	//nolint:errcheck
+	_ = json.NewEncoder(w).Encode([]struct {
+		Key   string `json:"Key"`
+		Value []byte `json:"Value"`
+	}{
+		{Key: key, Value: []byte(value)},
+	})
+}
+
+func consulAddr(url string) string {
+	return url[len("http://"):]
+}
+
+// TestIntegrationResolveAllLocalProviders resolves a whole config document that
+// mixes every local provider, both reference syntaxes, and a JSON-pointer
+// fragment — proving the providers cooperate through the resolver exactly as the
+// caller expects.
+func TestIntegrationResolveAllLocalProviders(t *testing.T) {
+	t.Setenv("TYK_SECRET_DB_PASSWORD", "s3cret")
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "tls.crt"), []byte("CERTDATA\n"), 0o600))
+
+	secrets := map[string]string{
+		"api_key": "inline-key",
+		"blob":    `{"user":"admin","pass":"pw"}`,
+	}
+
+	reg := newRegistry(t, nil, registry.WithDefaultStores(promotedDefaults(t, dir, secrets)))
+	res := resolver.NewResolver(reg)
+
+	doc := []byte(`{
+		"db_password": "kv://env/db_password",
+		"api_key":     "kv://secrets/api_key",
+		"cert":        "kv://file/tls.crt",
+		"url":         "https://$kv{secrets:blob#user}.example.com",
+		"admin_pass":  "kv://secrets/blob#pass",
+		"missing_env": "kv://env/NOT_SET_ANYWHERE"
+	}`)
+
+	out, err := res.ResolveAll(t.Context(), doc)
+	require.NoError(t, err)
+
+	var got struct {
+		DBPassword string `json:"db_password"`
+		APIKey     string `json:"api_key"`
+		Cert       string `json:"cert"`
+		URL        string `json:"url"`
+		AdminPass  string `json:"admin_pass"`
+		MissingEnv string `json:"missing_env"`
+	}
+	require.NoError(t, json.Unmarshal(out, &got))
+
+	assert.Equal(t, "s3cret", got.DBPassword, "env: TYK_SECRET_ prefix + uppercase")
+	assert.Equal(t, "inline-key", got.APIKey, "inline: whole-value lookup")
+	assert.Equal(t, "CERTDATA", got.Cert, "file: read with trailing newline trimmed")
+	assert.Equal(t, "https://admin.example.com", got.URL, "inline + $kv{} inline token + #fragment")
+	assert.Equal(t, "pw", got.AdminPass, "inline: kv:// whole-value with #fragment")
+	assert.Equal(t, "", got.MissingEnv, "env: missing variable resolves to empty, no error")
+}
+
+func TestIntegrationInlineMissingKeyIsFatal(t *testing.T) {
+	t.Parallel()
+
+	reg := newRegistry(t, nil, registry.WithDefaultStores(
+		promotedDefaults(t, "", map[string]string{"present": "v"}),
+	))
+	res := resolver.NewResolver(reg)
+
+	_, err := res.Resolve(t.Context(), "kv://secrets/absent")
+
+	var notFound *kv.KeyNotFoundError
+	require.ErrorAs(t, err, &notFound)
+	assert.Equal(t, "absent", notFound.KeyPath)
+}
+
+func TestIntegrationEnvMissingKeyIsNotFatal(t *testing.T) {
+	t.Parallel()
+
+	reg := newRegistry(t, nil, registry.WithDefaultStores(promotedDefaults(t, "", nil)))
+	res := resolver.NewResolver(reg)
+
+	got, err := res.Resolve(t.Context(), "kv://env/UNSET_OPTIONAL_SECRET")
+	require.NoError(t, err)
+	assert.Equal(t, "", got)
+}
+
+func TestIntegrationPhase1ResolvesRemoteTokenFromRealEnv(t *testing.T) {
+	t.Setenv("TYK_SECRET_VAULT_TOKEN", "hvs.real")
+
+	doc := []byte(`{
+		"kv": {
+			"stores": {
+				"vault": {"type": "hashicorp_vault", "config": {"token": "kv://env/VAULT_TOKEN"}}
+			}
+		}
+	}`)
+
+	rec := &configRecorder{}
+	reg := newRegistry(t, doc,
+		registry.WithDefaultStores(promotedDefaults(t, "", nil)),
+		registry.WithFactories(map[kv.ProviderType]kv.ProviderFactory{
+			kv.Vault: recordingFactory(rec, &fakeProvider{}, nil),
+		}),
+	)
+
+	_, err := reg.GetStore("vault")
+	require.NoError(t, err)
+	assert.Equal(t, "hvs.real", tokenOf(t, rec.single(t)),
+		"real env provider must resolve the vault token in Phase 1")
+}
+
+func TestIntegrationEnvEmptyPrefixRejectedThroughStack(t *testing.T) {
+	t.Parallel()
+
+	openEnv, err := json.Marshal(map[string]any{"prefix": "", "uppercase": true})
+	require.NoError(t, err)
+
+	reg := newRegistry(t, nil, registry.WithDefaultStores(map[string]kv.StoreConfig{
+		"openenv": {Type: kv.Env, Config: openEnv},
+	}))
+	res := resolver.NewResolver(reg)
+
+	_, err = res.Resolve(t.Context(), "kv://openenv/PATH")
+	require.ErrorIs(t, err, env.ErrPrefixRequired)
+}
+
+func TestIntegrationVaultProviderResolvesThroughDefaultRegistry(t *testing.T) {
+	clearVaultEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// KV v2 envelope: {"data": {"data": <secret>, "metadata": {...}}}.
+		//nolint:errcheck
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"data":     map[string]any{"password": "s3cr3t"},
+				"metadata": map[string]any{"version": 1},
+			},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	doc := []byte(fmt.Sprintf(`{
+		"kv": {
+			"stores": {
+				"vault": {
+					"type": "hashicorp_vault",
+					"required": true,
+					"config": {"address": %q, "token": "root", "kv_version": 2}
+				}
+			}
+		}
+	}`, srv.URL))
+
+	reg := newRegistry(t, doc)
+	res := resolver.NewResolver(reg)
+
+	got, err := res.Resolve(t.Context(), "kv://vault/secret/myapp#password")
+	require.NoError(t, err)
+	assert.Equal(t, "s3cr3t", got)
+}
+
+func TestIntegrationVaultStoreServesRepeatedReadsFromCache(t *testing.T) {
+	clearVaultEnv(t)
+
+	var hits atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+
+		w.Header().Set("Content-Type", "application/json")
+		//nolint:errcheck
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"data":     map[string]any{"password": "s3cr3t"},
+				"metadata": map[string]any{"version": 1},
+			},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	doc := []byte(fmt.Sprintf(`{
+		"kv": {
+			"cache": {"enabled": true, "ttl": "1m"},
+			"stores": {
+				"vault": {
+					"type": "hashicorp_vault",
+					"required": true,
+					"config": {"address": %q, "token": "root", "kv_version": 2}
+				}
+			}
+		}
+	}`, srv.URL))
+
+	reg := newRegistry(t, doc)
+	res := resolver.NewResolver(reg)
+
+	for range 3 {
+		got, err := res.Resolve(t.Context(), "kv://vault/secret/myapp#password")
+		require.NoError(t, err)
+		assert.Equal(t, "s3cr3t", got)
+	}
+
+	assert.Equal(t, int32(1), hits.Load(),
+		"3 resolves of the same key must hit the vault backend only once (SecretStore cache)")
+}
+
+func TestIntegrationConsulProviderResolvesThroughDefaultRegistry(t *testing.T) {
+	clearConsulEnv(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		consulKVResponse(w, "services/redis", `{"host":"cache01","port":"6379"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	doc := []byte(fmt.Sprintf(`{
+		"kv": {
+			"stores": {
+				"consul": {
+					"type": "hashicorp_consul",
+					"required": true,
+					"config": {"address": %q}
+				}
+			}
+		}
+	}`, consulAddr(srv.URL)))
+
+	reg := newRegistry(t, doc)
+	res := resolver.NewResolver(reg)
+
+	whole, err := res.Resolve(t.Context(), "kv://consul/services/redis")
+	require.NoError(t, err)
+	assert.Equal(t, `{"host":"cache01","port":"6379"}`, whole)
+
+	got, err := res.Resolve(t.Context(), "kv://consul/services/redis#host")
+	require.NoError(t, err)
+	assert.Equal(t, "cache01", got)
+}
+
+func TestIntegrationConsulStoreServesRepeatedReadsFromCache(t *testing.T) {
+	clearConsulEnv(t)
+
+	var hits atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		consulKVResponse(w, "services/redis", "cache01")
+	}))
+	t.Cleanup(srv.Close)
+
+	doc := []byte(fmt.Sprintf(`{
+		"kv": {
+			"cache": {"enabled": true, "ttl": "1m"},
+			"stores": {
+				"consul": {
+					"type": "hashicorp_consul",
+					"required": true,
+					"config": {"address": %q}
+				}
+			}
+		}
+	}`, consulAddr(srv.URL)))
+
+	reg := newRegistry(t, doc)
+	res := resolver.NewResolver(reg)
+
+	for range 3 {
+		got, err := res.Resolve(t.Context(), "kv://consul/services/redis")
+		require.NoError(t, err)
+		assert.Equal(t, "cache01", got)
+	}
+
+	assert.Equal(t, int32(1), hits.Load(),
+		"3 resolves of the same key must hit the consul backend only once (SecretStore cache)")
+}
+
+func TestIntegrationConsulStoreNegativeCachesNotFound(t *testing.T) {
+	clearConsulEnv(t)
+
+	var hits atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(srv.Close)
+
+	doc := []byte(fmt.Sprintf(`{
+		"kv": {
+			"cache": {"enabled": true, "ttl": "1m", "negative_ttl_not_found": "1m"},
+			"stores": {
+				"consul": {
+					"type": "hashicorp_consul",
+					"required": true,
+					"config": {"address": %q}
+				}
+			}
+		}
+	}`, consulAddr(srv.URL)))
+
+	reg := newRegistry(t, doc)
+	res := resolver.NewResolver(reg)
+
+	for range 3 {
+		_, err := res.Resolve(t.Context(), "kv://consul/services/absent")
+
+		var notFound *kv.KeyNotFoundError
+		require.ErrorAs(t, err, &notFound)
+	}
+
+	assert.Equal(t, int32(1), hits.Load(),
+		"a not-found must be negatively cached (negative_ttl_not_found bucket), not re-fetched")
+}
+
+// BenchmarkVaultStoreGet measures a Get against a real vault provider talking
+// to a co-located (in-process httptest) KVv2 backend, through the full
+// production stack: NewFromConfig registry → SecretStore wrapper → vault API
+// client → HTTP. The cache-off run is the true cost of one backend round trip
+// (the "co-located provider" startup criterion); the cache-on run is the
+// steady-state request path.
+func BenchmarkVaultStoreGet(b *testing.B) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// nolint:errcheck
+		_, _ = w.Write([]byte(`{"data":{"data":{"password":"hunter2"}}}`))
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+
+	for _, tc := range []struct {
+		name         string
+		cacheEnabled bool
+	}{
+		{name: "cache-off", cacheEnabled: false},
+		{name: "cache-on", cacheEnabled: true},
+	} {
+		rawConfig := fmt.Sprintf(`{
+			"kv": {
+				"cache": {"enabled": %t, "ttl": "1h"},
+				"stores": {
+					"vault": {
+						"type": "hashicorp_vault",
+						"config": {"address": %q, "token": "bench-token", "kv_version": 2}
+					}
+				}
+			}
+		}`, tc.cacheEnabled, srv.URL)
+
+		reg, err := registry.NewFromConfig(ctx, []byte(rawConfig))
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		store, err := reg.GetStore("vault")
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		b.Run(tc.name, func(b *testing.B) {
+			for b.Loop() {
+				if _, err := store.Get(ctx, "secret/bench"); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+
+		_ = reg.Close(ctx)
+	}
+}

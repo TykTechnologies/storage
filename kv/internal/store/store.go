@@ -12,8 +12,6 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-const defaultProviderTimeout = 5 * time.Second
-
 // SecretStore is an internal decorator that adds caching and singleflight to a Provider.
 type SecretStore struct {
 	name      string
@@ -35,7 +33,7 @@ func (s *SecretStore) Get(ctx context.Context, path string) (string, error) {
 	}
 
 	val, exists, needsRefresh, err := s.cache.Get(path)
-	if exists {
+	if exists && !kv.IsCacheBypassed(ctx) {
 		// Fail fast on cached errors
 		if err != nil {
 			return "", err
@@ -155,12 +153,12 @@ func NewSecretStore(
 	opts ...Option,
 ) (*SecretStore, error) {
 	if provider == nil {
-		return nil, fmt.Errorf("failed to create a secret store with name %q: provider cannot be nil", name)
+		return nil, fmt.Errorf("secret store %q: provider cannot be nil", name)
 	}
 
 	cache, err := cache.NewCache(cacheConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create secret store: %w", err)
+		return nil, fmt.Errorf("secret store %q: %w", name, err)
 	}
 
 	s := &SecretStore{
@@ -169,7 +167,7 @@ func NewSecretStore(
 		cache:     cache,
 		sf:        &singleflight.Group{},
 		sfRefresh: &singleflight.Group{},
-		timeout:   defaultProviderTimeout,
+		timeout:   kv.DefaultOperationTimeout,
 	}
 
 	for _, opt := range opts {

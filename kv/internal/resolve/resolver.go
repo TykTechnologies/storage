@@ -14,9 +14,30 @@ import (
 
 type Resolver struct {
 	registry kv.StoreGetter
+	lenient  bool
 }
 
 type Option func(*Resolver)
+
+// WithLenientMode makes the resolver leave any reference that targets an
+// unknown store (kv.ErrStoreNotFound) unchanged, instead of failing.
+//
+// It exists for exactly one caller: Phase 1 of the registry bootstrap,
+// which resolves store configs before the remote stores they may reference
+// have been initialized. At that point the absent stores are precisely the
+// remote ones, and their references must pass through verbatim so the
+// caller's later strict pass can resolve them.
+//
+// Lenient mode tolerates absent stores only: malformed references,
+// reachable stores with missing keys, and missing JSON fields still fail,
+// so config typos are never silently masked. Deliberately not exposed
+// through the public kv/resolver facade — exposing it would invite callers
+// to suppress resolution errors wholesale.
+func WithLenientMode() Option {
+	return func(r *Resolver) {
+		r.lenient = true
+	}
+}
 
 func NewResolver(registry kv.StoreGetter, opts ...Option) *Resolver {
 	r := &Resolver{registry: registry}
@@ -31,66 +52,49 @@ var inlineRe = regexp.MustCompile(`\$kv\{([^}]+)\}`)
 
 func (r *Resolver) Resolve(ctx context.Context, input string) (string, error) {
 	if strings.HasPrefix(input, "kv://") {
-		trimmed := strings.TrimPrefix(input, "kv://")
+		return r.resolveURI(ctx, input)
+	}
 
-		slashIdx := strings.IndexByte(trimmed, '/')
-		if slashIdx < 0 {
-			return "", fmt.Errorf(
-				"%w: missing path separator in %q",
-				ErrMalformedReference,
-				input,
-			)
-		}
+	return r.resolveInline(ctx, input)
+}
 
-		storeName := trimmed[:slashIdx]
-		rest := trimmed[slashIdx+1:]
-		path, fragment, _ := strings.Cut(rest, "#")
+// resolveURI resolves a whole-value "kv://store/path#fragment" reference.
+func (r *Resolver) resolveURI(ctx context.Context, input string) (string, error) {
+	body := strings.TrimPrefix(input, "kv://")
 
-		if storeName == "" || path == "" {
-			return "", fmt.Errorf(
-				"%w: empty store name or path in %q",
-				ErrMalformedReference,
-				input,
-			)
-		}
+	storeName, path, fragment, err := parseReference(body, '/', input)
+	if err != nil {
+		return "", err
+	}
 
-		return r.fetchAndExtract(ctx, storeName, path, fragment)
+	res, err := r.fetchAndExtract(ctx, storeName, path, fragment)
+	if r.lenient && errors.Is(err, kv.ErrStoreNotFound) {
+		return input, nil
+	}
+
+	return res, err
+}
+
+// resolveInline resolves every embedded "$kv{store:path#fragment}" token in a
+// larger string, accumulating errors so a single call reports all failures.
+func (r *Resolver) resolveInline(ctx context.Context, input string) (string, error) {
+	// The token regex requires a closing brace, so an unclosed "$kv{" can
+	// never match — without this check a typo'd reference would silently pass
+	// through as a literal value.
+	if unclosedInlineToken(input) >= 0 {
+		return "", fmt.Errorf(
+			"%w: unclosed $kv{ reference in %q",
+			ErrMalformedReference,
+			input,
+		)
 	}
 
 	var resolveErrs []error
+
 	result := inlineRe.ReplaceAllStringFunc(input, func(match string) string {
-		// strip "$kv{" prefix and "}" suffix
-		inner := match[4 : len(match)-1]
-
-		colonIdx := strings.IndexByte(inner, ':')
-		if colonIdx < 0 {
-			resolveErrs = append(resolveErrs, fmt.Errorf(
-				"%w: missing store separator in %q",
-				ErrMalformedReference,
-				match,
-			))
-
-			return match
-		}
-
-		storeName := inner[:colonIdx]
-		rest := inner[colonIdx+1:]
-		path, fragment, _ := strings.Cut(rest, "#")
-
-		if storeName == "" || path == "" {
-			resolveErrs = append(resolveErrs, fmt.Errorf(
-				"%w: empty store name or path in %q",
-				ErrMalformedReference,
-				match,
-			))
-
-			return match
-		}
-
-		val, err := r.fetchAndExtract(ctx, storeName, path, fragment)
+		val, err := r.resolveInlineToken(ctx, match)
 		if err != nil {
 			resolveErrs = append(resolveErrs, err)
-			return match
 		}
 
 		return val
@@ -101,6 +105,53 @@ func (r *Resolver) Resolve(ctx context.Context, input string) (string, error) {
 	}
 
 	return result, nil
+}
+
+func (r *Resolver) resolveInlineToken(ctx context.Context, match string) (string, error) {
+	// strip "$kv{" prefix and "}" suffix
+	inner := match[4 : len(match)-1]
+
+	storeName, path, fragment, err := parseReference(inner, ':', match)
+	if err != nil {
+		return match, err
+	}
+
+	val, err := r.fetchAndExtract(ctx, storeName, path, fragment)
+	if err != nil {
+		if r.lenient && errors.Is(err, kv.ErrStoreNotFound) {
+			return match, nil
+		}
+
+		return match, err
+	}
+
+	return val, nil
+}
+
+// parseReference splits "store<sep>path#fragment" into its parts. raw is the
+// original reference text, used only for error messages.
+func parseReference(body string, sep byte, raw string) (storeName, path, fragment string, err error) {
+	sepIdx := strings.IndexByte(body, sep)
+	if sepIdx < 0 {
+		return "", "", "", fmt.Errorf(
+			"%w: missing store/path separator in %q",
+			ErrMalformedReference,
+			raw,
+		)
+	}
+
+	storeName = body[:sepIdx]
+	path, fragment, _ = strings.Cut(body[sepIdx+1:], "#")
+
+	if storeName == "" || path == "" {
+		return "", "", "", fmt.Errorf(
+			"%w: empty store name or path in %q",
+			ErrMalformedReference,
+			raw,
+		)
+	}
+
+	return storeName, path, fragment, nil
 }
 
 func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, error) {
@@ -161,6 +212,32 @@ func (r *Resolver) fetchAndExtract(ctx context.Context, storeName, path, fragmen
 	}
 
 	return extractJSONPointer(raw, fragment)
+}
+
+// unclosedInlineToken returns the index of the first "$kv{" occurrence in
+// input that is not the start of a well-formed $kv{...} token, or -1 when
+// every occurrence is properly closed.
+func unclosedInlineToken(input string) int {
+	starts := make(map[int]struct{})
+	for _, m := range inlineRe.FindAllStringIndex(input, -1) {
+		starts[m[0]] = struct{}{}
+	}
+
+	offset := 0
+
+	for {
+		i := strings.Index(input[offset:], "$kv{")
+		if i < 0 {
+			return -1
+		}
+
+		abs := offset + i
+		if _, ok := starts[abs]; !ok {
+			return abs
+		}
+
+		offset = abs + len("$kv{")
+	}
 }
 
 func (r *Resolver) walkAndResolve(ctx context.Context, node any) (any, error) {
