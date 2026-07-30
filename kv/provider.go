@@ -119,7 +119,7 @@ type Closer interface {
 }
 
 // Standaloner is an optional interface for providers that do not need
-// to be combined with caching or singleflight mechanisms.
+// to be combined with singleflight mechanisms.
 type Standaloner interface {
 	IsStandalone() bool
 }
