@@ -187,8 +187,8 @@ func TestValidateSyntaxAgreesWithResolveOnMalformed(t *testing.T) {
 			require.ErrorIs(t, ValidateSyntax(input), ErrMalformedReference,
 				"ValidateSyntax must reject this input")
 
-			_, err := r.Resolve(context.Background(), input)
-			require.Error(t, err,
+			_, err := r.Resolve(t.Context(), input)
+			require.ErrorIs(t, err, ErrMalformedReference,
 				"Resolve must also error on an input ValidateSyntax rejects")
 		})
 	}
