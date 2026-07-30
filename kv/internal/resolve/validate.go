@@ -38,9 +38,15 @@ func ValidateSyntax(input string) error {
 // a field/index breadcrumb. It resolves nothing and contacts no store, so it
 // needs no registry.
 func ValidateSyntaxAll(rawJSON []byte) error {
-	// Fast path: with no KV syntax anywhere there is nothing to validate, and we
-	// avoid an unmarshal
+	// Fast path: with no KV syntax anywhere there is nothing to validate, so we
+	// avoid the unmarshal. Still verify the document is valid JSON — matching
+	// ResolveAll — so JSON validity doesn't depend on whether KV syntax happens
+	// to be present.
 	if !bytes.Contains(rawJSON, []byte("kv://")) && !bytes.Contains(rawJSON, []byte("$kv{")) {
+		if !json.Valid(rawJSON) {
+			return fmt.Errorf("%w: invalid document", ErrInvalidJSON)
+		}
+
 		return nil
 	}
 

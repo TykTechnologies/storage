@@ -64,9 +64,24 @@ func TestValidateSyntaxAll(t *testing.T) {
 
 func TestValidateSyntaxAll_InvalidJSON(t *testing.T) {
 	t.Parallel()
-	// A document that contains KV syntax but is not valid JSON cannot be walked.
-	err := ValidateSyntaxAll([]byte(`{"x":"kv://vault/ok" `))
-	require.ErrorIs(t, err, ErrInvalidJSON)
+
+	docs := []string{
+		`{"x":"kv://vault/ok" `,
+		`{not valid json`,
+	}
+
+	r := NewResolver(nil)
+
+	for _, doc := range docs {
+		t.Run(doc, func(t *testing.T) {
+			t.Parallel()
+
+			require.ErrorIs(t, ValidateSyntaxAll([]byte(doc)), ErrInvalidJSON)
+
+			_, rErr := r.ResolveAll(context.Background(), []byte(doc))
+			require.ErrorIs(t, rErr, ErrInvalidJSON, "ResolveAll must agree")
+		})
+	}
 }
 
 func TestValidateSyntaxAllAgreesWithResolveAllOnMalformed(t *testing.T) {
