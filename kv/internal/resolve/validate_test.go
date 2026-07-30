@@ -7,6 +7,105 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestValidateSyntaxAll(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		doc     string
+		wantErr bool
+	}{
+		{name: "no kv syntax at all", doc: `{"a":"plain","b":["x",1,true,null]}`},
+		{name: "empty object", doc: `{}`},
+		{
+			name: "well-formed references at various depths",
+			doc: `{"url":"https://$kv{env:HOST}/v1",` +
+				`"secret":"kv://vault/db/creds#password",` +
+				`"list":["kv://consul/services/web"]}`,
+		},
+		{
+			name: "malformed whole-value reference in a nested non-URL field",
+			doc: `{"middleware":{"operations":{"getget":{"transformRequestHeaders":` +
+				`{"add":[{"name":"X-KV","value":"kv://random-gcpdb-password"}]}}}}}`,
+			wantErr: true,
+		},
+		{
+			name:    "unclosed inline token in an arbitrary string field",
+			doc:     `{"headers":{"value":"prefix-$kv{unclosed"}}`,
+			wantErr: true,
+		},
+		{
+			name:    "inline token missing store separator in an array element",
+			doc:     `{"values":["ok","$kv{missingcolon}"]}`,
+			wantErr: true,
+		},
+		{
+			name:    "empty store in a whole-value reference",
+			doc:     `{"x":"kv:///secret/path"}`,
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := ValidateSyntaxAll([]byte(tc.doc))
+
+			if tc.wantErr {
+				require.ErrorIs(t, err, ErrMalformedReference)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestValidateSyntaxAll_InvalidJSON(t *testing.T) {
+	t.Parallel()
+	// A document that contains KV syntax but is not valid JSON cannot be walked.
+	err := ValidateSyntaxAll([]byte(`{"x":"kv://vault/ok" `))
+	require.ErrorIs(t, err, ErrInvalidJSON)
+}
+
+func TestValidateSyntaxAllAgreesWithResolveAllOnMalformed(t *testing.T) {
+	t.Parallel()
+
+	malformed := []string{
+		`{"headers":[{"value":"kv://no-path-separator"}]}`,
+		`{"nested":{"deep":{"v":"prefix-$kv{unclosed"}}}`,
+		`{"arr":["ok","$kv{missingcolon}"]}`,
+	}
+
+	r := NewResolver(nil)
+
+	for _, doc := range malformed {
+		t.Run(doc, func(t *testing.T) {
+			t.Parallel()
+			require.ErrorIs(t, ValidateSyntaxAll([]byte(doc)), ErrMalformedReference)
+			_, err := r.ResolveAll(context.Background(), []byte(doc))
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestValidateSyntaxAll_ErrorIncludesFieldPath(t *testing.T) {
+	t.Parallel()
+
+	doc := `{"x-tyk-api-gateway":{"middleware":{"operations":{"getget":` +
+		`{"transformRequestHeaders":{"add":[{"name":"X-KV",` +
+		`"value":"kv://random-gcpdb-password"}]}}}}}}`
+	err := ValidateSyntaxAll([]byte(doc))
+
+	require.ErrorIs(t, err, ErrMalformedReference)
+	require.Contains(t, err.Error(),
+		"x-tyk-api-gateway.middleware.operations.getget.transformRequestHeaders.add[0].value")
+	require.Contains(t, err.Error(), "missing path separator")
+	require.Contains(t, err.Error(), "kv://random-gcpdb-password")
+	require.NotContains(t, err.Error(), `field "`)
+}
+
 func TestValidateSyntax(t *testing.T) {
 	t.Parallel()
 

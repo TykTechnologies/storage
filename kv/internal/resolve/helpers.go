@@ -7,6 +7,23 @@ import (
 	"strings"
 )
 
+// fieldPath and indexPath build a dotted field path (array elements rendered as
+// [i]) for error messages. Both the resolve walk and the validate walk thread a
+// path through these so they report the same readable
+// "x-tyk-api-gateway.upstream.url"-style location rather than a nested
+// "field \"x\": field \"y\": ..." breadcrumb chain.
+func fieldPath(parent, key string) string {
+	if parent == "" {
+		return key
+	}
+
+	return parent + "." + key
+}
+
+func indexPath(parent string, i int) string {
+	return fmt.Sprintf("%s[%d]", parent, i)
+}
+
 func extractJSONPointer(raw, fragment string) (string, error) {
 	// UseNumber keeps numeric leaves as json.Number — a float64 round-trip
 	// silently corrupts integers above 2^53.
