@@ -670,6 +670,37 @@ func TestResolveAll_DedupsAcrossSyntaxForms(t *testing.T) {
 		"the same target via different syntax forms must resolve the backend once")
 }
 
+func TestResolveAll_DedupsFragmentsOfSameSecret(t *testing.T) {
+	const fields = 50
+
+	payload := make([]string, fields)
+	for i := range payload {
+		payload[i] = fmt.Sprintf(`"k%d":"v%d"`, i, i)
+	}
+
+	provider := newCountingProvider("{" + strings.Join(payload, ",") + "}")
+	r := resolve.NewResolver(newGetter(map[string]kv.Provider{"vault": provider}))
+
+	refs := make([]string, fields)
+	for i := range refs {
+		refs[i] = fmt.Sprintf(`"f%d":"kv://vault/secret/data/app#/k%d"`, i, i)
+	}
+
+	doc := []byte("{" + strings.Join(refs, ",") + "}")
+
+	out, err := r.ResolveAll(t.Context(), doc)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, provider.callsFor("secret/data/app"),
+		"distinct fragments of one secret must share a single backend fetch")
+	require.EqualValues(t, 1, provider.total.Load(),
+		"total backend calls must be 1 regardless of fragment count (%d)", fields)
+
+	for i := 0; i < fields; i++ {
+		require.Contains(t, string(out), fmt.Sprintf(`"f%d":"v%d"`, i, i))
+	}
+}
+
 // mutableProvider returns whatever value it currently holds, and counts calls.
 // It lets a test change the backing secret between resolutions.
 type mutableProvider struct {
