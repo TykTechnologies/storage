@@ -184,19 +184,21 @@ func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, erro
 // It is best-effort and deliberately non-cancelling. Each goroutine returns nil
 // even on failure — to keep one reference's failure from poisoning the others.
 func (r *Resolver) prefetch(ctx context.Context, doc any) {
-	refs := collectRefs(doc)
+	paths := distinctPaths(collectRefs(doc))
 
-	if len(refs) <= 1 {
+	if len(paths) <= 1 {
 		return
 	}
+
+	mm := memoFrom(ctx)
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(maxConcurrentResolves)
 
-	for ref := range refs {
+	for pk := range paths {
 		g.Go(func() error {
 			//nolint:errcheck
-			_, _ = r.fetchAndExtract(gctx, ref.store, ref.path, ref.fragment)
+			_, _ = r.fetchRaw(gctx, mm, pk)
 			return nil
 		})
 	}
@@ -205,37 +207,59 @@ func (r *Resolver) prefetch(ctx context.Context, doc any) {
 	_ = g.Wait()
 }
 
-// fetchAndExtract resolves a single target, consulting the per-call memo (when
-// ctx carries one) so repeated references — in either syntax form — resolve the
-// backend at most once per document.
+// fetchAndExtract resolves a single reference, consulting the per-call memo
+// (when ctx carries one) at two levels: the fully-extracted result is memoized
+// per {store, path, fragment}, and the underlying fetch per {store, path}. So a
+// backend is hit at most once per secret per document — regardless of how many
+// fragments reference it — and an identical reference is extracted at most once.
 func (r *Resolver) fetchAndExtract(ctx context.Context, storeName, path, fragment string) (string, error) {
 	mm := memoFrom(ctx)
-
 	key := refKey{store: storeName, path: path, fragment: fragment}
+
 	if mm != nil {
-		if hit, ok := mm.get(key); ok {
+		if hit, ok := mm.getExtract(key); ok {
 			return hit.val, hit.err
 		}
 	}
 
-	val, err := r.fetch(ctx, storeName, path, fragment)
+	raw, fetchErr := r.fetchRaw(ctx, mm, key.fetchKey())
+	val, err := extractFragment(raw, fetchErr, fragment)
 
 	if mm != nil {
-		mm.set(key, memoResult{val: val, err: err})
+		mm.setExtract(key, memoResult{val: val, err: err})
 	}
 
 	return val, err
 }
 
-func (r *Resolver) fetch(ctx context.Context, storeName, path, fragment string) (string, error) {
+func (r *Resolver) fetchRaw(ctx context.Context, mm *memo, pk pathKey) (string, error) {
+	if mm != nil {
+		if hit, ok := mm.getRaw(pk); ok {
+			return hit.raw, hit.err
+		}
+	}
+
+	raw, err := r.fetchStore(ctx, pk.store, pk.path)
+
+	if mm != nil {
+		mm.setRaw(pk, rawResult{raw: raw, err: err})
+	}
+
+	return raw, err
+}
+
+func (r *Resolver) fetchStore(ctx context.Context, storeName, path string) (string, error) {
 	store, err := r.registry.GetStore(storeName)
 	if err != nil {
 		return "", err
 	}
 
-	raw, err := store.Get(ctx, path)
-	if err != nil {
-		return "", err
+	return store.Get(ctx, path)
+}
+
+func extractFragment(raw string, fetchErr error, fragment string) (string, error) {
+	if fetchErr != nil {
+		return "", fetchErr
 	}
 
 	if fragment == "" {

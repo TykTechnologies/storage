@@ -5,11 +5,36 @@ import (
 	"strings"
 )
 
-// refKey identifies a resolution target.
+// refKey identifies a resolution target: a fragment of a secret.
 type refKey struct {
 	store    string
 	path     string
 	fragment string
+}
+
+// pathKey identifies a backend fetch target — a secret at {store, path},
+// independent of any fragment. Fetches are memoized on this so that every
+// fragment of the same secret shares a single backend call: the fragment is
+// extracted from the fetched value in memory.
+type pathKey struct {
+	store string
+	path  string
+}
+
+// fetchKey drops the fragment, yielding the backend fetch target for ref.
+func (k refKey) fetchKey() pathKey {
+	return pathKey{store: k.store, path: k.path}
+}
+
+// distinctPaths collapses a set of references to the distinct backend fetches
+// they require, merging multiple fragments of the same secret into one.
+func distinctPaths(refs map[refKey]struct{}) map[pathKey]struct{} {
+	paths := make(map[pathKey]struct{}, len(refs))
+	for ref := range refs {
+		paths[ref.fetchKey()] = struct{}{}
+	}
+
+	return paths
 }
 
 // parseWholeValue parses a whole-value reference of the form
