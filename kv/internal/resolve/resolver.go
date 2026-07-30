@@ -158,7 +158,9 @@ func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, erro
 	// sequential substitution walk below reads them without further I/O.
 	r.prefetch(ctx, doc)
 
-	resolved, err := r.walkAndResolve(ctx, doc, "")
+	resolved, err := walk(doc, "", func(value string) (any, error) {
+		return r.Resolve(ctx, value)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -266,41 +268,5 @@ func unclosedInlineToken(input string) int {
 		}
 
 		offset = abs + len("$kv{")
-	}
-}
-
-func (r *Resolver) walkAndResolve(ctx context.Context, node any, path string) (any, error) {
-	switch v := node.(type) {
-	case string:
-		resolved, err := r.Resolve(ctx, v)
-		if err != nil && path != "" {
-			return nil, fmt.Errorf("%s: %w", path, err)
-		}
-
-		return resolved, err
-	case map[string]any:
-		for key, value := range v {
-			resolved, err := r.walkAndResolve(ctx, value, fieldPath(path, key))
-			if err != nil {
-				return nil, err
-			}
-
-			v[key] = resolved
-		}
-
-		return v, nil
-	case []any:
-		for i, value := range v {
-			resolved, err := r.walkAndResolve(ctx, value, indexPath(path, i))
-			if err != nil {
-				return nil, err
-			}
-
-			v[i] = resolved
-		}
-
-		return v, nil
-	default:
-		return v, nil
 	}
 }

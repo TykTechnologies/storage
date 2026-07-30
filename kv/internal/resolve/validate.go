@@ -52,35 +52,9 @@ func ValidateSyntaxAll(rawJSON []byte) error {
 		return fmt.Errorf("%w: %w", ErrInvalidJSON, err)
 	}
 
-	return walkAndValidate(doc, "")
-}
+	_, err := walk(doc, "", func(value string) (any, error) {
+		return value, ValidateSyntax(value)
+	})
 
-func walkAndValidate(node any, path string) error {
-	switch v := node.(type) {
-	case string:
-		err := ValidateSyntax(v)
-		if err == nil || path == "" {
-			return err
-		}
-
-		return fmt.Errorf("%s: %w", path, err)
-	case map[string]any:
-		for key, value := range v {
-			if err := walkAndValidate(value, fieldPath(path, key)); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	case []any:
-		for i, value := range v {
-			if err := walkAndValidate(value, indexPath(path, i)); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	default:
-		return nil
-	}
+	return err
 }

@@ -24,6 +24,51 @@ func indexPath(parent string, i int) string {
 	return fmt.Sprintf("%s[%d]", parent, i)
 }
 
+type visitString func(value string) (any, error)
+
+// walk traverses a decoded JSON document depth-first, applies visit to every
+// string leaf, and writes the returned value back in place (maps and slices are
+// mutated).
+func walk(node any, path string, visit visitString) (any, error) {
+	switch v := node.(type) {
+	case string:
+		res, err := visit(v)
+		if err != nil {
+			if path == "" {
+				return nil, err
+			}
+
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+
+		return res, nil
+	case map[string]any:
+		for key, value := range v {
+			res, err := walk(value, fieldPath(path, key), visit)
+			if err != nil {
+				return nil, err
+			}
+
+			v[key] = res
+		}
+
+		return v, nil
+	case []any:
+		for i, value := range v {
+			res, err := walk(value, indexPath(path, i), visit)
+			if err != nil {
+				return nil, err
+			}
+
+			v[i] = res
+		}
+
+		return v, nil
+	default:
+		return v, nil
+	}
+}
+
 func extractJSONPointer(raw, fragment string) (string, error) {
 	// UseNumber keeps numeric leaves as json.Number — a float64 round-trip
 	// silently corrupts integers above 2^53.
