@@ -38,13 +38,12 @@ func (e *KeyNotFoundError) Error() string {
 
 // StoreUnavailableError indicates a transient failure reaching the store.
 type StoreUnavailableError struct {
-	StoreName string
-	KeyPath   string
-	Err       error
+	KeyPath string
+	Err     error
 }
 
 func (e *StoreUnavailableError) Error() string {
-	return fmt.Sprintf("store %q unavailable when fetching key %q: %v", e.StoreName, e.KeyPath, e.Err)
+	return fmt.Sprintf("store unavailable when fetching key %q: %v", e.KeyPath, e.Err)
 }
 
 func (e *StoreUnavailableError) Unwrap() error {

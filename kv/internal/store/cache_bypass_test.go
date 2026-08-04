@@ -128,9 +128,8 @@ func TestGetWithCacheBypass(t *testing.T) {
 				}
 
 				return "", &kv.StoreUnavailableError{
-					StoreName: "test",
-					KeyPath:   "db/password",
-					Err:       fmt.Errorf("backend down"),
+					KeyPath: "db/password",
+					Err:     fmt.Errorf("backend down"),
 				}
 			},
 		}
