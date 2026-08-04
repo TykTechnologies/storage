@@ -9,8 +9,14 @@ import (
 	"regexp"
 	"strings"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/TykTechnologies/storage/kv"
 )
+
+// maxConcurrentResolves bounds how many references are fetched at once during
+// the prefetch phase.
+const maxConcurrentResolves = 16
 
 type Resolver struct {
 	registry kv.StoreGetter
@@ -51,36 +57,42 @@ func NewResolver(registry kv.StoreGetter, opts ...Option) *Resolver {
 var inlineRe = regexp.MustCompile(`\$kv\{([^}]+)\}`)
 
 func (r *Resolver) Resolve(ctx context.Context, input string) (string, error) {
-	if strings.HasPrefix(input, "kv://") {
-		return r.resolveURI(ctx, input)
+	ref, ok, err := parseWholeValue(input)
+	if err != nil {
+		return "", err
+	}
+
+	if ok {
+		return r.resolveRef(ctx, ref, input)
 	}
 
 	return r.resolveInline(ctx, input)
 }
 
-// resolveURI resolves a whole-value "kv://store/path#fragment" reference.
-func (r *Resolver) resolveURI(ctx context.Context, input string) (string, error) {
-	body := strings.TrimPrefix(input, "kv://")
-
-	storeName, path, fragment, err := parseReference(body, '/', input)
+// resolveRef resolves a single reference. literal is the original text to emit
+// unchanged when lenient mode tolerates a missing store — the whole input for a
+// kv:// reference, or the matched token for a $kv{} one. It is the single place
+// the lenient store-not-found rule lives.
+func (r *Resolver) resolveRef(ctx context.Context, ref refKey, literal string) (string, error) {
+	val, err := r.fetchAndExtract(ctx, ref.store, ref.path, ref.fragment)
 	if err != nil {
+		if r.lenient && errors.Is(err, kv.ErrStoreNotFound) {
+			return literal, nil
+		}
+
 		return "", err
 	}
 
-	res, err := r.fetchAndExtract(ctx, storeName, path, fragment)
-	if r.lenient && errors.Is(err, kv.ErrStoreNotFound) {
-		return input, nil
-	}
-
-	return res, err
+	return val, nil
 }
 
-// resolveInline resolves every embedded "$kv{store:path#fragment}" token in a
-// larger string, accumulating errors so a single call reports all failures.
+// resolveInline replaces every $kv{...} token in input. A malformed or
+// unresolvable token is left in place and its error collected; all failures are
+// returned joined so the caller sees every problem at once.
 func (r *Resolver) resolveInline(ctx context.Context, input string) (string, error) {
-	// The token regex requires a closing brace, so an unclosed "$kv{" can
-	// never match — without this check a typo'd reference would silently pass
-	// through as a literal value.
+	// The token regex requires a closing brace, so an unclosed "$kv{" can never
+	// match — without this check a typo'd reference would silently pass through
+	// as a literal value.
 	if unclosedInlineToken(input) >= 0 {
 		return "", fmt.Errorf(
 			"%w: unclosed $kv{ reference in %q",
@@ -89,69 +101,31 @@ func (r *Resolver) resolveInline(ctx context.Context, input string) (string, err
 		)
 	}
 
-	var resolveErrs []error
+	var errs []error
 
 	result := inlineRe.ReplaceAllStringFunc(input, func(match string) string {
-		val, err := r.resolveInlineToken(ctx, match)
+		ref, err := parseInlineToken(match)
 		if err != nil {
-			resolveErrs = append(resolveErrs, err)
+			errs = append(errs, err)
+
+			return match
+		}
+
+		val, err := r.resolveRef(ctx, ref, match)
+		if err != nil {
+			errs = append(errs, err)
+
+			return match
 		}
 
 		return val
 	})
 
-	if len(resolveErrs) > 0 {
-		return "", errors.Join(resolveErrs...)
+	if len(errs) > 0 {
+		return "", errors.Join(errs...)
 	}
 
 	return result, nil
-}
-
-func (r *Resolver) resolveInlineToken(ctx context.Context, match string) (string, error) {
-	// strip "$kv{" prefix and "}" suffix
-	inner := match[4 : len(match)-1]
-
-	storeName, path, fragment, err := parseReference(inner, ':', match)
-	if err != nil {
-		return match, err
-	}
-
-	val, err := r.fetchAndExtract(ctx, storeName, path, fragment)
-	if err != nil {
-		if r.lenient && errors.Is(err, kv.ErrStoreNotFound) {
-			return match, nil
-		}
-
-		return match, err
-	}
-
-	return val, nil
-}
-
-// parseReference splits "store<sep>path#fragment" into its parts. raw is the
-// original reference text, used only for error messages.
-func parseReference(body string, sep byte, raw string) (storeName, path, fragment string, err error) {
-	sepIdx := strings.IndexByte(body, sep)
-	if sepIdx < 0 {
-		return "", "", "", fmt.Errorf(
-			"%w: missing store/path separator in %q",
-			ErrMalformedReference,
-			raw,
-		)
-	}
-
-	storeName = body[:sepIdx]
-	path, fragment, _ = strings.Cut(body[sepIdx+1:], "#")
-
-	if storeName == "" || path == "" {
-		return "", "", "", fmt.Errorf(
-			"%w: empty store name or path in %q",
-			ErrMalformedReference,
-			raw,
-		)
-	}
-
-	return storeName, path, fragment, nil
 }
 
 func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, error) {
@@ -178,6 +152,12 @@ func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, erro
 		return nil, fmt.Errorf("%w: %w", ErrInvalidJSON, err)
 	}
 
+	ctx = withMemo(ctx)
+
+	// Prefetch every distinct reference concurrently into the memo, so the
+	// sequential substitution walk below reads them without further I/O.
+	r.prefetch(ctx, doc)
+
 	resolved, err := r.walkAndResolve(ctx, doc)
 	if err != nil {
 		return nil, err
@@ -196,15 +176,88 @@ func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, erro
 	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
 }
 
+// prefetch resolves every distinct reference in doc concurrently, warming the
+// per-call memo so the substitution walk reads them without further I/O.
+//
+// It is best-effort and deliberately non-cancelling. Each goroutine returns nil
+// even on failure — to keep one reference's failure from poisoning the others.
+func (r *Resolver) prefetch(ctx context.Context, doc any) {
+	paths := distinctPaths(collectRefs(doc))
+
+	if len(paths) <= 1 {
+		return
+	}
+
+	mm := memoFrom(ctx)
+
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(maxConcurrentResolves)
+
+	for pk := range paths {
+		g.Go(func() error {
+			//nolint:errcheck
+			_, _ = r.fetchRaw(gctx, mm, pk)
+			return nil
+		})
+	}
+
+	//nolint:errcheck
+	_ = g.Wait()
+}
+
+// fetchAndExtract resolves a single reference, consulting the per-call memo
+// (when ctx carries one) at two levels: the fully-extracted result is memoized
+// per {store, path, fragment}, and the underlying fetch per {store, path}. So a
+// backend is hit at most once per secret per document — regardless of how many
+// fragments reference it — and an identical reference is extracted at most once.
 func (r *Resolver) fetchAndExtract(ctx context.Context, storeName, path, fragment string) (string, error) {
+	mm := memoFrom(ctx)
+	key := refKey{store: storeName, path: path, fragment: fragment}
+
+	if mm != nil {
+		if hit, ok := mm.getExtract(key); ok {
+			return hit.val, hit.err
+		}
+	}
+
+	raw, fetchErr := r.fetchRaw(ctx, mm, key.fetchKey())
+	val, err := extractFragment(raw, fetchErr, fragment)
+
+	if mm != nil {
+		mm.setExtract(key, memoResult{val: val, err: err})
+	}
+
+	return val, err
+}
+
+func (r *Resolver) fetchRaw(ctx context.Context, mm *memo, pk pathKey) (string, error) {
+	if mm != nil {
+		if hit, ok := mm.getRaw(pk); ok {
+			return hit.raw, hit.err
+		}
+	}
+
+	raw, err := r.fetchStore(ctx, pk.store, pk.path)
+
+	if mm != nil {
+		mm.setRaw(pk, rawResult{raw: raw, err: err})
+	}
+
+	return raw, err
+}
+
+func (r *Resolver) fetchStore(ctx context.Context, storeName, path string) (string, error) {
 	store, err := r.registry.GetStore(storeName)
 	if err != nil {
 		return "", err
 	}
 
-	raw, err := store.Get(ctx, path)
-	if err != nil {
-		return "", err
+	return store.Get(ctx, path)
+}
+
+func extractFragment(raw string, fetchErr error, fragment string) (string, error) {
+	if fetchErr != nil {
+		return "", fetchErr
 	}
 
 	if fragment == "" {
