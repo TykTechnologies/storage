@@ -402,7 +402,7 @@ func TestProvider_InterfaceContract(t *testing.T) {
 	_, isTimeouter := kv.AsTimeouter(provider)
 	require.True(t, isTimeouter, "must implement Timeouter")
 
-	_, isStandalone := kv.AsStandalone(provider)
+	_, isStandalone := kv.AsStandaloner(provider)
 	require.False(t, isStandalone, "must NOT implement Standalone (stays cache/singleflight-wrapped)")
 
 	_, isInitializer := kv.AsInitializer(provider)
