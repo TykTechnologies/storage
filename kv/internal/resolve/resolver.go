@@ -131,7 +131,7 @@ func (r *Resolver) resolveInline(ctx context.Context, input string) (string, err
 func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, error) {
 	// Fast path: skip unmarshal/remarshal entirely when no KV syntax is present,
 	// preserving the original bytes and avoiding unnecessary allocations.
-	if !bytes.Contains(rawJSON, []byte("kv://")) && !bytes.Contains(rawJSON, []byte("$kv{")) {
+	if !ContainsReferences(rawJSON) {
 		// Without this check, JSON validation would depend on whether
 		// the document happens to contain KV syntax.
 		if !json.Valid(rawJSON) {
@@ -176,6 +176,11 @@ func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, erro
 
 	// Encode appends a trailing newline; Marshal does not.
 	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
+}
+
+// ContainsReferences reports whether rawJSON contains any KV reference.
+func ContainsReferences(rawJSON []byte) bool {
+	return bytes.Contains(rawJSON, []byte("kv://")) || bytes.Contains(rawJSON, []byte("$kv{"))
 }
 
 // prefetch resolves every distinct reference in doc concurrently, warming the

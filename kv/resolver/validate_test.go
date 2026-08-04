@@ -59,3 +59,33 @@ func TestValidateSyntaxAll(t *testing.T) {
 		require.ErrorIs(t, resolver.ValidateSyntaxAll([]byte(`{"x":"kv://vault/ok"`)), resolver.ErrInvalidJSON)
 	})
 }
+
+func TestContainsReferences(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{"empty input", ``, false},
+		{"empty object", `{}`, false},
+		{"plain document, no references", `{"url":"https://example.com","port":8080}`, false},
+		{"whole-value reference", `{"secret":"kv://vault/db#password"}`, true},
+		{"inline token", `{"url":"https://$kv{env:HOST}/api"}`, true},
+		{"both kinds present", `{"a":"kv://s/p","b":"$kv{env:X}"}`, true},
+		{"reference nested in object", `{"outer":{"inner":"kv://s/p"}}`, true},
+		{"reference nested in array", `{"list":["ok","kv://s/p"]}`, true},
+		{"marker mid-string still counts", `{"note":"see kv://s/p for details"}`, true},
+		{"unclosed inline marker still counts", `{"x":"$kv{env:X"}`, true},
+		{"kv scheme without double slash", `{"x":"kv:/single"}`, false},
+		{"dollar-brace without kv", `{"x":"${HOME}"}`, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.want, resolver.ContainsReferences([]byte(tc.in)))
+		})
+	}
+}

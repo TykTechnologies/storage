@@ -22,3 +22,8 @@ func ValidateSyntax(s string) error {
 func ValidateSyntaxAll(rawJSON []byte) error {
 	return resolve.ValidateSyntaxAll(rawJSON)
 }
+
+// ContainsReferences reports whether rawJSON contains any KV reference.
+func ContainsReferences(rawJSON []byte) bool {
+	return resolve.ContainsReferences(rawJSON)
+}
