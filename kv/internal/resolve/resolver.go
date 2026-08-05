@@ -14,9 +14,11 @@ import (
 	"github.com/TykTechnologies/storage/kv"
 )
 
-// maxConcurrentResolves bounds how many references are fetched at once during
-// the prefetch phase.
-const maxConcurrentResolves = 16
+const (
+	maxConcurrentResolves = 16
+	markerWholeValue      = "kv://"
+	markerInline          = "$kv{"
+)
 
 type Resolver struct {
 	registry kv.StoreGetter
@@ -180,7 +182,13 @@ func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, erro
 
 // ContainsReferences reports whether rawJSON contains any KV reference.
 func ContainsReferences(rawJSON []byte) bool {
-	return bytes.Contains(rawJSON, []byte("kv://")) || bytes.Contains(rawJSON, []byte("$kv{"))
+	return bytes.Contains(rawJSON, []byte(markerWholeValue)) ||
+		bytes.Contains(rawJSON, []byte(markerInline))
+}
+
+// ContainsReferencesString is ContainsReferences for string input.
+func ContainsReferencesString(s string) bool {
+	return strings.Contains(s, markerWholeValue) || strings.Contains(s, markerInline)
 }
 
 // prefetch resolves every distinct reference in doc concurrently, warming the

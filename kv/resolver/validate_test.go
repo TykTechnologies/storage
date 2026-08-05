@@ -60,7 +60,7 @@ func TestValidateSyntaxAll(t *testing.T) {
 	})
 }
 
-func TestContainsReferences(t *testing.T) {
+func TestContainsReferences_Both(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -86,6 +86,7 @@ func TestContainsReferences(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			require.Equal(t, tc.want, resolver.ContainsReferences([]byte(tc.in)))
+			require.Equal(t, tc.want, resolver.ContainsReferencesString(tc.in))
 		})
 	}
 }
