@@ -45,6 +45,7 @@ func clearVaultEnv(t *testing.T) {
 		"VAULT_CACERT", "VAULT_CAPATH", "VAULT_CLIENT_CERT",
 		"VAULT_CLIENT_KEY", "VAULT_SKIP_VERIFY", "VAULT_TLS_SERVER_NAME",
 		"VAULT_MAX_RETRIES", "VAULT_CLIENT_TIMEOUT", "VAULT_RATE_LIMIT",
+		"VAULT_NAMESPACE",
 	} {
 		t.Setenv(k, "")
 	}
@@ -53,10 +54,12 @@ func clearVaultEnv(t *testing.T) {
 // vaultStub is an httptest server that records the requests it receives and
 // delegates response construction to a per-test handler.
 type vaultStub struct {
-	url    string
-	mu     sync.Mutex
-	got    []string
-	bodies []string
+	url        string
+	mu         sync.Mutex
+	got        []string
+	bodies     []string
+	namespaces []string
+	nsPresent  []bool
 }
 
 // requests returns a copy of the recorded "METHOD /path" entries.
@@ -65,6 +68,31 @@ func (s *vaultStub) requests() []string {
 	defer s.mu.Unlock()
 
 	return append([]string(nil), s.got...)
+}
+
+// lastNamespace returns the value of the X-Vault-Namespace header on the most
+// recent request. It is "" both when the header was absent and when it was
+// present with an empty value — use lastNamespacePresent to tell them apart.
+func (s *vaultStub) lastNamespace() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.namespaces) == 0 {
+		return ""
+	}
+
+	return s.namespaces[len(s.namespaces)-1]
+}
+
+func (s *vaultStub) lastNamespacePresent() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.nsPresent) == 0 {
+		return false
+	}
+
+	return s.nsPresent[len(s.nsPresent)-1]
 }
 
 // lastBody returns the raw request body of the most recent request.
@@ -90,6 +118,8 @@ func newVaultStub(t *testing.T, handler http.HandlerFunc) *vaultStub {
 		s.mu.Lock()
 		s.got = append(s.got, r.Method+" "+r.URL.Path)
 		s.bodies = append(s.bodies, string(body))
+		s.namespaces = append(s.namespaces, r.Header.Get("X-Vault-Namespace"))
+		s.nsPresent = append(s.nsPresent, len(r.Header.Values("X-Vault-Namespace")) > 0)
 		s.mu.Unlock()
 
 		handler(w, r)
@@ -181,6 +211,10 @@ func TestNewFactory(t *testing.T) {
 		{
 			name:   "agent_address with token",
 			config: `{"agent_address":"http://127.0.0.1:8100","token":"root"}`,
+		},
+		{
+			name:   "namespace is accepted",
+			config: `{"token":"root","namespace":"team-a/prod"}`,
 		},
 
 		// Vault has no usable zero value: a token is required even in agent mode,
@@ -435,6 +469,163 @@ func TestGet_MountPath(t *testing.T) {
 			require.Equal(t, []string{tt.wantPath}, stub.requests())
 		})
 	}
+}
+
+func TestNamespace(t *testing.T) {
+	tests := []struct {
+		name          string
+		namespace     string
+		wantNamespace string
+	}{
+		{
+			name:          "single-segment namespace is sent as-is",
+			namespace:     "team-a",
+			wantNamespace: "team-a",
+		},
+		{
+			name:          "nested namespace is sent as-is",
+			namespace:     "team-a/prod",
+			wantNamespace: "team-a/prod",
+		},
+		{
+			name:          "surrounding slashes and whitespace are trimmed",
+			namespace:     "  /team-a/prod/  ",
+			wantNamespace: "team-a/prod",
+		},
+		{
+			name:          "whitespace interleaved with bounding slashes is trimmed",
+			namespace:     "/ team-a/prod /",
+			wantNamespace: "team-a/prod",
+		},
+		{
+			name:          "empty namespace sends no header",
+			namespace:     "",
+			wantNamespace: "",
+		},
+		{
+			name:          "slash/whitespace-only namespace is treated as unset",
+			namespace:     "  /  ",
+			wantNamespace: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Run("Get", func(t *testing.T) {
+				stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
+					writeJSON(w, http.StatusOK, kvv2Envelope(map[string]any{"k": "v"}))
+				})
+
+				p := newVaultProvider(t, &vault.Config{
+					Address:   stub.url,
+					Token:     "root",
+					KVVersion: 2,
+					Namespace: tt.namespace,
+				})
+
+				_, err := p.Get(t.Context(), "secret/myapp/config")
+				require.NoError(t, err)
+
+				require.Equal(t, tt.wantNamespace, stub.lastNamespace())
+				// A non-empty namespace must put a header on the wire; an unset one
+				// must send NO header at all (not an empty-valued one).
+				require.Equal(t, tt.wantNamespace != "", stub.lastNamespacePresent())
+				// The namespace lives in the header, not the path: path is unchanged.
+				require.Equal(t, []string{"GET /v1/secret/data/myapp/config"}, stub.requests())
+			})
+
+			t.Run("Set", func(t *testing.T) {
+				stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
+					writeJSON(w, http.StatusOK, map[string]any{})
+				})
+
+				p := newVaultProvider(t, &vault.Config{
+					Address:   stub.url,
+					Token:     "root",
+					KVVersion: 2,
+					Namespace: tt.namespace,
+				})
+
+				err := setter(t, p).Set(t.Context(), "secret/myapp/config", `{"k":"v"}`)
+				require.NoError(t, err)
+
+				require.Equal(t, tt.wantNamespace, stub.lastNamespace())
+				require.Equal(t, tt.wantNamespace != "", stub.lastNamespacePresent())
+				require.Equal(t, []string{"PUT /v1/secret/data/myapp/config"}, stub.requests())
+			})
+		})
+	}
+}
+
+func TestNamespace_FromEnvironment(t *testing.T) {
+	tests := []struct {
+		name          string
+		envNamespace  string
+		cfgNamespace  string
+		wantNamespace string
+	}{
+		{
+			name:          "VAULT_NAMESPACE is honored when no namespace is configured",
+			envNamespace:  "team-env",
+			cfgNamespace:  "",
+			wantNamespace: "team-env",
+		},
+		{
+			name:          "explicit config namespace overrides VAULT_NAMESPACE",
+			envNamespace:  "team-env",
+			cfgNamespace:  "team-cfg",
+			wantNamespace: "team-cfg",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
+				writeJSON(w, http.StatusOK, kvv2Envelope(map[string]any{"k": "v"}))
+			})
+
+			clearVaultEnv(t)
+			t.Setenv("VAULT_NAMESPACE", tt.envNamespace)
+
+			raw, err := json.Marshal(&vault.Config{
+				Address:   stub.url,
+				Token:     "root",
+				KVVersion: 2,
+				Namespace: tt.cfgNamespace,
+			})
+			require.NoError(t, err)
+
+			p, err := vault.NewFactory()(raw)
+			require.NoError(t, err)
+
+			_, err = p.Get(t.Context(), "secret/myapp/config")
+			require.NoError(t, err)
+
+			require.Equal(t, tt.wantNamespace, stub.lastNamespace())
+			require.Equal(t, []string{"GET /v1/secret/data/myapp/config"}, stub.requests())
+		})
+	}
+}
+
+func TestNamespace_JSONConfigKey(t *testing.T) {
+	clearVaultEnv(t)
+
+	stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, kvv2Envelope(map[string]any{"k": "v"}))
+	})
+
+	raw := json.RawMessage(
+		`{"address":"` + stub.url + `","token":"root","kv_version":2,"namespace":"team-a/prod"}`,
+	)
+
+	p, err := vault.NewFactory()(raw)
+	require.NoError(t, err)
+
+	_, err = p.Get(t.Context(), "secret/myapp/config")
+	require.NoError(t, err)
+
+	require.True(t, stub.lastNamespacePresent(), "the \"namespace\" JSON key must reach the wire as a header")
+	require.Equal(t, "team-a/prod", stub.lastNamespace())
 }
 
 func TestGet_ReturnsCompactJSONWithoutTrailingNewline(t *testing.T) {
