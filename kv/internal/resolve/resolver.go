@@ -57,6 +57,18 @@ func NewResolver(registry kv.StoreGetter, opts ...Option) *Resolver {
 }
 
 var inlineRe = regexp.MustCompile(`\$kv\{([^}]+)\}`)
+var wholeValueRe = regexp.MustCompile(`kv://[^/\s"]+/[^\s"]+`)
+
+// inlineScanRe finds candidate inline tokens when scanning an opaque blob. It
+// differs from inlineRe by excluding '"' from the token body so a token can
+// never span a JSON string boundary: in `{"x":"$kv{env:X"}` the unclosed token
+// must not swallow the object's closing '}' across the value's closing quote.
+var inlineScanRe = regexp.MustCompile(`\$kv\{[^}"]+\}`)
+
+var (
+	markerWholeValueBytes = []byte(markerWholeValue)
+	markerInlineBytes     = []byte(markerInline)
+)
 
 func (r *Resolver) Resolve(ctx context.Context, input string) (string, error) {
 	ref, ok, err := parseWholeValue(input)
@@ -133,7 +145,7 @@ func (r *Resolver) resolveInline(ctx context.Context, input string) (string, err
 func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, error) {
 	// Fast path: skip unmarshal/remarshal entirely when no KV syntax is present,
 	// preserving the original bytes and avoiding unnecessary allocations.
-	if !ContainsReferences(rawJSON) {
+	if !mightContainReferences(rawJSON) {
 		// Without this check, JSON validation would depend on whether
 		// the document happens to contain KV syntax.
 		if !json.Valid(rawJSON) {
@@ -180,15 +192,48 @@ func (r *Resolver) ResolveAll(ctx context.Context, rawJSON []byte) ([]byte, erro
 	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
 }
 
-// ContainsReferences reports whether rawJSON contains any KV reference.
+// ContainsReferences reports whether rawJSON contains at least one well-formed
+// KV reference: a kv://store/path whole value, or a $kv{store:path} inline
+// token.
 func ContainsReferences(rawJSON []byte) bool {
-	return bytes.Contains(rawJSON, []byte(markerWholeValue)) ||
-		bytes.Contains(rawJSON, []byte(markerInline))
+	if bytes.Contains(rawJSON, markerWholeValueBytes) && wholeValueRe.Match(rawJSON) {
+		return true
+	}
+
+	if bytes.Contains(rawJSON, markerInlineBytes) {
+		for _, loc := range inlineScanRe.FindAllIndex(rawJSON, -1) {
+			if _, err := parseInlineToken(string(rawJSON[loc[0]:loc[1]])); err == nil {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // ContainsReferencesString is ContainsReferences for string input.
 func ContainsReferencesString(s string) bool {
-	return strings.Contains(s, markerWholeValue) || strings.Contains(s, markerInline)
+	if strings.Contains(s, markerWholeValue) && wholeValueRe.MatchString(s) {
+		return true
+	}
+
+	if strings.Contains(s, markerInline) {
+		for _, loc := range inlineScanRe.FindAllStringIndex(s, -1) {
+			if _, err := parseInlineToken(s[loc[0]:loc[1]]); err == nil {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// mightContainReferences is a deliberately loose, allocation-free pre-filter
+// reporting whether rawJSON contains either reference marker as a raw substring,
+// without checking that the surrounding text forms a well-formed reference.
+func mightContainReferences(rawJSON []byte) bool {
+	return bytes.Contains(rawJSON, markerWholeValueBytes) ||
+		bytes.Contains(rawJSON, markerInlineBytes)
 }
 
 // prefetch resolves every distinct reference in doc concurrently, warming the
