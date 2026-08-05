@@ -222,6 +222,6 @@ func TestProvider_IsNotStandalone(t *testing.T) {
 	p, err := gcp.NewFactory()(json.RawMessage(`{"project_id":"proj"}`))
 	require.NoError(t, err)
 
-	_, ok := kv.AsStandalone(p)
+	_, ok := kv.AsStandaloner(p)
 	require.False(t, ok, "must NOT implement Standalone (stays cache/singleflight-wrapped)")
 }
