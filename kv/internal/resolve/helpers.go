@@ -9,9 +9,8 @@ import (
 
 // fieldPath and indexPath build a dotted field path (array elements rendered as
 // [i]) for error messages. Both the resolve walk and the validate walk thread a
-// path through these so they report the same readable
-// "x-tyk-api-gateway.upstream.url"-style location rather than a nested
-// "field \"x\": field \"y\": ..." breadcrumb chain.
+// path through these so they report the same readable dot-style location rather
+// than a nested // "field \"x\": field \"y\": ..." breadcrumb chain.
 func fieldPath(parent, key string) string {
 	if parent == "" {
 		return key
