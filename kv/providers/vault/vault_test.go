@@ -3,6 +3,7 @@ package vault_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -52,9 +53,10 @@ func clearVaultEnv(t *testing.T) {
 // vaultStub is an httptest server that records the requests it receives and
 // delegates response construction to a per-test handler.
 type vaultStub struct {
-	url string
-	mu  sync.Mutex
-	got []string
+	url    string
+	mu     sync.Mutex
+	got    []string
+	bodies []string
 }
 
 // requests returns a copy of the recorded "METHOD /path" entries.
@@ -65,13 +67,29 @@ func (s *vaultStub) requests() []string {
 	return append([]string(nil), s.got...)
 }
 
+// lastBody returns the raw request body of the most recent request.
+func (s *vaultStub) lastBody() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.bodies) == 0 {
+		return ""
+	}
+
+	return s.bodies[len(s.bodies)-1]
+}
+
 func newVaultStub(t *testing.T, handler http.HandlerFunc) *vaultStub {
 	t.Helper()
 
 	s := &vaultStub{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+
 		s.mu.Lock()
 		s.got = append(s.got, r.Method+" "+r.URL.Path)
+		s.bodies = append(s.bodies, string(body))
 		s.mu.Unlock()
 
 		handler(w, r)
@@ -134,6 +152,15 @@ func mustJSON(t *testing.T, v any) json.RawMessage {
 	require.NoError(t, err)
 
 	return b
+}
+
+func setter(t *testing.T, p kv.Provider) kv.Setter {
+	t.Helper()
+
+	s, ok := kv.AsSetter(p)
+	require.True(t, ok, "vault provider must implement kv.Setter")
+
+	return s
 }
 
 func TestNewFactory(t *testing.T) {
@@ -537,4 +564,247 @@ func TestResolver_ExtractsFieldFromVaultSecret(t *testing.T) {
 	got, err := res.Resolve(ctx, "kv://vault/secret/myapp/config#api_key")
 	require.NoError(t, err)
 	require.Equal(t, "abc123", got)
+}
+
+func TestProvider_ImplementsSetter(t *testing.T) {
+	p := newVaultProvider(t, &vault.Config{Token: "root"})
+
+	_, ok := kv.AsSetter(p)
+	require.True(t, ok, "vault must implement kv.Setter for the write-back path")
+}
+
+func TestSet_WritesDataMap(t *testing.T) {
+	tests := []struct {
+		name      string
+		key       string
+		kvVersion int
+		value     string
+		wantPath  string
+		wantBody  string
+	}{
+		{
+			name:      "kv2 multi-segment path injects /data and wraps in data envelope",
+			key:       "secret/tyk-apis",
+			kvVersion: 2,
+			value:     `{"api_key":"NEW"}`,
+			wantPath:  "PUT /v1/secret/data/tyk-apis",
+			wantBody:  `{"data":{"api_key":"NEW"}}`,
+		},
+		{
+			name:      "kv2 default version (0) wraps in data envelope",
+			key:       "secret/tyk-apis",
+			kvVersion: 0,
+			value:     `{"api_key":"NEW"}`,
+			wantPath:  "PUT /v1/secret/data/tyk-apis",
+			wantBody:  `{"data":{"api_key":"NEW"}}`,
+		},
+		{
+			name:      "kv2 single-segment path injects /data after the mount",
+			key:       "mysecret",
+			kvVersion: 2,
+			value:     `{"api_key":"NEW"}`,
+			wantPath:  "PUT /v1/mysecret/data",
+			wantBody:  `{"data":{"api_key":"NEW"}}`,
+		},
+		{
+			name:      "kv2 writes the whole data map faithfully (symmetric with Get: a real C2 secret has many fields)",
+			key:       "secret/tyk-apis",
+			kvVersion: 2,
+			value:     `{"api_key":"NEW","username":"bob"}`,
+			wantPath:  "PUT /v1/secret/data/tyk-apis",
+			wantBody:  `{"data":{"api_key":"NEW","username":"bob"}}`,
+		},
+		{
+			name:      "kv1 writes the data map as-is with no data envelope",
+			key:       "secret/tyk-apis",
+			kvVersion: 1,
+			value:     `{"api_key":"NEW"}`,
+			wantPath:  "PUT /v1/secret/tyk-apis",
+			wantBody:  `{"api_key":"NEW"}`,
+		},
+		{
+			name:      "kv2 non-string field values (number, bool) are written faithfully",
+			key:       "secret/tyk-apis",
+			kvVersion: 2,
+			value:     `{"api_key":"NEW","port":8080,"enabled":true}`,
+			wantPath:  "PUT /v1/secret/data/tyk-apis",
+			wantBody:  `{"data":{"api_key":"NEW","port":8080,"enabled":true}}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
+				writeJSON(w, http.StatusOK, map[string]any{})
+			})
+
+			p := newVaultProvider(t, &vault.Config{
+				Address:   stub.url,
+				Token:     "root",
+				KVVersion: tt.kvVersion,
+			})
+
+			err := setter(t, p).Set(t.Context(), tt.key, tt.value)
+			require.NoError(t, err)
+
+			require.Equal(t, []string{tt.wantPath}, stub.requests())
+			require.JSONEq(t, tt.wantBody, stub.lastBody())
+		})
+	}
+}
+
+func TestSet_MountPath(t *testing.T) {
+	tests := []struct {
+		name      string
+		mountPath string
+		key       string
+		wantPath  string
+		wantErr   bool
+	}{
+		{
+			name:      "kv2 nested mount injects /data after the configured mount",
+			mountPath: "tenants/a/kv",
+			key:       "tenants/a/kv/tyk-apis",
+			wantPath:  "PUT /v1/tenants/a/kv/data/tyk-apis",
+		},
+		{
+			name:      "kv2 key outside the mount is rejected before any request",
+			mountPath: "tenants/a/kv",
+			key:       "other/secret",
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
+				writeJSON(w, http.StatusOK, map[string]any{})
+			})
+
+			p := newVaultProvider(t, &vault.Config{
+				Address:   stub.url,
+				Token:     "root",
+				KVVersion: 2,
+				MountPath: tt.mountPath,
+			})
+
+			err := setter(t, p).Set(t.Context(), tt.key, `{"api_key":"NEW"}`)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				require.Empty(t, stub.requests(),
+					"a key outside mount_path must be rejected before any Vault request")
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, []string{tt.wantPath}, stub.requests())
+			require.JSONEq(t, `{"data":{"api_key":"NEW"}}`, stub.lastBody())
+		})
+	}
+}
+
+func TestSet_InvalidValueRejectedBeforeRequest(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "not json at all", value: "just a string"},
+		{name: "json string scalar is not an object", value: `"api_key"`},
+		{name: "json number is not an object", value: "42"},
+		{name: "json array is not an object", value: `["a","b"]`},
+		{name: "json null is not an object", value: "null"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stub := newVaultStub(t, func(_ http.ResponseWriter, _ *http.Request) {
+				t.Error("Set must not reach Vault when the value is not a JSON object")
+			})
+
+			p := newVaultProvider(t, &vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
+
+			err := setter(t, p).Set(t.Context(), "secret/tyk-apis", tt.value)
+			require.Error(t, err, "value must be a JSON object (the secret data map)")
+			require.Empty(t, stub.requests())
+		})
+	}
+}
+
+func TestSet_BackendErrorReturnsStoreUnavailable(t *testing.T) {
+	stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		// A 200 with an unparseable body fails fast (no 5xx retry backoff) and
+		// deterministically exercises the write error branch.
+		w.WriteHeader(http.StatusOK)
+
+		_, err := w.Write([]byte("{ this is not valid vault json"))
+		if err != nil {
+			t.Error(err)
+		}
+	})
+
+	p := newVaultProvider(t, &vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
+
+	err := setter(t, p).Set(t.Context(), "secret/tyk-apis", `{"api_key":"NEW"}`)
+
+	var unavailable *kv.StoreUnavailableError
+	require.ErrorAs(t, err, &unavailable,
+		"a backend write failure must map to *kv.StoreUnavailableError")
+}
+
+func TestSet_PropagatesContextCancellation(t *testing.T) {
+	stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{})
+	})
+
+	p := newVaultProvider(t, &vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	err := setter(t, p).Set(ctx, "secret/tyk-apis", `{"api_key":"NEW"}`)
+	require.ErrorIs(t, err, context.Canceled,
+		"a cancelled context must abort the write (WriteWithContext)")
+}
+
+func TestSet_RoundTripsWithGet(t *testing.T) {
+	var (
+		mu     sync.Mutex
+		stored map[string]any
+	)
+
+	var stub *vaultStub
+	stub = newVaultStub(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			mu.Lock()
+			data := stored
+			mu.Unlock()
+
+			writeJSON(w, http.StatusOK, kvv2Envelope(data))
+
+			return
+		}
+
+		var put struct {
+			Data map[string]any `json:"data"`
+		}
+		err := json.Unmarshal([]byte(stub.lastBody()), &put)
+		require.NoError(t, err)
+
+		mu.Lock()
+		stored = put.Data
+		mu.Unlock()
+
+		writeJSON(w, http.StatusOK, map[string]any{})
+	})
+
+	p := newVaultProvider(t, &vault.Config{Address: stub.url, Token: "root", KVVersion: 2})
+
+	require.NoError(t, setter(t, p).Set(t.Context(), "secret/tyk-apis", `{"api_key":"NEW","username":"bob"}`))
+
+	got, err := p.Get(t.Context(), "secret/tyk-apis")
+	require.NoError(t, err)
+	require.JSONEq(t, `{"api_key":"NEW","username":"bob"}`, got,
+		"Set then Get must round-trip the data map")
 }
