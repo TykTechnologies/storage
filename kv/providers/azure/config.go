@@ -21,49 +21,121 @@ const defaultCredentialType = "managed_identity"
 // guidRe matches the 36-char canonical UUID.
 var guidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
-// FIX: Validate me
-// Config is the JSON "config" block of an azure_key_vault store.
+// Config is used to configure an Azure Key Vault store.
 type Config struct {
-	// VaultURL is the Key Vault data-plane URL. Required.
+	// VaultURL is the address of the key vault holding the secrets, in the form
+	// "https://<vault-name>.vault.azure.net" — Azure shows it as the vault's "Vault
+	// URI" in the portal. Give the bare address with no path or query. Only the
+	// global Azure cloud is supported: the vaults of the sovereign clouds
+	// (Azure US Government, Azure China) are rejected. Required.
 	VaultURL string `json:"vault_url"`
 
-	// CredentialType selects how the provider authenticates.
-	// "managed_identity" is applied by default. Allowed:
-	// "managed_identity" | "workload_identity" | "client_secret" | "client_certificate".
+	// CredentialType is how Tyk authenticates to the key vault. Azure offers
+	// several mechanisms and they need different fields below, so this choice
+	// decides which of them apply. One of:
+	//   - "managed_identity"    an identity Azure attaches to the resource Tyk
+	//                           runs on (a VM, App Service, Container App, AKS
+	//                           pod), with no credential kept by Tyk at all.
+	//                           This is the default and the recommended choice
+	//                           whenever Tyk runs inside Azure. See ClientID.
+	//   - "workload_identity"   for Tyk running in Kubernetes: the cluster places
+	//                           a short-lived token in a file that Microsoft
+	//                           Entra ID is configured to trust. Needs TenantID,
+	//                           ClientID and FederatedTokenFile.
+	//   - "client_secret"       an app registration and its secret, the usual
+	//                           choice when Tyk runs outside Azure. Needs
+	//                           TenantID, ClientID and ClientSecret.
+	//   - "client_certificate"  an app registration that proves itself with a
+	//                           certificate instead of a secret — longer-lived
+	//                           and not a password to leak. Needs TenantID,
+	//                           ClientID and ClientCertificateFile.
+	//
+	// Defaults to "managed_identity" when omitted, and any value other than the
+	// four above is rejected when the store starts. Optional.
+	//
+	// Whichever is chosen, the identity needs permission to read the secrets:
+	// the "Key Vault Secrets User" role when the vault uses Azure role-based
+	// access control, or a "get" secret permission when it uses the older vault
+	// access policies. Writing secrets through Tyk needs "Key Vault Secrets
+	// Officer" or a "set" permission.
 	CredentialType string `json:"credential_type"`
 
-	// TenantID is the Entra tenant GUID. Required for client_secret, client_certificate,
-	// and workload_identity; ignored for managed_identity.
+	// TenantID identifies the Microsoft Entra ID directory the identity belongs
+	// to, as a GUID — Azure shows it as "Directory (tenant) ID" on an app
+	// registration's overview page. Required for the "client_secret",
+	// "client_certificate" and "workload_identity" credential types; ignored for
+	// "managed_identity", where Azure already knows the directory.
 	TenantID string `json:"tenant_id"`
 
-	// ClientID is the app-registration / service-principal client GUID for the SP and
-	// workload-identity modes. For managed_identity it selects a user-assigned identity by
-	// its client ID or system-assigned if client ID is empty.
+	// ClientID identifies the application or identity Tyk authenticates as, as a
+	// GUID — Azure shows it as "Application (client) ID" on an app registration,
+	// or as "Client ID" on a managed identity.
+	//
+	// Required for the "client_secret", "client_certificate" and
+	// "workload_identity" credential types. For "managed_identity" it is
+	// optional and selects which identity to use: give the client ID of a
+	// user-assigned identity, or leave it empty to use the system-assigned
+	// identity of the resource Tyk runs on. Fill it in whenever more than one
+	// user-assigned identity is attached, since Azure cannot then choose for you.
 	ClientID string `json:"client_id"`
 
-	// ClientSecret is the service-principal secret. Required for client_secret.
+	// ClientSecret is the secret value of the app registration named by ClientID
+	// — the string Azure shows exactly once, when the secret is created.
+	// Use the value, not the secret's ID or name.
+	// Required for the "client_secret" credential type, ignored otherwise.
+	//
+	// Client secrets expire, and Azure will not warn Tyk in advance: an expired
+	// secret shows up as reads suddenly failing. Prefer "managed_identity" or
+	// "workload_identity" where the environment allows it.
 	ClientSecret string `json:"client_secret"`
 
-	// ClientCertificateFile is a path to a PEM or PKCS#12 file (certificate + private key).
-	// Required for client_certificate.
+	// ClientCertificateFile is the path to the certificate file the app
+	// registration authenticates with, on the host running Tyk. The file must
+	// contain both the certificate and its private key, as PEM or as PKCS#12
+	// (a .pfx or .p12 file) — the same certificate that was uploaded to the app
+	// registration in Azure. Required for the "client_certificate" credential
+	// type, ignored otherwise.
+	//
+	// The file is read as the store starts, so a path that is missing, unreadable
+	// or not a certificate Tyk can parse stops the store from starting rather
+	// than surfacing later as a failed read.
 	ClientCertificateFile string `json:"client_certificate_file"`
 
-	// ClientCertificatePassword decrypts a password-protected PKCS#12 certificate file.
-	// LIMITATION: the Azure SDK cannot decrypt encrypted-PEM private keys at all,
-	// and cannot open a PKCS#12 that uses SHA-256 for message authentication. Optional.
+	// ClientCertificatePassword is the password protecting the PKCS#12
+	// certificate file, if it has one. Leave it empty for an unprotected file or
+	// for PEM. Optional.
+	//
+	// Two limitations come from the Azure SDK: a PEM file whose private key is
+	// itself encrypted cannot be opened at all, whatever is set here, and neither
+	// can a PKCS#12 file that uses SHA-256 to authenticate its contents. In both
+	// cases convert the file — an unencrypted PEM is the reliable form.
 	ClientCertificatePassword string `json:"client_certificate_password"`
 
-	// FederatedTokenFile is the path to a file holding an OIDC token that Entra trusts via
-	// a federated identity credential. Required for workload_identity. Works for ANY
-	// Kubernetes cluster (AKS injects it; EKS/GKE/on-prem project a service-account token)
-	// and any file-sourced OIDC token — not AKS-only.
+	// FederatedTokenFile is the path to a file holding the short-lived token that
+	// proves Tyk's identity to Microsoft Entra ID. Kubernetes writes such a file
+	// into the pod for the workload's service account, and Entra ID is configured
+	// to trust it against an app registration.
+	//
+	// On AKS with workload identity enabled the file is provided automatically and
+	// its path is in the AZURE_FEDERATED_TOKEN_FILE environment variable. This is
+	// not limited to AKS: any Kubernetes cluster — EKS, GKE, self-hosted — can
+	// project such a token, as can any other source that writes a trusted OpenID
+	// Connect token to a file. Required for the "workload_identity" credential
+	// type, ignored otherwise.
 	FederatedTokenFile string `json:"federated_token_file"`
 
-	// Timeout bounds each API call. Go duration string ("5s", "500ms"). Optional.
+	// Timeout is how long Tyk waits for a single Key Vault request — reading or
+	// writing one secret — before giving up and reporting the store as
+	// unavailable. Give it as a Go duration string: "5s", "500ms", "1m".
+	// Defaults to 5s when omitted; a value Tyk cannot read as a duration stops
+	// the store from starting. Optional.
 	Timeout string `json:"timeout"`
 
-	// TrimTrailingNewline, when true, strips a single trailing "\n" from the value returned
-	// by Get. Optional.
+	// TrimTrailingNewline removes a single newline character from the end of the
+	// value Tyk reads from a secret, if one is present. Secrets created from the
+	// command line often pick up a trailing newline, which would otherwise count
+	// as part of the value and break credentials such as tokens and passwords.
+	// Defaults to false, which passes values on exactly as stored. Optional.
 	TrimTrailingNewline bool `json:"trim_trailing_newline"`
 }
 
