@@ -1,0 +1,207 @@
+package kv
+
+import (
+	"context"
+	"encoding/json"
+	"time"
+)
+
+// ProviderType represents the unique string identifier for a KV provider.
+type ProviderType string
+
+const (
+	// --- Open Source (OSS) Providers ---
+
+	// Env resolves secrets from environment variables.
+	Env ProviderType = "env"
+
+	// Inline resolves secrets from plain text in the configuration.
+	Inline ProviderType = "inline"
+
+	// File resolves secrets from files on the local filesystem.
+	File ProviderType = "file"
+
+	// Vault resolves secrets from HashiCorp Vault.
+	Vault ProviderType = "hashicorp_vault"
+
+	// Consul resolves secrets from HashiCorp Consul.
+	Consul ProviderType = "hashicorp_consul"
+
+	// --- Enterprise Edition (EE) Providers ---
+
+	// AWS resolves secrets from AWS Secrets Manager.
+	AWS ProviderType = "aws_secrets_manager"
+
+	// GCP resolves secrets from Google Cloud Secret Manager.
+	GCP ProviderType = "gcp_secret_manager"
+
+	// Azure resolves secrets from Azure Key Vault.
+	Azure ProviderType = "azure_key_vault"
+
+	// Conjur resolves secrets from CyberArk Conjur.
+	Conjur ProviderType = "cyberark_conjur"
+)
+
+// DefaultOperationTimeout bounds a single provider Get/Set when neither the store
+// config nor the SecretStore wrapper supplies one.
+const DefaultOperationTimeout = 5 * time.Second
+
+// IsLocal reports whether this provider type resolves secrets from resources
+// available to the local process — environment variables, inline config data,
+// or the filesystem — requiring no network and a literal, reference-free config.
+func (t ProviderType) IsLocal() bool {
+	switch t {
+	case Env, Inline, File:
+		return true
+	default:
+		return false
+	}
+}
+
+// KeyValueRetriever defines the core read capability for retrieving values by key.
+type KeyValueRetriever interface {
+	Get(ctx context.Context, key string) (string, error)
+}
+
+// Provider is the composite interface that all KV providers must implement.
+// Currently only requires read access via KeyValueRetriever, but designed
+// for future expansion.
+//
+// Providers may optionally implement Initializer, Closer, HealthChecker,
+// or Lister interfaces for additional capabilities that will be detected
+// via type assertion during registry operations.
+type Provider interface {
+	KeyValueRetriever
+}
+
+// StoreGetter retrieves an initialized store by name.
+type StoreGetter interface {
+	GetStore(name string) (Provider, error)
+}
+
+// ProviderFactory creates a specific provider instance from raw JSON configuration.
+// Each provider type registers its own factory function that knows how to parse
+// its specific configuration format and return a configured Provider.
+//
+// The factory pattern allows the registry to create providers dynamically
+// without compile-time dependencies on specific provider implementations.
+//
+// Config validation convention. A factory returns an error only for config that
+// is present but invalid — a value that can never produce correct behavior
+// (malformed JSON, or a security-critical field set to an unusable value, e.g.
+// a relative path where an absolute one is required). It must NOT error for
+// merely-absent optional config: an unset value is a valid state, so the factory
+// builds a provider that runs in its default or disabled mode (e.g. an env
+// provider with no prefix, or a file provider with no base_path that then
+// rejects every Get). Whether to create a store at all for an unconfigured
+// feature is the caller's decision, not the factory's. The effect: configuration
+// mistakes surface once, at construction, while unused features stay quiet
+// instead of failing on every Get.
+type ProviderFactory func(config json.RawMessage) (Provider, error)
+
+// Initializer is an optional interface for providers that require network
+// initialization or connection establishment before use.
+type Initializer interface {
+	Init(ctx context.Context) error
+}
+
+// Setter is an optional interface for providers that support writing values
+// back to their backend.
+type Setter interface {
+	Set(ctx context.Context, key, value string) error
+}
+
+// Lister is an optional interface for providers that support enumerating
+// keys & values by prefix. This enables dynamic discovery of available secrets
+// and operational tooling.
+type Lister interface {
+	List(ctx context.Context, prefix string) (map[string]string, error)
+}
+
+// Closer is an optional interface for providers that need graceful shutdown
+// or resource cleanup when the registry is closed.
+type Closer interface {
+	Close(ctx context.Context) error
+}
+
+// Standaloner is an optional interface for providers that do not need
+// to be combined with caching or singleflight mechanisms.
+type Standaloner interface {
+	IsStandalone() bool
+}
+
+// Timeouter is an optional interface for providers that expose a custom
+// duration configuration for operations.
+type Timeouter interface {
+	Timeout() time.Duration
+}
+
+// AsSetter attempts to extract a Setter from a Provider,
+// automatically unwrapping decorators.
+func AsSetter(p Provider) (Setter, bool) {
+	return As[Setter](p)
+}
+
+// AsLister attempts to extract a Lister from a Provider,
+// automatically unwrapping decorators.
+func AsLister(p Provider) (Lister, bool) {
+	return As[Lister](p)
+}
+
+// AsInitializer attempts to extract an Initializer from a Provider,
+// automatically unwrapping decorators.
+func AsInitializer(p Provider) (Initializer, bool) {
+	return As[Initializer](p)
+}
+
+// AsCloser attempts to extract an Closer from a Provider,
+// automatically unwrapping decorators.
+func AsCloser(p Provider) (Closer, bool) {
+	return As[Closer](p)
+}
+
+// AsStandaloner attempts to extract a Standaloner from a Provider.
+func AsStandaloner(p Provider) (Standaloner, bool) {
+	return As[Standaloner](p)
+}
+
+// AsTimeouter attempts to extract a Timeouter from a Provider.
+func AsTimeouter(p Provider) (Timeouter, bool) {
+	return As[Timeouter](p)
+}
+
+// As attempts to extract an interface of type T from a Provider,
+// automatically unwrapping decorators up to a maximum depth.
+func As[T any](p Provider) (T, bool) {
+	const maxDepth = 100
+	var zero T
+
+	for range maxDepth {
+		if p == nil {
+			return zero, false
+		}
+
+		if v, ok := p.(T); ok {
+			return v, true
+		}
+
+		wrapper, ok := p.(interface{ Unwrap() Provider })
+		if !ok {
+			return zero, false
+		}
+
+		p = wrapper.Unwrap()
+	}
+
+	return zero, false
+}
+
+// EffectiveTimeout resolves a configured timeout to the value actually used:
+// the configured value when positive, else the default.
+func EffectiveTimeout(configured time.Duration) time.Duration {
+	if configured > 0 {
+		return configured
+	}
+
+	return DefaultOperationTimeout
+}
