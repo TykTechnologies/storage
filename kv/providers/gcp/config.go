@@ -94,16 +94,17 @@ type Config struct {
 	CredentialsType string `json:"credentials_type"`
 
 	// CredentialsFile is the path to a Google Cloud credentials JSON file on the
-	// host running Tyk. Set it together with CredentialsType. Cannot be combined
-	// with CredentialsJSON.
+	// host running the Tyk component. Set it together with CredentialsType.
+	// Cannot be combined with CredentialsJSON.
 	//
 	// Both are optional, and leaving them empty is the recommended setup on
 	// Google Cloud: Tyk then uses Application Default Credentials, Google's
 	// standard way for an application to find credentials from its surroundings —
 	// the GOOGLE_APPLICATION_CREDENTIALS environment variable, the credentials
 	// left by `gcloud auth login`, or the service account attached to the GKE
-	// workload, Cloud Run service or Compute Engine instance Tyk runs on. No
-	// secret material then has to be stored in Tyk's own configuration.
+	// workload, Cloud Run service or Compute Engine instance the component runs
+	// on. No secret material then has to be stored in the component's own
+	// configuration file.
 	//
 	// Whichever identity is used needs read access to the secrets, which on
 	// Google Cloud means the "roles/secretmanager.secretAccessor" role. Writing

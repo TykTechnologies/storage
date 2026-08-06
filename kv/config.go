@@ -7,6 +7,15 @@ import (
 // Config represents the top-level "kv" configuration block in component configs.
 // It contains global settings and named store definitions.
 //
+// This block is configured per Tyk component — Gateway, Dashboard and so on —
+// in that component's own configuration. Stores are therefore not shared between
+// components: each one resolves secrets through the stores defined in its own
+// config, using its own credentials, environment and network access. A component
+// that has to resolve a reference needs a store for it, so a reference used in
+// more than one component needs the store defined in each. Where the surrounding
+// field documentation says "Tyk" does something, it means the component the store
+// belongs to.
+//
 // Example JSON structure:
 //
 //	{
@@ -32,7 +41,7 @@ type StoreConfig struct {
 	// Type is the kind of secret backend this store talks to. It also decides
 	// how the Config block below is interpreted, since every backend takes its
 	// own settings. One of:
-	//   - "env"                 environment variables of the Tyk process
+	//   - "env"                 environment variables of the Tyk component's process
 	//   - "inline"              literal values written into this configuration
 	//   - "file"                files on the local filesystem
 	//   - "hashicorp_vault"     HashiCorp Vault
@@ -40,19 +49,25 @@ type StoreConfig struct {
 	//   - "aws_secrets_manager" AWS Secrets Manager
 	//   - "gcp_secret_manager"  Google Cloud Secret Manager
 	//   - "azure_key_vault"     Azure Key Vault
-	// Required.
+	//
+	// Which of these a given store can actually use depends on the Tyk component
+	// and its edition: a component registers the backends it supports, so a type
+	// that is valid in one may be unavailable in another and is then treated as an
+	// unsupported type (see Required). Check the documentation of the component
+	// you are configuring. Required.
 	Type ProviderType `json:"type"`
 
-	// Required says whether Tyk may start up without this store. A store fails
-	// to start when its settings cannot be read, its credentials are refused, or
-	// its type is not supported.
+	// Required says whether the Tyk component may start up without this store. A
+	// store fails to start when its settings cannot be read, its credentials are
+	// refused, or its type is not supported.
 	//
 	// Left false — the default — such a failure is written to the log as a
-	// warning and the store is skipped: Tyk starts, and any reference to that
-	// store fails at the point something tries to read it. Set to true, the same
-	// failure stops Tyk from starting and reports the error. Choose true for
-	// stores holding secrets Tyk cannot run properly without, so a mistake shows
-	// up immediately at startup rather than later as a failing API.
+	// warning and the store is skipped: start-up continues, and any reference to
+	// that store fails at the point something tries to read it. Set to true, the
+	// same failure is reported to the component as an error instead, and a
+	// component will normally refuse to start on it. Choose true for stores
+	// holding secrets the component cannot run properly without, so a mistake
+	// shows up immediately at startup rather than later as a failing API.
 	Required bool `json:"required"`
 
 	// Config holds the settings for the backend named by Type: where it lives,

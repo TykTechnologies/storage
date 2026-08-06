@@ -33,16 +33,18 @@ type Config struct {
 	// action, plus PutSecretValue and CreateSecret if Tyk also writes them).
 	//
 	// Both are optional and must be set together. If omitted, the credentials
-	// are obtained from the host instead, using the first of these sources
-	// that provides them:
+	// are obtained from the host running the Tyk component instead, using the
+	// first of these sources that provides them:
 	//   - the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_SESSION_TOKEN
 	//     environment variables;
 	//   - the AWS shared configuration files on the host (see Profile below);
-	//   - the IAM role attached to the EC2 instance or ECS task Tyk runs on;
-	//   - the IAM role attached to Tyk's Kubernetes service account, when
-	//     running on EKS with IAM Roles for Service Accounts (IRSA).
+	//   - the IAM role attached to the EC2 instance or ECS task the component
+	//     runs on;
+	//   - the IAM role attached to the component's Kubernetes service account,
+	//     when running on EKS with IAM Roles for Service Accounts (IRSA).
 	// On a host that already carries an IAM role, leaving both empty is the
-	// recommended setup: no long-lived keys are stored in Tyk's configuration.
+	// recommended setup: no long-lived keys are then stored in the component's
+	// configuration file.
 	AccessKeyID     string `json:"access_key_id"`
 	SecretAccessKey string `json:"secret_access_key"`
 
@@ -55,9 +57,9 @@ type Config struct {
 	// starts, since a session token means nothing without the key it belongs to.
 	SessionToken string `json:"session_token"`
 
-	// Profile is the name of a profile in the AWS shared configuration files
-	// on the host running Tyk (~/.aws/config and ~/.aws/credentials) — the
-	// same files and profile names the AWS CLI uses with `aws --profile
+	// Profile is the name of a profile in the AWS shared configuration files on
+	// the host running the Tyk component (~/.aws/config and ~/.aws/credentials) —
+	// the same files and profile names the AWS CLI uses with `aws --profile
 	// <name>`. Tyk then takes its credentials from that profile. Cannot be
 	// combined with AccessKeyID and SecretAccessKey. Optional.
 	Profile string `json:"profile"`

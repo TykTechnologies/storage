@@ -16,26 +16,29 @@ import (
 type Config struct {
 	// Address is the URL of the Vault server Tyk reads secrets from, for example
 	// "https://vault.example.com:8200". Leave it empty and the address is taken
-	// from the VAULT_ADDR environment variable of the Tyk process, falling back
-	// to https://127.0.0.1:8200 — a Vault running on the same host. Optional,
-	// but set it explicitly unless you are deliberately relying on VAULT_ADDR.
+	// from the VAULT_ADDR environment variable of the Tyk component this store is
+	// configured in, falling back to https://127.0.0.1:8200 — a Vault on the same
+	// host as that component. Optional, but set it explicitly unless you are
+	// deliberately relying on VAULT_ADDR.
 	Address string `json:"address"`
 
 	// AgentAddress is the URL of a Vault Agent running alongside Tyk, for example
 	// "http://127.0.0.1:8100". Vault Agent is a HashiCorp companion process that
 	// sits between an application and Vault, handling login and token renewal on
 	// its behalf. Set this and Tyk sends its requests to the agent instead of to
-	// Address. A token is still required either way. Left empty, the VAULT_AGENT_ADDR
-	// environment variable applies if it is set; with neither, Tyk talks to Vault
-	// directly. Optional.
+	// Address. A token is still required either way. Left empty, the
+	// VAULT_AGENT_ADDR environment variable applies if the component's
+	// environment has it set; with neither, Tyk talks to Vault directly.
+	// Optional.
 	AgentAddress string `json:"agent_address"`
 
 	// MaxRetries is how many additional attempts Tyk makes when Vault answers a
 	// request with a server-side error (an HTTP 5xx, typically a Vault node that
 	// is sealed, standby, or briefly overloaded). Retries are a Vault client
 	// feature and use exponential backoff. Leave it at 0 to keep the Vault
-	// client's own default of 2 retries, or whatever VAULT_MAX_RETRIES says if the
-	// Tyk process has it set; a value above 0 replaces both. Optional.
+	// client's own default of 2 retries, or whatever VAULT_MAX_RETRIES says where
+	// the component's environment has it set; a value above 0 replaces both.
+	// Optional.
 	MaxRetries int `json:"max_retries"`
 
 	// Timeout is how long Tyk waits for a single Vault request — reading or

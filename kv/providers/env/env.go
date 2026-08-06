@@ -32,6 +32,12 @@ var ErrPrefixRequired = errors.New("env: prefix is required")
 
 // Config is used to configure an environment-variable store.
 //
+// The variables read are those of the Tyk component this store is configured in,
+// and nothing else: a store defined for one component cannot see another
+// component's environment, even on the same host. Each component that needs
+// these values must therefore be given them, and where components run in
+// separate containers or on separate hosts, each of those needs them too.
+//
 // One behaviour to be aware of when using this store: an environment variable
 // that does not exist and one set to an empty string cannot be told apart, so a
 // misspelled key quietly resolves to an empty value instead of being reported as
@@ -47,9 +53,9 @@ type Config struct {
 	// It is required, and it is what confines references to the variables you
 	// meant to expose. Since every lookup is prefix + key, a reference can only
 	// reach variables you deliberately named with that prefix, and never the rest
-	// of the environment Tyk runs with — cloud credentials, tokens, PATH and so
-	// on. That matters because references are written in API definitions, which
-	// may come from people less trusted than whoever runs the Tyk host.
+	// of the component's environment — cloud credentials, tokens, PATH and so on.
+	// That matters because references are written in API definitions, which may
+	// be authored by people trusted less than whoever operates the component.
 	//
 	// With no prefix set, every read fails instead of falling back to reading the
 	// whole environment. Use AllowNoPrefix if that fallback is genuinely what you
@@ -66,10 +72,10 @@ type Config struct {
 
 	// AllowNoPrefix permits a store with an empty prefix, which reads environment
 	// variables directly by name with none of the confinement described under
-	// Prefix. Every variable in Tyk's environment then becomes readable through a
-	// reference, so turn this on only where every reference is as trusted as the
-	// host itself. Defaults to false, so a prefix left out by mistake fails
-	// safely rather than quietly opening up the environment.
+	// Prefix. Every variable in the component's environment then becomes readable
+	// through a reference, so turn this on only where every reference is as
+	// trusted as the component's host itself. Defaults to false, so a prefix left
+	// out by mistake fails safely rather than quietly opening up the environment.
 	AllowNoPrefix bool `json:"allow_no_prefix"`
 }
 

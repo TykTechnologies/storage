@@ -75,8 +75,9 @@ type Config struct {
 	// "workload_identity" credential types. For "managed_identity" it is
 	// optional and selects which identity to use: give the client ID of a
 	// user-assigned identity, or leave it empty to use the system-assigned
-	// identity of the resource Tyk runs on. Fill it in whenever more than one
-	// user-assigned identity is attached, since Azure cannot then choose for you.
+	// identity of the Azure resource the component runs on. Fill it in whenever
+	// more than one user-assigned identity is attached, since Azure cannot then
+	// choose for you.
 	ClientID string `json:"client_id"`
 
 	// ClientSecret is the secret value of the app registration named by ClientID
@@ -90,8 +91,8 @@ type Config struct {
 	ClientSecret string `json:"client_secret"`
 
 	// ClientCertificateFile is the path to the certificate file the app
-	// registration authenticates with, on the host running Tyk. The file must
-	// contain both the certificate and its private key, as PEM or as PKCS#12
+	// registration authenticates with, on the host running the Tyk component.
+	// The file must hold both the certificate and its private key, as PEM or PKCS#12
 	// (a .pfx or .p12 file) — the same certificate that was uploaded to the app
 	// registration in Azure. Required for the "client_certificate" credential
 	// type, ignored otherwise.

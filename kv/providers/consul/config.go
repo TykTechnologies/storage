@@ -13,12 +13,15 @@ import (
 //
 // Every field is optional: a store with no settings at all connects to a Consul
 // agent on the same host. Note that most of the fields, when left empty, fall
-// back to a standard CONSUL_* environment variable of the Tyk process before
-// falling back to the default — each field below says which variable applies to
-// it. This is Consul's own client behaviour, which Tyk does not override, and it
-// means that in a Tyk process holding several Consul stores, every store that
-// omits a field inherits the same environment value. Set the fields explicitly
-// per store wherever they need to differ.
+// back to a standard CONSUL_* environment variable before falling back to the
+// default — each field below says which variable applies to it. This is Consul's
+// own client behaviour, which Tyk does not override.
+//
+// Those variables are read from the environment of the Tyk component this store
+// is configured in, so every Consul store in that one component inherits the
+// same values for the fields it omits. Set the fields explicitly per store
+// wherever they need to differ, and note that the same store configured in
+// another component resolves them against that component's environment instead.
 type Config struct {
 	// Address is the Consul HTTP API endpoint Tyk reads secrets from, given as
 	// host and port with no scheme, for example "consul.example.com:8500". Point
@@ -29,9 +32,9 @@ type Config struct {
 	//
 	// Left empty, the address comes from the CONSUL_HTTP_ADDR environment
 	// variable, falling back to "127.0.0.1:8500". That last fallback is the Consul
-	// client's own default and assumes an agent on the same host as Tyk, which is
-	// unlikely to be what you want outside local development — set this field
-	// explicitly for anything else. Optional.
+	// client's own default and assumes an agent on the same host as the Tyk
+	// component, which is unlikely to be what you want outside local development —
+	// set this field explicitly for anything else. Optional.
 	Address string `json:"address"`
 
 	// Scheme is the protocol Tyk uses to reach the address above: "http" or
@@ -87,8 +90,8 @@ type Config struct {
 	// certificates from a public authority needs none of them. As with the fields
 	// above, each one left empty falls back to its standard Consul environment
 	// variable — CONSUL_TLS_SERVER_NAME, CONSUL_CACERT, CONSUL_CAPATH,
-	// CONSUL_CLIENT_CERT, CONSUL_CLIENT_KEY, and CONSUL_HTTP_SSL_VERIFY — if the
-	// Tyk process has it set.
+	// CONSUL_CLIENT_CERT, CONSUL_CLIENT_KEY, and CONSUL_HTTP_SSL_VERIFY — where
+	// the component's environment has it set.
 	TLSConfig struct {
 		// Address is the hostname to expect in the Consul server's certificate,
 		// when that differs from the host in Address — for example when
