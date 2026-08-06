@@ -15,6 +15,7 @@ import (
 // ErrEmptyKey is returned by Get for an empty key.
 var ErrEmptyKey = errors.New("inline: key must not be empty")
 
+// FIX: Validate me
 // Config is the inline provider's configuration.
 type Config struct {
 	// Data holds literal key/value secrets.

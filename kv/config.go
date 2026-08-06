@@ -20,6 +20,7 @@ type Config struct {
 	Stores map[string]StoreConfig `json:"stores"`
 }
 
+// FIX: Validate me
 // StoreConfig defines the configuration for a single named KV store instance.
 type StoreConfig struct {
 	// Type specifies which provider factory to use.

@@ -9,6 +9,7 @@ import (
 	consulsdk "github.com/hashicorp/consul/api"
 )
 
+// FIX: Validate me
 // Config is the JSON "config" block of a consul store.
 type Config struct {
 	// Address of the consul agent as host:port; the scheme comes from Scheme.

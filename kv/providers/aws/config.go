@@ -10,6 +10,7 @@ import (
 	"github.com/TykTechnologies/storage/kv"
 )
 
+// FIX: Validate me
 // Config is the JSON "config" block of an aws_secrets_manager store.
 type Config struct {
 	// Region is the AWS region the store reads from. Required — each named

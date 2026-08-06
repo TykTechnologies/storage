@@ -11,6 +11,7 @@ import (
 	vaultsdk "github.com/hashicorp/vault/api"
 )
 
+// FIX: Validate me
 // Config is the JSON "config" block of a vault store.
 type Config struct {
 	// Address is the Vault server URL, e.g. "https://vault.example.com:8200".

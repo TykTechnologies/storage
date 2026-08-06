@@ -30,6 +30,7 @@ import (
 // AllowNoPrefix is not set.
 var ErrPrefixRequired = errors.New("env: prefix is required")
 
+// FIX: Validate me
 // Config is the env provider's configuration.
 type Config struct {
 	// Prefix is prepended literally to the (optionally uppercased) key before the

@@ -15,6 +15,7 @@ import (
 	"github.com/TykTechnologies/storage/kv"
 )
 
+// FIX: Validate me
 // Config is the file provider's configuration.
 type Config struct {
 	// BasePath is the mandatory security boundary for file references.

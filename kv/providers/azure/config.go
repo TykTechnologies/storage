@@ -21,6 +21,7 @@ const defaultCredentialType = "managed_identity"
 // guidRe matches the 36-char canonical UUID.
 var guidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
+// FIX: Validate me
 // Config is the JSON "config" block of an azure_key_vault store.
 type Config struct {
 	// VaultURL is the Key Vault data-plane URL. Required.

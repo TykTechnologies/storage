@@ -32,6 +32,7 @@ var (
 	allowedTransports       = []string{"grpc", "rest"}
 )
 
+// FIX: Validate me
 // Config is the JSON "config" block of a gcp_secret_manager store.
 type Config struct {
 	// ProjectID is the GCP project that owns the secrets. Required.
