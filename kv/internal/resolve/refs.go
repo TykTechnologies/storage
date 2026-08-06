@@ -5,18 +5,18 @@ import (
 	"strings"
 )
 
-// refKey identifies a resolution target: a fragment of a secret.
-type refKey struct {
-	store    string
-	path     string
-	fragment string
-}
-
 // ParseWholeValue is the exported boundary over parseWholeValue for callers
 // outside the resolve engine that must parse a kv:// reference without resolving it.
 func ParseWholeValue(input string) (store, path, fragment string, ok bool, err error) {
 	rk, ok, err := parseWholeValue(input)
 	return rk.store, rk.path, rk.fragment, ok, err
+}
+
+// refKey identifies a resolution target: a fragment of a secret.
+type refKey struct {
+	store    string
+	path     string
+	fragment string
 }
 
 // pathKey identifies a backend fetch target — a secret at {store, path},
