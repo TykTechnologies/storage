@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/TykTechnologies/storage/kv"
 	vaultsdk "github.com/hashicorp/vault/api"
@@ -55,6 +56,25 @@ type Config struct {
 	// "/data" after the first segment, so existing single-segment-mount configs
 	// are unaffected. Ignored for KV v1 (which has no data segment).
 	MountPath string `json:"mount_path"`
+
+	// Namespace scopes every request to a Vault namespace, e.g. "team-a" or a
+	// nested "team-a/prod". The server resolves the final path as
+	// "<namespace>/<mount>/<key>", so it does NOT change how MountPath or the KV
+	// v2 "/data" segment are computed here — the two are orthogonal.
+	//
+	// Namespaces are a Vault ENTERPRISE / HCP feature. Against Community Vault a
+	// non-empty value makes every request fail. We deliberately do NOT validate
+	// the name here: the rules (reserved words, etc.) are the server's contract,
+	// and the factory performs no network I/O, so an invalid or unlicensed namespace
+	// can only be reported at request time regardless. The value is only normalized.
+	//
+	// Optional. When empty, the namespace is NOT forced to root: the Vault client
+	// still inherits the process-global VAULT_NAMESPACE environment variable when
+	// it is set, consistent with how Address/Token fall back to VAULT_ADDR/
+	// VAULT_TOKEN. In a multi-store process this means every store that omits the
+	// field shares that env-level namespace, so set it explicitly per store when
+	// they must differ.
+	Namespace string `json:"namespace"`
 }
 
 // NewFactory returns a kv.ProviderFactory for HashiCorp Vault stores.
@@ -92,6 +112,17 @@ func NewFactory() kv.ProviderFactory {
 		}
 
 		client.SetToken(conf.Token)
+
+		// Trim any leading/trailing mix of slashes and whitespace in one pass so
+		// copy-pasted values like "team-a/prod/", " team-a/prod", and "/ team-a"
+		// all normalize to "team-a/prod" (interior slashes are preserved). Empty
+		// means "unset": we skip SetNamespace so an inherited VAULT_NAMESPACE is
+		// left intact and the client sends no header.
+		if ns := strings.TrimFunc(conf.Namespace, func(r rune) bool {
+			return r == '/' || unicode.IsSpace(r)
+		}); ns != "" {
+			client.SetNamespace(ns)
+		}
 
 		return &vaultProvider{
 			client:  client,
