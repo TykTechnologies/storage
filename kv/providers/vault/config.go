@@ -12,68 +12,94 @@ import (
 	vaultsdk "github.com/hashicorp/vault/api"
 )
 
-// FIX: Validate me
-// Config is the JSON "config" block of a vault store.
+// Config is used to configure a HashiCorp Vault store.
 type Config struct {
-	// Address is the Vault server URL, e.g. "https://vault.example.com:8200".
-	// Optional: when empty the Vault client default is used (the VAULT_ADDR
-	// environment variable, otherwise https://127.0.0.1:8200).
+	// Address is the URL of the Vault server Tyk reads secrets from, for example
+	// "https://vault.example.com:8200". Leave it empty and the address is taken
+	// from the VAULT_ADDR environment variable of the Tyk process, falling back
+	// to https://127.0.0.1:8200 — a Vault running on the same host. Optional,
+	// but set it explicitly unless you are deliberately relying on VAULT_ADDR.
 	Address string `json:"address"`
 
-	// AgentAddress is the URL of a local Vault Agent, e.g. "http://127.0.0.1:8100".
-	// When set, the client routes requests through the agent instead of Address.
-	// A token is still required.
+	// AgentAddress is the URL of a Vault Agent running alongside Tyk, for example
+	// "http://127.0.0.1:8100". Vault Agent is a HashiCorp companion process that
+	// sits between an application and Vault, handling login and token renewal on
+	// its behalf. Set this and Tyk sends its requests to the agent instead of to
+	// Address. A token is still required either way. Left empty, the VAULT_AGENT_ADDR
+	// environment variable applies if it is set; with neither, Tyk talks to Vault
+	// directly. Optional.
 	AgentAddress string `json:"agent_address"`
 
-	// MaxRetries caps how many times the client retries a request after a
-	// server (5xx) error. Applied only when > 0; otherwise the Vault client
-	// default is kept.
+	// MaxRetries is how many additional attempts Tyk makes when Vault answers a
+	// request with a server-side error (an HTTP 5xx, typically a Vault node that
+	// is sealed, standby, or briefly overloaded). Retries are a Vault client
+	// feature and use exponential backoff. Leave it at 0 to keep the Vault
+	// client's own default of 2 retries, or whatever VAULT_MAX_RETRIES says if the
+	// Tyk process has it set; a value above 0 replaces both. Optional.
 	MaxRetries int `json:"max_retries"`
 
-	// Timeout bounds each Vault request. It is a Go duration string such as
-	// "5s" or "500ms"; an empty value means "unset", leaving the SecretStore to
-	// apply its own default.
+	// Timeout is how long Tyk waits for a single Vault request — reading or
+	// writing one secret — before giving up and reporting the store as
+	// unavailable. Give it as a Go duration string: "5s", "500ms", "1m".
+	// Defaults to 5s when omitted; a value Tyk cannot read as a duration stops
+	// the store from starting. Optional.
 	Timeout string `json:"timeout"`
 
-	// Token authenticates requests to Vault. Required.
+	// Token is the Vault token Tyk authenticates with. Every Vault request
+	// carries it, and the policies attached to it decide which secrets Tyk can
+	// read. Required — including when AgentAddress is set, as Vault has no
+	// usable "no token" mode.
+	//
+	// Note that Vault tokens expire. For a long-running Tyk deployment, prefer a
+	// token whose lifetime you manage outside Tyk — via Vault Agent, or by
+	// renewing and re-issuing the configuration — over a short-lived token that
+	// will silently stop working.
 	Token string `json:"token"`
 
-	// KVVersion selects the KV secrets engine version. Any value other than 1
-	// means v2 (the default): secrets live under "<mount>/data/<path>" and are
-	// wrapped in a "data" envelope. 1 selects v1, where the path is used as-is.
+	// KVVersion is the version of Vault's KV secrets engine that holds the
+	// secrets. Vault has two, and they store data differently, so Tyk has to
+	// know which it is talking to. Set it to 1 for KV version 1; any other
+	// value, including leaving it unset, means version 2 — the current default
+	// in Vault and the one you get unless you chose otherwise when enabling the
+	// engine. If reads fail with secrets you know exist, this is the first field
+	// to check. Optional.
 	KVVersion int `json:"kv_version"`
 
-	// MountPath is the path the KV secrets engine is mounted at, e.g. "secret"
-	// or a nested "tenants/a/kv". It is OPTIONAL and only affects KV v2.
+	// MountPath is where the KV secrets engine is mounted in Vault — "secret"
+	// for a stock setup, or something nested such as "tenants/a/kv". Tyk needs
+	// this because KV version 2 stores secrets one level below the mount
+	// internally, and Tyk has to insert that step in the right place when
+	// building the request.
 	//
-	// The key passed to Get is always the full logical path under this mount
-	// (it must start with MountPath). When set, the provider inserts the v2
-	// "/data/" segment immediately after MountPath instead of assuming the mount
-	// is the first path segment — which is what makes nested mounts work. A key
-	// that is not under MountPath is rejected.
+	// Keys in references are always the full path including the mount, for
+	// example kv://vault-prod/secret/my-app/db with a mount of "secret". A key
+	// that does not sit under MountPath is rejected.
 	//
-	// When empty, the provider falls back to the legacy behavior of injecting
-	// "/data" after the first segment, so existing single-segment-mount configs
-	// are unaffected. Ignored for KV v1 (which has no data segment).
+	// Optional, and only used for KV version 2. Leave it empty and Tyk assumes
+	// the mount is the first segment of the key, which is correct for the usual
+	// single-segment mounts; set it whenever your mount has more than one
+	// segment.
 	MountPath string `json:"mount_path"`
 
-	// Namespace scopes every request to a Vault namespace, e.g. "team-a" or a
-	// nested "team-a/prod". The server resolves the final path as
-	// "<namespace>/<mount>/<key>", so it does NOT change how MountPath or the KV
-	// v2 "/data" segment are computed here — the two are orthogonal.
+	// Namespace confines every request to a Vault namespace, for example "team-a"
+	// or a nested "team-a/prod". Namespaces are isolated tenants within one Vault
+	// cluster, each with its own mounts, policies and secrets, so the same key
+	// can exist in several of them.
 	//
-	// Namespaces are a Vault ENTERPRISE / HCP feature. Against Community Vault a
-	// non-empty value makes every request fail. We deliberately do NOT validate
-	// the name here: the rules (reserved words, etc.) are the server's contract,
-	// and the factory performs no network I/O, so an invalid or unlicensed namespace
-	// can only be reported at request time regardless. The value is only normalized.
+	// Namespaces are a feature of Vault Enterprise and HCP Vault only. Against
+	// Community Vault, setting this makes every request fail. Leading and
+	// trailing slashes and spaces are tidied up, so "team-a/prod/" and
+	// "team-a/prod" are equivalent.
 	//
-	// Optional. When empty, the namespace is NOT forced to root: the Vault client
-	// still inherits the process-global VAULT_NAMESPACE environment variable when
-	// it is set, consistent with how Address/Token fall back to VAULT_ADDR/
-	// VAULT_TOKEN. In a multi-store process this means every store that omits the
-	// field shares that env-level namespace, so set it explicitly per store when
-	// they must differ.
+	// Optional. Leaving it empty does not mean the root namespace: Tyk then
+	// inherits whatever the VAULT_NAMESPACE environment variable of its process
+	// says, the same way Address falls back to VAULT_ADDR. All stores that omit
+	// this field therefore share that one namespace, so set it per store when they
+	// need to differ.
+	//
+	// The name is not checked when the store starts — Tyk makes no request to
+	// Vault at that point — so a namespace that does not exist, is spelled wrongly,
+	// or is unavailable on your Vault licence only shows up as reads failing.
 	Namespace string `json:"namespace"`
 }
 
