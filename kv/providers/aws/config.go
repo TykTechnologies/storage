@@ -50,8 +50,9 @@ type Config struct {
 	// short-lived credentials issued by AWS STS rather than a permanent IAM
 	// access key. STS hands back three values together — an access key ID, a
 	// secret access key and a session token — so put the third one here.
-	// Leave it empty for a permanent access key. Only used together with
-	// AccessKeyID and SecretAccessKey. Optional.
+	// Leave it empty for a permanent access key. Optional, but only alongside
+	// AccessKeyID and SecretAccessKey: on its own it is rejected when the store
+	// starts, since a session token means nothing without the key it belongs to.
 	SessionToken string `json:"session_token"`
 
 	// Profile is the name of a profile in the AWS shared configuration files
@@ -75,15 +76,19 @@ type Config struct {
 	// callers to present, as an extra check that the caller really is who the
 	// role expects. Where the role's trust policy asks for an external ID —
 	// common when the role belongs to another account or to a third party —
-	// enter the same value here, otherwise AWS refuses to grant the role. Only
-	// used with RoleARN. Optional.
+	// enter the same value here, otherwise AWS refuses to grant the role.
+	// Optional, but only alongside RoleARN: without a role to assume there is
+	// nothing to present it to, so on its own it is rejected when the store
+	// starts.
 	ExternalID string `json:"external_id"`
 
 	// RoleSessionName is a name of your choosing for Tyk's use of the role,
 	// for example "tyk-gateway". AWS records it against every request Tyk
 	// makes with that role, so it appears in CloudTrail logs and makes Tyk's
 	// activity easy to tell apart from anything else using the same role. AWS
-	// generates a name when this is empty. Only used with RoleARN. Optional.
+	// generates a name when this is empty. Optional, but only alongside RoleARN:
+	// with no role being assumed there is no session to name, so on its own it
+	// is rejected when the store starts.
 	RoleSessionName string `json:"role_session_name"`
 
 	// VersionStage makes the store read the version of a secret that carries
@@ -111,7 +116,8 @@ type Config struct {
 	// Timeout is how long Tyk waits for a single Secrets Manager request —
 	// reading or writing one secret — before giving up and reporting the store
 	// as unavailable. Give it as a Go duration string: "5s", "500ms", "1m".
-	// Defaults to 5s when omitted. Optional.
+	// Defaults to 5s when omitted; a value Tyk cannot read as a duration stops
+	// the store from starting. Optional.
 	Timeout string `json:"timeout"`
 
 	// TrimTrailingNewline removes a single newline character from the end of
