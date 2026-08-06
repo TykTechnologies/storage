@@ -15,19 +15,28 @@ import (
 	"github.com/TykTechnologies/storage/kv"
 )
 
-// FIX: Validate me
-// Config is the file provider's configuration.
+// Config is used to configure a local-file store.
 type Config struct {
-	// BasePath is the mandatory security boundary for file references.
+	// BasePath is the directory the store reads secrets from, and the boundary
+	// that keys are not allowed to leave. A common use is a directory of
+	// Kubernetes Secrets mounted into the Tyk container, where each secret shows
+	// up as a file whose contents are the value.
 	//
-	// It must be an absolute path: a relative value is rejected at construction
-	// so the boundary's location is explicit and never depends on the process
-	// working directory. When set, keys must be relative paths that resolve
-	// within this directory — absolute keys and ".." traversal are rejected,
-	// and symlinks that escape the directory after resolution are rejected.
+	// Keys are paths relative to this directory: with a base path of
+	// "/etc/tyk/secrets", the reference kv://<store-name>/db/password reads the
+	// file /etc/tyk/secrets/db/password. The value is the file's contents with any
+	// trailing newlines removed.
 	//
-	// When empty, the provider resolves nothing: every key is rejected, so file
-	// references are effectively disabled until a base_path is configured.
+	// It must be an absolute path. A relative one is refused when the store is
+	// created, so the location can never depend on which directory Tyk happened
+	// to be started from. Keys that try to escape the directory are refused too:
+	// absolute paths, paths containing "..", and symbolic links that lead outside
+	// it. This is what stops a reference from reaching arbitrary files on the
+	// host, which matters because references are written in API definitions, and
+	// those may come from people less trusted than whoever runs Tyk.
+	//
+	// Leaving it empty switches the store off: every read fails until a base path
+	// is configured.
 	BasePath string `json:"base_path"`
 }
 
