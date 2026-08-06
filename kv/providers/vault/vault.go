@@ -11,6 +11,7 @@ package vault
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -82,6 +83,45 @@ func (vp *vaultProvider) Get(ctx context.Context, key string) (string, error) {
 	}
 
 	return string(b), nil
+}
+
+// Set writes value as the secret's data at key. For KV v2 the map is wrapped in the
+// "data" envelope and "/data" is injected into the path; for KV v1 the map
+// is written as-is. When mount_path is set, key must be the full logical path under that mount.
+//
+// A value that is not a JSON object is rejected before any request; a backend or
+// transport failure returns *kv.StoreUnavailableError.
+func (vp *vaultProvider) Set(ctx context.Context, key, value string) error {
+	apiPath, err := vp.physicalPath(key)
+	if err != nil {
+		return err
+	}
+
+	var fields map[string]any
+
+	err = json.Unmarshal([]byte(value), &fields)
+	if err != nil {
+		return fmt.Errorf("vault: value must be a JSON object: %w", err)
+	}
+
+	if fields == nil {
+		return errors.New("vault: value must be a JSON object")
+	}
+
+	data := fields
+	if vp.kvv2 {
+		data = map[string]any{"data": fields}
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, kv.EffectiveTimeout(vp.timeout))
+	defer cancel()
+
+	_, err = vp.client.Logical().WriteWithContext(ctx, apiPath, data)
+	if err != nil {
+		return &kv.StoreUnavailableError{KeyPath: key, Err: err}
+	}
+
+	return nil
 }
 
 func (vp *vaultProvider) Timeout() time.Duration {

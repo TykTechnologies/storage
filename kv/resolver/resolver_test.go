@@ -136,3 +136,129 @@ func TestProviderErrorsPropagateThroughFacade(t *testing.T) {
 	require.ErrorAs(t, err, &got)
 	require.Equal(t, "vault", got.StoreName)
 }
+
+func TestParseReference(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantOK  bool
+		wantErr bool
+		want    resolver.Reference
+	}{
+		// --- valid kv:// references (ok=true, err=nil) ---
+		{
+			name:   "store and multi-segment path, no fragment",
+			input:  "kv://vault/secret/tyk-apis",
+			wantOK: true,
+			want:   resolver.Reference{Store: "vault", Path: "secret/tyk-apis"},
+		},
+		{
+			name:   "store, path and fragment",
+			input:  "kv://vault/secret/tyk-apis#api_key",
+			wantOK: true,
+			want:   resolver.Reference{Store: "vault", Path: "secret/tyk-apis", Field: "api_key"},
+		},
+		{
+			name:   "single-segment path",
+			input:  "kv://env/MY_VAR",
+			wantOK: true,
+			want:   resolver.Reference{Store: "env", Path: "MY_VAR"},
+		},
+		{
+			name:   "consul-style multi-segment path, no fragment",
+			input:  "kv://consul/tyk-apis/edge/key",
+			wantOK: true,
+			want:   resolver.Reference{Store: "consul", Path: "tyk-apis/edge/key"},
+		},
+		{
+			name:   "fragment carrying a JSON pointer is preserved verbatim",
+			input:  "kv://vault/db/creds#data/password",
+			wantOK: true,
+			want:   resolver.Reference{Store: "vault", Path: "db/creds", Field: "data/password"},
+		},
+		{
+			name:   "only the first hash splits path from fragment",
+			input:  "kv://s/p#a#b",
+			wantOK: true,
+			want:   resolver.Reference{Store: "s", Path: "p", Field: "a#b"},
+		},
+		{
+			name:   "trailing hash yields an empty fragment (valid, no field)",
+			input:  "kv://vault/secret/app#",
+			wantOK: true,
+			want:   resolver.Reference{Store: "vault", Path: "secret/app"},
+		},
+
+		// --- not a kv:// whole-value reference (ok=false, err=nil) ---
+		{
+			name:  "legacy vault scheme is not a kv:// reference",
+			input: "vault://secret/tyk-apis.api_key",
+		},
+		{
+			name:  "legacy consul scheme is not a kv:// reference",
+			input: "consul://tyk-apis/edge_key",
+		},
+		{
+			name:  "plain literal is not a reference",
+			input: "just-a-literal-value",
+		},
+		{
+			name:  "inline token is not a whole-value reference",
+			input: "$kv{vault:secret/tyk-apis#api_key}",
+		},
+		{
+			name:  "empty string is not a reference",
+			input: "",
+		},
+
+		// --- malformed kv:// references (ok=true, err wraps ErrMalformedReference) ---
+		{
+			name:    "missing path separator",
+			input:   "kv://vaultonly",
+			wantOK:  true,
+			wantErr: true,
+		},
+		{
+			name:    "prefix only",
+			input:   "kv://",
+			wantOK:  true,
+			wantErr: true,
+		},
+		{
+			name:    "empty store name",
+			input:   "kv:///secret/x",
+			wantOK:  true,
+			wantErr: true,
+		},
+		{
+			name:    "empty path",
+			input:   "kv://vault/",
+			wantOK:  true,
+			wantErr: true,
+		},
+		{
+			name:    "empty store and path",
+			input:   "kv:///",
+			wantOK:  true,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok, err := resolver.ParseReference(tt.input)
+
+			require.Equal(t, tt.wantOK, ok)
+
+			if tt.wantErr {
+				require.ErrorIs(t, err, resolver.ErrMalformedReference,
+					"a malformed kv:// reference must wrap ErrMalformedReference")
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
