@@ -14,6 +14,7 @@ import (
 	"github.com/TykTechnologies/storage/kv/providers/vault"
 	"github.com/TykTechnologies/storage/kv/registry"
 	"github.com/TykTechnologies/storage/kv/resolver"
+	vaultsdk "github.com/hashicorp/vault/api"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,11 +42,11 @@ func clearVaultEnv(t *testing.T) {
 	t.Helper()
 
 	for _, k := range []string{
-		"VAULT_ADDR", "VAULT_AGENT_ADDR", "VAULT_TOKEN",
-		"VAULT_CACERT", "VAULT_CAPATH", "VAULT_CLIENT_CERT",
-		"VAULT_CLIENT_KEY", "VAULT_SKIP_VERIFY", "VAULT_TLS_SERVER_NAME",
-		"VAULT_MAX_RETRIES", "VAULT_CLIENT_TIMEOUT", "VAULT_RATE_LIMIT",
-		"VAULT_NAMESPACE",
+		vaultsdk.EnvVaultAddress, vaultsdk.EnvVaultAgentAddr, vaultsdk.EnvVaultToken,
+		vaultsdk.EnvVaultCACert, vaultsdk.EnvVaultCAPath, vaultsdk.EnvVaultClientCert,
+		vaultsdk.EnvVaultClientKey, vaultsdk.EnvVaultSkipVerify, vaultsdk.EnvVaultTLSServerName,
+		vaultsdk.EnvVaultMaxRetries, vaultsdk.EnvVaultClientTimeout, vaultsdk.EnvRateLimit,
+		vaultsdk.EnvVaultNamespace,
 	} {
 		t.Setenv(k, "")
 	}
@@ -60,6 +61,7 @@ type vaultStub struct {
 	bodies     []string
 	namespaces []string
 	nsPresent  []bool
+	tokens     []string
 }
 
 // requests returns a copy of the recorded "METHOD /path" entries.
@@ -107,6 +109,17 @@ func (s *vaultStub) lastBody() string {
 	return s.bodies[len(s.bodies)-1]
 }
 
+func (s *vaultStub) lastToken() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.tokens) == 0 {
+		return ""
+	}
+
+	return s.tokens[len(s.tokens)-1]
+}
+
 func newVaultStub(t *testing.T, handler http.HandlerFunc) *vaultStub {
 	t.Helper()
 
@@ -120,6 +133,7 @@ func newVaultStub(t *testing.T, handler http.HandlerFunc) *vaultStub {
 		s.bodies = append(s.bodies, string(body))
 		s.namespaces = append(s.namespaces, r.Header.Get("X-Vault-Namespace"))
 		s.nsPresent = append(s.nsPresent, len(r.Header.Values("X-Vault-Namespace")) > 0)
+		s.tokens = append(s.tokens, r.Header.Get("X-Vault-Token"))
 		s.mu.Unlock()
 
 		handler(w, r)
@@ -281,6 +295,49 @@ func TestNewFactory(t *testing.T) {
 			require.NotNil(t, p)
 		})
 	}
+}
+
+func TestNewFactory_TokenFromEnv(t *testing.T) {
+	clearVaultEnv(t)
+	t.Setenv(vaultsdk.EnvVaultToken, "token-from-env")
+
+	stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, kvv2Envelope(map[string]any{"api_key": "abc123"}))
+	})
+
+	raw := json.RawMessage(`{"address":"` + stub.url + `","kv_version":2}`)
+	p, err := vault.NewFactory()(raw)
+	require.NoError(t, err, "an empty config token must be satisfied by VAULT_TOKEN")
+	require.NotNil(t, p)
+
+	_, err = p.Get(t.Context(), "secret/myapp/config")
+	require.NoError(t, err)
+	require.Equal(t, "token-from-env", stub.lastToken(), "the client must authenticate with the env token")
+}
+
+func TestNewFactory_ConfigTokenBeatsEnv(t *testing.T) {
+	clearVaultEnv(t)
+	t.Setenv(vaultsdk.EnvVaultToken, "token-from-env")
+
+	stub := newVaultStub(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, kvv2Envelope(map[string]any{"api_key": "abc123"}))
+	})
+
+	raw := json.RawMessage(`{"address":"` + stub.url + `","token":"token-from-config","kv_version":2}`)
+	p, err := vault.NewFactory()(raw)
+	require.NoError(t, err)
+
+	_, err = p.Get(t.Context(), "secret/myapp/config")
+	require.NoError(t, err)
+	require.Equal(t, "token-from-config", stub.lastToken(), "config token must take precedence over VAULT_TOKEN")
+}
+
+func TestNewFactory_NoTokenAnywhereErrors(t *testing.T) {
+	clearVaultEnv(t)
+
+	p, err := vault.NewFactory()(json.RawMessage(`{"address":"http://vault.test:8200"}`))
+	require.Nil(t, p)
+	require.ErrorContains(t, err, vaultsdk.EnvVaultToken)
 }
 
 func TestProvider_ReportsConfiguredTimeout(t *testing.T) {
@@ -585,7 +642,7 @@ func TestNamespace_FromEnvironment(t *testing.T) {
 			})
 
 			clearVaultEnv(t)
-			t.Setenv("VAULT_NAMESPACE", tt.envNamespace)
+			t.Setenv(vaultsdk.EnvVaultNamespace, tt.envNamespace)
 
 			raw, err := json.Marshal(&vault.Config{
 				Address:   stub.url,
