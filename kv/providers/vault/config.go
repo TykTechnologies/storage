@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 	"unicode"
@@ -48,10 +49,17 @@ type Config struct {
 	// the store from starting. Optional.
 	Timeout string `json:"timeout"`
 
-	// Token is the token that Tyk uses to authenticates with Vault. Every request
-	// that Tyk makes to the Vault carries it, and the policies attached to it decide which secrets Tyk can
-	// read. Required — including when AgentAddress is set, as Vault has no
+	// Token is the token Tyk authenticates to Vault with. Every request Tyk makes
+	// to Vault carries it, and the policies attached to it decide which secrets Tyk
+	// can read. Required — including when AgentAddress is set, as Vault has no
 	// usable "no token" mode.
+	//
+	// Left empty, the token is taken from the VAULT_TOKEN environment variable of
+	// the Tyk component's process, the same way Address falls back to VAULT_ADDR; a
+	// token set here takes precedence. VAULT_TOKEN is process-wide, so every store
+	// that omits this field shares it — set it per store when they must differ, or
+	// reference it indirectly (for example "kv://env-store/KEY"). The store still
+	// fails to start when neither source supplies a token.
 	//
 	// Note that Vault tokens expire. For a long-running Tyk deployment, prefer a
 	// token whose lifetime you manage outside Tyk — via Vault Agent, or by
@@ -114,7 +122,8 @@ type Config struct {
 //   - malformed JSON,
 //   - an unparseable timeout (must be a Go duration string, e.g. "5s"),
 //   - a missing token. Vault has no usable zero value, so a token is required
-//     even when agent_address is set.
+//     even when agent_address is set; it may come from the config or, when that
+//     is empty, the VAULT_TOKEN environment variable.
 //
 // The resulting provider is remote: it is NOT Standalone and exposes its timeout
 // via the Timeouter interface, so the registry wraps it in the caching /
@@ -124,6 +133,13 @@ func NewFactory() kv.ProviderFactory {
 		var conf Config
 		if err := parseConfig(raw, &conf); err != nil {
 			return nil, err
+		}
+
+		// Fall back to the standard VAULT_TOKEN environment variable when the config
+		// leaves the token empty — it is the one credential the Vault SDK's
+		// DefaultConfig does not read for us. A token set in the config wins.
+		if conf.Token == "" {
+			conf.Token = os.Getenv(vaultsdk.EnvVaultToken)
 		}
 
 		if err := conf.validate(); err != nil {
@@ -177,7 +193,7 @@ func parseConfig(raw json.RawMessage, conf *Config) error {
 
 func (conf *Config) validate() error {
 	if conf.Token == "" {
-		return errors.New("vault: token is required")
+		return errors.New("vault: token is required (set it in config or the VAULT_TOKEN environment variable)")
 	}
 
 	return nil

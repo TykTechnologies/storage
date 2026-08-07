@@ -2,6 +2,7 @@ package kv
 
 import (
 	"encoding/json"
+	"strings"
 )
 
 // Config represents the top-level "kv" configuration block in component configs.
@@ -33,7 +34,34 @@ type Config struct {
 	// short and stable, because renaming one breaks every reference that uses
 	// it. Configure as many stores as you need, including several of the same
 	// type (one Vault store per environment, for instance).
-	Stores map[string]StoreConfig `json:"stores"`
+	Stores Stores `json:"stores"`
+}
+
+// Stores is a set of named store definitions, keyed by the name each store is
+// referenced by.
+//
+// Beyond being a map, Stores implements Decode so configuration loaders that
+// support custom decoders — kelseyhightower/envconfig in particular — can
+// populate the whole set from a single environment variable holding a JSON
+// object. That is the only way store definitions can come from the environment:
+// the map is keyed by operator-chosen names and every entry carries an opaque
+// per-provider Config blob, neither of which a flat NAME=value convention can
+// express.
+type Stores map[string]StoreConfig
+
+// Decode populates s from value, a JSON object mapping each store name to its
+// definition — the same shape as the "stores" field of a config file:
+//
+//	{"vault-prod": {"type": "hashicorp_vault", "required": true, "config": {...}}}
+//
+// It satisfies the envconfig.Decoder interface structurally,
+// so a component can expose its store definitions through an environment variable.
+func (s *Stores) Decode(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+
+	return json.Unmarshal([]byte(value), s)
 }
 
 // StoreConfig defines the configuration for a single named KV store instance.
