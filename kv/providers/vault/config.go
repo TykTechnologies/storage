@@ -41,15 +41,15 @@ type Config struct {
 	// Optional.
 	MaxRetries int `json:"max_retries"`
 
-	// Timeout is how long Tyk waits for a single Vault request — reading or
-	// writing one secret — before giving up and reporting the store as
+	// Timeout is how long Tyk waits for a single Vault request — reading
+	// one secret — before giving up and reporting the store as
 	// unavailable. Give it as a Go duration string: "5s", "500ms", "1m".
 	// Defaults to 5s when omitted; a value Tyk cannot read as a duration stops
 	// the store from starting. Optional.
 	Timeout string `json:"timeout"`
 
-	// Token is the Vault token Tyk authenticates with. Every Vault request
-	// carries it, and the policies attached to it decide which secrets Tyk can
+	// Token is the token that Tyk uses to authenticates with Vault. Every request
+	// that Tyk makes to the Vault carries it, and the policies attached to it decide which secrets Tyk can
 	// read. Required — including when AgentAddress is set, as Vault has no
 	// usable "no token" mode.
 	//

@@ -56,8 +56,7 @@ type Config struct {
 	// Whichever is chosen, the identity needs permission to read the secrets:
 	// the "Key Vault Secrets User" role when the vault uses Azure role-based
 	// access control, or a "get" secret permission when it uses the older vault
-	// access policies. Writing secrets through Tyk needs "Key Vault Secrets
-	// Officer" or a "set" permission.
+	// access policies.
 	CredentialType string `json:"credential_type"`
 
 	// TenantID identifies the Microsoft Entra ID directory the identity belongs
@@ -125,8 +124,8 @@ type Config struct {
 	// type, ignored otherwise.
 	FederatedTokenFile string `json:"federated_token_file"`
 
-	// Timeout is how long Tyk waits for a single Key Vault request — reading or
-	// writing one secret — before giving up and reporting the store as
+	// Timeout is how long Tyk waits for a single Key Vault request — reading
+	// one secret — before giving up and reporting the store as
 	// unavailable. Give it as a Go duration string: "5s", "500ms", "1m".
 	// Defaults to 5s when omitted; a value Tyk cannot read as a duration stops
 	// the store from starting. Optional.

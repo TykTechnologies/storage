@@ -43,7 +43,7 @@ type Config struct {
 	// QuotaProjectID names a different Google Cloud project to charge the API
 	// requests to, for both billing and API quota. By default the requests count
 	// against the project that owns the secrets. Set this only if your
-	// organisation deliberately separates the two — the usual reason is a shared
+	// organization deliberately separates the two — the usual reason is a shared
 	// secrets project whose quota should not be consumed by every service reading
 	// from it. The identity Tyk uses needs the "serviceusage.services.use"
 	// permission on the project named here. Optional.
@@ -72,7 +72,7 @@ type Config struct {
 	//
 	// Required when a credential is supplied, and must be left empty when none
 	// is: with no credential Tyk uses Application Default Credentials instead
-	// (see CredentialsFile), which recognise their own type, so a value here
+	// (see CredentialsFile), which recognize their own type, so a value here
 	// would do nothing and is rejected as a likely mistake. Any other value is
 	// rejected as well. Optional.
 	//
@@ -107,9 +107,7 @@ type Config struct {
 	// configuration file.
 	//
 	// Whichever identity is used needs read access to the secrets, which on
-	// Google Cloud means the "roles/secretmanager.secretAccessor" role. Writing
-	// secrets through Tyk needs more: permission to add a secret version, and to
-	// create a secret the first time one is written.
+	// Google Cloud means the "roles/secretmanager.secretAccessor" role.
 	CredentialsFile string `json:"credentials_file"`
 
 	// CredentialsJSON is the content of a Google Cloud credentials JSON file,
@@ -140,14 +138,14 @@ type Config struct {
 	// through to the one allowed to act as the target. Each must hold the
 	// "roles/iam.serviceAccountTokenCreator" role on the next.
 	//
-	// Leave it empty unless your organisation has deliberately set up such a
+	// Leave it empty unless your organization has deliberately set up such a
 	// chain. Optional, but only alongside ImpersonateServiceAccount: with no
 	// service account to reach, a chain leads nowhere, so on its own it is
 	// rejected when the store starts.
 	ImpersonateDelegates []string `json:"impersonate_delegates"`
 
 	// Timeout is how long Tyk waits for a single Secret Manager request — reading
-	// or writing one secret — before giving up and reporting the store as
+	// one secret — before giving up and reporting the store as
 	// unavailable. Give it as a Go duration string: "5s", "500ms", "1m".
 	// Defaults to 5s when omitted; a value Tyk cannot read as a duration stops
 	// the store from starting. Optional.
