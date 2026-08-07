@@ -30,7 +30,7 @@ type Config struct {
 	// when you create an access key. They are not fields of a secret: they
 	// identify the IAM user Tyk authenticates as, and that user needs
 	// permission to read the secrets (the secretsmanager:GetSecretValue
-	// action, plus PutSecretValue and CreateSecret if Tyk also writes them).
+	// action.
 	//
 	// Both are optional and must be set together. If omitted, the credentials
 	// are obtained from the host running the Tyk component instead, using the
@@ -46,6 +46,7 @@ type Config struct {
 	// recommended setup: no long-lived keys are then stored in the component's
 	// configuration file.
 	AccessKeyID     string `json:"access_key_id"`
+    // The AWS IAM Secret Access Key used to identify the IAM user that Tyk authenticates as. See AccessKeyID for more details.
 	SecretAccessKey string `json:"secret_access_key"`
 
 	// SessionToken is needed only when AccessKeyID and SecretAccessKey are
@@ -101,8 +102,7 @@ type Config struct {
 	// what almost every store wants. Cannot be combined with VersionID.
 	// Optional.
 	//
-	// With any label other than "AWSCURRENT" the store becomes read-only: Tyk
-	// rejects attempts to write secrets through it.
+	// With any label other than "AWSCURRENT" the store becomes read-only.
 	VersionStage string `json:"version_stage"`
 
 	// VersionID makes the store read one exact, unchanging version of a
@@ -111,12 +111,11 @@ type Config struct {
 	// is for holding to a known value rather than for everyday use. Cannot be
 	// combined with VersionStage. Optional.
 	//
-	// A store fixed to one version is read-only: Tyk rejects attempts to
-	// write secrets through it.
+	// A store fixed to one version is read-only.
 	VersionID string `json:"version_id"`
 
 	// Timeout is how long Tyk waits for a single Secrets Manager request —
-	// reading or writing one secret — before giving up and reporting the store
+	// reading one secret — before giving up and reporting the store
 	// as unavailable. Give it as a Go duration string: "5s", "500ms", "1m".
 	// Defaults to 5s when omitted; a value Tyk cannot read as a duration stops
 	// the store from starting. Optional.

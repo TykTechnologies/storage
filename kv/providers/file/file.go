@@ -24,7 +24,7 @@ type Config struct {
 	// mounted into that component's container, where each secret shows up as a
 	// file whose contents are the value.
 	//
-	// Keys are paths relative to this directory: with a base path of
+	// Keys are paths relative to this directory: with base_path set to
 	// "/etc/tyk/secrets", the reference kv://<store-name>/db/password reads the
 	// file /etc/tyk/secrets/db/password. The value is the file's contents with any
 	// trailing newlines removed.
