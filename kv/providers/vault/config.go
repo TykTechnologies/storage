@@ -49,10 +49,10 @@ type Config struct {
 	// the store from starting. Optional.
 	Timeout string `json:"timeout"`
 
-	// Token is the token Tyk authenticates to Vault with. Every request Tyk makes
-	// to Vault carries it, and the policies attached to it decide which secrets Tyk
-	// can read. Required — including when AgentAddress is set, as Vault has no
-	// usable "no token" mode.
+	// Token is the token that Tyk uses to authenticates with Vault. Every request
+	// that Tyk makes to Vault carries it, and the policies attached to it decide
+	// which secrets Tyk can read. Required — including when AgentAddress is set,
+	// as Vault has no usable "no token" mode.
 	//
 	// Left empty, the token is taken from the VAULT_TOKEN environment variable of
 	// the Tyk component's process, the same way Address falls back to VAULT_ADDR; a
