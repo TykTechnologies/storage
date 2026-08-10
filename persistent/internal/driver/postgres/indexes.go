@@ -263,38 +263,43 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
 		idx.Keys = append(idx.Keys, model.DBM{idxRow.ColumnName: idxRow.Direction})
 	}
 
+	// TTL metadata only annotates indexes already collected above, so when there
+	// are no secondary indexes there is nothing to enrich — skip both round-trips.
+	//
 	// index_metadata is only created alongside the first TTL index, so its
 	// absence just means there is no TTL metadata to report. Any other failure
 	// must surface: silently skipping it would report TTL indexes as plain ones.
-	metaExists, err := d.tableExists(ctx, "index_metadata")
-	if err != nil {
-		return nil, err
-	}
-
-	if metaExists {
-		quotedTable, err := sanitizeIdentifier(tableName)
+	if len(indexMap) > 0 {
+		metaExists, err := d.tableExists(ctx, "index_metadata")
 		if err != nil {
 			return nil, err
 		}
 
-		type ttlMeta struct {
-			IndexName  string `gorm:"column:index_name"`
-			TTLSeconds int    `gorm:"column:ttl_seconds"`
-		}
+		if metaExists {
+			quotedTable, err := sanitizeIdentifier(tableName)
+			if err != nil {
+				return nil, err
+			}
 
-		var metas []ttlMeta
+			type ttlMeta struct {
+				IndexName  string `gorm:"column:index_name"`
+				TTLSeconds int    `gorm:"column:ttl_seconds"`
+			}
 
-		ttlQ := `SELECT index_name, ttl_seconds FROM index_metadata WHERE table_name = ?`
-		if err := d.db.WithContext(ctx).Raw(ttlQ, quotedTable).Scan(&metas).Error; err != nil {
-			return nil, fmt.Errorf("failed to query TTL index metadata: %w", err)
-		}
+			var metas []ttlMeta
 
-		for _, m := range metas {
-			// pq.QuoteIdentifier wraps names in double-quotes; strip before map lookup.
-			key := strings.Trim(m.IndexName, `"`)
-			if idx, found := indexMap[key]; found {
-				idx.IsTTLIndex = true
-				idx.TTL = m.TTLSeconds
+			ttlQ := `SELECT index_name, ttl_seconds FROM index_metadata WHERE table_name = ?`
+			if err := d.db.WithContext(ctx).Raw(ttlQ, quotedTable).Scan(&metas).Error; err != nil {
+				return nil, fmt.Errorf("failed to query TTL index metadata: %w", err)
+			}
+
+			for _, m := range metas {
+				// pq.QuoteIdentifier wraps names in double-quotes; strip before map lookup.
+				key := strings.Trim(m.IndexName, `"`)
+				if idx, found := indexMap[key]; found {
+					idx.IsTTLIndex = true
+					idx.TTL = m.TTLSeconds
+				}
 			}
 		}
 	}

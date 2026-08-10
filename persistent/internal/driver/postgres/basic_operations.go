@@ -349,99 +349,85 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 		return err
 	}
 
-	tx := d.db.WithContext(ctx).Begin()
-	if tx.Error != nil {
-		return tx.Error
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			panic(r)
-		}
-	}()
-
-	// pg_advisory_xact_lock serializes concurrent Upserts that use the same
-	// (table, query) pair; it is released automatically when the tx ends.
-	// It does NOT protect against Upserts reaching the same row through a
-	// different filter, or writers bypassing Upsert (Insert, raw SQL) —
-	// uniqueness beyond the primary key is not enforced at the schema level.
-	lockKey, err := upsertLockKey(tableName, query)
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", lockKey).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
-
 	originalID := row.GetObjectID()
-	updateDB := tx.Table(tableName)
 
-	updateDB, err = d.translateQuery(updateDB, query, row)
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	_, updateMap, err := d.applyMongoUpdateOperators(updateDB, update)
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	// Use COUNT to determine existence rather than RowsAffected from Updates.
-	// Updates({}) produces 0 RowsAffected when updateMap is empty, which would
-	// incorrectly fall through to the INSERT branch for an existing record.
-	// Trade-off: one extra round-trip per Upsert call inside the advisory lock.
-	var count int64
-	if err := updateDB.Count(&count).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	if count > 0 {
-		if len(updateMap) > 0 {
-			if result := updateDB.Updates(updateMap); result.Error != nil {
-				tx.Rollback()
-				return result.Error
-			}
-		}
-
-		if err := d.fetchUpdatedRow(tx, tableName, query, row); err != nil {
-			tx.Rollback()
+	// Transaction auto-commits when the callback returns nil and rolls back on
+	// any returned error or panic, so each early return cleans up the tx and the
+	// advisory lock (which is transaction-scoped) without an explicit Rollback.
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// pg_advisory_xact_lock serializes concurrent Upserts that use the same
+		// (table, query) pair; it is released automatically when the tx ends.
+		// It does NOT protect against Upserts reaching the same row through a
+		// different filter, or writers bypassing Upsert (Insert, raw SQL) —
+		// uniqueness beyond the primary key is not enforced at the schema level.
+		lockKey, err := upsertLockKey(tableName, query)
+		if err != nil {
 			return err
 		}
+
+		if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", lockKey).Error; err != nil {
+			return err
+		}
+
+		updateDB := tx.Table(tableName)
+
+		updateDB, err = d.translateQuery(updateDB, query, row)
+		if err != nil {
+			return err
+		}
+
+		_, updateMap, err := d.applyMongoUpdateOperators(updateDB, update)
+		if err != nil {
+			return err
+		}
+
+		// Use COUNT to determine existence rather than RowsAffected from Updates.
+		// Updates({}) produces 0 RowsAffected when updateMap is empty, which would
+		// incorrectly fall through to the INSERT branch for an existing record.
+		// Trade-off: one extra round-trip per Upsert call inside the advisory lock.
+		var count int64
+		if err := updateDB.Count(&count).Error; err != nil {
+			return err
+		}
+
+		if count > 0 {
+			if len(updateMap) > 0 {
+				if err := updateDB.Updates(updateMap).Error; err != nil {
+					return err
+				}
+			}
+
+			if err := d.fetchUpdatedRow(tx, tableName, query, row); err != nil {
+				return err
+			}
+
+			if originalID != "" {
+				row.SetObjectID(originalID)
+			}
+
+			return nil
+		}
+
+		ensureID(originalID, row, query)
+
+		newRow := cloneDBObject(row)
+
+		mergeQueryFields(newRow, query)
+
+		applySetOperatorToObject(newRow, update)
+
+		if err := tx.Table(tableName).Create(newRow).Error; err != nil {
+			return err
+		}
+
+		copyStructValues(newRow, row)
 
 		if originalID != "" {
 			row.SetObjectID(originalID)
 		}
 
-		return tx.Commit().Error
-	}
-
-	ensureID(originalID, row, query)
-
-	newRow := cloneDBObject(row)
-
-	mergeQueryFields(newRow, query)
-
-	applySetOperatorToObject(newRow, update)
-
-	if err := tx.Table(tableName).Create(newRow).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	copyStructValues(newRow, row)
-
-	if originalID != "" {
-		row.SetObjectID(originalID)
-	}
-
-	return tx.Commit().Error
+		return nil
+	})
 }
 
 func (d *driver) fetchUpdatedRow(tx *gorm.DB, table string, query model.DBM, row model.DBObject) error {
