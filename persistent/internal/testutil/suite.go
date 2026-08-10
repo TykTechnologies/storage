@@ -1,3 +1,8 @@
+// Package testutil provides a driver-agnostic conformance test suite for the
+// persistent storage layer. Each driver (mgo, official Mongo, Postgres) wires
+// its concrete DBObject and ID filter into a Suite and calls RunSuite, which
+// exercises the same behavioral contract against every driver so behavioral
+// drift between them is caught in CI.
 package testutil
 
 import (
@@ -25,6 +30,7 @@ type Suite struct {
 // RunSuite verifies the behavioral contract of PersistentStorage across all drivers.
 func RunSuite(t *testing.T, s Suite) {
 	t.Helper()
+
 	ctx := context.Background()
 
 	// setup drops and recreates the table to guarantee a clean state.
@@ -63,6 +69,7 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("InsertAndQueryByID", func(t *testing.T) {
 		setup(t)
+
 		obj := s.NewObject()
 		require.NoError(t, s.Storage.Insert(ctx, obj))
 		assert.NotEmpty(t, obj.GetObjectID(), "Insert must set ObjectID")
@@ -75,6 +82,7 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("InsertThenCount", func(t *testing.T) {
 		setup(t)
+
 		count, err := s.Storage.Count(ctx, s.NewObject())
 		require.NoError(t, err)
 		assert.Equal(t, 0, count, "count must be 0 before any inserts")
@@ -89,6 +97,7 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("InsertMultiple", func(t *testing.T) {
 		setup(t)
+
 		objs := []model.DBObject{s.NewObject(), s.NewObject(), s.NewObject()}
 		require.NoError(t, s.Storage.Insert(ctx, objs...))
 
@@ -99,6 +108,7 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("DeleteByID", func(t *testing.T) {
 		setup(t)
+
 		obj := s.NewObject()
 		require.NoError(t, s.Storage.Insert(ctx, obj))
 
@@ -111,6 +121,7 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("DeleteNonExistentReturnsError", func(t *testing.T) {
 		setup(t)
+
 		obj := s.NewObject()
 		obj.SetObjectID(model.NewObjectID())
 
@@ -120,6 +131,7 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("UpdateExistingObject", func(t *testing.T) {
 		setup(t)
+
 		obj := s.NewObject()
 		require.NoError(t, s.Storage.Insert(ctx, obj))
 
@@ -133,6 +145,7 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("UpdateNonExistentReturnsError", func(t *testing.T) {
 		setup(t)
+
 		obj := s.NewObject()
 		obj.SetObjectID(model.NewObjectID())
 
@@ -142,12 +155,14 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("BulkUpdateEmptyObjectsReturnsError", func(t *testing.T) {
 		setup(t)
+
 		err := s.Storage.BulkUpdate(ctx, []model.DBObject{})
 		assert.Error(t, err, "BulkUpdate with empty slice must return an error")
 	})
 
 	t.Run("UpdateAllNoMatchReturnsError", func(t *testing.T) {
 		setup(t)
+
 		err := s.Storage.UpdateAll(ctx, s.NewObject(),
 			model.DBM{"name": "nonexistent-xyzzy"},
 			model.DBM{"$set": model.DBM{"name": "new-value"}})
@@ -156,6 +171,7 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("UpsertInsertsWhenNotFound", func(t *testing.T) {
 		setup(t)
+
 		freshID := model.NewObjectID()
 		obj := s.NewObject()
 		obj.SetObjectID(freshID)
@@ -170,6 +186,7 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("UpsertUpdatesWhenFound", func(t *testing.T) {
 		setup(t)
+
 		obj := s.NewObject()
 		require.NoError(t, s.Storage.Insert(ctx, obj))
 		id := obj.GetObjectID()
@@ -184,6 +201,7 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("UpsertNoDuplicatesUnderConcurrency", func(t *testing.T) {
 		setup(t)
+
 		freshID := model.NewObjectID()
 		concurrency := 5
 		errs := make(chan error, concurrency)
@@ -207,6 +225,7 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("CreateAndGetIndexes", func(t *testing.T) {
 		setup(t)
+
 		obj := s.NewObject()
 		idx := model.Index{
 			Name: "conformance_idx",
@@ -229,6 +248,7 @@ func RunSuite(t *testing.T, s Suite) {
 
 	t.Run("CleanIndexes", func(t *testing.T) {
 		setup(t)
+
 		obj := s.NewObject()
 		err := s.Storage.CreateIndex(ctx, obj, model.Index{
 			Name: "conformance_clean_idx",

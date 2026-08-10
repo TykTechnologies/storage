@@ -50,9 +50,10 @@ tasks:
         # Strip empty lines from coverage files before merging. Go 1.25 can write
         # them for packages with zero test runs when -coverpkg is active, which
         # causes gocovmerge's cover.ParseProfiles to fail on the empty line.
-        find . -name '*.cov' -type f | while read -r f; do
-          grep -v '^$' "$f" > "${f}.clean" && mv "${f}.clean" "$f" || true
-        done
+        # sed edits in place, so a file consisting only of blank lines is still
+        # fixed (the grep+mv form skipped the mv when grep matched nothing).
+        find . -name '*.cov' -type f -exec sed -i.bak '/^[[:space:]]*$/d' {} +
+        find . -name '*.cov.bak' -type f -delete
         find . -name '*.cov' -type f -exec gocovmerge {} + > merged-coverage.cov
 
   test-persistent:

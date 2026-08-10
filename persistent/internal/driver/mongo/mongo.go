@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"errors"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -15,6 +16,10 @@ import (
 )
 
 var _ types.PersistentStorage = &mongoDriver{}
+
+// upsertMaxRetries bounds retries of an upsert that lost the insert race with a
+// concurrent upsert of the same document (duplicate-key error on pre-5.0 servers).
+const upsertMaxRetries = 3
 
 type mongoDriver struct {
 	*lifeCycle
@@ -421,7 +426,18 @@ func (d *mongoDriver) Upsert(ctx context.Context, row model.DBObject, query, upd
 	coll := d.client.Database(d.database).Collection(row.TableName())
 
 	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
-	err := coll.FindOneAndUpdate(ctx, query, update, opts).Decode(row)
+
+	// Concurrent upserts on the same not-yet-existing document can race on the
+	// insert path: two executions both miss, both try to insert, and one loses
+	// with a duplicate-key error. Servers before 5.0 do not retry this
+	// internally, so retry here; the losing call now sees the winner's document.
+	var err error
+	for attempt := 0; attempt < upsertMaxRetries; attempt++ {
+		err = coll.FindOneAndUpdate(ctx, query, update, opts).Decode(row)
+		if !mongo.IsDuplicateKeyError(err) {
+			break
+		}
+	}
 
 	return d.handleStoreError(err)
 }

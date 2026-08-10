@@ -110,7 +110,7 @@ func (d *driver) Delete(ctx context.Context, object model.DBObject, filters ...m
 }
 
 // Update applies changes from the given object to the database, using either the provided filter
-// or the object’s ID. Excludes ID fields and returns an error if no rows are affected.
+// or the object's ID. Excludes ID fields and returns an error if no rows are affected.
 func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...model.DBM) error {
 	tableName, err := d.validateDBAndTable(object)
 	if err != nil {
@@ -121,62 +121,39 @@ func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 		return ErrorMultipleDBM
 	}
 
-	// Begin a real DB transaction so the existence-check COUNT and the Save are
-	// atomic. Without this a concurrent DELETE between the two calls could let
-	// Save INSERT a ghost row instead of returning ErrNoRows (TOCTOU).
-	rtx := d.db.WithContext(ctx).Begin()
-	if rtx.Error != nil {
-		return rtx.Error
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			rtx.Rollback()
-			panic(r)
-		}
-	}()
-
-	tx := rtx.Table(tableName)
+	tx := d.db.WithContext(ctx).Table(tableName)
 
 	// Apply filters
 	if len(filters) == 1 {
 		tx, err = d.translateQuery(tx, filters[0], object)
 		if err != nil {
-			rtx.Rollback()
 			return err
 		}
 	} else {
 		id := object.GetObjectID()
-		if id != "" {
-			tx = tx.Where("id = ?", id.Hex())
-		} else {
-			rtx.Rollback()
+		if id == "" {
 			return errors.New("no filter provided and object has no ID")
 		}
+
+		tx = tx.Where("id = ?", id.Hex())
 	}
 
-	// Verify the record exists before saving. GORM’s Save has upsert semantics:
-	// it INSERTs when the WHERE condition matches nothing, which would make the
-	// RowsAffected check unreliable. A pre-count lets us surface sql.ErrNoRows
-	// correctly without changing the all-fields update behaviour of Save.
-	// Trade-off: one extra round-trip per Update call.
-	var count int64
-	if err := tx.Count(&count).Error; err != nil {
-		rtx.Rollback()
-		return err
+	// Select("*") makes Updates write every field, including zero values,
+	// preserving Save's replace-all semantics, while Omit keeps the primary key
+	// out of the SET clause. Unlike Save, Updates never falls back to INSERT
+	// when the WHERE clause matches nothing, so this single atomic UPDATE can't
+	// create ghost rows under concurrent deletes and makes RowsAffected a
+	// reliable existence signal.
+	result := tx.Select("*").Omit("id").Updates(object)
+	if result.Error != nil {
+		return result.Error
 	}
 
-	if count == 0 {
-		rtx.Rollback()
+	if result.RowsAffected == 0 {
 		return sql.ErrNoRows
 	}
 
-	if err := tx.Save(object).Error; err != nil {
-		rtx.Rollback()
-		return err
-	}
-
-	return rtx.Commit().Error
+	return nil
 }
 
 /*
@@ -384,7 +361,11 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 		}
 	}()
 
-	// pg_advisory_xact_lock serializes concurrent upserts; released automatically when tx ends.
+	// pg_advisory_xact_lock serializes concurrent Upserts that use the same
+	// (table, query) pair; it is released automatically when the tx ends.
+	// It does NOT protect against Upserts reaching the same row through a
+	// different filter, or writers bypassing Upsert (Insert, raw SQL) —
+	// uniqueness beyond the primary key is not enforced at the schema level.
 	if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", upsertLockKey(tableName, query)).Error; err != nil {
 		tx.Rollback()
 		return err

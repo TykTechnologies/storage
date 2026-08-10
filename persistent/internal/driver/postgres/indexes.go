@@ -263,24 +263,38 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
 		idx.Keys = append(idx.Keys, model.DBM{idxRow.ColumnName: idxRow.Direction})
 	}
 
-	// index_metadata may not exist (only created on first TTL index); ignore errors.
-	if quotedTable, qErr := sanitizeIdentifier(tableName); qErr == nil {
+	// index_metadata is only created alongside the first TTL index, so its
+	// absence just means there is no TTL metadata to report. Any other failure
+	// must surface: silently skipping it would report TTL indexes as plain ones.
+	metaExists, err := d.tableExists(ctx, "index_metadata")
+	if err != nil {
+		return nil, err
+	}
+
+	if metaExists {
+		quotedTable, err := sanitizeIdentifier(tableName)
+		if err != nil {
+			return nil, err
+		}
+
 		type ttlMeta struct {
-			IndexName  string
-			TtlSeconds int
+			IndexName  string `gorm:"column:index_name"`
+			TTLSeconds int    `gorm:"column:ttl_seconds"`
 		}
 
 		var metas []ttlMeta
 
 		ttlQ := `SELECT index_name, ttl_seconds FROM index_metadata WHERE table_name = ?`
-		if d.db.WithContext(ctx).Raw(ttlQ, quotedTable).Scan(&metas).Error == nil {
-			for _, m := range metas {
-				// pq.QuoteIdentifier wraps names in double-quotes; strip before map lookup.
-				key := strings.Trim(m.IndexName, `"`)
-				if idx, found := indexMap[key]; found {
-					idx.IsTTLIndex = true
-					idx.TTL = m.TtlSeconds
-				}
+		if err := d.db.WithContext(ctx).Raw(ttlQ, quotedTable).Scan(&metas).Error; err != nil {
+			return nil, fmt.Errorf("failed to query TTL index metadata: %w", err)
+		}
+
+		for _, m := range metas {
+			// pq.QuoteIdentifier wraps names in double-quotes; strip before map lookup.
+			key := strings.Trim(m.IndexName, `"`)
+			if idx, found := indexMap[key]; found {
+				idx.IsTTLIndex = true
+				idx.TTL = m.TTLSeconds
 			}
 		}
 	}
