@@ -366,7 +366,13 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 	// It does NOT protect against Upserts reaching the same row through a
 	// different filter, or writers bypassing Upsert (Insert, raw SQL) —
 	// uniqueness beyond the primary key is not enforced at the schema level.
-	if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", upsertLockKey(tableName, query)).Error; err != nil {
+	lockKey, err := upsertLockKey(tableName, query)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", lockKey).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -547,9 +553,17 @@ func copyStructValues(src, dst interface{}) {
 }
 
 // upsertLockKey returns a stable int64 advisory-lock key for a table+query pair.
-// Keys are sorted so the result is independent of map iteration order.
-// Values are JSON-marshaled for a canonical, type-safe string representation.
-func upsertLockKey(tableName string, query model.DBM) int64 {
+// Keys are sorted so the result is independent of map iteration order, and values
+// are JSON-marshaled for a canonical, type-safe representation.
+//
+// A value that cannot be JSON-marshaled is rejected rather than hashed via a
+// non-canonical fallback: an ambiguous representation (e.g. fmt's "%v" for
+// pointers or structs with unexported fields) could make distinct queries hash
+// to the same key (false lock contention, a DoS vector on attacker-controlled
+// input) or the same query hash differently (a missed lock, reintroducing the
+// race the lock exists to prevent). Callers must therefore use JSON-serializable
+// query values.
+func upsertLockKey(tableName string, query model.DBM) (int64, error) {
 	h := fnv.New64a()
 	h.Write([]byte(tableName))
 
@@ -565,14 +579,13 @@ func upsertLockKey(tableName string, query model.DBM) int64 {
 
 		b, err := json.Marshal(query[k])
 		if err != nil {
-			// Fall back to fmt representation for non-JSON-serialisable values.
-			b = []byte(fmt.Sprintf("%v", query[k]))
+			return 0, fmt.Errorf("cannot build upsert lock key: query value for %q is not JSON-serializable: %w", k, err)
 		}
 
 		h.Write(b)
 	}
 
-	return int64(h.Sum64())
+	return int64(h.Sum64()), nil
 }
 
 func applySetOperatorToObject(obj model.DBObject, update model.DBM) {
