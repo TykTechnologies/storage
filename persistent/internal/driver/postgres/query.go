@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -322,7 +324,29 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 			for nk, nv := range nested {
 				switch nk {
 				case "$ne":
-					db = db.Not(fmt.Sprintf("%v = ?", k), nv)
+					// MongoDB $ne also matches documents where the field is
+					// absent/null; mirror that so NULL rows are included, unlike a
+					// bare NOT (col = ?) which excludes them.
+					db = db.Where(fmt.Sprintf("(%v IS NULL OR %v <> ?)", k, k), nv)
+				case "$regex":
+					if pattern, ok := nv.(string); ok && pattern != "" {
+						matchOp := "~"
+						if opts, ok := nested["$options"].(string); ok && strings.Contains(opts, "i") {
+							matchOp = "~*"
+						}
+
+						db = db.Where(fmt.Sprintf("%v %s ?", k, matchOp), pattern)
+					}
+				case "$options":
+					// Consumed together with $regex above; no standalone clause.
+				case "$exists":
+					if exists, ok := nv.(bool); ok {
+						if exists {
+							db = db.Where(fmt.Sprintf("%v IS NOT NULL", k))
+						} else {
+							db = db.Where(fmt.Sprintf("%v IS NULL", k))
+						}
+					}
 				case "$gt":
 					db = db.Where(fmt.Sprintf("%v > ?", k), nv)
 
@@ -601,20 +625,17 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 								return "", nil, fmt.Errorf("unsupported aggregation function: %s", funcName)
 							}
 
-							// For simplicity, we assume the function argument is just a field name or a literal
-							var argStr string
-							if funcArg == 1 && funcName == "$sum" {
-								// Special case for $sum: 1 which is COUNT(*)
-								argStr = "*"
-							} else if fieldName, ok := funcArg.(string); ok {
-								fieldName = strings.TrimPrefix(fieldName, "$")
-								argStr = fieldName
-							} else {
-								// For literals, add as a parameter
-								args = append(args, funcArg)
-								argStr = "?"
-								argIndex++
+							// The accumulator argument may be the literal 1 (COUNT(*)), a
+							// field reference ("$field"), a nested aggregation expression
+							// such as {$cond: ...} (compiled to a CASE expression), or a
+							// plain literal (bound as a parameter).
+							argStr, exprArgs, err := aggAccumulatorArg(funcName, funcArg)
+							if err != nil {
+								return "", nil, err
 							}
+
+							args = append(args, exprArgs...)
+							argIndex += len(exprArgs)
 
 							selectParts = append(selectParts, fmt.Sprintf("%s(%s) AS %s", sqlFunc, argStr, field))
 						}
@@ -728,6 +749,17 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 				return "", nil, errors.New("$skip value must be an integer")
 			}
 
+		case "$unwind":
+			// $unwind flattens an array field into one row per element. In a
+			// document store the counters live in arrays/sub-documents; the
+			// equivalent SQL schema stores them as one row per element keyed by a
+			// dimension column, so there is no single-table SQL rewrite for
+			// $unwind without aligning the two schemas. Reject it explicitly
+			// rather than silently producing an incorrect query.
+			return "", nil, errors.New("$unwind is not supported by the Postgres aggregation translator: " +
+				"it maps to a dimension/row-per-element schema that cannot be expressed as a single-table rewrite " +
+				"(see docs/postgres-analytics-aggregation.md)")
+
 		default:
 			return "", nil, fmt.Errorf("unsupported aggregation operator: %s", operator)
 		}
@@ -760,6 +792,217 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 	}
 
 	return query, args, nil
+}
+
+// aggFieldPattern validates a bare SQL identifier used inside an aggregation
+// expression. Dots are converted to underscores before validation.
+var aggFieldPattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+
+// sanitizeAggField validates a field identifier referenced from an aggregation
+// expression, rejecting anything that is not a plain identifier so that field
+// references can be interpolated into SQL without opening an injection vector.
+func sanitizeAggField(name string) (string, error) {
+	name = strings.ReplaceAll(name, ".", "_")
+	if !aggFieldPattern.MatchString(name) {
+		return "", fmt.Errorf("invalid field identifier in aggregation expression: %q", name)
+	}
+
+	return name, nil
+}
+
+// aggAccumulatorArg renders the argument of a $group accumulator ($sum, $avg,
+// …) to a SQL expression. It supports the COUNT(*) shorthand ($sum: 1), field
+// references, nested aggregation expressions (e.g. {$cond: …}), and plain
+// literals (returned as a bound parameter).
+func aggAccumulatorArg(funcName string, funcArg interface{}) (string, []interface{}, error) {
+	if funcName == "$sum" {
+		if n, ok := funcArg.(int); ok && n == 1 {
+			return "*", nil, nil
+		}
+	}
+
+	switch fa := funcArg.(type) {
+	case string:
+		col, err := sanitizeAggField(strings.TrimPrefix(fa, "$"))
+		if err != nil {
+			return "", nil, err
+		}
+
+		return col, nil, nil
+	case model.DBM:
+		expr, err := translateAggValueExpr(fa)
+		if err != nil {
+			return "", nil, err
+		}
+
+		return expr, nil, nil
+	default:
+		return "?", []interface{}{funcArg}, nil
+	}
+}
+
+// translateAggValueExpr renders a MongoDB aggregation *value* expression to SQL.
+// Field references ("$col") become column identifiers, operator maps recurse
+// (currently {$cond: …}), and scalar literals are inlined (numbers/booleans) or
+// single-quoted (strings). Numeric literals are inlined rather than bound so
+// that expressions embedded in the SELECT list do not disturb positional
+// parameter ordering relative to the WHERE clause.
+func translateAggValueExpr(expr interface{}) (string, error) {
+	switch e := expr.(type) {
+	case string:
+		if strings.HasPrefix(e, "$") {
+			return sanitizeAggField(strings.TrimPrefix(e, "$"))
+		}
+
+		return "'" + strings.ReplaceAll(e, "'", "''") + "'", nil
+	case bool:
+		if e {
+			return "TRUE", nil
+		}
+
+		return "FALSE", nil
+	case int:
+		return strconv.Itoa(e), nil
+	case int32:
+		return strconv.FormatInt(int64(e), 10), nil
+	case int64:
+		return strconv.FormatInt(e, 10), nil
+	case float64:
+		return strconv.FormatFloat(e, 'f', -1, 64), nil
+	case model.DBM:
+		if len(e) != 1 {
+			return "", errors.New("aggregation value expression must have exactly one operator")
+		}
+
+		for op, v := range e {
+			if op == "$cond" {
+				return translateCondExpr(v)
+			}
+
+			return "", fmt.Errorf("unsupported aggregation value operator: %s", op)
+		}
+	}
+
+	return "", fmt.Errorf("unsupported aggregation value expression: %T", expr)
+}
+
+// translateCondExpr compiles a MongoDB $cond into a SQL CASE expression. Both
+// the object form ({if, then, else}) and the array form ([if, then, else]) are
+// supported.
+func translateCondExpr(v interface{}) (string, error) {
+	var ifExpr, thenExpr, elseExpr interface{}
+
+	switch c := v.(type) {
+	case model.DBM:
+		ifExpr, thenExpr, elseExpr = c["if"], c["then"], c["else"]
+	case []interface{}:
+		if len(c) != 3 {
+			return "", errors.New("$cond array form must have exactly 3 elements")
+		}
+
+		ifExpr, thenExpr, elseExpr = c[0], c[1], c[2]
+	default:
+		return "", errors.New("$cond must be an object {if,then,else} or a 3-element array")
+	}
+
+	cond, err := translateAggBoolExpr(ifExpr)
+	if err != nil {
+		return "", err
+	}
+
+	thenSQL, err := translateAggValueExpr(thenExpr)
+	if err != nil {
+		return "", err
+	}
+
+	elseSQL, err := translateAggValueExpr(elseExpr)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("CASE WHEN %s THEN %s ELSE %s END", cond, thenSQL, elseSQL), nil
+}
+
+// translateAggBoolExpr compiles a MongoDB boolean/comparison aggregation
+// expression ($and, $or, $eq, $ne, $gt, $gte, $lt, $lte) to a SQL predicate.
+func translateAggBoolExpr(expr interface{}) (string, error) {
+	m, ok := expr.(model.DBM)
+	if !ok {
+		return "", fmt.Errorf("boolean expression must be a DBM, got %T", expr)
+	}
+
+	if len(m) != 1 {
+		return "", errors.New("boolean expression must have exactly one operator")
+	}
+
+	for op, v := range m {
+		switch op {
+		case "$and", "$or":
+			arr, ok := v.([]interface{})
+			if !ok {
+				return "", fmt.Errorf("%s expects an array of expressions", op)
+			}
+
+			parts := make([]string, 0, len(arr))
+
+			for _, sub := range arr {
+				p, err := translateAggBoolExpr(sub)
+				if err != nil {
+					return "", err
+				}
+
+				parts = append(parts, p)
+			}
+
+			joiner := " OR "
+			if op == "$and" {
+				joiner = " AND "
+			}
+
+			return "(" + strings.Join(parts, joiner) + ")", nil
+		case "$eq", "$ne", "$gt", "$gte", "$lt", "$lte":
+			arr, ok := v.([]interface{})
+			if !ok || len(arr) != 2 {
+				return "", fmt.Errorf("%s expects a 2-element array", op)
+			}
+
+			left, err := translateAggValueExpr(arr[0])
+			if err != nil {
+				return "", err
+			}
+
+			right, err := translateAggValueExpr(arr[1])
+			if err != nil {
+				return "", err
+			}
+
+			return fmt.Sprintf("%s %s %s", left, aggComparator(op), right), nil
+		default:
+			return "", fmt.Errorf("unsupported boolean operator in aggregation: %s", op)
+		}
+	}
+
+	return "", errors.New("empty boolean expression")
+}
+
+// aggComparator maps a MongoDB comparison operator to its SQL operator.
+func aggComparator(op string) string {
+	switch op {
+	case "$eq":
+		return "="
+	case "$ne":
+		return "<>"
+	case "$gt":
+		return ">"
+	case "$gte":
+		return ">="
+	case "$lt":
+		return "<"
+	case "$lte":
+		return "<="
+	}
+
+	return ""
 }
 
 func buildWhereClause(filter model.DBM) (string, []interface{}) {

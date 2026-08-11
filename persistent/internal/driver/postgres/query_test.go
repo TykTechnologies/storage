@@ -650,6 +650,113 @@ func TestTranslateAggregationPipeline(t *testing.T) {
 	})
 }
 
+// TestTranslateAggregationConditional covers $sum:{$cond:...} conditional
+// accumulators — the SUM(CASE WHEN ...) idiom the analytics reports rely on to
+// compute success/error/response-code rollups on Postgres.
+func TestTranslateAggregationConditional(t *testing.T) {
+	t.Run("SuccessAndErrorConditionalCounts", func(t *testing.T) {
+		// Mirrors the raw-log/uptime analytics $group: count 2xx as Success and
+		// >=400 as Error, alongside a plain Hits count and an average.
+		pipeline := []model.DBM{
+			{
+				"$group": model.DBM{
+					"_id":  model.DBM{"bucket": "$ts"},
+					"Hits": model.DBM{"$sum": 1},
+					"Success": model.DBM{"$sum": model.DBM{"$cond": model.DBM{
+						"if": model.DBM{"$or": []interface{}{
+							model.DBM{"$eq": []interface{}{"$Code", 200}},
+							model.DBM{"$eq": []interface{}{"$Code", 201}},
+						}},
+						"then": 1,
+						"else": 0,
+					}}},
+					"Error": model.DBM{"$sum": model.DBM{"$cond": model.DBM{
+						"if":   model.DBM{"$gte": []interface{}{"$Code", 400}},
+						"then": 1,
+						"else": 0,
+					}}},
+					"RequestAvg": model.DBM{"$avg": "$RequestTime"},
+				},
+			},
+		}
+
+		query, _, err := translateAggregationPipeline("tyk_analytics", pipeline)
+		require.NoError(t, err)
+
+		assert.Contains(t, query, "SUM(*) AS Hits")
+		assert.Contains(t, query, "SUM(CASE WHEN (Code = 200 OR Code = 201) THEN 1 ELSE 0 END) AS Success")
+		assert.Contains(t, query, "SUM(CASE WHEN Code >= 400 THEN 1 ELSE 0 END) AS Error")
+		assert.Contains(t, query, "AVG(RequestTime) AS RequestAvg")
+		assert.Contains(t, query, "GROUP BY ts")
+	})
+
+	t.Run("CondArrayForm", func(t *testing.T) {
+		pipeline := []model.DBM{
+			{
+				"$group": model.DBM{
+					"_id": nil,
+					"N": model.DBM{"$sum": model.DBM{"$cond": []interface{}{
+						model.DBM{"$lt": []interface{}{"$latency", 100}},
+						1,
+						0,
+					}}},
+				},
+			},
+		}
+
+		query, _, err := translateAggregationPipeline("t", pipeline)
+		require.NoError(t, err)
+		assert.Contains(t, query, "SUM(CASE WHEN latency < 100 THEN 1 ELSE 0 END) AS N")
+	})
+
+	t.Run("RejectsInvalidFieldIdentifier", func(t *testing.T) {
+		pipeline := []model.DBM{
+			{
+				"$group": model.DBM{
+					"_id": nil,
+					"X":   model.DBM{"$sum": "$evil; DROP TABLE users"},
+				},
+			},
+		}
+
+		_, _, err := translateAggregationPipeline("t", pipeline)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid field identifier")
+	})
+
+	t.Run("UnwindReportsSchemaDivergence", func(t *testing.T) {
+		// $unwind over an array-of-counters schema has no single-table SQL
+		// rewrite; the translator must reject it with an actionable error rather
+		// than emit an incorrect query.
+		pipeline := []model.DBM{
+			{"$unwind": "$lists.keyendpoints"},
+		}
+
+		_, _, err := translateAggregationPipeline("t", pipeline)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "$unwind is not supported")
+	})
+
+	t.Run("UnsupportedBoolOperator", func(t *testing.T) {
+		pipeline := []model.DBM{
+			{
+				"$group": model.DBM{
+					"_id": nil,
+					"X": model.DBM{"$sum": model.DBM{"$cond": model.DBM{
+						"if":   model.DBM{"$regexMatch": []interface{}{"$a", "b"}},
+						"then": 1,
+						"else": 0,
+					}}},
+				},
+			},
+		}
+
+		_, _, err := translateAggregationPipeline("t", pipeline)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported boolean operator")
+	})
+}
+
 func TestTranslateAggregationPipelineGroup(t *testing.T) {
 	// Define test cases
 	testCases := []struct {
