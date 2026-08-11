@@ -366,6 +366,22 @@ func TestResolve_JSONPointer_ObjectLeaf_ReserializedAsJSON(t *testing.T) {
 	assert.Equal(t, float64(5432), reserialized["port"])
 }
 
+func TestResolveAll_ErrorIncludesFieldPath(t *testing.T) {
+	t.Parallel()
+
+	r := resolve.NewResolver(newGetter(nil))
+	doc := []byte(`{"api_definition":{"version_data":{"versions":{"Default":` +
+		`{"extended_paths":{"transform_headers":[{"add_headers":` +
+		`{"X-KV":"kv://no-path-separator"}}]}}}}}}`)
+
+	_, err := r.ResolveAll(context.Background(), doc)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"api_definition.version_data.versions.Default.extended_paths.transform_headers[0].add_headers.X-KV")
+	require.NotContains(t, err.Error(), `field "`)
+}
+
 func TestResolveAll_FlatDocument(t *testing.T) {
 	t.Parallel()
 

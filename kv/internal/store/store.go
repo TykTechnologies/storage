@@ -8,66 +8,43 @@ import (
 	"time"
 
 	"github.com/TykTechnologies/storage/kv"
-	"github.com/TykTechnologies/storage/kv/internal/cache"
 	"golang.org/x/sync/singleflight"
 )
 
-// SecretStore is an internal decorator that adds caching and singleflight to a Provider.
+// SecretStore is an internal decorator that adds singleflight deduplication,
+// a bounded per-operation timeout, and closed-state gating to a Provider.
 type SecretStore struct {
-	name      string
-	provider  kv.Provider
-	cache     *cache.Cache
-	sf        *singleflight.Group
-	sfRefresh *singleflight.Group
-	isClosed  atomic.Bool
-	timeout   time.Duration
+	name     string
+	provider kv.Provider
+	sf       *singleflight.Group
+	isClosed atomic.Bool
+	timeout  time.Duration
 }
 
 // Option defines a functional option for configuring the SecretStore.
 type Option func(*SecretStore)
 
-// Get retrieves a secret value with caching and deduplication.
+// Get retrieves a secret value with deduplication.
 func (s *SecretStore) Get(ctx context.Context, path string) (string, error) {
 	if s.isClosed.Load() {
 		return "", kv.ErrStoreClosed
 	}
 
-	val, exists, needsRefresh, err := s.cache.Get(path)
-	if exists && !kv.IsCacheBypassed(ctx) {
-		// Fail fast on cached errors
-		if err != nil {
-			return "", err
-		}
-
-		// If value is almost expired on cache, the process should refresh it
-		// on background which is called "stale-while-revalidate" strategy
-		if needsRefresh && !s.isClosed.Load() {
-			s.triggerBackgroundRefreshOnce(path)
-		}
-
-		return val, err
-	}
-
-	if s.isClosed.Load() {
-		return "", kv.ErrStoreClosed
-	}
-
 	ch := s.sf.DoChan(path, func() (any, error) {
+		// WithoutCancel: this fetch is shared by every caller waiting on the same
+		// path, so one caller going away must not abort it for the others.
 		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.timeout)
 		defer cancel()
 
-		newVal, err := s.provider.Get(fetchCtx, path)
+		val, err := s.provider.Get(fetchCtx, path)
 
-		// Return earlier to prevent cache poisoning with context errors
+		// Name the path in the error: a bare context deadline gives
+		// no way to tell which secret timed out.
 		if errors.Is(err, context.DeadlineExceeded) {
 			return "", fmt.Errorf("timeout fetching %q: %w", path, err)
 		}
 
-		if !s.isClosed.Load() {
-			s.cache.Set(path, newVal, err)
-		}
-
-		return newVal, err
+		return val, err
 	})
 
 	select {
@@ -101,39 +78,11 @@ func (s *SecretStore) Close(ctx context.Context) error {
 		return nil
 	}
 
-	s.cache.Close()
-
 	if closer, ok := kv.AsCloser(s.provider); ok {
 		return closer.Close(ctx)
 	}
 
 	return nil
-}
-
-func (s *SecretStore) triggerBackgroundRefreshOnce(path string) {
-	ch := s.sfRefresh.DoChan(path, func() (any, error) {
-		return s.doBackgroundRefresh(path)
-	})
-	_ = ch
-}
-
-func (s *SecretStore) doBackgroundRefresh(path string) (any, error) {
-	if s.isClosed.Load() {
-		return "", kv.ErrStoreClosed
-	}
-
-	// We're creating a new context for background refresh because we don't want
-	// a cancelled HTTP request to abort a cache refresh that benefits all future callers.
-	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
-	defer cancel()
-
-	newVal, err := s.provider.Get(ctx, path)
-	// Update the cache on success to ensure errors don't overwrite valid entries.
-	if err == nil && !s.isClosed.Load() {
-		s.cache.Set(path, newVal, nil)
-	}
-
-	return newVal, err
 }
 
 // WithTimeout overrides the global default provider timeout.
@@ -149,25 +98,17 @@ func WithTimeout(timeout time.Duration) Option {
 func NewSecretStore(
 	name string,
 	provider kv.Provider,
-	cacheConfig kv.CacheConfig,
 	opts ...Option,
 ) (*SecretStore, error) {
 	if provider == nil {
 		return nil, fmt.Errorf("secret store %q: provider cannot be nil", name)
 	}
 
-	cache, err := cache.NewCache(cacheConfig)
-	if err != nil {
-		return nil, fmt.Errorf("secret store %q: %w", name, err)
-	}
-
 	s := &SecretStore{
-		name:      name,
-		provider:  provider,
-		cache:     cache,
-		sf:        &singleflight.Group{},
-		sfRefresh: &singleflight.Group{},
-		timeout:   kv.DefaultOperationTimeout,
+		name:     name,
+		provider: provider,
+		sf:       &singleflight.Group{},
+		timeout:  kv.DefaultOperationTimeout,
 	}
 
 	for _, opt := range opts {
