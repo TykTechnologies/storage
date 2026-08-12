@@ -93,12 +93,17 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 // Close terminates the active database connection.
 // Returns an error if the connection cannot be closed properly.
 func (l *lifeCycle) Close() error {
+	if l.sqlDB == nil {
+		return errors.New("closing a no connected database")
+	}
+
 	err := l.sqlDB.Close()
 	if err != nil {
 		return err
 	}
 
 	l.db = nil
+	l.sqlDB = nil
 
 	return nil
 }

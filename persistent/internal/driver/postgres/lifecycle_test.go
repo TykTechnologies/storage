@@ -11,6 +11,7 @@ import (
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/utils"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLifeCycle_DBType(t *testing.T) {
@@ -101,6 +102,28 @@ func TestPing(t *testing.T) {
 
 		// Verify that the correct error is returned
 		assert.Error(t, err, "Ping should return an error when session is closed")
+	})
+}
+
+func TestLifeCycleClose(t *testing.T) {
+	t.Run("CloseReleasesConnection", func(t *testing.T) {
+		lc := &lifeCycle{}
+		opts := &types.ClientOpts{
+			ConnectionString: getConnStr(),
+			Type:             "postgresDBType",
+		}
+
+		require.NoError(t, lc.Connect(opts))
+		require.NotNil(t, lc.sqlDB)
+
+		assert.NoError(t, lc.Close(), "Close on a connected lifecycle must succeed")
+		assert.Nil(t, lc.db, "gorm handle must be cleared after Close")
+		assert.Nil(t, lc.sqlDB, "sql.DB handle must be cleared after Close")
+	})
+
+	t.Run("CloseWithoutConnectionErrors", func(t *testing.T) {
+		lc := &lifeCycle{}
+		assert.Error(t, lc.Close(), "Close on a never-connected lifecycle must error, not panic")
 	})
 }
 
