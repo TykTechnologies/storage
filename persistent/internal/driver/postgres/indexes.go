@@ -86,8 +86,18 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 
 	for _, key := range index.Keys {
 		for field, direction := range key {
+			// Mongo-style keys reference _id; the physical column depends on
+			// the model's json-tag naming ("_id" for Tyk schemas, "id"
+			// otherwise). Resolve against the actual table.
 			if field == "_id" {
-				field = "id"
+				hasUnderscoreID, err := d.columnExists(ctx, rawTable, "_id")
+				if err != nil {
+					return fmt.Errorf("failed to resolve _id column: %w", err)
+				}
+
+				if !hasUnderscoreID {
+					field = "id"
+				}
 			}
 
 			col, err := sanitizeIdentifier(field)
@@ -419,6 +429,28 @@ func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 }
 
 // Helper function to check if an index exists
+// columnExists reports whether the given raw (unquoted) column exists on the
+// raw table name, per information_schema.
+func (d *driver) columnExists(ctx context.Context, tableName, columnName string) (bool, error) {
+	query := `
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = ?
+            AND column_name = ?
+        )
+    `
+
+	var exists bool
+
+	err := d.db.WithContext(ctx).Raw(query, tableName, columnName).Scan(&exists).Error
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
 func (d *driver) indexExists(ctx context.Context, tableName, indexName string) (bool, error) {
 	query := `
         SELECT EXISTS (
