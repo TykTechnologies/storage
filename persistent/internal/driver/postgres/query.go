@@ -728,7 +728,10 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 				sortParts := []string{}
 
 				for field, direction := range sortExpr {
-					field = strings.ReplaceAll(field, ".", "_")
+					col, err := sanitizeAggField(field)
+					if err != nil {
+						return "", nil, err
+					}
 
 					var dirStr string
 
@@ -742,7 +745,9 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 							return "", nil, fmt.Errorf("invalid sort direction for field %s: %d", field, dir)
 						}
 
-						sortParts = append(sortParts, fmt.Sprintf("%s %s", field, dirStr))
+						// Quote so sorting works on case-sensitive aliased
+						// accumulators ("Hits") as well as raw lowercase columns.
+						sortParts = append(sortParts, fmt.Sprintf("%q %s", col, dirStr))
 					} else {
 						return "", nil, fmt.Errorf("sort direction for field %s must be an integer", field)
 					}

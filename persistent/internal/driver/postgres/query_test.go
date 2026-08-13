@@ -567,7 +567,7 @@ func TestTranslateAggregationPipeline(t *testing.T) {
 		assert.Contains(t, query, "WHERE", "Query should contain a WHERE clause")
 		assert.Contains(t, query, "category = ", "Query should filter on category")
 		assert.Contains(t, query, "ORDER BY", "Query should contain an ORDER BY clause")
-		assert.Contains(t, query, "value DESC", "Query should order by value in descending order")
+		assert.Contains(t, query, "\"value\" DESC", "Query should order by value in descending order")
 
 		// Verify the values
 		assert.Equal(t, 1, len(values), "Should have 1 parameter value")
@@ -604,7 +604,7 @@ func TestTranslateAggregationPipeline(t *testing.T) {
 		assert.Contains(t, query, "WHERE", "Query should contain a WHERE clause")
 		assert.Contains(t, query, "active = ", "Query should filter on active")
 		assert.Contains(t, query, "ORDER BY", "Query should contain an ORDER BY clause")
-		assert.Contains(t, query, "value ASC", "Query should order by value in ascending order")
+		assert.Contains(t, query, "\"value\" ASC", "Query should order by value in ascending order")
 		assert.Contains(t, query, "LIMIT 3", "Query should limit to 3 results")
 
 		// Verify the values
@@ -974,7 +974,7 @@ func TestTranslateAggregationPipelineGroup(t *testing.T) {
 			},
 			expectedParts: []string{
 				"SELECT", "category", "COUNT(*) AS \"count\"", "SUM(amount) AS \"total\"",
-				"FROM test_table", "WHERE status = ?", "GROUP BY category", "ORDER BY total DESC",
+				"FROM test_table", "WHERE status = ?", "GROUP BY category", "ORDER BY \"total\" DESC",
 			},
 			expectedArgCount: 1,
 			expectedArgs:     []interface{}{"active"},
