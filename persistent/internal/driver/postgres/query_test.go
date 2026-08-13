@@ -683,10 +683,10 @@ func TestTranslateAggregationConditional(t *testing.T) {
 		query, _, err := translateAggregationPipeline("tyk_analytics", pipeline)
 		require.NoError(t, err)
 
-		assert.Contains(t, query, "SUM(*) AS Hits")
-		assert.Contains(t, query, "SUM(CASE WHEN (Code = 200 OR Code = 201) THEN 1 ELSE 0 END) AS Success")
-		assert.Contains(t, query, "SUM(CASE WHEN Code >= 400 THEN 1 ELSE 0 END) AS Error")
-		assert.Contains(t, query, "AVG(RequestTime) AS RequestAvg")
+		assert.Contains(t, query, "COUNT(*) AS \"Hits\"")
+		assert.Contains(t, query, "SUM(CASE WHEN (Code = 200 OR Code = 201) THEN 1 ELSE 0 END) AS \"Success\"")
+		assert.Contains(t, query, "SUM(CASE WHEN Code >= 400 THEN 1 ELSE 0 END) AS \"Error\"")
+		assert.Contains(t, query, "AVG(RequestTime) AS \"RequestAvg\"")
 		assert.Contains(t, query, "GROUP BY ts")
 	})
 
@@ -706,7 +706,7 @@ func TestTranslateAggregationConditional(t *testing.T) {
 
 		query, _, err := translateAggregationPipeline("t", pipeline)
 		require.NoError(t, err)
-		assert.Contains(t, query, "SUM(CASE WHEN latency < 100 THEN 1 ELSE 0 END) AS N")
+		assert.Contains(t, query, "SUM(CASE WHEN latency < 100 THEN 1 ELSE 0 END) AS \"N\"")
 	})
 
 	t.Run("RejectsInvalidFieldIdentifier", func(t *testing.T) {
@@ -722,6 +722,80 @@ func TestTranslateAggregationConditional(t *testing.T) {
 		_, _, err := translateAggregationPipeline("t", pipeline)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid field identifier")
+	})
+
+	t.Run("ProjectRenameAndNestedField", func(t *testing.T) {
+		// The raw-log/uptime analytics pipelines remap document fields before
+		// grouping: {Code: "$responsecode", UpstreamLatency: "$latency.upstream"}.
+		pipeline := []model.DBM{
+			{
+				"$project": model.DBM{
+					"Code":            "$responsecode",
+					"UpstreamLatency": "$latency.upstream",
+					"excluded":        0,
+				},
+			},
+		}
+
+		query, _, err := translateAggregationPipeline("tyk_analytics", pipeline)
+		require.NoError(t, err)
+		assert.Contains(t, query, "responsecode AS \"Code\"")
+		assert.Contains(t, query, "latency_upstream AS \"UpstreamLatency\"")
+		assert.NotContains(t, query, "excluded")
+	})
+
+	t.Run("FirstAfterDescendingSortIsMax", func(t *testing.T) {
+		// LastTimeStamp: {$first: "$Timestamp"} after $sort {Timestamp: -1} —
+		// the newest value, i.e. MAX. A pre-group $sort must also not leak into
+		// the grouped query's ORDER BY.
+		pipeline := []model.DBM{
+			{"$sort": model.DBM{"Timestamp": -1}},
+			{
+				"$group": model.DBM{
+					"_id":           model.DBM{"bucket": "$ts"},
+					"LastTimeStamp": model.DBM{"$first": "$Timestamp"},
+					"FirstSeen":     model.DBM{"$last": "$Timestamp"},
+				},
+			},
+		}
+
+		query, _, err := translateAggregationPipeline("t", pipeline)
+		require.NoError(t, err)
+		assert.Contains(t, query, "MAX(Timestamp) AS \"LastTimeStamp\"")
+		assert.Contains(t, query, "MIN(Timestamp) AS \"FirstSeen\"")
+		assert.NotContains(t, query, "ORDER BY", "pre-group sort must not become the result ORDER BY")
+	})
+
+	t.Run("FirstWithoutSortErrors", func(t *testing.T) {
+		pipeline := []model.DBM{
+			{
+				"$group": model.DBM{
+					"_id": nil,
+					"X":   model.DBM{"$first": "$Timestamp"},
+				},
+			},
+		}
+
+		_, _, err := translateAggregationPipeline("t", pipeline)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "preceding $sort")
+	})
+
+	t.Run("MatchRegexAndExists", func(t *testing.T) {
+		pipeline := []model.DBM{
+			{
+				"$match": model.DBM{
+					"apikey":  model.DBM{"$regex": "^abc", "$options": "i"},
+					"deleted": model.DBM{"$exists": false},
+				},
+			},
+		}
+
+		query, values, err := translateAggregationPipeline("t", pipeline)
+		require.NoError(t, err)
+		assert.Contains(t, query, "apikey ~* ?")
+		assert.Contains(t, query, "deleted IS NULL")
+		assert.Equal(t, []interface{}{"^abc"}, values)
 	})
 
 	t.Run("UnwindReportsSchemaDivergence", func(t *testing.T) {
@@ -783,7 +857,7 @@ func TestTranslateAggregationPipelineGroup(t *testing.T) {
 				},
 			},
 			expectedParts: []string{
-				"SELECT", "category", "SUM(*) AS count", "FROM test_table", "GROUP BY category",
+				"SELECT", "category", "COUNT(*) AS \"count\"", "FROM test_table", "GROUP BY category",
 			},
 			expectedArgCount: 0,
 			expectedError:    false,
@@ -808,7 +882,7 @@ func TestTranslateAggregationPipelineGroup(t *testing.T) {
 				},
 			},
 			expectedParts: []string{
-				"SELECT", "category", "status", "SUM(amount) AS total", "AVG(value) AS avg_value",
+				"SELECT", "category", "status", "SUM(amount) AS \"total\"", "AVG(value) AS \"avg_value\"",
 				"FROM test_table", "GROUP BY",
 			},
 			expectedArgCount: 0,
@@ -840,8 +914,8 @@ func TestTranslateAggregationPipelineGroup(t *testing.T) {
 				},
 			},
 			expectedParts: []string{
-				"SELECT", "category", "SUM(*) AS count", "SUM(amount) AS total",
-				"MIN(value) AS min_value", "MAX(value) AS max_value", "AVG(value) AS avg_value",
+				"SELECT", "category", "COUNT(*) AS \"count\"", "SUM(amount) AS \"total\"",
+				"MIN(value) AS \"min_value\"", "MAX(value) AS \"max_value\"", "AVG(value) AS \"avg_value\"",
 				"FROM test_table", "GROUP BY category",
 			},
 			expectedArgCount: 0,
@@ -864,7 +938,7 @@ func TestTranslateAggregationPipelineGroup(t *testing.T) {
 				},
 			},
 			expectedParts: []string{
-				"SELECT", "SUM(*) AS total_count", "SUM(amount) AS grand_total", "FROM test_table",
+				"SELECT", "COUNT(*) AS \"total_count\"", "SUM(amount) AS \"grand_total\"", "FROM test_table",
 			},
 			expectedNotParts: []string{
 				"GROUP BY", // Should not have GROUP BY for null _id
@@ -899,7 +973,7 @@ func TestTranslateAggregationPipelineGroup(t *testing.T) {
 				},
 			},
 			expectedParts: []string{
-				"SELECT", "category", "SUM(*) AS count", "SUM(amount) AS total",
+				"SELECT", "category", "COUNT(*) AS \"count\"", "SUM(amount) AS \"total\"",
 				"FROM test_table", "WHERE status = ?", "GROUP BY category", "ORDER BY total DESC",
 			},
 			expectedArgCount: 1,
@@ -1630,6 +1704,113 @@ func TestTranslateQuery(t *testing.T) {
 
 		assert.Equal(t, int64(2), count, "Count should return expected number")
 	})
+}
+
+// TestAggregateWithShardingEnabled verifies the _date_sharding directive in a
+// pipeline's $match fans the aggregation out across per-day tables via UNION ALL.
+func TestAggregateWithShardingEnabled(t *testing.T) {
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	driver.TableSharding = true
+	driver.options = &types.ClientOpts{}
+
+	baseTableName := "test_objects"
+	now := time.Now()
+	startDate := now.Add(-2 * 24 * time.Hour)
+
+	shardTables := []string{}
+
+	defer func() {
+		for _, tbl := range shardTables {
+			_ = driver.db.Exec("DROP TABLE IF EXISTS " + tbl).Error
+		}
+	}()
+
+	// Two daily shards, three rows each with value 10/20/30.
+	for i := 0; i <= 1; i++ {
+		date := startDate.Add(time.Duration(i*24) * time.Hour)
+		shardTableName := baseTableName + "_" + date.Format("20060102")
+		shardTables = append(shardTables, shardTableName)
+
+		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf(`
+            CREATE TABLE IF NOT EXISTS %s (
+                id TEXT PRIMARY KEY,
+                name TEXT,
+                value INTEGER,
+                category TEXT,
+                created_at TIMESTAMP
+            )
+        `, shardTableName)).Error
+		require.NoError(t, err)
+
+		for j := 1; j <= 3; j++ {
+			err := driver.db.WithContext(ctx).Exec(fmt.Sprintf(`
+                INSERT INTO %s (id, name, value, category, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            `, shardTableName), model.NewObjectID().Hex(), fmt.Sprintf("Shard %d-%d", i, j),
+				j*10, "A", date).Error
+			require.NoError(t, err)
+		}
+	}
+
+	pipeline := []model.DBM{
+		{
+			"$match": model.DBM{
+				"_date_sharding": "created_at",
+				"created_at": model.DBM{
+					"$gte": startDate.Add(-time.Hour),
+					"$lte": now,
+				},
+			},
+		},
+		{
+			"$group": model.DBM{
+				"_id":  model.DBM{"cat": "$category"},
+				"Hits": model.DBM{"$sum": 1},
+				"Sum":  model.DBM{"$sum": "$value"},
+			},
+		},
+	}
+
+	results, err := driver.Aggregate(ctx, &TestObject{}, pipeline)
+	require.NoError(t, err)
+	require.Len(t, results, 1, "one group across both shards")
+
+	// 2 shards x 3 rows; values (10+20+30) x 2.
+	assert.EqualValues(t, 6, toInt64(t, results[0]["Hits"]))
+	assert.EqualValues(t, 120, toInt64(t, results[0]["Sum"]))
+}
+
+// toInt64 normalises driver-dependent numeric scan types.
+func toInt64(t *testing.T, v interface{}) int64 {
+	t.Helper()
+
+	switch n := v.(type) {
+	case int64:
+		return n
+	case int32:
+		return int64(n)
+	case int:
+		return int64(n)
+	case float64:
+		return int64(n)
+	case []byte:
+		var out int64
+		_, err := fmt.Sscan(string(n), &out)
+		require.NoError(t, err)
+
+		return out
+	case string:
+		var out int64
+		_, err := fmt.Sscan(n, &out)
+		require.NoError(t, err)
+
+		return out
+	default:
+		t.Fatalf("unexpected numeric type %T", v)
+		return 0
+	}
 }
 
 func TestTranslateQueryWithShardingEnabled(t *testing.T) {
