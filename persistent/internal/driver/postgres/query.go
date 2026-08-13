@@ -528,7 +528,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 
 						for _, expr := range idMap {
 							if fieldName, ok := expr.(string); ok {
-								fieldName = strings.TrimPrefix(fieldName, "$")
+								fieldName = strings.ReplaceAll(strings.TrimPrefix(fieldName, "$"), ".", "_")
 								groupFields = append(groupFields, fieldName)
 							} else {
 								return "", nil, errors.New("complex group expressions not supported")
@@ -541,7 +541,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 					} else if idExpr == nil {
 						groupByClause = ""
 					} else if fieldName, ok := idExpr.(string); ok {
-						fieldName = strings.TrimPrefix(fieldName, "$")
+						fieldName = strings.ReplaceAll(strings.TrimPrefix(fieldName, "$"), ".", "_")
 						groupByClause = fieldName
 					} else {
 						return "", nil, errors.New("complex group expressions not supported")
@@ -728,6 +728,8 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 				sortParts := []string{}
 
 				for field, direction := range sortExpr {
+					field = strings.ReplaceAll(field, ".", "_")
+
 					var dirStr string
 
 					if dir, ok := direction.(int); ok {
@@ -1198,6 +1200,9 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 		if k == "$sort" || k == "$skip" || k == "$limit" {
 			continue
 		}
+
+		// Mongo dotted paths map to underscore-joined columns on Postgres.
+		k = strings.ReplaceAll(k, ".", "_")
 
 		// Handle logical operators
 		if k == "$or" || k == "$and" {
