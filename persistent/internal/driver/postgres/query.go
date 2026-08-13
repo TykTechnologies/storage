@@ -163,7 +163,7 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 		// Set values in the map
 		for i, col := range columns {
 			val := *(values[i].(*interface{}))
-			rowMap[col] = val
+			rowMap[col] = normalizeAggregateValue(val)
 		}
 
 		results = append(results, rowMap)
@@ -817,6 +817,33 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 	}
 
 	return query, args, nil
+}
+
+// normalizeAggregateValue converts driver-native scan types to plain Go
+// numbers where possible: Postgres NUMERIC (e.g. AVG results) arrives through
+// interface{} scans as []byte or string, which document-store consumers do not
+// expect. Non-numeric values pass through unchanged.
+func normalizeAggregateValue(val interface{}) interface{} {
+	var s string
+
+	switch v := val.(type) {
+	case []byte:
+		s = string(v)
+	case string:
+		s = v
+	default:
+		return val
+	}
+
+	if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return n
+	}
+
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return f
+	}
+
+	return val
 }
 
 // aggFieldPattern validates a bare SQL identifier used inside an aggregation
