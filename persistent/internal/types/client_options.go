@@ -41,6 +41,10 @@ type ClientOpts struct {
 	DirectConnection bool
 	// type of database/driver
 	Type string
+	// TableSharding enables date-based table sharding on drivers that support
+	// it (Postgres): queries and aggregations carrying the _date_sharding
+	// directive fan out across per-day tables (suffix _YYYYMMDD).
+	TableSharding bool
 }
 
 // GetTLSConfig returns the TLS config given the configuration specified in ClientOpts. It loads certificates if necessary.
