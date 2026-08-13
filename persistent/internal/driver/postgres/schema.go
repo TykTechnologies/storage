@@ -383,11 +383,10 @@ func (d *driver) Migrate(ctx context.Context, objects []model.DBObject, options 
 			return ErrorEmptyTableName
 		}
 
-		tableExists := db.Migrator().HasTable(tableName)
-		if tableExists {
-			continue // Skip if table already exists
-		}
-
+		// AutoMigrate is run for existing tables too: it is idempotent and
+		// applies additive schema evolution (creating missing columns), which
+		// consumers previously relied on when they used GORM AutoMigrate
+		// directly. It never drops columns or data.
 		err := db.Table(tableName).AutoMigrate(obj)
 		if err != nil {
 			return fmt.Errorf("failed to migrate table %s: %w", tableName, err)

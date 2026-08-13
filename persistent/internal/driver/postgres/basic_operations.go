@@ -135,7 +135,10 @@ func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 			return errors.New("no filter provided and object has no ID")
 		}
 
-		tx = tx.Where("id = ?", id.Hex())
+		// No explicit WHERE needed: with a non-zero primary key, GORM's update
+		// callback adds the primary-key condition from the model's schema,
+		// which resolves the correct column name ("id" or "_id") regardless of
+		// the model's json-tag naming.
 	}
 
 	// Select("*") makes Updates write every field, including zero values,

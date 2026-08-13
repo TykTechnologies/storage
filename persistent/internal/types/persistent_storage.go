@@ -63,4 +63,8 @@ type PersistentStorage interface {
 	GetTables(ctx context.Context) ([]string, error)
 	// DropTable drops a table/collection from the database. Returns the number of affected rows and error
 	DropTable(ctx context.Context, name string) (int, error)
+	// Close releases the underlying connection/pool. The storage must not be
+	// used after Close; consumers replacing an unhealthy connection should
+	// Close the old instance first to avoid leaking pools.
+	Close() error
 }

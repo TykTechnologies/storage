@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -116,7 +118,21 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 		return nil, errors.New("empty aggregation pipeline")
 	}
 
-	sqlQuery, args, err := translateAggregationPipeline(tableName, pipeline)
+	// Resolve date-sharded sources (the _date_sharding directive in $match)
+	// into a UNION ALL from-clause before translation. An empty from-clause
+	// means sharding was requested but no shard tables cover the date range:
+	// the result set is empty by definition (matching a document store
+	// aggregating over a nonexistent collection).
+	from, pipeline, err := d.resolveAggregateFrom(tableName, pipeline)
+	if err != nil {
+		return nil, err
+	}
+
+	if from == "" {
+		return []model.DBM{}, nil
+	}
+
+	sqlQuery, args, err := translateAggregationPipeline(from, pipeline)
 	if err != nil {
 		return nil, fmt.Errorf("failed to translate aggregation pipeline: %w", err)
 	}
@@ -154,7 +170,7 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 		// Set values in the map
 		for i, col := range columns {
 			val := *(values[i].(*interface{}))
-			rowMap[col] = val
+			rowMap[col] = normalizeAggregateValue(val)
 		}
 
 		results = append(results, rowMap)
@@ -322,7 +338,29 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 			for nk, nv := range nested {
 				switch nk {
 				case "$ne":
-					db = db.Not(fmt.Sprintf("%v = ?", k), nv)
+					// MongoDB $ne also matches documents where the field is
+					// absent/null; mirror that so NULL rows are included, unlike a
+					// bare NOT (col = ?) which excludes them.
+					db = db.Where(fmt.Sprintf("(%v IS NULL OR %v <> ?)", k, k), nv)
+				case "$regex":
+					if pattern, ok := nv.(string); ok && pattern != "" {
+						matchOp := "~"
+						if opts, ok := nested["$options"].(string); ok && strings.Contains(opts, "i") {
+							matchOp = "~*"
+						}
+
+						db = db.Where(fmt.Sprintf("%v %s ?", k, matchOp), pattern)
+					}
+				case "$options":
+					// Consumed together with $regex above; no standalone clause.
+				case "$exists":
+					if exists, ok := nv.(bool); ok {
+						if exists {
+							db = db.Where(fmt.Sprintf("%v IS NOT NULL", k))
+						} else {
+							db = db.Where(fmt.Sprintf("%v IS NULL", k))
+						}
+					}
 				case "$gt":
 					db = db.Where(fmt.Sprintf("%v > ?", k), nv)
 
@@ -407,66 +445,12 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 		}
 
 		if baseTable != "" {
-			tablePattern := baseTable + "_%"
-
-			// Query to get all tables matching the pattern
-			query := `
-				SELECT tablename 
-				FROM pg_tables 
-				WHERE schemaname = 'public' 
-				AND tablename LIKE ?
-        	`
-
-			rows, err := d.db.Raw(query, tablePattern).Rows()
+			fromSQL, err := d.shardedFrom(baseTable, minShardDate, maxShardDate)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get sharded tables: %w", err)
+				return nil, err
 			}
 
-			defer rows.Close()
-
-			var matchingTables []string
-
-			for rows.Next() {
-				var tableName string
-				if err := rows.Scan(&tableName); err != nil {
-					return nil, fmt.Errorf("failed to scan table name: %w", err)
-				}
-
-				matchingTables = append(matchingTables, tableName)
-			}
-
-			if err := rows.Err(); err != nil {
-				return nil, fmt.Errorf("error iterating table names: %w", err)
-			}
-
-			allTablesSQL := []string{}
-			dateFormat := "20060102"
-			minDateStr := minShardDate.Format(dateFormat)
-			maxDateStr := maxShardDate.Format(dateFormat)
-
-			for _, tableName := range matchingTables {
-				// Extract date suffix from table name
-				if len(tableName) <= len(baseTable)+1 {
-					continue // Skip if table name is too short
-				}
-
-				dateSuffix := tableName[len(baseTable)+1:] // +1 for the underscore
-
-				// Validate that the suffix is a date in the expected format
-				if len(dateSuffix) != 8 {
-					continue // Not a date suffix
-				}
-
-				// Check if the date is within our range
-				if dateSuffix >= minDateStr && dateSuffix <= maxDateStr {
-					allTablesSQL = append(allTablesSQL, "SELECT * FROM "+tableName)
-				}
-			}
-
-			if len(allTablesSQL) > 0 {
-				fromSQL := strings.Join(allTablesSQL, " UNION ALL ")
-				fromSQL = "(" + fromSQL + ") AS base"
-
+			if fromSQL != "" {
 				db = db.Table(fromSQL)
 			}
 		}
@@ -508,6 +492,15 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 	var args []interface{}
 	argIndex := 1
 
+	// lastSort remembers the most recent $sort stage so a following $group can
+	// resolve $first/$last accumulators against the document order it defined.
+	var lastSort model.DBM
+
+	// hasGroup marks that a $group stage was translated, so ungrouped
+	// aggregations (empty _id) can reproduce Mongo semantics over an empty
+	// input set (no rows, instead of SQL's single all-NULL aggregate row).
+	hasGroup := false
+
 	for _, stage := range pipeline {
 		if len(stage) != 1 {
 			return "", nil, errors.New("each pipeline stage must have exactly one operator")
@@ -541,13 +534,14 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 
 		case "$group":
 			if groupExpr, ok := value.(model.DBM); ok {
+				hasGroup = true
 				if idExpr, ok := groupExpr["_id"]; ok {
 					if idMap, ok := idExpr.(model.DBM); ok {
 						groupFields := []string{}
 
 						for _, expr := range idMap {
 							if fieldName, ok := expr.(string); ok {
-								fieldName = strings.TrimPrefix(fieldName, "$")
+								fieldName = strings.ReplaceAll(strings.TrimPrefix(fieldName, "$"), ".", "_")
 								groupFields = append(groupFields, fieldName)
 							} else {
 								return "", nil, errors.New("complex group expressions not supported")
@@ -560,7 +554,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 					} else if idExpr == nil {
 						groupByClause = ""
 					} else if fieldName, ok := idExpr.(string); ok {
-						fieldName = strings.TrimPrefix(fieldName, "$")
+						fieldName = strings.ReplaceAll(strings.TrimPrefix(fieldName, "$"), ".", "_")
 						groupByClause = fieldName
 					} else {
 						return "", nil, errors.New("complex group expressions not supported")
@@ -575,6 +569,11 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 					selectParts = append(selectParts, groupFields...)
 				}
 
+				// A $sort that precedes $group orders documents into the
+				// accumulators (Mongo semantics, consumed by $first/$last); it
+				// must not become the ORDER BY of the grouped result.
+				orderByClause = ""
+
 				// Add aggregation functions to select clause
 				for field, expr := range groupExpr {
 					if field == "_id" {
@@ -588,6 +587,18 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 
 							switch funcName {
 							case "$sum":
+								// {$sum: 1} is Mongo's row-count idiom -> COUNT(*).
+								if n, ok := funcArg.(int); ok && n == 1 {
+									alias, err := sanitizeAggField(field)
+									if err != nil {
+										return "", nil, err
+									}
+
+									selectParts = append(selectParts, fmt.Sprintf(`COUNT(*) AS %q`, alias))
+
+									continue
+								}
+
 								sqlFunc = "SUM"
 							case "$avg":
 								sqlFunc = "AVG"
@@ -597,26 +608,47 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 								sqlFunc = "MAX"
 							case "$count":
 								sqlFunc = "COUNT"
+							case "$first", "$last":
+								// $first/$last depend on the document order set by the
+								// preceding $sort: on a descending sort $first is the
+								// maximum value and $last the minimum (and inversely for
+								// ascending). Only the field the pipeline sorted on can be
+								// resolved this way.
+								sqlExpr, err := translateFirstLast(funcName, funcArg, lastSort)
+								if err != nil {
+									return "", nil, err
+								}
+
+								alias, err := sanitizeAggField(field)
+								if err != nil {
+									return "", nil, err
+								}
+
+								selectParts = append(selectParts, fmt.Sprintf(`%s AS %q`, sqlExpr, alias))
+
+								continue
 							default:
 								return "", nil, fmt.Errorf("unsupported aggregation function: %s", funcName)
 							}
 
-							// For simplicity, we assume the function argument is just a field name or a literal
-							var argStr string
-							if funcArg == 1 && funcName == "$sum" {
-								// Special case for $sum: 1 which is COUNT(*)
-								argStr = "*"
-							} else if fieldName, ok := funcArg.(string); ok {
-								fieldName = strings.TrimPrefix(fieldName, "$")
-								argStr = fieldName
-							} else {
-								// For literals, add as a parameter
-								args = append(args, funcArg)
-								argStr = "?"
-								argIndex++
+							// The accumulator argument may be the literal 1 (COUNT(*)), a
+							// field reference ("$field"), a nested aggregation expression
+							// such as {$cond: ...} (compiled to a CASE expression), or a
+							// plain literal (bound as a parameter).
+							argStr, exprArgs, err := aggAccumulatorArg(funcName, funcArg)
+							if err != nil {
+								return "", nil, err
 							}
 
-							selectParts = append(selectParts, fmt.Sprintf("%s(%s) AS %s", sqlFunc, argStr, field))
+							args = append(args, exprArgs...)
+							argIndex += len(exprArgs)
+
+							alias, err := sanitizeAggField(field)
+							if err != nil {
+								return "", nil, err
+							}
+
+							selectParts = append(selectParts, fmt.Sprintf(`%s(%s) AS %q`, sqlFunc, argStr, alias))
 						}
 					} else {
 						return "", nil, fmt.Errorf("invalid aggregation expression for field %s", field)
@@ -640,6 +672,19 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 						projectParts = append(projectParts, field)
 					} else if include == 0 || include == false {
 						// Exclude the field (do nothing)
+					} else if ref, ok := include.(string); ok && strings.HasPrefix(ref, "$") {
+						// Rename projection: {Alias: "$field.path"} -> field_path AS Alias.
+						col, err := sanitizeAggField(strings.TrimPrefix(ref, "$"))
+						if err != nil {
+							return "", nil, err
+						}
+
+						alias, err := sanitizeAggField(field)
+						if err != nil {
+							return "", nil, err
+						}
+
+						projectParts = append(projectParts, fmt.Sprintf(`%s AS %q`, col, alias))
 					} else if exprMap, ok := include.(model.DBM); ok {
 						// Field has an expression
 						for exprOp, exprVal := range exprMap {
@@ -663,8 +708,13 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 										}
 									}
 
-									concatStmt := fmt.Sprintf("CONCAT(%s)", strings.Join(concatParts, ", "))
-									projectParts = append(projectParts, concatStmt, field)
+									alias, err := sanitizeAggField(field)
+									if err != nil {
+										return "", nil, err
+									}
+
+									concatStmt := fmt.Sprintf(`CONCAT(%s) AS %q`, strings.Join(concatParts, ", "), alias)
+									projectParts = append(projectParts, concatStmt)
 								} else {
 									return "", nil, errors.New("$concat value must be an array")
 								}
@@ -686,9 +736,16 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 
 		case "$sort":
 			if sortExpr, ok := value.(model.DBM); ok {
+				lastSort = sortExpr
+
 				sortParts := []string{}
 
 				for field, direction := range sortExpr {
+					col, err := sanitizeAggField(field)
+					if err != nil {
+						return "", nil, err
+					}
+
 					var dirStr string
 
 					if dir, ok := direction.(int); ok {
@@ -701,7 +758,9 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 							return "", nil, fmt.Errorf("invalid sort direction for field %s: %d", field, dir)
 						}
 
-						sortParts = append(sortParts, fmt.Sprintf("%s %s", field, dirStr))
+						// Quote so sorting works on case-sensitive aliased
+						// accumulators ("Hits") as well as raw lowercase columns.
+						sortParts = append(sortParts, fmt.Sprintf("%q %s", col, dirStr))
 					} else {
 						return "", nil, fmt.Errorf("sort direction for field %s must be an integer", field)
 					}
@@ -728,6 +787,17 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 				return "", nil, errors.New("$skip value must be an integer")
 			}
 
+		case "$unwind":
+			// $unwind flattens an array field into one row per element. In a
+			// document store the counters live in arrays/sub-documents; the
+			// equivalent SQL schema stores them as one row per element keyed by a
+			// dimension column, so there is no single-table SQL rewrite for
+			// $unwind without aligning the two schemas. Reject it explicitly
+			// rather than silently producing an incorrect query.
+			return "", nil, errors.New("$unwind is not supported by the Postgres aggregation translator: " +
+				"it maps to a dimension/row-per-element schema that cannot be expressed as a single-table rewrite " +
+				"(see docs/postgres-analytics-aggregation.md)")
+
 		default:
 			return "", nil, fmt.Errorf("unsupported aggregation operator: %s", operator)
 		}
@@ -741,6 +811,11 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 
 	if groupByClause != "" {
 		query += fmt.Sprintf(" GROUP BY %s", groupByClause)
+	} else if hasGroup {
+		// A $group with an empty _id produces no output document in Mongo
+		// when nothing matched; without GROUP BY, SQL aggregates always emit
+		// one row, so filter the empty-input case out.
+		query += " HAVING COUNT(*) > 0"
 	}
 
 	if havingClause != "" {
@@ -762,6 +837,428 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 	return query, args, nil
 }
 
+// normalizeAggregateValue converts driver-native scan types to plain Go
+// numbers where possible: Postgres NUMERIC (e.g. AVG results) arrives through
+// interface{} scans as []byte or string, which document-store consumers do not
+// expect. Non-numeric values pass through unchanged.
+func normalizeAggregateValue(val interface{}) interface{} {
+	var s string
+
+	switch v := val.(type) {
+	case []byte:
+		s = string(v)
+	case string:
+		s = v
+	default:
+		return val
+	}
+
+	if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return n
+	}
+
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return f
+	}
+
+	return val
+}
+
+// toInterfaceSlice widens any slice or array value (e.g. the []string a
+// caller naturally passes to $in) to []interface{}. It returns nil when the
+// value is not a slice.
+func toInterfaceSlice(val interface{}) []interface{} {
+	if vs, ok := val.([]interface{}); ok {
+		return vs
+	}
+
+	rv := reflect.ValueOf(val)
+	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
+		return nil
+	}
+
+	out := make([]interface{}, rv.Len())
+	for i := range out {
+		out[i] = rv.Index(i).Interface()
+	}
+
+	return out
+}
+
+// aggFieldPattern validates a bare SQL identifier used inside an aggregation
+// expression. Dots are converted to underscores before validation.
+var aggFieldPattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+
+// sanitizeAggField validates a field identifier referenced from an aggregation
+// expression, rejecting anything that is not a plain identifier so that field
+// references can be interpolated into SQL without opening an injection vector.
+func sanitizeAggField(name string) (string, error) {
+	name = strings.ReplaceAll(name, ".", "_")
+	if !aggFieldPattern.MatchString(name) {
+		return "", fmt.Errorf("invalid field identifier in aggregation expression: %q", name)
+	}
+
+	return name, nil
+}
+
+// aggAccumulatorArg renders the argument of a $group accumulator ($sum, $avg,
+// …) to a SQL expression. It supports the COUNT(*) shorthand ($sum: 1), field
+// references, nested aggregation expressions (e.g. {$cond: …}), and plain
+// literals (returned as a bound parameter).
+func aggAccumulatorArg(funcName string, funcArg interface{}) (string, []interface{}, error) {
+	switch fa := funcArg.(type) {
+	case string:
+		col, err := sanitizeAggField(strings.TrimPrefix(fa, "$"))
+		if err != nil {
+			return "", nil, err
+		}
+
+		return col, nil, nil
+	case model.DBM:
+		expr, err := translateAggValueExpr(fa)
+		if err != nil {
+			return "", nil, err
+		}
+
+		return expr, nil, nil
+	default:
+		return "?", []interface{}{funcArg}, nil
+	}
+}
+
+// shardedFrom builds a "(SELECT * FROM t1 UNION ALL ...) AS base" from-clause
+// spanning the date-sharded tables of baseTable (suffix _YYYYMMDD) that fall
+// within [minDate, maxDate]. It returns "" when no sharded tables match.
+func (d *driver) shardedFrom(baseTable string, minDate, maxDate time.Time) (string, error) {
+	tablePattern := baseTable + "_%"
+
+	query := `
+		SELECT tablename
+		FROM pg_tables
+		WHERE schemaname = 'public'
+		AND tablename LIKE ?
+	`
+
+	rows, err := d.db.Raw(query, tablePattern).Rows()
+	if err != nil {
+		return "", fmt.Errorf("failed to get sharded tables: %w", err)
+	}
+
+	defer rows.Close()
+
+	var matchingTables []string
+
+	for rows.Next() {
+		var tableName string
+		if err := rows.Scan(&tableName); err != nil {
+			return "", fmt.Errorf("failed to scan table name: %w", err)
+		}
+
+		matchingTables = append(matchingTables, tableName)
+	}
+
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("error iterating table names: %w", err)
+	}
+
+	allTablesSQL := []string{}
+	dateFormat := "20060102"
+	minDateStr := minDate.Format(dateFormat)
+	maxDateStr := maxDate.Format(dateFormat)
+
+	for _, tableName := range matchingTables {
+		if len(tableName) <= len(baseTable)+1 {
+			continue // Skip if table name is too short
+		}
+
+		dateSuffix := tableName[len(baseTable)+1:] // +1 for the underscore
+
+		// Validate that the suffix is a date in the expected format
+		if len(dateSuffix) != 8 {
+			continue // Not a date suffix
+		}
+
+		if dateSuffix >= minDateStr && dateSuffix <= maxDateStr {
+			allTablesSQL = append(allTablesSQL, "SELECT * FROM "+tableName)
+		}
+	}
+
+	if len(allTablesSQL) == 0 {
+		return "", nil
+	}
+
+	return "(" + strings.Join(allTablesSQL, " UNION ALL ") + ") AS base", nil
+}
+
+// resolveAggregateFrom inspects the pipeline's $match stages for the
+// _date_sharding directive (the name of the date field carrying $gte/$lte
+// bounds). When present — and table sharding is enabled on the driver — it
+// returns a UNION ALL from-clause spanning the matching per-day tables and a
+// pipeline copy with the directive stripped, so the filter itself still
+// applies inside each shard. When no shard table covers the range it returns
+// an empty from-clause, signalling an empty result set. Without the directive
+// (or with sharding disabled) the base table and original pipeline are
+// returned unchanged.
+func (d *driver) resolveAggregateFrom(baseTable string, pipeline []model.DBM) (string, []model.DBM, error) {
+	tableSharding := d.options != nil && d.TableSharding
+
+	out := make([]model.DBM, len(pipeline))
+	from := baseTable
+
+	for i, stage := range pipeline {
+		out[i] = stage
+
+		matchExpr, ok := stage["$match"].(model.DBM)
+		if !ok {
+			continue
+		}
+
+		shardField, requested := matchExpr["_date_sharding"].(string)
+		if !requested {
+			continue
+		}
+
+		// Strip the directive so it never reaches the WHERE clause.
+		cleaned := model.DBM{}
+
+		for k, v := range matchExpr {
+			if k != "_date_sharding" {
+				cleaned[k] = v
+			}
+		}
+
+		out[i] = model.DBM{"$match": cleaned}
+
+		if !tableSharding {
+			continue
+		}
+
+		bounds, ok := cleaned[shardField].(model.DBM)
+		if !ok {
+			return "", nil, errors.New("date sharding requires bounds on the shard field")
+		}
+
+		minDate, minOK := bounds["$gte"].(time.Time)
+		maxDate, maxOK := bounds["$lte"].(time.Time)
+
+		if !minOK || !maxOK {
+			return "", nil, errors.New("date sharding requires both gte and lte date dimensions")
+		}
+
+		fromSQL, err := d.shardedFrom(baseTable, minDate, maxDate)
+		if err != nil {
+			return "", nil, err
+		}
+
+		// No shard tables cover the requested range: propagate an empty
+		// from-clause so the caller can short-circuit to an empty result
+		// instead of silently reading the (unsharded) base table.
+		from = fromSQL
+	}
+
+	return from, out, nil
+}
+
+// translateFirstLast maps a $first/$last accumulator to MIN/MAX using the
+// document order established by the pipeline's preceding $sort: with a
+// descending sort $first is MAX and $last is MIN, and inversely for an
+// ascending sort. It errors when there is no preceding $sort on the referenced
+// field, since the accumulator's meaning would be undefined.
+func translateFirstLast(funcName string, funcArg interface{}, lastSort model.DBM) (string, error) {
+	fieldRef, ok := funcArg.(string)
+	if !ok || !strings.HasPrefix(fieldRef, "$") {
+		return "", fmt.Errorf("%s requires a field reference argument", funcName)
+	}
+
+	name := strings.TrimPrefix(fieldRef, "$")
+
+	col, err := sanitizeAggField(name)
+	if err != nil {
+		return "", err
+	}
+
+	dirRaw, sorted := lastSort[name]
+	if !sorted {
+		return "", fmt.Errorf("%s on %q requires a preceding $sort on that field", funcName, name)
+	}
+
+	dir, ok := dirRaw.(int)
+	if !ok || (dir != 1 && dir != -1) {
+		return "", fmt.Errorf("invalid sort direction for field %q", name)
+	}
+
+	descending := dir == -1
+	if (funcName == "$first") == descending {
+		return "MAX(" + col + ")", nil
+	}
+
+	return "MIN(" + col + ")", nil
+}
+
+// translateAggValueExpr renders a MongoDB aggregation *value* expression to SQL.
+// Field references ("$col") become column identifiers, operator maps recurse
+// (currently {$cond: …}), and scalar literals are inlined (numbers/booleans) or
+// single-quoted (strings). Numeric literals are inlined rather than bound so
+// that expressions embedded in the SELECT list do not disturb positional
+// parameter ordering relative to the WHERE clause.
+func translateAggValueExpr(expr interface{}) (string, error) {
+	switch e := expr.(type) {
+	case string:
+		if strings.HasPrefix(e, "$") {
+			return sanitizeAggField(strings.TrimPrefix(e, "$"))
+		}
+
+		return "'" + strings.ReplaceAll(e, "'", "''") + "'", nil
+	case bool:
+		if e {
+			return "TRUE", nil
+		}
+
+		return "FALSE", nil
+	case int:
+		return strconv.Itoa(e), nil
+	case int32:
+		return strconv.FormatInt(int64(e), 10), nil
+	case int64:
+		return strconv.FormatInt(e, 10), nil
+	case float64:
+		return strconv.FormatFloat(e, 'f', -1, 64), nil
+	case model.DBM:
+		if len(e) != 1 {
+			return "", errors.New("aggregation value expression must have exactly one operator")
+		}
+
+		for op, v := range e {
+			if op == "$cond" {
+				return translateCondExpr(v)
+			}
+
+			return "", fmt.Errorf("unsupported aggregation value operator: %s", op)
+		}
+	}
+
+	return "", fmt.Errorf("unsupported aggregation value expression: %T", expr)
+}
+
+// translateCondExpr compiles a MongoDB $cond into a SQL CASE expression. Both
+// the object form ({if, then, else}) and the array form ([if, then, else]) are
+// supported.
+func translateCondExpr(v interface{}) (string, error) {
+	var ifExpr, thenExpr, elseExpr interface{}
+
+	switch c := v.(type) {
+	case model.DBM:
+		ifExpr, thenExpr, elseExpr = c["if"], c["then"], c["else"]
+	case []interface{}:
+		if len(c) != 3 {
+			return "", errors.New("$cond array form must have exactly 3 elements")
+		}
+
+		ifExpr, thenExpr, elseExpr = c[0], c[1], c[2]
+	default:
+		return "", errors.New("$cond must be an object {if,then,else} or a 3-element array")
+	}
+
+	cond, err := translateAggBoolExpr(ifExpr)
+	if err != nil {
+		return "", err
+	}
+
+	thenSQL, err := translateAggValueExpr(thenExpr)
+	if err != nil {
+		return "", err
+	}
+
+	elseSQL, err := translateAggValueExpr(elseExpr)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("CASE WHEN %s THEN %s ELSE %s END", cond, thenSQL, elseSQL), nil
+}
+
+// translateAggBoolExpr compiles a MongoDB boolean/comparison aggregation
+// expression ($and, $or, $eq, $ne, $gt, $gte, $lt, $lte) to a SQL predicate.
+func translateAggBoolExpr(expr interface{}) (string, error) {
+	m, ok := expr.(model.DBM)
+	if !ok {
+		return "", fmt.Errorf("boolean expression must be a DBM, got %T", expr)
+	}
+
+	if len(m) != 1 {
+		return "", errors.New("boolean expression must have exactly one operator")
+	}
+
+	for op, v := range m {
+		switch op {
+		case "$and", "$or":
+			arr, ok := v.([]interface{})
+			if !ok {
+				return "", fmt.Errorf("%s expects an array of expressions", op)
+			}
+
+			parts := make([]string, 0, len(arr))
+
+			for _, sub := range arr {
+				p, err := translateAggBoolExpr(sub)
+				if err != nil {
+					return "", err
+				}
+
+				parts = append(parts, p)
+			}
+
+			joiner := " OR "
+			if op == "$and" {
+				joiner = " AND "
+			}
+
+			return "(" + strings.Join(parts, joiner) + ")", nil
+		case "$eq", "$ne", "$gt", "$gte", "$lt", "$lte":
+			arr, ok := v.([]interface{})
+			if !ok || len(arr) != 2 {
+				return "", fmt.Errorf("%s expects a 2-element array", op)
+			}
+
+			left, err := translateAggValueExpr(arr[0])
+			if err != nil {
+				return "", err
+			}
+
+			right, err := translateAggValueExpr(arr[1])
+			if err != nil {
+				return "", err
+			}
+
+			return fmt.Sprintf("%s %s %s", left, aggComparator(op), right), nil
+		default:
+			return "", fmt.Errorf("unsupported boolean operator in aggregation: %s", op)
+		}
+	}
+
+	return "", errors.New("empty boolean expression")
+}
+
+// aggComparator maps a MongoDB comparison operator to its SQL operator.
+func aggComparator(op string) string {
+	switch op {
+	case "$eq":
+		return "="
+	case "$ne":
+		return "<>"
+	case "$gt":
+		return ">"
+	case "$gte":
+		return ">="
+	case "$lt":
+		return "<"
+	case "$lte":
+		return "<="
+	}
+
+	return ""
+}
+
 func buildWhereClause(filter model.DBM) (string, []interface{}) {
 	if len(filter) == 0 {
 		return "", nil
@@ -778,9 +1275,38 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 			continue
 		}
 
-		// Handle logical operators
+		// Mongo dotted paths map to underscore-joined columns on Postgres.
+		k = strings.ReplaceAll(k, ".", "_")
+
+		// Logical operators take a list of sub-filters; each sub-filter
+		// translates recursively and the results join with OR/AND.
 		if k == "$or" || k == "$and" {
-			// This would need specific implementation based on your needs
+			subFilters, ok := v.([]model.DBM)
+			if !ok {
+				continue
+			}
+
+			joiner := " OR "
+			if k == "$and" {
+				joiner = " AND "
+			}
+
+			var subConditions []string
+
+			for _, sub := range subFilters {
+				subSQL, subValues := buildWhereClause(sub)
+				if subSQL == "" {
+					continue
+				}
+
+				subConditions = append(subConditions, "("+subSQL+")")
+				values = append(values, subValues...)
+			}
+
+			if len(subConditions) > 0 {
+				conditions = append(conditions, "("+strings.Join(subConditions, joiner)+")")
+			}
+
 			continue
 		}
 
@@ -814,9 +1340,8 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 					i++
 
 				case "$in":
-					inValues, ok := opVal.([]interface{})
-					if !ok {
-						// Handle error or try to convert
+					inValues := toInterfaceSlice(opVal)
+					if inValues == nil {
 						continue
 					}
 
@@ -829,6 +1354,30 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 					}
 
 					conditions = append(conditions, fmt.Sprintf("%s IN (%s)", k, strings.Join(placeholders, ",")))
+
+				case "$regex":
+					if pattern, ok := opVal.(string); ok && pattern != "" {
+						matchOp := "~"
+						if opts, ok := val["$options"].(string); ok && strings.Contains(opts, "i") {
+							matchOp = "~*"
+						}
+
+						conditions = append(conditions, fmt.Sprintf("%s %s ?", k, matchOp))
+						values = append(values, pattern)
+						i++
+					}
+
+				case "$options":
+					// Consumed together with $regex above; no standalone clause.
+
+				case "$exists":
+					if exists, ok := opVal.(bool); ok {
+						if exists {
+							conditions = append(conditions, fmt.Sprintf("%s IS NOT NULL", k))
+						} else {
+							conditions = append(conditions, fmt.Sprintf("%s IS NULL", k))
+						}
+					}
 				}
 			}
 

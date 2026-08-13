@@ -21,6 +21,8 @@ func NewPostgresDriver(opts *types.ClientOpts) (*driver, error) {
 
 	driver := &driver{}
 	driver.lifeCycle = lc
+	driver.options = opts
+	driver.TableSharding = opts.TableSharding
 
 	err := driver.Connect(opts)
 	if err != nil {

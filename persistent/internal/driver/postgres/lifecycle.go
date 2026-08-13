@@ -34,8 +34,15 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 		return ErrorEmptyConnStr
 	}
 
-	// Open GORM with PostgreSQL driver
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	// Open GORM with PostgreSQL driver. UseJSONTags/AutoEmbedd match how every
+	// Tyk product opens the gorm fork: column names derive from json tags and
+	// embedded structs are flattened. Without these the driver would create and
+	// query columns named after Go fields, which does not line up with existing
+	// Tyk Postgres schemas (e.g. those written by the dashboard).
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		AutoEmbedd:  true,
+		UseJSONTags: true,
+	})
 	if err != nil {
 		return fmt.Errorf("gorm open: %w", err)
 	}
@@ -93,12 +100,17 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 // Close terminates the active database connection.
 // Returns an error if the connection cannot be closed properly.
 func (l *lifeCycle) Close() error {
+	if l.sqlDB == nil {
+		return errors.New("closing a no connected database")
+	}
+
 	err := l.sqlDB.Close()
 	if err != nil {
 		return err
 	}
 
 	l.db = nil
+	l.sqlDB = nil
 
 	return nil
 }

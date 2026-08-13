@@ -538,6 +538,31 @@ func TestMigrate(t *testing.T) {
 		}
 	}
 
+	// Migrate must apply additive schema evolution: re-running it against an
+	// existing table whose schema is missing a column (e.g. after a model gains
+	// a field) must create that column, mirroring GORM AutoMigrate semantics.
+	t.Run("MigrateAddsMissingColumnToExistingTable", func(t *testing.T) {
+		testObj := &TestObject{TableNameValue: "test_migrate_add_column"}
+		defer cleanupTables([]model.DBObject{testObj})
+
+		err := driver.Migrate(ctx, []model.DBObject{testObj})
+		require.NoError(t, err)
+
+		// Simulate an old schema by dropping a column.
+		err = driver.db.Table(testObj.TableName()).Migrator().DropColumn(testObj, "name")
+		require.NoError(t, err, "dropping column to simulate old schema")
+
+		hasCol := driver.db.Table(testObj.TableName()).Migrator().HasColumn(testObj, "name")
+		require.False(t, hasCol, "column must be absent before re-migration")
+
+		// Re-running Migrate on the existing table must restore the column.
+		err = driver.Migrate(ctx, []model.DBObject{testObj})
+		assert.NoError(t, err)
+
+		hasCol = driver.db.Table(testObj.TableName()).Migrator().HasColumn(testObj, "name")
+		assert.True(t, hasCol, "Migrate must add missing columns to existing tables")
+	})
+
 	// Test case 1: Migrate a single new table
 	t.Run("MigrateSingleNewTable", func(t *testing.T) {
 		testObj := &TestObject{TableNameValue: "test_migrate_single"}
