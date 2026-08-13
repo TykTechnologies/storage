@@ -798,6 +798,26 @@ func TestTranslateAggregationConditional(t *testing.T) {
 		assert.Equal(t, []interface{}{"^abc"}, values)
 	})
 
+	t.Run("MatchOrOfRegexAndTypedIn", func(t *testing.T) {
+		pipeline := []model.DBM{
+			{
+				"$match": model.DBM{
+					"$or": []model.DBM{
+						{"tags": model.DBM{"$regex": `"tag1"`}},
+						{"tags": model.DBM{"$regex": `"tag2"`}},
+					},
+					"apiid": model.DBM{"$in": []string{"api1", "api2"}},
+				},
+			},
+		}
+
+		query, values, err := translateAggregationPipeline("t", pipeline)
+		require.NoError(t, err)
+		assert.Contains(t, query, `((tags ~ ?) OR (tags ~ ?))`)
+		assert.Contains(t, query, "apiid IN (?,?)")
+		assert.ElementsMatch(t, []interface{}{`"tag1"`, `"tag2"`, "api1", "api2"}, values)
+	})
+
 	t.Run("UnwindReportsSchemaDivergence", func(t *testing.T) {
 		// $unwind over an array-of-counters schema has no single-table SQL
 		// rewrite; the translator must reject it with an actionable error rather
@@ -1780,6 +1800,25 @@ func TestAggregateWithShardingEnabled(t *testing.T) {
 	// 2 shards x 3 rows; values (10+20+30) x 2.
 	assert.EqualValues(t, 6, toInt64(t, results[0]["Hits"]))
 	assert.EqualValues(t, 120, toInt64(t, results[0]["Sum"]))
+
+	// A range no shard table covers yields an empty result set — never a
+	// silent fallback to the unsharded base table.
+	staleRange := []model.DBM{
+		{
+			"$match": model.DBM{
+				"_date_sharding": "created_at",
+				"created_at": model.DBM{
+					"$gte": startDate.Add(-100 * 24 * time.Hour),
+					"$lte": startDate.Add(-90 * 24 * time.Hour),
+				},
+			},
+		},
+		pipeline[1],
+	}
+
+	results, err = driver.Aggregate(ctx, &TestObject{}, staleRange)
+	require.NoError(t, err)
+	assert.Empty(t, results)
 }
 
 // toInt64 normalises driver-dependent numeric scan types.

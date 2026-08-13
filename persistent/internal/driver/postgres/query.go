@@ -119,10 +119,17 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 	}
 
 	// Resolve date-sharded sources (the _date_sharding directive in $match)
-	// into a UNION ALL from-clause before translation.
+	// into a UNION ALL from-clause before translation. An empty from-clause
+	// means sharding was requested but no shard tables cover the date range:
+	// the result set is empty by definition (matching a document store
+	// aggregating over a nonexistent collection).
 	from, pipeline, err := d.resolveAggregateFrom(tableName, pipeline)
 	if err != nil {
 		return nil, err
+	}
+
+	if from == "" {
+		return []model.DBM{}, nil
 	}
 
 	sqlQuery, args, err := translateAggregationPipeline(from, pipeline)
@@ -846,6 +853,27 @@ func normalizeAggregateValue(val interface{}) interface{} {
 	return val
 }
 
+// toInterfaceSlice widens any slice or array value (e.g. the []string a
+// caller naturally passes to $in) to []interface{}. It returns nil when the
+// value is not a slice.
+func toInterfaceSlice(val interface{}) []interface{} {
+	if vs, ok := val.([]interface{}); ok {
+		return vs
+	}
+
+	rv := reflect.ValueOf(val)
+	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
+		return nil
+	}
+
+	out := make([]interface{}, rv.Len())
+	for i := range out {
+		out[i] = rv.Index(i).Interface()
+	}
+
+	return out
+}
+
 // aggFieldPattern validates a bare SQL identifier used inside an aggregation
 // expression. Dots are converted to underscores before validation.
 var aggFieldPattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
@@ -956,8 +984,10 @@ func (d *driver) shardedFrom(baseTable string, minDate, maxDate time.Time) (stri
 // bounds). When present — and table sharding is enabled on the driver — it
 // returns a UNION ALL from-clause spanning the matching per-day tables and a
 // pipeline copy with the directive stripped, so the filter itself still
-// applies inside each shard. Without the directive (or with sharding disabled)
-// the base table and original pipeline are returned unchanged.
+// applies inside each shard. When no shard table covers the range it returns
+// an empty from-clause, signalling an empty result set. Without the directive
+// (or with sharding disabled) the base table and original pipeline are
+// returned unchanged.
 func (d *driver) resolveAggregateFrom(baseTable string, pipeline []model.DBM) (string, []model.DBM, error) {
 	tableSharding := d.options != nil && d.TableSharding
 
@@ -1009,9 +1039,10 @@ func (d *driver) resolveAggregateFrom(baseTable string, pipeline []model.DBM) (s
 			return "", nil, err
 		}
 
-		if fromSQL != "" {
-			from = fromSQL
-		}
+		// No shard tables cover the requested range: propagate an empty
+		// from-clause so the caller can short-circuit to an empty result
+		// instead of silently reading the (unsharded) base table.
+		from = fromSQL
 	}
 
 	return from, out, nil
@@ -1236,9 +1267,35 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 		// Mongo dotted paths map to underscore-joined columns on Postgres.
 		k = strings.ReplaceAll(k, ".", "_")
 
-		// Handle logical operators
+		// Logical operators take a list of sub-filters; each sub-filter
+		// translates recursively and the results join with OR/AND.
 		if k == "$or" || k == "$and" {
-			// This would need specific implementation based on your needs
+			subFilters, ok := v.([]model.DBM)
+			if !ok {
+				continue
+			}
+
+			joiner := " OR "
+			if k == "$and" {
+				joiner = " AND "
+			}
+
+			var subConditions []string
+
+			for _, sub := range subFilters {
+				subSQL, subValues := buildWhereClause(sub)
+				if subSQL == "" {
+					continue
+				}
+
+				subConditions = append(subConditions, "("+subSQL+")")
+				values = append(values, subValues...)
+			}
+
+			if len(subConditions) > 0 {
+				conditions = append(conditions, "("+strings.Join(subConditions, joiner)+")")
+			}
+
 			continue
 		}
 
@@ -1272,9 +1329,8 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 					i++
 
 				case "$in":
-					inValues, ok := opVal.([]interface{})
-					if !ok {
-						// Handle error or try to convert
+					inValues := toInterfaceSlice(opVal)
+					if inValues == nil {
 						continue
 					}
 
