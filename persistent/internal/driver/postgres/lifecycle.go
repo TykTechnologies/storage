@@ -34,8 +34,15 @@ func (l *lifeCycle) Connect(opts *types.ClientOpts) error {
 		return ErrorEmptyConnStr
 	}
 
-	// Open GORM with PostgreSQL driver
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	// Open GORM with PostgreSQL driver. UseJSONTags/AutoEmbedd match how every
+	// Tyk product opens the gorm fork: column names derive from json tags and
+	// embedded structs are flattened. Without these the driver would create and
+	// query columns named after Go fields, which does not line up with existing
+	// Tyk Postgres schemas (e.g. those written by the dashboard).
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		AutoEmbedd:  true,
+		UseJSONTags: true,
+	})
 	if err != nil {
 		return fmt.Errorf("gorm open: %w", err)
 	}
