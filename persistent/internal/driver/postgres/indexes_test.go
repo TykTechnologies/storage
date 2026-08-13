@@ -647,11 +647,10 @@ func TestIndexExists(t *testing.T) {
 		err := driver.CreateIndex(ctx, testItem, index)
 		assert.NoError(t, err, "First index creation should succeed")
 
-		// Try to create the same index again
-		// If indexExists works correctly, this should fail with a duplicate index error
+		// Re-creating the same index is idempotent, matching MongoDB's
+		// behaviour (indexExists short-circuits to success).
 		err = driver.CreateIndex(ctx, testItem, index)
-		assert.Error(t, err, "Second index creation should fail")
-		assert.Contains(t, err.Error(), "already exists", "Error should indicate index already exists")
+		assert.NoError(t, err, "Second index creation should be a no-op, not an error")
 	})
 
 	// Test case 2: Check after dropping an index

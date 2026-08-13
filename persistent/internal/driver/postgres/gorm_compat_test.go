@@ -5,6 +5,7 @@ package postgres
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -130,9 +131,12 @@ func TestGORMCompatibility_MigratorGetIndexes(t *testing.T) {
 		indexes, err := driver.db.WithContext(ctx).Migrator().GetIndexes(obj)
 		require.NoError(t, err)
 
+		// GORM's migrator reports the physical name, which the driver
+		// namespaces with the table (logical names are per-collection like
+		// MongoDB; Postgres index names are schema-global).
 		foundCustom := false
 		for _, idx := range indexes {
-			if idx.Name() == "idx_gorm_compat_name" {
+			if strings.HasSuffix(idx.Name(), "_idx_gorm_compat_name") {
 				foundCustom = true
 				assert.Contains(t, idx.Columns(), "name", "Custom index should be on 'name' column")
 			}

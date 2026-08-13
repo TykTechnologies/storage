@@ -36,6 +36,8 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 		return err
 	}
 
+	rawTable := tableName
+
 	tableName, err = sanitizeIdentifier(tableName)
 	if err != nil {
 		return fmt.Errorf("invalid table name: %w", err)
@@ -65,10 +67,18 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 		indexName = strings.Join(parts, "_")
 	}
 
-	indexName, err = sanitizeIdentifier(indexName)
+	// Postgres index names are schema-global while MongoDB's are scoped per
+	// collection; consumers name indexes per collection. Namespace the physical
+	// index with the table name so identical logical names on different tables
+	// do not collide.
+	rawPhysical := rawTable + "_" + indexName
+
+	physicalName, err := sanitizeIdentifier(rawPhysical)
 	if err != nil {
 		return fmt.Errorf("invalid index name: %w", err)
 	}
+
+	indexName = physicalName
 
 	// Build column list safely
 	var indexFields []string
@@ -119,14 +129,16 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 		}
 	}
 
-	// Check if the index already exists
-	exists, err := d.indexExists(ctx, tableName, indexName)
+	// Check if the index already exists. The catalog stores raw (unquoted)
+	// names. Re-creating an existing index succeeds silently, matching
+	// MongoDB's idempotent index creation.
+	exists, err := d.indexExists(ctx, rawTable, rawPhysical)
 	if err != nil {
 		return fmt.Errorf("failed to check index existence: %w", err)
 	}
 
 	if exists {
-		return ErrorIndexAlreadyExist
+		return nil
 	}
 
 	// Build CREATE INDEX statement
@@ -248,6 +260,10 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
 	indexMap := make(map[string]*model.Index)
 
 	for _, idxRow := range rows {
+		// Physical names are namespaced with the table (see CreateIndex);
+		// present the logical name consumers created the index with.
+		idxRow.IndexName = strings.TrimPrefix(idxRow.IndexName, tableName+"_")
+
 		idx, exists := indexMap[idxRow.IndexName]
 		if !exists {
 			idx = &model.Index{
@@ -294,8 +310,9 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
 			}
 
 			for _, m := range metas {
-				// pq.QuoteIdentifier wraps names in double-quotes; strip before map lookup.
-				key := strings.Trim(m.IndexName, `"`)
+				// pq.QuoteIdentifier wraps names in double-quotes; strip those and
+				// the table-namespace prefix before the logical-name map lookup.
+				key := strings.TrimPrefix(strings.Trim(m.IndexName, `"`), tableName+"_")
 				if idx, found := indexMap[key]; found {
 					idx.IsTTLIndex = true
 					idx.TTL = m.TTLSeconds
