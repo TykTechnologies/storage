@@ -818,6 +818,25 @@ func TestTranslateAggregationConditional(t *testing.T) {
 		assert.ElementsMatch(t, []interface{}{`"tag1"`, `"tag2"`, "api1", "api2"}, values)
 	})
 
+	t.Run("UngroupedGroupFiltersEmptyInput", func(t *testing.T) {
+		// $group with an empty _id yields no document in Mongo when the input
+		// is empty; SQL aggregates without GROUP BY always emit one row, so
+		// the translator must filter that case out.
+		pipeline := []model.DBM{
+			{
+				"$group": model.DBM{
+					"_id":  model.DBM{},
+					"Hits": model.DBM{"$sum": 1},
+				},
+			},
+		}
+
+		query, _, err := translateAggregationPipeline("t", pipeline)
+		require.NoError(t, err)
+		assert.Contains(t, query, "HAVING COUNT(*) > 0")
+		assert.NotContains(t, query, "GROUP BY")
+	})
+
 	t.Run("UnwindReportsSchemaDivergence", func(t *testing.T) {
 		// $unwind over an array-of-counters schema has no single-table SQL
 		// rewrite; the translator must reject it with an actionable error rather

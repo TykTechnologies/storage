@@ -496,6 +496,11 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 	// resolve $first/$last accumulators against the document order it defined.
 	var lastSort model.DBM
 
+	// hasGroup marks that a $group stage was translated, so ungrouped
+	// aggregations (empty _id) can reproduce Mongo semantics over an empty
+	// input set (no rows, instead of SQL's single all-NULL aggregate row).
+	hasGroup := false
+
 	for _, stage := range pipeline {
 		if len(stage) != 1 {
 			return "", nil, errors.New("each pipeline stage must have exactly one operator")
@@ -529,6 +534,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 
 		case "$group":
 			if groupExpr, ok := value.(model.DBM); ok {
+				hasGroup = true
 				if idExpr, ok := groupExpr["_id"]; ok {
 					if idMap, ok := idExpr.(model.DBM); ok {
 						groupFields := []string{}
@@ -805,6 +811,11 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 
 	if groupByClause != "" {
 		query += fmt.Sprintf(" GROUP BY %s", groupByClause)
+	} else if hasGroup {
+		// A $group with an empty _id produces no output document in Mongo
+		// when nothing matched; without GROUP BY, SQL aggregates always emit
+		// one row, so filter the empty-input case out.
+		query += " HAVING COUNT(*) > 0"
 	}
 
 	if havingClause != "" {
