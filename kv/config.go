@@ -21,6 +21,7 @@ import (
 //
 //	{
 //	  "kv": {
+//	    "cache": {"enabled": true, "ttl": "60s"},
 //	    "stores": {
 //	      "vault-prod": {"type": "hashicorp_vault", "required": true, "config": {...}}
 //	    }

@@ -134,6 +134,10 @@ func (r *Registry) Add(pt kv.ProviderType, factory kv.ProviderFactory) error {
 //
 //	{
 //	  "kv": {
+//	    "cache": {
+//	      "enabled": true,
+//	      "ttl": "60s"
+//	    },
 //	    "stores": {
 //	      "vault-prod": {
 //	        "type": "vault",
@@ -187,7 +191,7 @@ func (r *Registry) InitStores(ctx context.Context, config *kv.Config) (err error
 	eg, egCtx := errgroup.WithContext(ctx)
 
 	for name, storeCfg := range config.Stores {
-		if scheduleErr := r.scheduleStoreInit(egCtx, eg, name, storeCfg, collect); scheduleErr != nil {
+		if scheduleErr := r.scheduleStoreInit(egCtx, eg, name, storeCfg, config.Cache, collect); scheduleErr != nil {
 			return scheduleErr
 		}
 	}
@@ -208,6 +212,7 @@ func (r *Registry) scheduleStoreInit(
 	eg *errgroup.Group,
 	name string,
 	storeCfg kv.StoreConfig,
+	cacheCfg kv.CacheConfig,
 	collect func(name string, store kv.Provider),
 ) error {
 	r.mu.RLock()
@@ -220,7 +225,7 @@ func (r *Registry) scheduleStoreInit(
 	}
 
 	eg.Go(func() error {
-		store, initErr := buildSingleStore(ctx, name, storeCfg, factory)
+		store, initErr := buildSingleStore(ctx, name, storeCfg, cacheCfg, factory)
 		if initErr != nil {
 			return r.handleStoreInitError(name, storeCfg.Required, initErr)
 		}
@@ -345,6 +350,7 @@ func buildSingleStore(
 	ctx context.Context,
 	name string,
 	storeCfg kv.StoreConfig,
+	cacheCfg kv.CacheConfig,
 	factory kv.ProviderFactory,
 ) (kv.Provider, error) {
 	provider, err := factory(storeCfg.Config)
@@ -371,6 +377,7 @@ func buildSingleStore(
 	ss, err := store.NewSecretStore(
 		name,
 		provider,
+		cacheCfg,
 		store.WithTimeout(timeout),
 	)
 	if err != nil {
