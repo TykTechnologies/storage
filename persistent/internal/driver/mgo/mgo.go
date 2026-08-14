@@ -20,6 +20,10 @@ import (
 
 var _ types.PersistentStorage = &mgoDriver{}
 
+// upsertMaxRetries bounds retries of an upsert that lost the insert race with a
+// concurrent upsert of the same document (duplicate-key error on pre-5.0 servers).
+const upsertMaxRetries = 3
+
 type mgoDriver struct {
 	*lifeCycle
 	lastConnAttempt time.Time
@@ -501,11 +505,21 @@ func (d *mgoDriver) Upsert(ctx context.Context, row model.DBObject, query, updat
 
 	col := sess.DB("").C(row.TableName())
 
-	_, err := col.Find(query).Apply(mgo.Change{
-		Update:    update,
-		Upsert:    true,
-		ReturnNew: true,
-	}, row)
+	// Concurrent upserts on the same not-yet-existing document can race on the
+	// insert path: two executions both miss, both try to insert, and one loses
+	// with a duplicate-key error. Servers before 5.0 do not retry this
+	// internally, so retry here; the losing call now sees the winner's document.
+	var err error
+	for attempt := 0; attempt < upsertMaxRetries; attempt++ {
+		_, err = col.Find(query).Apply(mgo.Change{
+			Update:    update,
+			Upsert:    true,
+			ReturnNew: true,
+		}, row)
+		if !mgo.IsDup(err) {
+			break
+		}
+	}
 
 	return d.handleStoreError(err)
 }

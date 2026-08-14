@@ -1,5 +1,5 @@
-//go:build postgres || postgres16.1 || postgres15 || postgres14.11 || postgres13.3 || postgres12.22
-// +build postgres postgres16.1 postgres15 postgres14.11 postgres13.3 postgres12.22
+//go:build postgres || postgres16.10 || postgres16.1 || postgres15.0 || postgres15 || postgres14.11 || postgres13.3 || postgres12.22
+// +build postgres postgres16.10 postgres16.1 postgres15.0 postgres15 postgres14.11 postgres13.3 postgres12.22
 
 package postgres
 
@@ -9,10 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/internal/types"
-	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/TykTechnologies/storage/persistent/internal/types"
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 func TestQuery(t *testing.T) {
@@ -1352,6 +1353,34 @@ func TestTranslateQuery(t *testing.T) {
 				},
 			},
 			expectedCount: 3,
+		},
+		{
+			// Regression: multi-field elements inside $or must be ANDed within the element,
+			// not ORed. {category:A, value:10} should match only Test 1, not all A-category.
+			name: "OR Operator multi-field elements",
+			query: model.DBM{
+				"$or": []model.DBM{
+					{"category": "A", "value": 10}, // only Test 1 matches both
+					{"value": 20},                  // Test 2
+				},
+			},
+			expectedCount: 2,
+		},
+		{
+			// Regression: the whole $or must render as one parenthesized group so a
+			// sibling top-level field still applies: category='B' AND (value=10 OR
+			// value=20) matches only Test 2. A flattened OR chain would let SQL's
+			// AND-over-OR precedence bypass the category filter and also match
+			// Test 1 (value=10, category=A).
+			name: "OR Operator with sibling field",
+			query: model.DBM{
+				"category": "B",
+				"$or": []model.DBM{
+					{"value": 10},
+					{"value": 20},
+				},
+			},
+			expectedCount: 1,
 		},
 		{
 			name: "Not Equal Operator",

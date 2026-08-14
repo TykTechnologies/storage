@@ -1,5 +1,5 @@
-//go:build postgres || postgres16.1 || postgres15 || postgres14.11 || postgres13.3 || postgres12.22
-// +build postgres postgres16.1 postgres15 postgres14.11 postgres13.3 postgres12.22
+//go:build postgres || postgres16.10 || postgres16.1 || postgres15.0 || postgres15 || postgres14.11 || postgres13.3 || postgres12.22
+// +build postgres postgres16.10 postgres16.1 postgres15.0 postgres15 postgres14.11 postgres13.3 postgres12.22
 
 package postgres
 
@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/utils"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestLifeCycle_DBType(t *testing.T) {

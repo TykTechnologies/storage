@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/model"
 	"gorm.io/gorm"
+
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 // Query retrieves records from the database matching the given filter into result.
@@ -282,11 +283,26 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 			continue
 		}
 
-		// Handle $or operator
 		if k == "$or" {
 			if nested, ok := v.([]model.DBM); ok {
-				for ni, n := range nested {
+				// Accumulate the branches on a separate session and attach them with a
+				// single Where so the whole $or renders as one parenthesized group.
+				// Chaining db.Or at the top level would flatten it and let SQL's
+				// AND-over-OR precedence bypass sibling filters.
+				orGroup := db.Session(&gorm.Session{NewDB: true})
+
+				for i, n := range nested {
+					sub := db.Session(&gorm.Session{NewDB: true})
+
 					for nk, nv := range n {
+						// Apply the same dot-to-underscore conversion as the non-$or path
+						// (line below the $or block) so nested field names like "user.name"
+						// remain valid before sanitization.
+						col, colErr := sanitizeIdentifier(strings.ReplaceAll(nk, ".", "_"))
+						if colErr != nil {
+							return nil, fmt.Errorf("invalid field in $or: %w", colErr)
+						}
+
 						val := ""
 						if o, ok := nv.(model.ObjectID); ok {
 							val = o.Hex()
@@ -294,12 +310,18 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 							val = fmt.Sprint(nv)
 						}
 
-						if ni == 0 {
-							db = db.Where(nk+" = ?", val)
-						} else {
-							db = db.Or(nk+" = ?", val)
-						}
+						sub = sub.Where(col+" = ?", val)
 					}
+
+					if i == 0 {
+						orGroup = orGroup.Where(sub)
+					} else {
+						orGroup = orGroup.Or(sub)
+					}
+				}
+
+				if len(nested) > 0 {
+					db = db.Where(orGroup)
 				}
 			}
 

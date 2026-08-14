@@ -192,6 +192,8 @@ jobs:
           # Redis; empty elsewhere so the test self-skips.
           TEST_IAM_REDIS_ADDR: ${{ matrix.storagetype == 'iam' && 'localhost:6379' || '' }}
           TEST_IAM_REDIS_PASS: ${{ matrix.storagetype == 'iam' && 'tokenAAA' || '' }}
+          # Postgres DSN must match the credentials set by bin/Taskfile-db.yml start-postgres.
+          postgres_test_dsn: ${{ matrix.database == 'postgres' && 'host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable' || '' }}
         run: task test-${{ matrix.storagetype }}
       - uses: actions/upload-artifact@v4
         with:
@@ -269,7 +271,7 @@ jobs:
             -Dsonar.sources=.
             -Dsonar.coverage.exclusions=**/*_test.go,**/mocks/*.go,**/tempmocks/*.go
             -Dsonar.exclusions=**/mocks/*.go,**/tempmocks/*.go
-            -Dsonar.test.inclusions=**/*_test.go
+            -Dsonar.test.inclusions=**/*_test.go,**/internal/testutil/**
             -Dsonar.tests=.
             -Dsonar.go.coverage.reportPaths=merged-coverage.cov
             -Dsonar.go.golangci-lint.reportPaths=golanglint.xml
