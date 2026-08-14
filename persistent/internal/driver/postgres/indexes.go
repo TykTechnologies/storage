@@ -351,6 +351,7 @@ func (d *driver) deleteIndexMetadata(ctx context.Context, quotedTable, quotedInd
 
 	if quotedIndex != "" {
 		query += ` AND index_name = ?`
+
 		args = append(args, quotedIndex)
 	}
 
