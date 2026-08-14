@@ -109,18 +109,6 @@ func (s *vaultStub) lastNamespacePresent() bool {
 	return s.nsPresent[len(s.nsPresent)-1]
 }
 
-// lastBody returns the raw request body of the most recent request.
-func (s *vaultStub) lastBody() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if len(s.bodies) == 0 {
-		return ""
-	}
-
-	return s.bodies[len(s.bodies)-1]
-}
-
 func (s *vaultStub) lastToken() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

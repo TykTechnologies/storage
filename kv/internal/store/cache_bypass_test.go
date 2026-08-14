@@ -92,7 +92,7 @@ func TestGetWithCacheBypass(t *testing.T) {
 		provider := &mockProvider{
 			mockGetFunc: func(_ context.Context, _ string) (string, error) {
 				if atomic.AddInt32(&n, 1) == 1 {
-					return "", &kv.KeyNotFoundError{StoreName: "test", KeyPath: "db/password"}
+					return "", &kv.KeyNotFoundError{KeyPath: "db/password"}
 				}
 
 				return "recovered", nil
@@ -128,9 +128,8 @@ func TestGetWithCacheBypass(t *testing.T) {
 				}
 
 				return "", &kv.StoreUnavailableError{
-					StoreName: "test",
-					KeyPath:   "db/password",
-					Err:       fmt.Errorf("backend down"),
+					KeyPath: "db/password",
+					Err:     fmt.Errorf("backend down"),
 				}
 			},
 		}
