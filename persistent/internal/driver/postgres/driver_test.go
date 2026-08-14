@@ -8,8 +8,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/TykTechnologies/storage/persistent/internal/types"
 )
 
 func getConnStr() string {

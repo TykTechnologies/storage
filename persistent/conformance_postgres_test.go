@@ -8,10 +8,11 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/TykTechnologies/storage/persistent"
 	"github.com/TykTechnologies/storage/persistent/internal/testutil"
 	"github.com/TykTechnologies/storage/persistent/model"
-	"github.com/stretchr/testify/require"
 )
 
 type pgConformanceEntity struct {

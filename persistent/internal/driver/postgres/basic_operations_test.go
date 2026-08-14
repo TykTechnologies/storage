@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 // TestInsert tests the Insert method

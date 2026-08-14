@@ -11,10 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/model"
-	"github.com/TykTechnologies/storage/persistent/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/TykTechnologies/storage/persistent/model"
+	"github.com/TykTechnologies/storage/persistent/utils"
 )
 
 func TestHasTable(t *testing.T) {

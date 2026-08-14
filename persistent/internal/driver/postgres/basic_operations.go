@@ -14,8 +14,9 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
-	"github.com/TykTechnologies/storage/persistent/model"
 	"gorm.io/gorm"
+
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 // Insert adds one or more objects into the database in a single batch operation.
@@ -381,22 +382,31 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 			return err
 		}
 
-		// Use COUNT to determine existence rather than RowsAffected from Updates.
-		// Updates({}) produces 0 RowsAffected when updateMap is empty, which would
-		// incorrectly fall through to the INSERT branch for an existing record.
-		// Trade-off: one extra round-trip per Upsert call inside the advisory lock.
-		var count int64
-		if err := updateDB.Count(&count).Error; err != nil {
-			return err
-		}
+		// When updateMap is non-empty the UPDATE itself answers the existence
+		// question: Postgres reports matched rows in RowsAffected even when the
+		// new values equal the current ones. Only an empty updateMap needs a
+		// COUNT, because Updates({}) short-circuits with 0 RowsAffected and
+		// would incorrectly fall through to the INSERT branch for an existing
+		// record.
+		exists := false
 
-		if count > 0 {
-			if len(updateMap) > 0 {
-				if err := updateDB.Updates(updateMap).Error; err != nil {
-					return err
-				}
+		if len(updateMap) > 0 {
+			res := updateDB.Updates(updateMap)
+			if res.Error != nil {
+				return res.Error
 			}
 
+			exists = res.RowsAffected > 0
+		} else {
+			var count int64
+			if err := updateDB.Count(&count).Error; err != nil {
+				return err
+			}
+
+			exists = count > 0
+		}
+
+		if exists {
 			if err := d.fetchUpdatedRow(tx, tableName, query, row); err != nil {
 				return err
 			}

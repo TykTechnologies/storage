@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 func TestCreateIndex(t *testing.T) {
@@ -485,6 +486,43 @@ func TestGetIndexes(t *testing.T) {
 			}
 		}
 		assert.True(t, foundIndex, "Compound index was not found")
+	})
+
+	// Test case 7: TTL metadata must not outlive the index it described.
+	// Regression: index_metadata rows used to survive CleanIndexes, so a later
+	// plain index reusing the name was misreported as a TTL index.
+	t.Run("StaleTTLMetadataCleared", func(t *testing.T) {
+		ttlIndex := model.Index{
+			Name:       "idx_test_ttl_reuse",
+			Keys:       []model.DBM{{"created_at": 1}},
+			IsTTLIndex: true,
+			TTL:        3600,
+		}
+		require.NoError(t, driver.CreateIndex(ctx, testItem, ttlIndex))
+
+		require.NoError(t, driver.CleanIndexes(ctx, testItem))
+
+		plainIndex := model.Index{
+			Name: "idx_test_ttl_reuse",
+			Keys: []model.DBM{{"created_at": 1}},
+		}
+		require.NoError(t, driver.CreateIndex(ctx, testItem, plainIndex))
+
+		indexes, err := driver.GetIndexes(ctx, testItem)
+		require.NoError(t, err)
+
+		var found bool
+
+		for _, idx := range indexes {
+			if idx.Name == "idx_test_ttl_reuse" {
+				found = true
+
+				assert.False(t, idx.IsTTLIndex, "recreated plain index must not inherit the TTL flag")
+				assert.Equal(t, 0, idx.TTL, "recreated plain index must not inherit TTL seconds")
+			}
+		}
+
+		assert.True(t, found, "recreated index was not found")
 	})
 }
 

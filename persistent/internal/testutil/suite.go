@@ -9,10 +9,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/TykTechnologies/storage/persistent/internal/types"
-	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/TykTechnologies/storage/persistent/internal/types"
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 // Suite configures a PersistentStorage conformance test run.

@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/utils"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestLifeCycle_DBType(t *testing.T) {

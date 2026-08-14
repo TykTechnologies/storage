@@ -9,10 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/internal/types"
-	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/TykTechnologies/storage/persistent/internal/types"
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 func TestQuery(t *testing.T) {
@@ -1364,6 +1365,22 @@ func TestTranslateQuery(t *testing.T) {
 				},
 			},
 			expectedCount: 2,
+		},
+		{
+			// Regression: the whole $or must render as one parenthesized group so a
+			// sibling top-level field still applies: category='B' AND (value=10 OR
+			// value=20) matches only Test 2. A flattened OR chain would let SQL's
+			// AND-over-OR precedence bypass the category filter and also match
+			// Test 1 (value=10, category=A).
+			name: "OR Operator with sibling field",
+			query: model.DBM{
+				"category": "B",
+				"$or": []model.DBM{
+					{"value": 10},
+					{"value": 20},
+				},
+			},
+			expectedCount: 1,
 		},
 		{
 			name: "Not Equal Operator",

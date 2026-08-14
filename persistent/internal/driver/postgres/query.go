@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/model"
 	"gorm.io/gorm"
+
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 // Query retrieves records from the database matching the given filter into result.
@@ -284,6 +285,12 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 
 		if k == "$or" {
 			if nested, ok := v.([]model.DBM); ok {
+				// Accumulate the branches on a separate session and attach them with a
+				// single Where so the whole $or renders as one parenthesized group.
+				// Chaining db.Or at the top level would flatten it and let SQL's
+				// AND-over-OR precedence bypass sibling filters.
+				orGroup := db.Session(&gorm.Session{NewDB: true})
+
 				for i, n := range nested {
 					sub := db.Session(&gorm.Session{NewDB: true})
 
@@ -307,10 +314,14 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 					}
 
 					if i == 0 {
-						db = db.Where(sub)
+						orGroup = orGroup.Where(sub)
 					} else {
-						db = db.Or(sub)
+						orGroup = orGroup.Or(sub)
 					}
+				}
+
+				if len(nested) > 0 {
+					db = db.Where(orGroup)
 				}
 			}
 

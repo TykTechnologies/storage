@@ -6,8 +6,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/lib/pq"
+
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 type IndexRow struct {
@@ -170,6 +171,10 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 		if err := d.db.WithContext(ctx).Exec(ttlSQL, tableName, indexName, index.TTL).Error; err != nil {
 			return fmt.Errorf("failed to store TTL metadata: %w", err)
 		}
+	} else if err := d.deleteIndexMetadata(ctx, tableName, indexName); err != nil {
+		// A dropped TTL index may have left a metadata row behind under this
+		// name; clear it so GetIndexes does not report this plain index as TTL.
+		return err
 	}
 
 	return nil
@@ -326,6 +331,36 @@ func (d *driver) tableExists(ctx context.Context, tableName string) (bool, error
 	return exists, nil
 }
 
+// deleteIndexMetadata removes TTL metadata rows for the given quoted table
+// (and optionally a single quoted index; empty means all of the table's rows)
+// so a dropped or recreated index does not inherit TTL attributes from a
+// previous incarnation. index_metadata is only created alongside the first
+// TTL index, so its absence means there is nothing to clean.
+func (d *driver) deleteIndexMetadata(ctx context.Context, quotedTable, quotedIndex string) error {
+	exists, err := d.tableExists(ctx, "index_metadata")
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return nil
+	}
+
+	query := `DELETE FROM index_metadata WHERE table_name = ?`
+	args := []interface{}{quotedTable}
+
+	if quotedIndex != "" {
+		query += ` AND index_name = ?`
+		args = append(args, quotedIndex)
+	}
+
+	if err := d.db.WithContext(ctx).Exec(query, args...).Error; err != nil {
+		return fmt.Errorf("failed to delete TTL index metadata: %w", err)
+	}
+
+	return nil
+}
+
 // CleanIndexes removes all non-primary indexes from the table of the given DBObject.
 // Returns an error if the cleanup operation fails.
 func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
@@ -396,6 +431,16 @@ func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 
 	if err := tx.Commit().Error; err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// The dropped indexes' TTL metadata must go too, otherwise a later index
+	// reusing one of these names would be misreported as TTL. A table name
+	// that fails sanitization can never have been given TTL metadata by
+	// CreateIndex, so there is nothing to clean in that case.
+	if quotedTable, qErr := sanitizeIdentifier(tableName); qErr == nil {
+		if mErr := d.deleteIndexMetadata(ctx, quotedTable, ""); mErr != nil {
+			return mErr
+		}
 	}
 
 	return nil

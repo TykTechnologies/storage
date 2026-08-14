@@ -7,10 +7,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 func TestBuildQuery(t *testing.T) {
