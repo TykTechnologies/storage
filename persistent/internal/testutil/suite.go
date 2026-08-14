@@ -25,6 +25,9 @@ type Suite struct {
 	// Mongo: model.DBM{"_id": id}
 	// Postgres: model.DBM{"id": id}
 	IDFilter func(model.ObjectID) model.DBM
+	// NewSlice returns a pointer to an empty slice of the concrete DBObject
+	// type, for multi-record Query calls.
+	NewSlice func() interface{}
 }
 
 // RunSuite verifies the behavioral contract of PersistentStorage across all drivers.
@@ -78,6 +81,16 @@ func RunSuite(t *testing.T, s Suite) {
 		err := s.Storage.Query(ctx, result, result, s.IDFilter(obj.GetObjectID()))
 		require.NoError(t, err)
 		assert.Equal(t, obj.GetObjectID(), result.GetObjectID())
+	})
+
+	t.Run("QueryEmptySliceIsNotError", func(t *testing.T) {
+		setup(t)
+
+		// No rows match: every driver must fill an empty slice and return a
+		// nil error (the document-store behavior consumers are written for).
+		results := s.NewSlice()
+		err := s.Storage.Query(ctx, s.NewObject(), results, model.DBM{})
+		require.NoError(t, err, "Query into a slice must not error on an empty result")
 	})
 
 	t.Run("InsertThenCount", func(t *testing.T) {

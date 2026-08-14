@@ -4,7 +4,6 @@
 package postgres
 
 import (
-	"database/sql"
 	"fmt"
 	"testing"
 	"time"
@@ -86,12 +85,13 @@ func TestQuery(t *testing.T) {
 			require.NoError(t, err, "Failed to insert test data")
 		}
 
-		// Query with filter that matches no objects
+		// Query with filter that matches no objects: an empty slice with no
+		// error, matching the document-store drivers.
 		var results []*TestObject
 		filter := model.DBM{"value": model.DBM{"$gt": 100}}
 		err = driver.Query(ctx, testObj, &results, filter)
 
-		assert.ErrorIs(t, err, sql.ErrNoRows, "Query should return an error with empty result")
+		assert.NoError(t, err, "Query into a slice must not error on an empty result")
 		assert.Empty(t, results, "Result slice should be empty")
 	})
 

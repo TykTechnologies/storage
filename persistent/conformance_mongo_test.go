@@ -33,6 +33,7 @@ func TestConformanceOfficialMongo(t *testing.T) {
 	testutil.RunSuite(t, testutil.Suite{
 		Storage:   storage,
 		NewObject: func() model.DBObject { return &mongoConformanceEntity{} },
+		NewSlice:  func() interface{} { return &[]*mongoConformanceEntity{} },
 		IDFilter:  func(id model.ObjectID) model.DBM { return model.DBM{"_id": id} },
 	})
 }

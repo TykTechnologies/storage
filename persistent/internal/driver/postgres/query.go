@@ -50,15 +50,11 @@ func (d *driver) Query(ctx context.Context, object model.DBObject, result interf
 			return err
 		}
 	} else {
-		// For a slice, use Find
-		err := db.Find(result).Error
-		if err != nil {
+		// For a slice, use Find. An empty result set is not an error: the
+		// document-store drivers return an empty slice with a nil error, and
+		// consumers rely on that parity.
+		if err := db.Find(result).Error; err != nil {
 			return err
-		}
-
-		// Check if any records were found
-		if resultElem.Len() == 0 {
-			return sql.ErrNoRows
 		}
 	}
 

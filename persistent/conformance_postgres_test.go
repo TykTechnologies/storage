@@ -44,6 +44,7 @@ func TestConformancePostgres(t *testing.T) {
 	testutil.RunSuite(t, testutil.Suite{
 		Storage:   storage,
 		NewObject: func() model.DBObject { return &pgConformanceEntity{} },
+		NewSlice:  func() interface{} { return &[]*pgConformanceEntity{} },
 		IDFilter:  func(id model.ObjectID) model.DBM { return model.DBM{"id": id} },
 	})
 }

@@ -33,6 +33,7 @@ func TestConformanceMgo(t *testing.T) {
 	testutil.RunSuite(t, testutil.Suite{
 		Storage:   storage,
 		NewObject: func() model.DBObject { return &mgoConformanceEntity{} },
+		NewSlice:  func() interface{} { return &[]*mgoConformanceEntity{} },
 		IDFilter:  func(id model.ObjectID) model.DBM { return model.DBM{"_id": id} },
 	})
 }
