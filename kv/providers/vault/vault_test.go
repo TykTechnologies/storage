@@ -72,18 +72,6 @@ func (s *vaultStub) requests() []string {
 	return append([]string(nil), s.got...)
 }
 
-// lastBody returns the raw request body of the most recent request.
-func (s *vaultStub) lastBody() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if len(s.bodies) == 0 {
-		return ""
-	}
-
-	return s.bodies[len(s.bodies)-1]
-}
-
 // lastNamespace returns the value of the X-Vault-Namespace header on the most
 // recent request. It is "" both when the header was absent and when it was
 // present with an empty value — use lastNamespacePresent to tell them apart.
@@ -107,6 +95,18 @@ func (s *vaultStub) lastNamespacePresent() bool {
 	}
 
 	return s.nsPresent[len(s.nsPresent)-1]
+}
+
+// lastBody returns the raw request body of the most recent request.
+func (s *vaultStub) lastBody() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.bodies) == 0 {
+		return ""
+	}
+
+	return s.bodies[len(s.bodies)-1]
 }
 
 func (s *vaultStub) lastToken() string {
