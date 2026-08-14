@@ -32,60 +32,138 @@ var (
 	allowedTransports       = []string{"grpc", "rest"}
 )
 
-// Config is the JSON "config" block of a gcp_secret_manager store.
+// Config is used to configure a Google Cloud Secret Manager store.
 type Config struct {
-	// ProjectID is the GCP project that owns the secrets. Required.
+	// ProjectID is the ID of the Google Cloud project that holds the secrets, for
+	// example "my-company-prod". Use the project ID, not the display name or the
+	// numeric project number. A store reads from this one project only; to read
+	// secrets from a second project, configure a second store. Required.
 	ProjectID string `json:"project_id"`
 
-	// QuotaProjectID sets the project billed/quota-attributed for API calls
-	// (the x-goog-user-project header, via option.WithQuotaProject). Optional.
+	// QuotaProjectID names a different Google Cloud project to charge the API
+	// requests to, for both billing and API quota. By default the requests count
+	// against the project that owns the secrets. Set this only if your
+	// organization deliberately separates the two — the usual reason is a shared
+	// secrets project whose quota should not be consumed by every service reading
+	// from it. The identity Tyk uses needs the "serviceusage.services.use"
+	// permission on the project named here. Optional.
 	QuotaProjectID string `json:"quota_project_id"`
 
-	// Location, when set, targets REGIONAL Secret Manager (data residency).
-	// Example: "europe-west1". When set, the client uses the regional endpoint
-	// and all resource names include /locations/<Location>/. Optional.
+	// Location confines the store to a single Google Cloud region, for example
+	// "europe-west1", by using Secret Manager's regional service rather than the
+	// global one. Set it when the secrets were created as regional secrets — data
+	// residency rules commonly require this — and leave it empty for ordinary
+	// global secrets. It has to match how the secrets were created: a global
+	// secret cannot be read through a regional store, or the reverse. Optional.
 	Location string `json:"location"`
 
-	// CredentialsType describes how to interpret an EXPLICIT credential passed via
-	// CredentialsFile/CredentialsJSON. It does NOT select an auth method.
-	//   - ADC path (no CredentialsFile/JSON): the type is auto-detected from the ADC
-	//     source (GOOGLE_APPLICATION_CREDENTIALS file, gcloud, or metadata server), so
-	//     this field is irrelevant and must be empty. WIF works this way too — point
-	//     GOOGLE_APPLICATION_CREDENTIALS at the WIF file and leave this empty.
-	//   - Explicit path: set CredentialsFile or CredentialsJSON AND this field to one of
-	//     "service_account" | "authorized_user" | "external_account".
+	// CredentialsType tells Tyk which kind of credential file it is being given,
+	// and is only used together with CredentialsFile or CredentialsJSON. It does
+	// not choose an authentication method — the presence of the credential does
+	// that. One of:
+	//   - "service_account"  a service-account key file, the usual choice when
+	//                        running outside Google Cloud;
+	//   - "authorized_user"  a user credential of the kind `gcloud auth login`
+	//                        writes, intended for local development;
+	//   - "external_account" a Workload Identity Federation file, which lets an
+	//                        identity from another provider (AWS, Azure, any
+	//                        OIDC issuer) act as a Google service account
+	//                        without a long-lived key.
 	//
-	// Setting it without any credential is a no-op mistake, so it is rejected.
+	// Required when a credential is supplied, and must be left empty when none
+	// is: with no credential Tyk uses Application Default Credentials instead
+	// (see CredentialsFile), which recognize their own type, so a value here
+	// would do nothing and is rejected as a likely mistake. Any other value is
+	// rejected as well. Optional.
+	//
+	// A credential declared as "external_account" is inspected more closely than
+	// the others. Unlike a key file, a federation file does not contain a
+	// credential — it describes where to go and get one — so an altered file can
+	// redirect that exchange somewhere of the author's choosing. Tyk therefore
+	// requires the Google addresses inside it to be genuine Google endpoints, and
+	// requires a file that federates from AWS to read from the standard AWS
+	// metadata address.
+	//
+	// One kind of federation file is refused outright. Google allows the file to
+	// obtain its token by running a program that the file itself names, known as
+	// an executable-sourced credential; that would let whoever supplies the file
+	// choose what Tyk runs on its host, so Tyk rejects it and the store does not
+	// start. If your federation file is of that kind, replace it with one that
+	// reads the token from a path on disk or fetches it from a URL — the forms
+	// used by Kubernetes, AWS and Azure federation.
 	CredentialsType string `json:"credentials_type"`
 
-	// CredentialsFile is a path to a credentials JSON file. Mutually exclusive
-	// with CredentialsJSON. Optional.
+	// CredentialsFile is the path to a Google Cloud credentials JSON file on the
+	// host running the Tyk component. Set it together with CredentialsType.
+	// Cannot be combined with CredentialsJSON.
+	//
+	// Both are optional, and leaving them empty is the recommended setup on
+	// Google Cloud: Tyk then uses Application Default Credentials, Google's
+	// standard way for an application to find credentials from its surroundings —
+	// the GOOGLE_APPLICATION_CREDENTIALS environment variable, the credentials
+	// left by `gcloud auth login`, or the service account attached to the GKE
+	// workload, Cloud Run service or Compute Engine instance the component runs
+	// on. No secret material then has to be stored in the component's own
+	// configuration file.
+	//
+	// Whichever identity is used needs read access to the secrets, which on
+	// Google Cloud means the "roles/secretmanager.secretAccessor" role.
 	CredentialsFile string `json:"credentials_file"`
 
-	// CredentialsJSON is the raw credentials JSON payload (e.g. injected via env).
-	// Mutually exclusive with CredentialsFile. Optional.
+	// CredentialsJSON is the content of a Google Cloud credentials JSON file,
+	// supplied inline instead of as a file on disk — useful when the credential
+	// arrives through an environment variable or a mounted Kubernetes Secret.
+	// Set it together with CredentialsType. Cannot be combined with
+	// CredentialsFile. Optional; see CredentialsFile for what applies when both
+	// are empty.
 	CredentialsJSON string `json:"credentials_json"`
 
-	// ImpersonateServiceAccount, when set, makes the client fetch/write secrets AS
-	// this target SA. The base identity is the explicit credentials above if
-	// provided, otherwise ADC. The base identity needs
-	// roles/iam.serviceAccountTokenCreator on the target. Optional.
+	// ImpersonateServiceAccount is the email address of a service account for Tyk
+	// to act as, for example "tyk-secrets@my-project.iam.gserviceaccount.com".
+	// When set, Tyk authenticates with the credentials described above, then asks
+	// Google for short-lived credentials for this service account and reads
+	// secrets as it — so this service account, rather than the original identity,
+	// is the one that needs access to the secrets. The original identity needs
+	// the "roles/iam.serviceAccountTokenCreator" role on it.
+	//
+	// Use it to reach secrets in another project without moving credentials
+	// around, or to keep the permissions granted to Tyk in one service account.
+	// Leave it empty to read as the identity Tyk authenticated with. Optional.
 	ImpersonateServiceAccount string `json:"impersonate_service_account"`
 
-	// ImpersonateDelegates is chained-delegation path to reach the target
-	// principal. Meaningful only with ImpersonateServiceAccount. Optional.
+	// ImpersonateDelegates is for the uncommon case where the identity Tyk
+	// authenticates with may not act as the target service account directly, but
+	// reaches it through intermediate service accounts. List their email
+	// addresses in order, from the one Tyk's own identity is allowed to act as
+	// through to the one allowed to act as the target. Each must hold the
+	// "roles/iam.serviceAccountTokenCreator" role on the next.
+	//
+	// Leave it empty unless your organization has deliberately set up such a
+	// chain. Optional, but only alongside ImpersonateServiceAccount: with no
+	// service account to reach, a chain leads nowhere, so on its own it is
+	// rejected when the store starts.
 	ImpersonateDelegates []string `json:"impersonate_delegates"`
 
-	// Timeout bounds each RPC. Go duration string ("5s", "500ms"). Optional.
+	// Timeout is how long Tyk waits for a single Secret Manager request — reading
+	// one secret — before giving up and reporting the store as
+	// unavailable. Give it as a Go duration string: "5s", "500ms", "1m".
+	// Defaults to 5s when omitted; a value Tyk cannot read as a duration stops
+	// the store from starting. Optional.
 	Timeout string `json:"timeout"`
 
-	// TrimTrailingNewline, when true, strips a single trailing "\n" from the
-	// payload. Guards the common footgun of secrets created with a trailing
-	// newline (e.g. `echo val | gcloud secrets create`). Optional.
+	// TrimTrailingNewline removes a single newline character from the end of the
+	// value Tyk reads from a secret, if one is present. Secrets created from the
+	// command line often pick up a trailing newline, which would otherwise count
+	// as part of the value and break credentials such as tokens and passwords.
+	// Defaults to false, which passes values on exactly as stored. Optional.
 	TrimTrailingNewline bool `json:"trim_trailing_newline"`
 
-	// Transport selects the wire protocol: "grpc" (default, recommended) or
-	// "rest". Use "rest" only in networks hostile to gRPC/HTTP-2. Optional.
+	// Transport is the protocol Tyk uses to talk to Secret Manager: "grpc" or
+	// "rest". Defaults to "grpc", which is faster and is what Google's own
+	// libraries use. Switch to "rest" only if the network between Tyk and Google
+	// cannot carry gRPC — some older proxies and firewalls interfere with the
+	// HTTP/2 connections it depends on. Any other value is rejected when the
+	// store starts. Optional.
 	Transport string `json:"transport"`
 }
 

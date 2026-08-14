@@ -15,9 +15,19 @@ import (
 // ErrEmptyKey is returned by Get for an empty key.
 var ErrEmptyKey = errors.New("inline: key must not be empty")
 
-// Config is the inline provider's configuration.
+// Config is used to configure an inline store.
 type Config struct {
-	// Data holds literal key/value secrets.
+	// Data holds the values themselves, as key/value pairs written straight into
+	// this configuration: with {"db_password": "s3cret"}, the reference
+	// kv://<store-name>/db_password resolves to "s3cret".
+	//
+	// Because the values sit in the configuration in plain text, wherever that
+	// configuration is stored and whoever can read it, this store suits
+	// development, testing and values that are not really secret. Anything that
+	// genuinely needs protecting belongs in one of the other backends.
+	//
+	// Keys are matched exactly: nothing is added to them and case matters.
+	// Leaving it empty is valid — every read is then reported as not found.
 	Data map[string]string `json:"data"`
 }
 
