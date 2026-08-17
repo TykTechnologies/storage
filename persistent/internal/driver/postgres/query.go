@@ -135,7 +135,7 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 		return []model.DBM{}, nil
 	}
 
-	sqlQuery, args, err := translateAggregationPipeline(from, pipeline)
+	sqlQuery, args, groupKeys, err := translateAggregationPipelineWithGroupKeys(from, pipeline)
 	if err != nil {
 		return nil, fmt.Errorf("failed to translate aggregation pipeline: %w", err)
 	}
@@ -196,6 +196,32 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 			}
 
 			rowMap[col] = val
+		}
+
+		// Grouped pipelines return their keys the way a document store does:
+		// gathered under an _id sub-document (or as a scalar _id), instead of
+		// leaking the translator's flat column layout to consumers.
+		if groupKeys != nil {
+			if groupKeys.ScalarColumn != "" {
+				rowMap["_id"] = rowMap[groupKeys.ScalarColumn]
+				delete(rowMap, groupKeys.ScalarColumn)
+			} else {
+				id := model.DBM{}
+
+				// Gather first, then delete: two aliases may reference the
+				// same column.
+				for alias, col := range groupKeys.Aliases {
+					if val, ok := rowMap[col]; ok {
+						id[alias] = val
+					}
+				}
+
+				for _, col := range groupKeys.Aliases {
+					delete(rowMap, col)
+				}
+
+				rowMap["_id"] = id
+			}
 		}
 
 		results = append(results, rowMap)
@@ -518,7 +544,25 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 	return db, nil
 }
 
+// translateAggregationPipeline is the string-only entry point used by tests;
+// it discards the group-key metadata that Aggregate uses to reshape rows.
 func translateAggregationPipeline(tableName string, pipeline []model.DBM) (string, []interface{}, error) {
+	query, args, _, err := translateAggregationPipelineWithGroupKeys(tableName, pipeline)
+	return query, args, err
+}
+
+// aggGroupKeys describes how a translated $group shaped its keys: for the
+// document form (_id: {Alias: "$field"}) Aliases maps alias -> column; for
+// the scalar form (_id: "$field") ScalarColumn holds the single group column.
+// Present (non-nil) only when the pipeline contained a $group stage.
+type aggGroupKeys struct {
+	Aliases      map[string]string
+	ScalarColumn string
+}
+
+func translateAggregationPipelineWithGroupKeys(
+	tableName string, pipeline []model.DBM,
+) (string, []interface{}, *aggGroupKeys, error) {
 	// Initialize SQL parts
 	selectClause := "*"
 	fromClause := tableName
@@ -546,9 +590,13 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 	// stage; such pipelines are rejected instead.
 	hasProject := false
 
+	// groupKeys records how the $group shaped its keys so Aggregate can
+	// reassemble the document-store _id sub-document from the flat SQL row.
+	var groupKeys *aggGroupKeys
+
 	for _, stage := range pipeline {
 		if len(stage) != 1 {
-			return "", nil, errors.New("each pipeline stage must have exactly one operator")
+			return "", nil, nil, errors.New("each pipeline stage must have exactly one operator")
 		}
 
 		var operator string
@@ -564,7 +612,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 			if matchExpr, ok := value.(model.DBM); ok {
 				matchWhere, matchArgs, err := buildWhereClause(matchExpr)
 				if err != nil {
-					return "", nil, err
+					return "", nil, nil, err
 				}
 
 				if matchWhere != "" {
@@ -578,12 +626,12 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 					argIndex += len(matchArgs)
 				}
 			} else {
-				return "", nil, errors.New("$match value must be a DBM")
+				return "", nil, nil, errors.New("$match value must be a DBM")
 			}
 
 		case "$group":
 			if hasProject {
-				return "", nil, errors.New("$project composed with $group is not supported by the Postgres " +
+				return "", nil, nil, errors.New("$project composed with $group is not supported by the Postgres " +
 					"aggregation translator: both stages render the same flat SELECT list, so the projection " +
 					"would be silently discarded — reference raw fields in the $group instead")
 			}
@@ -593,34 +641,40 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 				if idExpr, ok := groupExpr["_id"]; ok {
 					if idMap, ok := idExpr.(model.DBM); ok {
 						groupFields := []string{}
+						aliases := map[string]string{}
 
-						for _, expr := range idMap {
+						for alias, expr := range idMap {
 							if fieldName, ok := expr.(string); ok {
 								col, err := sanitizeAggField(strings.TrimPrefix(fieldName, "$"))
 								if err != nil {
-									return "", nil, err
+									return "", nil, nil, err
 								}
 
 								groupFields = append(groupFields, col)
+								aliases[alias] = col
 							} else {
-								return "", nil, errors.New("complex group expressions not supported")
+								return "", nil, nil, errors.New("complex group expressions not supported")
 							}
 						}
+
+						groupKeys = &aggGroupKeys{Aliases: aliases}
 
 						if len(groupFields) > 0 {
 							groupByClause = strings.Join(groupFields, ", ")
 						}
 					} else if idExpr == nil {
 						groupByClause = ""
+						groupKeys = &aggGroupKeys{}
 					} else if fieldName, ok := idExpr.(string); ok {
 						col, err := sanitizeAggField(strings.TrimPrefix(fieldName, "$"))
 						if err != nil {
-							return "", nil, err
+							return "", nil, nil, err
 						}
 
 						groupByClause = col
+						groupKeys = &aggGroupKeys{ScalarColumn: col}
 					} else {
-						return "", nil, errors.New("complex group expressions not supported")
+						return "", nil, nil, errors.New("complex group expressions not supported")
 					}
 				}
 
@@ -657,7 +711,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 								if isNumericOne(funcArg) {
 									alias, err := sanitizeAggField(field)
 									if err != nil {
-										return "", nil, err
+										return "", nil, nil, err
 									}
 
 									selectParts = append(selectParts, fmt.Sprintf(`COUNT(*) AS %q`, alias))
@@ -682,19 +736,19 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 								// resolved this way.
 								sqlExpr, err := translateFirstLast(funcName, funcArg, lastSort)
 								if err != nil {
-									return "", nil, err
+									return "", nil, nil, err
 								}
 
 								alias, err := sanitizeAggField(field)
 								if err != nil {
-									return "", nil, err
+									return "", nil, nil, err
 								}
 
 								selectParts = append(selectParts, fmt.Sprintf(`%s AS %q`, sqlExpr, alias))
 
 								continue
 							default:
-								return "", nil, fmt.Errorf("unsupported aggregation function: %s", funcName)
+								return "", nil, nil, fmt.Errorf("unsupported aggregation function: %s", funcName)
 							}
 
 							// The accumulator argument may be the literal 1 (COUNT(*)), a
@@ -703,7 +757,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 							// plain literal (bound as a parameter).
 							argStr, exprArgs, err := aggAccumulatorArg(funcName, funcArg)
 							if err != nil {
-								return "", nil, err
+								return "", nil, nil, err
 							}
 
 							args = append(args, exprArgs...)
@@ -711,13 +765,13 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 
 							alias, err := sanitizeAggField(field)
 							if err != nil {
-								return "", nil, err
+								return "", nil, nil, err
 							}
 
 							selectParts = append(selectParts, fmt.Sprintf(`%s(%s) AS %q`, sqlFunc, argStr, alias))
 						}
 					} else {
-						return "", nil, fmt.Errorf("invalid aggregation expression for field %s", field)
+						return "", nil, nil, fmt.Errorf("invalid aggregation expression for field %s", field)
 					}
 				}
 
@@ -729,12 +783,12 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 				// it says nothing about the order feeding any later $group.
 				lastSort = nil
 			} else {
-				return "", nil, errors.New("$group value must be a DBM")
+				return "", nil, nil, errors.New("$group value must be a DBM")
 			}
 
 		case "$project":
 			if hasGroup {
-				return "", nil, errors.New("$group composed with $project is not supported by the Postgres " +
+				return "", nil, nil, errors.New("$group composed with $project is not supported by the Postgres " +
 					"aggregation translator: both stages render the same flat SELECT list, so the group " +
 					"output would be silently discarded — alias the accumulators in the $group instead")
 			}
@@ -754,12 +808,12 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 						// Rename projection: {Alias: "$field.path"} -> field_path AS Alias.
 						col, err := sanitizeAggField(strings.TrimPrefix(ref, "$"))
 						if err != nil {
-							return "", nil, err
+							return "", nil, nil, err
 						}
 
 						alias, err := sanitizeAggField(field)
 						if err != nil {
-							return "", nil, err
+							return "", nil, nil, err
 						}
 
 						projectParts = append(projectParts, fmt.Sprintf(`%s AS %q`, col, alias))
@@ -782,26 +836,26 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 												concatParts = append(concatParts, fmt.Sprintf("'%s'", partStr))
 											}
 										} else {
-											return "", nil, errors.New("$concat arguments must be strings")
+											return "", nil, nil, errors.New("$concat arguments must be strings")
 										}
 									}
 
 									alias, err := sanitizeAggField(field)
 									if err != nil {
-										return "", nil, err
+										return "", nil, nil, err
 									}
 
 									concatStmt := fmt.Sprintf(`CONCAT(%s) AS %q`, strings.Join(concatParts, ", "), alias)
 									projectParts = append(projectParts, concatStmt)
 								} else {
-									return "", nil, errors.New("$concat value must be an array")
+									return "", nil, nil, errors.New("$concat value must be an array")
 								}
 							default:
-								return "", nil, fmt.Errorf("unsupported projection operator: %s", exprOp)
+								return "", nil, nil, fmt.Errorf("unsupported projection operator: %s", exprOp)
 							}
 						}
 					} else {
-						return "", nil, fmt.Errorf("invalid projection expression for field %s", field)
+						return "", nil, nil, fmt.Errorf("invalid projection expression for field %s", field)
 					}
 				}
 
@@ -809,7 +863,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 					selectClause = strings.Join(projectParts, ", ")
 				}
 			} else {
-				return "", nil, errors.New("$project value must be a DBM")
+				return "", nil, nil, errors.New("$project value must be a DBM")
 			}
 
 		case "$sort":
@@ -821,7 +875,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 				for field, direction := range sortExpr {
 					col, err := sanitizeAggField(field)
 					if err != nil {
-						return "", nil, err
+						return "", nil, nil, err
 					}
 
 					var dirStr string
@@ -833,14 +887,14 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 						case -1:
 							dirStr = "DESC"
 						default:
-							return "", nil, fmt.Errorf("invalid sort direction for field %s: %d", field, dir)
+							return "", nil, nil, fmt.Errorf("invalid sort direction for field %s: %d", field, dir)
 						}
 
 						// Quote so sorting works on case-sensitive aliased
 						// accumulators ("Hits") as well as raw lowercase columns.
 						sortParts = append(sortParts, fmt.Sprintf("%q %s", col, dirStr))
 					} else {
-						return "", nil, fmt.Errorf("sort direction for field %s must be an integer", field)
+						return "", nil, nil, fmt.Errorf("sort direction for field %s must be an integer", field)
 					}
 				}
 
@@ -848,21 +902,21 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 					orderByClause = strings.Join(sortParts, ", ")
 				}
 			} else {
-				return "", nil, errors.New("$sort value must be a DBM")
+				return "", nil, nil, errors.New("$sort value must be a DBM")
 			}
 
 		case "$limit":
 			if limit, ok := value.(int); ok {
 				limitClause = fmt.Sprintf("%d", limit)
 			} else {
-				return "", nil, errors.New("$limit value must be an integer")
+				return "", nil, nil, errors.New("$limit value must be an integer")
 			}
 
 		case "$skip":
 			if skip, ok := value.(int); ok {
 				offsetClause = fmt.Sprintf("%d", skip)
 			} else {
-				return "", nil, errors.New("$skip value must be an integer")
+				return "", nil, nil, errors.New("$skip value must be an integer")
 			}
 
 		case "$unwind":
@@ -872,12 +926,12 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 			// dimension column, so there is no single-table SQL rewrite for
 			// $unwind without aligning the two schemas. Reject it explicitly
 			// rather than silently producing an incorrect query.
-			return "", nil, errors.New("$unwind is not supported by the Postgres aggregation translator: " +
+			return "", nil, nil, errors.New("$unwind is not supported by the Postgres aggregation translator: " +
 				"it maps to a dimension/row-per-element schema that cannot be expressed as a single-table rewrite " +
 				"(see docs/postgres-analytics-aggregation.md)")
 
 		default:
-			return "", nil, fmt.Errorf("unsupported aggregation operator: %s", operator)
+			return "", nil, nil, fmt.Errorf("unsupported aggregation operator: %s", operator)
 		}
 	}
 
@@ -912,7 +966,7 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 		query += fmt.Sprintf(" OFFSET %s", offsetClause)
 	}
 
-	return query, args, nil
+	return query, args, groupKeys, nil
 }
 
 // normalizeAggregateValue converts a NUMERIC/DECIMAL column's scan value to a

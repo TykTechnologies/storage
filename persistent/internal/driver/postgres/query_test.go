@@ -2082,3 +2082,55 @@ func TestTranslateQueryWithShardingEnabled(t *testing.T) {
 		require.NoError(t, err, "Failed to drop sharded table")
 	}
 }
+
+// TestAggregateReturnsDocumentShapedGroupKeys pins that grouped results carry
+// their keys under an _id sub-document (matching the document-store drivers)
+// instead of the translator's flat column layout.
+func TestAggregateReturnsDocumentShapedGroupKeys(t *testing.T) {
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	testObj := &TestObject{TableNameValue: "test_agg_idshape"}
+	require.NoError(t, driver.Migrate(ctx, []model.DBObject{testObj}))
+
+	defer func() {
+		_ = driver.db.Exec("DROP TABLE IF EXISTS test_agg_idshape").Error
+	}()
+
+	for i := 1; i <= 4; i++ {
+		obj := &TestObject{
+			TableNameValue: "test_agg_idshape",
+			ID:             model.NewObjectID(),
+			Name:           "007", // numeric-looking TEXT must stay a string
+			Value:          i,
+			Category:       "A",
+			CreatedAt:      time.Now(),
+		}
+		require.NoError(t, driver.Insert(ctx, obj))
+	}
+
+	results, err := driver.Aggregate(ctx, testObj, []model.DBM{
+		{"$group": model.DBM{
+			"_id":  model.DBM{"Cat": "$category", "Label": "$name"},
+			"Hits": model.DBM{"$sum": 1},
+		}},
+	})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+
+	id, ok := results[0]["_id"].(model.DBM)
+	require.True(t, ok, "group keys must be gathered under _id")
+	assert.Equal(t, "A", id["Cat"])
+	assert.Equal(t, "007", id["Label"], "TEXT group keys must not be coerced to numbers")
+	assert.EqualValues(t, 4, toInt64(t, results[0]["Hits"]))
+	_, flat := results[0]["category"]
+	assert.False(t, flat, "group key columns must not also appear at the top level")
+
+	// Scalar _id form mirrors Mongo's scalar _id.
+	scalar, err := driver.Aggregate(ctx, testObj, []model.DBM{
+		{"$group": model.DBM{"_id": "$category", "Hits": model.DBM{"$sum": 1}}},
+	})
+	require.NoError(t, err)
+	require.Len(t, scalar, 1)
+	assert.Equal(t, "A", scalar[0]["_id"])
+}
