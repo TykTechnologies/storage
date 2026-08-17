@@ -937,3 +937,40 @@ func TestUpdatePersistsDataColumnNamedID(t *testing.T) {
 	assert.Equal(t, "renamed", afterBulk.Name)
 	assert.Equal(t, "asset-3", afterBulk.ID)
 }
+
+// compositePKObject mirrors models with a composite primary key (dashboard
+// Asset: _id + org_id) plus a regular "id" data column.
+type compositePKObject struct {
+	DBID  model.ObjectID `json:"_id,omitempty" gorm:"primaryKey;column:_id"`
+	ID    string         `json:"id"`
+	OrgID string         `json:"org_id" gorm:"primaryKey;column:org_id"`
+	Name  string         `json:"name"`
+}
+
+func (c *compositePKObject) TableName() string             { return "composite_pk_objects" }
+func (c *compositePKObject) GetObjectID() model.ObjectID   { return c.DBID }
+func (c *compositePKObject) SetObjectID(id model.ObjectID) { c.DBID = id }
+
+// TestUpdateCompositePKPersistsDataColumnNamedID pins the composite-key case:
+// the update's Omit must cover exactly the schema's primary-key columns, so
+// the "id" data column stays updatable when the key is (_id, org_id).
+func TestUpdateCompositePKPersistsDataColumnNamedID(t *testing.T) {
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	obj := &compositePKObject{DBID: model.NewObjectID(), ID: "asset-1", OrgID: "org1", Name: "n"}
+	require.NoError(t, driver.Migrate(ctx, []model.DBObject{obj}))
+
+	defer func() {
+		_ = driver.db.Exec("DROP TABLE IF EXISTS composite_pk_objects").Error
+	}()
+
+	require.NoError(t, driver.Insert(ctx, obj))
+
+	obj.ID = "asset-3"
+	require.NoError(t, driver.Update(ctx, obj, model.DBM{"_id": obj.DBID, "org_id": "org1"}))
+
+	var got compositePKObject
+	require.NoError(t, driver.Query(ctx, obj, &got, model.DBM{"id": "asset-3"}))
+	assert.Equal(t, obj.DBID, got.DBID)
+}
