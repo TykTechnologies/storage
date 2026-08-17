@@ -147,6 +147,24 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 		return nil, fmt.Errorf("failed to get columns: %w", err)
 	}
 
+	// NUMERIC/DECIMAL columns (e.g. AVG results) scan into interface{} as
+	// []byte or string; only those get parsed back into Go numbers, so that
+	// numeric-looking TEXT values (identifiers, zero-padded codes) survive
+	// untouched.
+	colTypes, err := rows.ColumnTypes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get column types: %w", err)
+	}
+
+	isNumericCol := make([]bool, len(columns))
+
+	for i, ct := range colTypes {
+		switch strings.ToUpper(ct.DatabaseTypeName()) {
+		case "NUMERIC", "DECIMAL":
+			isNumericCol[i] = true
+		}
+	}
+
 	results := []model.DBM{}
 
 	for rows.Next() {
@@ -166,7 +184,11 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 		// Set values in the map
 		for i, col := range columns {
 			val := *(values[i].(*interface{}))
-			rowMap[col] = normalizeAggregateValue(val)
+			if isNumericCol[i] {
+				val = normalizeAggregateValue(val)
+			}
+
+			rowMap[col] = val
 		}
 
 		results = append(results, rowMap)
@@ -336,8 +358,22 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 				case "$ne":
 					// MongoDB $ne also matches documents where the field is
 					// absent/null; mirror that so NULL rows are included, unlike a
-					// bare NOT (col = ?) which excludes them.
-					db = db.Where(fmt.Sprintf("(%v IS NULL OR %v <> ?)", k, k), nv)
+					// bare NOT (col = ?) which excludes them. {$ne: nil} means
+					// "present and non-null": col <> NULL would be UNKNOWN for
+					// every row, so it needs the dedicated IS NOT NULL form.
+					if nv == nil {
+						db = db.Where(fmt.Sprintf("%v IS NOT NULL", k))
+					} else {
+						db = db.Where(fmt.Sprintf("(%v IS NULL OR %v <> ?)", k, k), nv)
+					}
+				case "$eq":
+					// {$eq: nil} matches absent/null fields; col = NULL is
+					// UNKNOWN for every row, so it needs IS NULL.
+					if nv == nil {
+						db = db.Where(fmt.Sprintf("%v IS NULL", k))
+					} else {
+						db = db.Where(fmt.Sprintf("%v = ?", k), nv)
+					}
 				case "$regex":
 					if pattern, ok := nv.(string); ok && pattern != "" {
 						matchOp := "~"
@@ -497,6 +533,12 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 	// input set (no rows, instead of SQL's single all-NULL aggregate row).
 	hasGroup := false
 
+	// hasProject marks that a $project stage was translated. $project and
+	// $group both render the flat SELECT list of a single statement (there is
+	// no subquery nesting), so composing them would silently discard one
+	// stage; such pipelines are rejected instead.
+	hasProject := false
+
 	for _, stage := range pipeline {
 		if len(stage) != 1 {
 			return "", nil, errors.New("each pipeline stage must have exactly one operator")
@@ -513,7 +555,11 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 		switch operator {
 		case "$match":
 			if matchExpr, ok := value.(model.DBM); ok {
-				matchWhere, matchArgs := buildWhereClause(matchExpr)
+				matchWhere, matchArgs, err := buildWhereClause(matchExpr)
+				if err != nil {
+					return "", nil, err
+				}
+
 				if matchWhere != "" {
 					if whereClause == "" {
 						whereClause = matchWhere
@@ -529,6 +575,12 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 			}
 
 		case "$group":
+			if hasProject {
+				return "", nil, errors.New("$project composed with $group is not supported by the Postgres " +
+					"aggregation translator: both stages render the same flat SELECT list, so the projection " +
+					"would be silently discarded — reference raw fields in the $group instead")
+			}
+
 			if groupExpr, ok := value.(model.DBM); ok {
 				hasGroup = true
 				if idExpr, ok := groupExpr["_id"]; ok {
@@ -537,8 +589,12 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 
 						for _, expr := range idMap {
 							if fieldName, ok := expr.(string); ok {
-								fieldName = strings.ReplaceAll(strings.TrimPrefix(fieldName, "$"), ".", "_")
-								groupFields = append(groupFields, fieldName)
+								col, err := sanitizeAggField(strings.TrimPrefix(fieldName, "$"))
+								if err != nil {
+									return "", nil, err
+								}
+
+								groupFields = append(groupFields, col)
 							} else {
 								return "", nil, errors.New("complex group expressions not supported")
 							}
@@ -550,8 +606,12 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 					} else if idExpr == nil {
 						groupByClause = ""
 					} else if fieldName, ok := idExpr.(string); ok {
-						fieldName = strings.ReplaceAll(strings.TrimPrefix(fieldName, "$"), ".", "_")
-						groupByClause = fieldName
+						col, err := sanitizeAggField(strings.TrimPrefix(fieldName, "$"))
+						if err != nil {
+							return "", nil, err
+						}
+
+						groupByClause = col
 					} else {
 						return "", nil, errors.New("complex group expressions not supported")
 					}
@@ -567,7 +627,9 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 
 				// A $sort that precedes $group orders documents into the
 				// accumulators (Mongo semantics, consumed by $first/$last); it
-				// must not become the ORDER BY of the grouped result.
+				// must not become the ORDER BY of the grouped result. It also
+				// must not leak into a later $group, whose input order it no
+				// longer describes.
 				orderByClause = ""
 
 				// Add aggregation functions to select clause
@@ -584,7 +646,8 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 							switch funcName {
 							case "$sum":
 								// {$sum: 1} is Mongo's row-count idiom -> COUNT(*).
-								if n, ok := funcArg.(int); ok && n == 1 {
+								// JSON/BSON decoding delivers the 1 as float64.
+								if isNumericOne(funcArg) {
 									alias, err := sanitizeAggField(field)
 									if err != nil {
 										return "", nil, err
@@ -654,11 +717,23 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 				if len(selectParts) > 0 {
 					selectClause = strings.Join(selectParts, ", ")
 				}
+
+				// The pre-group sort described the accumulators' input order;
+				// it says nothing about the order feeding any later $group.
+				lastSort = nil
 			} else {
 				return "", nil, errors.New("$group value must be a DBM")
 			}
 
 		case "$project":
+			if hasGroup {
+				return "", nil, errors.New("$group composed with $project is not supported by the Postgres " +
+					"aggregation translator: both stages render the same flat SELECT list, so the group " +
+					"output would be silently discarded — alias the accumulators in the $group instead")
+			}
+
+			hasProject = true
+
 			if projectExpr, ok := value.(model.DBM); ok {
 				projectParts := []string{}
 
@@ -833,10 +908,10 @@ func translateAggregationPipeline(tableName string, pipeline []model.DBM) (strin
 	return query, args, nil
 }
 
-// normalizeAggregateValue converts driver-native scan types to plain Go
-// numbers where possible: Postgres NUMERIC (e.g. AVG results) arrives through
-// interface{} scans as []byte or string, which document-store consumers do not
-// expect. Non-numeric values pass through unchanged.
+// normalizeAggregateValue converts a NUMERIC/DECIMAL column's scan value to a
+// plain Go number: Postgres delivers those through interface{} scans as
+// []byte or string, which document-store consumers do not expect. Values that
+// fail to parse pass through unchanged.
 func normalizeAggregateValue(val interface{}) interface{} {
 	var s string
 
@@ -858,6 +933,36 @@ func normalizeAggregateValue(val interface{}) interface{} {
 	}
 
 	return val
+}
+
+// toDBMSlice normalizes the operand of a logical operator ($or/$and) to
+// []model.DBM. Decoders deliver it as []interface{}; typed callers pass
+// []model.DBM directly. Any other shape (or non-DBM element) is an error so
+// the condition cannot silently vanish from the WHERE clause.
+func toDBMSlice(v interface{}) ([]model.DBM, error) {
+	switch list := v.(type) {
+	case []model.DBM:
+		return list, nil
+	case []interface{}:
+		out := make([]model.DBM, 0, len(list))
+
+		for _, el := range list {
+			sub, ok := el.(model.DBM)
+			if !ok {
+				if m, ok := el.(map[string]interface{}); ok {
+					sub = model.DBM(m)
+				} else {
+					return nil, fmt.Errorf("expects DBM elements, got %T", el)
+				}
+			}
+
+			out = append(out, sub)
+		}
+
+		return out, nil
+	default:
+		return nil, fmt.Errorf("expects a list of sub-filters, got %T", v)
+	}
 }
 
 // toInterfaceSlice widens any slice or array value (e.g. the []string a
@@ -918,7 +1023,33 @@ func aggAccumulatorArg(funcName string, funcArg interface{}) (string, []interfac
 
 		return expr, nil, nil
 	default:
-		return "?", []interface{}{funcArg}, nil
+		// Numeric literals are inlined: a bound placeholder in the SELECT
+		// list would precede the WHERE placeholders in the SQL text while its
+		// argument is appended after the $match arguments, binding the values
+		// crosswise. Non-numeric literals have no meaningful aggregate.
+		switch funcArg.(type) {
+		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+			return fmt.Sprint(funcArg), nil, nil
+		default:
+			return "", nil, fmt.Errorf("unsupported %s argument type %T", funcName, funcArg)
+		}
+	}
+}
+
+// isNumericOne reports whether v is the literal 1 in any numeric type a
+// decoder may deliver it as.
+func isNumericOne(v interface{}) bool {
+	switch n := v.(type) {
+	case int:
+		return n == 1
+	case int32:
+		return n == 1
+	case int64:
+		return n == 1
+	case float64:
+		return n == 1
+	default:
+		return false
 	}
 }
 
@@ -1071,6 +1202,11 @@ func translateFirstLast(funcName string, funcArg interface{}, lastSort model.DBM
 	col, err := sanitizeAggField(name)
 	if err != nil {
 		return "", err
+	}
+
+	if len(lastSort) > 1 {
+		return "", fmt.Errorf("%s requires a single-key $sort: with a compound sort the first/last document "+
+			"per group is ordered by the leading key, which MIN/MAX on %q cannot express", funcName, name)
 	}
 
 	dirRaw, sorted := lastSort[name]
@@ -1255,9 +1391,9 @@ func aggComparator(op string) string {
 	return ""
 }
 
-func buildWhereClause(filter model.DBM) (string, []interface{}) {
+func buildWhereClause(filter model.DBM) (string, []interface{}, error) {
 	if len(filter) == 0 {
-		return "", nil
+		return "", nil, nil
 	}
 
 	var conditions []string
@@ -1277,9 +1413,9 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 		// Logical operators take a list of sub-filters; each sub-filter
 		// translates recursively and the results join with OR/AND.
 		if k == "$or" || k == "$and" {
-			subFilters, ok := v.([]model.DBM)
-			if !ok {
-				continue
+			subFilters, err := toDBMSlice(v)
+			if err != nil {
+				return "", nil, fmt.Errorf("%s: %w", k, err)
 			}
 
 			joiner := " OR "
@@ -1290,7 +1426,11 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 			var subConditions []string
 
 			for _, sub := range subFilters {
-				subSQL, subValues := buildWhereClause(sub)
+				subSQL, subValues, err := buildWhereClause(sub)
+				if err != nil {
+					return "", nil, err
+				}
+
 				if subSQL == "" {
 					continue
 				}
@@ -1331,9 +1471,24 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 					i++
 
 				case "$ne":
-					conditions = append(conditions, fmt.Sprintf("%s <> ?", k))
-					values = append(values, opVal)
-					i++
+					// Parity with translateQuery: $ne also matches NULL rows,
+					// and {$ne: nil} means "present and non-null".
+					if opVal == nil {
+						conditions = append(conditions, fmt.Sprintf("%s IS NOT NULL", k))
+					} else {
+						conditions = append(conditions, fmt.Sprintf("(%s IS NULL OR %s <> ?)", k, k))
+						values = append(values, opVal)
+						i++
+					}
+
+				case "$eq":
+					if opVal == nil {
+						conditions = append(conditions, fmt.Sprintf("%s IS NULL", k))
+					} else {
+						conditions = append(conditions, fmt.Sprintf("%s = ?", k))
+						values = append(values, opVal)
+						i++
+					}
 
 				case "$in":
 					inValues := toInterfaceSlice(opVal)
@@ -1384,5 +1539,5 @@ func buildWhereClause(filter model.DBM) (string, []interface{}) {
 		}
 	}
 
-	return strings.Join(conditions, " AND "), values
+	return strings.Join(conditions, " AND "), values, nil
 }

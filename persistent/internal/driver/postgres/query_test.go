@@ -837,6 +837,125 @@ func TestTranslateAggregationConditional(t *testing.T) {
 		assert.NotContains(t, query, "GROUP BY")
 	})
 
+	t.Run("GroupIDRefRejectsInjection", func(t *testing.T) {
+		pipeline := []model.DBM{
+			{
+				"$group": model.DBM{
+					"_id":  model.DBM{"K": "$apiid) FROM t; --"},
+					"Hits": model.DBM{"$sum": 1},
+				},
+			},
+		}
+
+		_, _, err := translateAggregationPipeline("t", pipeline)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid field identifier")
+
+		pipeline[0]["$group"].(model.DBM)["_id"] = "$apiid; DROP TABLE t"
+		_, _, err = translateAggregationPipeline("t", pipeline)
+		require.Error(t, err)
+	})
+
+	t.Run("ProjectComposedWithGroupErrors", func(t *testing.T) {
+		pipeline := []model.DBM{
+			{"$project": model.DBM{"Code": "$responsecode"}},
+			{"$group": model.DBM{"_id": nil, "Hits": model.DBM{"$sum": 1}}},
+		}
+
+		_, _, err := translateAggregationPipeline("t", pipeline)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "$project composed with $group")
+
+		reversed := []model.DBM{pipeline[1], pipeline[0]}
+		_, _, err = translateAggregationPipeline("t", reversed)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "$group composed with $project")
+	})
+
+	t.Run("LiteralAccumulatorsInlineWithoutCrosswiseBinding", func(t *testing.T) {
+		pipeline := []model.DBM{
+			{"$match": model.DBM{"status": "active"}},
+			{"$group": model.DBM{
+				"_id": nil,
+				"X":   model.DBM{"$sum": 2.5},
+				"N":   model.DBM{"$sum": float64(1)},
+			}},
+		}
+
+		query, values, err := translateAggregationPipeline("t", pipeline)
+		require.NoError(t, err)
+		assert.Contains(t, query, `SUM(2.5) AS "X"`)
+		assert.Contains(t, query, `COUNT(*) AS "N"`, "JSON-decoded $sum:1 must still be the row-count idiom")
+		assert.Equal(t, []interface{}{"active"}, values, "only the $match value may bind as a parameter")
+
+		bad := []model.DBM{{"$group": model.DBM{"_id": nil, "X": model.DBM{"$sum": "not-a-ref-or-number"}}}}
+		_, _, err = translateAggregationPipeline("t", bad)
+		require.Error(t, err, "non-numeric literal accumulator arguments must be rejected")
+	})
+
+	t.Run("MatchOrFromDecodedInterfaceSlice", func(t *testing.T) {
+		pipeline := []model.DBM{
+			{
+				"$match": model.DBM{
+					"$or": []interface{}{
+						model.DBM{"tags": model.DBM{"$regex": `"a"`}},
+						map[string]interface{}{"tags": model.DBM{"$regex": `"b"`}},
+					},
+				},
+			},
+		}
+
+		query, values, err := translateAggregationPipeline("t", pipeline)
+		require.NoError(t, err)
+		assert.Contains(t, query, `((tags ~ ?) OR (tags ~ ?))`)
+		assert.Len(t, values, 2)
+
+		bad := []model.DBM{{"$match": model.DBM{"$or": "not-a-list"}}}
+		_, _, err = translateAggregationPipeline("t", bad)
+		require.Error(t, err, "a malformed $or must fail loudly, not vanish from the WHERE clause")
+	})
+
+	t.Run("MatchNilEqualityUsesNullPredicates", func(t *testing.T) {
+		pipeline := []model.DBM{
+			{
+				"$match": model.DBM{
+					"deleted_at": model.DBM{"$ne": nil},
+					"revoked_at": model.DBM{"$eq": nil},
+					"is_oas":     model.DBM{"$ne": true},
+				},
+			},
+		}
+
+		query, values, err := translateAggregationPipeline("t", pipeline)
+		require.NoError(t, err)
+		assert.Contains(t, query, "deleted_at IS NOT NULL")
+		assert.Contains(t, query, "revoked_at IS NULL")
+		assert.Contains(t, query, "(is_oas IS NULL OR is_oas <> ?)",
+			"non-nil $ne must stay NULL-inclusive for Mongo parity")
+		assert.Equal(t, []interface{}{true}, values)
+	})
+
+	t.Run("FirstWithCompoundSortErrors", func(t *testing.T) {
+		pipeline := []model.DBM{
+			{"$sort": model.DBM{"a": 1, "ts": -1}},
+			{"$group": model.DBM{"_id": "$c", "L": model.DBM{"$first": "$ts"}}},
+		}
+
+		_, _, err := translateAggregationPipeline("t", pipeline)
+		require.Error(t, err, "MIN/MAX cannot express first-per-group under a compound sort")
+	})
+
+	t.Run("SortDoesNotLeakIntoLaterGroup", func(t *testing.T) {
+		pipeline := []model.DBM{
+			{"$sort": model.DBM{"ts": -1}},
+			{"$group": model.DBM{"_id": "$c", "L": model.DBM{"$first": "$ts"}}},
+			{"$group": model.DBM{"_id": nil, "M": model.DBM{"$first": "$ts"}}},
+		}
+
+		_, _, err := translateAggregationPipeline("t", pipeline)
+		require.Error(t, err, "a pre-group sort must not order a later group's input")
+	})
+
 	t.Run("UnwindReportsSchemaDivergence", func(t *testing.T) {
 		// $unwind over an array-of-counters schema has no single-table SQL
 		// rewrite; the translator must reject it with an actionable error rather
@@ -1058,7 +1177,8 @@ func TestBuildWhereClause(t *testing.T) {
 	t.Run("SimpleEqualityFilter", func(t *testing.T) {
 		filter := model.DBM{"name": "test", "value": 123}
 
-		whereClause, values := buildWhereClause(filter)
+		whereClause, values, err := buildWhereClause(filter)
+		require.NoError(t, err)
 
 		// The order of conditions in the WHERE clause might vary, so we need to check both possibilities
 		possibleClauses := []string{
@@ -1090,7 +1210,8 @@ func TestBuildWhereClause(t *testing.T) {
 			"score": model.DBM{"$lte": 100},
 		}
 
-		whereClause, values := buildWhereClause(filter)
+		whereClause, values, err := buildWhereClause(filter)
+		require.NoError(t, err)
 
 		// The order of conditions might vary
 		possibleClauses := []string{
@@ -1121,7 +1242,8 @@ func TestBuildWhereClause(t *testing.T) {
 			},
 		}
 
-		whereClause, values := buildWhereClause(filter)
+		whereClause, values, err := buildWhereClause(filter)
+		require.NoError(t, err)
 
 		// The order of conditions might vary
 		possibleClauses := []string{
@@ -1147,7 +1269,8 @@ func TestBuildWhereClause(t *testing.T) {
 	t.Run("EmptyFilter", func(t *testing.T) {
 		filter := model.DBM{}
 
-		whereClause, values := buildWhereClause(filter)
+		whereClause, values, err := buildWhereClause(filter)
+		require.NoError(t, err)
 
 		assert.Equal(t, "", whereClause, "WHERE clause should be empty for empty filter")
 		assert.Empty(t, values, "Values should be empty for empty filter")
