@@ -40,8 +40,13 @@ func (d *driver) Query(ctx context.Context, object model.DBObject, result interf
 	isSingle := resultElem.Kind() != reflect.Slice
 
 	if isSingle {
-		// For a single object, use First
-		err := db.First(result).Error
+		// Query into a fresh instance and copy back: GORM derives extra
+		// conditions from a non-zero primary key on the destination, so a
+		// caller reusing one struct across lookups (Mongo-style) would get
+		// the previous record's ID ANDed into the WHERE clause.
+		fresh := reflect.New(resultElem.Type())
+
+		err := db.First(fresh.Interface()).Error
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return sql.ErrNoRows
@@ -49,6 +54,8 @@ func (d *driver) Query(ctx context.Context, object model.DBObject, result interf
 
 			return err
 		}
+
+		resultElem.Set(fresh.Elem())
 	} else {
 		// For a slice, use Find. An empty result set is not an error: the
 		// document-store drivers return an empty slice with a nil error, and

@@ -83,6 +83,25 @@ func RunSuite(t *testing.T, s Suite) {
 		assert.Equal(t, obj.GetObjectID(), result.GetObjectID())
 	})
 
+	t.Run("QueryReusedDestinationIsOverwritten", func(t *testing.T) {
+		setup(t)
+
+		first := s.NewObject()
+		require.NoError(t, s.Storage.Insert(ctx, first))
+		second := s.NewObject()
+		require.NoError(t, s.Storage.Insert(ctx, second))
+
+		// Document-store callers reuse one struct across lookups; a stale ID
+		// on the destination must not leak into the second query's filter.
+		result := s.NewObject()
+		require.NoError(t, s.Storage.Query(ctx, result, result, s.IDFilter(first.GetObjectID())))
+		require.Equal(t, first.GetObjectID(), result.GetObjectID())
+
+		err := s.Storage.Query(ctx, result, result, s.IDFilter(second.GetObjectID()))
+		require.NoError(t, err, "a reused destination must not constrain the query")
+		assert.Equal(t, second.GetObjectID(), result.GetObjectID())
+	})
+
 	t.Run("QueryEmptySliceIsNotError", func(t *testing.T) {
 		setup(t)
 
