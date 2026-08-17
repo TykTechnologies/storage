@@ -200,23 +200,11 @@ func (d *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filte
 		return ErrorEmptyTableName
 	}
 
+	// Updates are struct-based (like Update): GORM's schema resolves the
+	// primary-key column regardless of json-tag naming and serializes JSON
+	// fields properly, where a hand-built map would render nested structs as
+	// their Go string form.
 	if len(filters) == 1 {
-		// Extract update values from the first object
-		updateData, err := objectToMap(objects[0])
-		if err != nil {
-			tx.Rollback()
-			return err
-		}
-
-		// Remove ID fields from update data
-		delete(updateData, "_id")
-		delete(updateData, "id")
-
-		if len(updateData) == 0 {
-			tx.Rollback()
-			return nil // Nothing to update
-		}
-
 		query := tx.Table(tableName)
 		filter := filters[0]
 
@@ -226,7 +214,7 @@ func (d *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filte
 			}
 		}
 
-		result := query.Updates(updateData)
+		result := query.Select("*").Omit("id").Updates(objects[0])
 		if result.Error != nil {
 			tx.Rollback()
 			return result.Error
@@ -238,23 +226,9 @@ func (d *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filte
 				continue // Skip objects without ID
 			}
 
-			// Extract update values
-			updateData, err := objectToMap(obj)
-			if err != nil {
-				tx.Rollback()
-				return err
-			}
-
-			// Remove ID fields from update data
-			delete(updateData, "_id")
-			delete(updateData, "id")
-
-			if len(updateData) == 0 {
-				continue // Nothing to update
-			}
-
-			// Update by ID
-			result := tx.Table(tableName).Where("id = ?", id.Hex()).Updates(updateData)
+			// No explicit WHERE: with a non-zero primary key, GORM's update
+			// callback adds the primary-key condition from the model schema.
+			result := tx.Table(tableName).Select("*").Omit("id").Updates(obj)
 			if result.Error != nil {
 				tx.Rollback()
 				return result.Error
