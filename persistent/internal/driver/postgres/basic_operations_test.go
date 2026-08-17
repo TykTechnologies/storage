@@ -891,3 +891,49 @@ func TestApplySetOperatorToObject(t *testing.T) {
 		assert.Equal(t, "Updated Name", obj.Name)
 	})
 }
+
+// assetLikeObject mirrors the dashboard Asset shape: the primary key column is
+// "_id" (json-tag naming) while "id" is a regular, updatable data column.
+type assetLikeObject struct {
+	DBID model.ObjectID `json:"_id" gorm:"primaryKey"`
+	ID   string         `json:"id"`
+	Name string         `json:"name"`
+}
+
+func (a *assetLikeObject) TableName() string             { return "asset_like_objects" }
+func (a *assetLikeObject) GetObjectID() model.ObjectID   { return a.DBID }
+func (a *assetLikeObject) SetObjectID(id model.ObjectID) { a.DBID = id }
+
+// TestUpdatePersistsDataColumnNamedID pins that Update's primary-key Omit
+// targets the schema's real PK column: with an "_id" primary key, a rename of
+// the "id" data column must reach the SET clause.
+func TestUpdatePersistsDataColumnNamedID(t *testing.T) {
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	obj := &assetLikeObject{DBID: model.NewObjectID(), ID: "asset-1", Name: "n"}
+	require.NoError(t, driver.Migrate(ctx, []model.DBObject{obj}))
+
+	defer func() {
+		_ = driver.db.Exec("DROP TABLE IF EXISTS asset_like_objects").Error
+	}()
+
+	require.NoError(t, driver.Insert(ctx, obj))
+
+	obj.ID = "asset-3"
+	require.NoError(t, driver.Update(ctx, obj, model.DBM{"_id": obj.DBID}))
+
+	var got assetLikeObject
+	require.NoError(t, driver.Query(ctx, obj, &got, model.DBM{"id": "asset-3"}))
+	assert.Equal(t, obj.DBID, got.DBID)
+
+	// BulkUpdate's per-object branch must locate the row by the "_id" primary
+	// key, not a hardcoded "id" column.
+	obj.Name = "renamed"
+	require.NoError(t, driver.BulkUpdate(ctx, []model.DBObject{obj}))
+
+	var afterBulk assetLikeObject
+	require.NoError(t, driver.Query(ctx, obj, &afterBulk, model.DBM{"_id": obj.DBID}))
+	assert.Equal(t, "renamed", afterBulk.Name)
+	assert.Equal(t, "asset-3", afterBulk.ID)
+}

@@ -111,6 +111,18 @@ func (d *driver) Delete(ctx context.Context, object model.DBObject, filters ...m
 
 // Update applies changes from the given object to the database, using either the provided filter
 // or the object's ID. Excludes ID fields and returns an error if no rows are affected.
+// primaryKeyColumn resolves the database column backing the model's primary
+// key. With json-tag naming this may be "_id"; "id" is the fallback when the
+// schema cannot be parsed.
+func (d *driver) primaryKeyColumn(object model.DBObject) string {
+	stmt := &gorm.Statement{DB: d.db}
+	if err := stmt.Parse(object); err == nil && stmt.Schema != nil && stmt.Schema.PrioritizedPrimaryField != nil {
+		return stmt.Schema.PrioritizedPrimaryField.DBName
+	}
+
+	return "id"
+}
+
 func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...model.DBM) error {
 	tableName, err := d.validateDBAndTable(object)
 	if err != nil {
@@ -143,11 +155,13 @@ func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 
 	// Select("*") makes Updates write every field, including zero values,
 	// preserving Save's replace-all semantics, while Omit keeps the primary key
-	// out of the SET clause. Unlike Save, Updates never falls back to INSERT
-	// when the WHERE clause matches nothing, so this single atomic UPDATE can't
-	// create ghost rows under concurrent deletes and makes RowsAffected a
-	// reliable existence signal.
-	result := tx.Select("*").Omit("id").Updates(object)
+	// out of the SET clause. The primary-key column is resolved from the model
+	// schema: with json-tag naming it may be "_id" while a plain "id" is a
+	// regular data column that must stay updatable. Unlike Save, Updates never
+	// falls back to INSERT when the WHERE clause matches nothing, so this
+	// single atomic UPDATE can't create ghost rows under concurrent deletes
+	// and makes RowsAffected a reliable existence signal.
+	result := tx.Select("*").Omit(d.primaryKeyColumn(object)).Updates(object)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -214,7 +228,7 @@ func (d *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filte
 			}
 		}
 
-		result := query.Select("*").Omit("id").Updates(objects[0])
+		result := query.Select("*").Omit(d.primaryKeyColumn(objects[0])).Updates(objects[0])
 		if result.Error != nil {
 			tx.Rollback()
 			return result.Error
@@ -228,7 +242,7 @@ func (d *driver) BulkUpdate(ctx context.Context, objects []model.DBObject, filte
 
 			// No explicit WHERE: with a non-zero primary key, GORM's update
 			// callback adds the primary-key condition from the model schema.
-			result := tx.Table(tableName).Select("*").Omit("id").Updates(obj)
+			result := tx.Table(tableName).Select("*").Omit(d.primaryKeyColumn(obj)).Updates(obj)
 			if result.Error != nil {
 				tx.Rollback()
 				return result.Error
