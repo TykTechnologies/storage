@@ -152,6 +152,27 @@ func main() {
 }
 ```
 
+### Connection pool statistics
+
+Every driver (postgres, mongo, mgo, redis) optionally exposes engine-agnostic
+connection-pool statistics through `poolstats.PoolStatsProvider`. The existing
+interfaces are unchanged — opt in with a type assertion:
+
+```go
+import "github.com/TykTechnologies/storage/poolstats"
+
+if p, ok := store.(poolstats.PoolStatsProvider); ok {
+    stats, err := p.PoolStats(ctx)
+    if err == nil && stats.Present.Has(poolstats.FieldInUse) {
+        metrics.Gauge("storage_pool_in_use", stats.InUse)
+    }
+}
+```
+
+Not every backend reports every field: check `stats.Present` before emitting a
+metric (e.g. mongo/mgo report no wait stats; mgo stats are process-global and
+best-effort). Reading stats is cheap and never probes the backing store.
+
 ## Architecture
 
 The Tyk Storage library is divided into two main components:

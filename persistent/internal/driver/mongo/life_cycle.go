@@ -20,7 +20,8 @@ import (
 )
 
 type lifeCycle struct {
-	client *mongo.Client
+	client    *mongo.Client
+	poolStats *poolStatsCollector
 
 	connectionString string
 	database         string
@@ -54,6 +55,11 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	// SetRegistry allow us to marshall/unmarshall old mgo ID's structures and mgo default values.
 	connOpts.SetRegistry(createCustomRegistry().Build())
 
+	// Aggregate pool events for PoolStats; the official client has no snapshot
+	// pool API. A fresh collector per connect keeps reconnects clean.
+	collector := newPoolStatsCollector(connOpts)
+	connOpts.SetPoolMonitor(collector.monitor())
+
 	if client, err = mongo.Connect(context.Background(), connOpts); err != nil {
 		return err
 	}
@@ -74,6 +80,7 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	lc.connectionString = opts.ConnectionString
 	lc.database = cs.db
 	lc.client = client
+	lc.poolStats = collector
 
 	// Make sure the old connection pool is closed if exists, but don't block the function on it
 	if oldClient != nil {

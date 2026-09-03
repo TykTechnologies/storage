@@ -71,10 +71,7 @@ func buildUniversalOptions(baseConfig *model.BaseConfig) (*redis.UniversalOption
 	}
 
 	// poolSize applies per cluster node and not for the whole cluster.
-	poolSize := 500
-	if opts.MaxActive > 0 {
-		poolSize = opts.MaxActive
-	}
+	poolSize := effectivePoolSize(opts)
 
 	timeout := 5 * time.Second
 	if opts.Timeout != 0 {
