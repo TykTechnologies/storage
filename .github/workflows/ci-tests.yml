@@ -232,7 +232,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ./downloaded-coverage
-          merge-multiple: true
+          pattern: coverage-*
+          # No merge-multiple: matrix jobs upload identically-named files
+          # (e.g. temporal/temporal-standalone.cov), and concurrent extraction
+          # into one directory corrupts them. One subdirectory per artifact is
+          # collision-free; gocovmerge merges the duplicates.
       - name: Download golangci-lint artifacts
         uses: actions/download-artifact@v4
         with:
