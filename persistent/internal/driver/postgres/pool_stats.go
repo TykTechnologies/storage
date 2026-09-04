@@ -26,9 +26,11 @@ func poolStatsFromSQL(s sql.DBStats) poolstats.PoolStats {
 }
 
 // PoolStats implements poolstats.PoolStatsProvider. It reads the atomic
-// snapshot kept by database/sql and never touches the database.
+// snapshot kept by database/sql and never touches the database. The d.db check
+// matches Ping's closed-session semantics: Close() nils d.db but leaves d.sqlDB
+// set, and a closed pool must error rather than report healthy zeros.
 func (d *driver) PoolStats(_ context.Context) (poolstats.PoolStats, error) {
-	if d.lifeCycle == nil || d.sqlDB == nil {
+	if d.lifeCycle == nil || d.db == nil || d.sqlDB == nil {
 		return poolstats.PoolStats{}, ErrorSessionClosed
 	}
 

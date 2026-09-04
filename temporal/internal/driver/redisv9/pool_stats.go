@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/TykTechnologies/storage/poolstats"
 	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/TykTechnologies/storage/temporal/temperr"
@@ -42,8 +44,10 @@ func (h *RedisV9) poolCfg() *model.RedisOptions {
 
 // PoolStats implements poolstats.PoolStatsProvider. It reads go-redis' cheap
 // in-process pool counters (aggregated across nodes in cluster mode) and never
-// touches Redis. MaxOpen is only reported when the originating configuration
-// is known.
+// touches Redis. MaxOpen is only reported when the originating configuration is
+// known AND the client is not a cluster client: the configured pool size is
+// per node while Open/InUse/Idle are cluster-wide aggregates, so reporting it
+// would make utilization ratios exceed 100%.
 func (h *RedisV9) PoolStats(_ context.Context) (poolstats.PoolStats, error) {
 	if h.client == nil {
 		return poolstats.PoolStats{}, temperr.ClosedConnection
@@ -52,17 +56,19 @@ func (h *RedisV9) PoolStats(_ context.Context) (poolstats.PoolStats, error) {
 	s := h.client.PoolStats()
 
 	stats := poolstats.PoolStats{
-		Engine:       poolstats.EngineRedis,
-		Open:         int(s.TotalConns),
-		InUse:        int(s.TotalConns) - int(s.IdleConns),
-		Idle:         int(s.IdleConns),
-		WaitCount:    int64(s.WaitCount),
-		WaitDuration: time.Duration(s.WaitDurationNs),
+		Engine:           poolstats.EngineRedis,
+		Open:             int(s.TotalConns),
+		InUse:            int(s.TotalConns) - int(s.IdleConns),
+		Idle:             int(s.IdleConns),
+		WaitCount:        int64(s.WaitCount),
+		WaitDuration:     time.Duration(s.WaitDurationNs),
+		CheckOutFailures: int64(s.Timeouts),
 		Present: poolstats.FieldOpen | poolstats.FieldInUse | poolstats.FieldIdle |
-			poolstats.FieldWaitCount | poolstats.FieldWaitDuration,
+			poolstats.FieldWaitCount | poolstats.FieldWaitDuration | poolstats.FieldCheckOutFailures,
 	}
 
-	if cfg := h.poolCfg(); cfg != nil {
+	_, clustered := h.client.(*redis.ClusterClient)
+	if cfg := h.poolCfg(); cfg != nil && !clustered {
 		stats.MaxOpen = effectivePoolSize(cfg)
 		stats.Present |= poolstats.FieldMaxOpen
 	}

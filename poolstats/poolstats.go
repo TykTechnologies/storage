@@ -42,6 +42,7 @@ const (
 	FieldIdle
 	FieldWaitCount
 	FieldWaitDuration
+	FieldCheckOutFailures
 )
 
 // Has reports whether every bit in field is set in f.
@@ -65,6 +66,9 @@ type PoolStats struct {
 	WaitCount int64
 	// WaitDuration is the cumulative time blocked waiting for a connection.
 	WaitDuration time.Duration
+	// CheckOutFailures is the cumulative number of failed attempts to check a
+	// connection out of the pool (timeouts, dial errors).
+	CheckOutFailures int64
 	// Present marks which of the above fields this backend actually reports.
 	Present FieldSet
 }

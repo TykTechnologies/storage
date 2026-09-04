@@ -36,9 +36,10 @@ func TestPoolStatsCollector_Snapshot(t *testing.T) {
 	assert.Equal(t, 3, got.Open)  // 4 created - 1 closed
 	assert.Equal(t, 1, got.InUse) // 2 checked out - 1 checked in
 	assert.Equal(t, 2, got.Idle)  // open - in use
-	assert.Equal(t, int64(1), c.checkOutFailed.Load())
+	assert.Equal(t, int64(1), got.CheckOutFailures)
 
-	want := poolstats.FieldMaxOpen | poolstats.FieldOpen | poolstats.FieldInUse | poolstats.FieldIdle
+	want := poolstats.FieldMaxOpen | poolstats.FieldOpen | poolstats.FieldInUse |
+		poolstats.FieldIdle | poolstats.FieldCheckOutFailures
 	assert.Equal(t, want, got.Present)
 	assert.False(t, got.Present.Has(poolstats.FieldWaitCount), "mongo does not report waits")
 	assert.False(t, got.Present.Has(poolstats.FieldWaitDuration), "mongo does not report waits")

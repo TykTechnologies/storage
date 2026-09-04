@@ -34,8 +34,26 @@ func TestRedisV9_PoolStats(t *testing.T) {
 	assert.Equal(t, 0, got.Open) // nothing dialed yet
 
 	all := poolstats.FieldMaxOpen | poolstats.FieldOpen | poolstats.FieldInUse |
-		poolstats.FieldIdle | poolstats.FieldWaitCount | poolstats.FieldWaitDuration
+		poolstats.FieldIdle | poolstats.FieldWaitCount | poolstats.FieldWaitDuration |
+		poolstats.FieldCheckOutFailures
 	assert.Equal(t, all, got.Present)
+}
+
+func TestRedisV9_PoolStats_ClusterOmitsMaxOpen(t *testing.T) {
+	// PoolSize is configured per cluster node while go-redis aggregates
+	// Open/InUse/Idle across all nodes, so reporting a per-node MaxOpen next to
+	// cluster-wide gauges would push utilization ratios past 100%.
+	h := &RedisV9{
+		client: redis.NewClusterClient(&redis.ClusterOptions{Addrs: []string{"localhost:7100"}}),
+		cfg:    &model.RedisOptions{MaxActive: 9},
+	}
+
+	got, err := h.PoolStats(context.Background())
+	require.NoError(t, err)
+
+	assert.False(t, got.Present.Has(poolstats.FieldMaxOpen))
+	assert.Equal(t, 0, got.MaxOpen)
+	assert.True(t, got.Present.Has(poolstats.FieldOpen))
 }
 
 func TestRedisV9_PoolStats_ConnectorInheritsMaxOpen(t *testing.T) {

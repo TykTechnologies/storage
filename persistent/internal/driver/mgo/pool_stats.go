@@ -14,10 +14,19 @@ var _ poolstats.PoolStatsProvider = (*mgoDriver)(nil)
 
 // statsToPool maps mgo's socket counters onto the engine-agnostic PoolStats.
 // mgo exposes neither a configured pool limit nor wait stats, so only
-// Open/InUse/Idle are marked Present.
+// Open/InUse/Idle are marked Present. All three are clamped at zero: a
+// SetStats(false)/SetStats(true) cycle zeroes mgo's counters while sockets are
+// still alive, after which their close events can drive the raw values negative.
 func statsToPool(s mgo.Stats) poolstats.PoolStats {
 	open := s.SocketsAlive
+	if open < 0 {
+		open = 0
+	}
+
 	inUse := s.SocketsInUse
+	if inUse < 0 {
+		inUse = 0
+	}
 
 	idle := open - inUse
 	if idle < 0 {

@@ -21,13 +21,17 @@ func TestFieldSet_Has(t *testing.T) {
 			not: []poolstats.FieldSet{
 				poolstats.FieldMaxOpen, poolstats.FieldOpen, poolstats.FieldInUse,
 				poolstats.FieldIdle, poolstats.FieldWaitCount, poolstats.FieldWaitDuration,
+				poolstats.FieldCheckOutFailures,
 			},
 		},
 		{
 			name: "partial_set",
 			set:  poolstats.FieldOpen | poolstats.FieldInUse | poolstats.FieldIdle,
 			has:  []poolstats.FieldSet{poolstats.FieldOpen, poolstats.FieldInUse, poolstats.FieldIdle},
-			not:  []poolstats.FieldSet{poolstats.FieldMaxOpen, poolstats.FieldWaitCount, poolstats.FieldWaitDuration},
+			not: []poolstats.FieldSet{
+				poolstats.FieldMaxOpen, poolstats.FieldWaitCount, poolstats.FieldWaitDuration,
+				poolstats.FieldCheckOutFailures,
+			},
 		},
 	}
 
@@ -48,6 +52,7 @@ func TestFieldBitsAreDistinct(t *testing.T) {
 	fields := []poolstats.FieldSet{
 		poolstats.FieldMaxOpen, poolstats.FieldOpen, poolstats.FieldInUse,
 		poolstats.FieldIdle, poolstats.FieldWaitCount, poolstats.FieldWaitDuration,
+		poolstats.FieldCheckOutFailures,
 	}
 
 	seen := poolstats.FieldSet(0)

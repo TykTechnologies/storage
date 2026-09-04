@@ -68,3 +68,15 @@ func TestDriver_PoolStats_Integration(t *testing.T) {
 	var provider poolstats.PoolStatsProvider = d
 	assert.NotNil(t, provider)
 }
+
+func TestDriver_PoolStats_AfterClose_Integration(t *testing.T) {
+	d, err := NewPostgresDriver(&types.ClientOpts{ConnectionString: connStr, Type: "postgres"})
+	require.NoError(t, err)
+
+	require.NoError(t, d.Close())
+
+	// A closed store must error like Ping does, not report healthy zeros that a
+	// metrics loop would keep emitting.
+	_, err = d.PoolStats(context.Background())
+	assert.ErrorIs(t, err, ErrorSessionClosed)
+}

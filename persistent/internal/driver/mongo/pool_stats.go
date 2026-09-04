@@ -13,7 +13,9 @@ import (
 )
 
 // defaultMaxPoolSize mirrors the mongo-go driver's default connection pool
-// size, applied when maxPoolSize is not set via URI or options.
+// size (defaultMaxPoolSize in mongo/client.go, 100 as of v1.17.7), applied
+// when maxPoolSize is not set via URI or options. Re-check this value when
+// upgrading the driver.
 const defaultMaxPoolSize = 100
 
 var _ poolstats.PoolStatsProvider = (*mongoDriver)(nil)
@@ -24,12 +26,10 @@ var _ poolstats.PoolStatsProvider = (*mongoDriver)(nil)
 type poolStatsCollector struct {
 	maxPoolSize uint64
 
-	created    atomic.Int64
-	closed     atomic.Int64
-	checkedOut atomic.Int64
-	checkedIn  atomic.Int64
-	// checkOutFailed is aggregated for completeness/debugging; PoolStats has no
-	// corresponding field yet, so it is intentionally not surfaced.
+	created        atomic.Int64
+	closed         atomic.Int64
+	checkedOut     atomic.Int64
+	checkedIn      atomic.Int64
 	checkOutFailed atomic.Int64
 }
 
@@ -79,21 +79,30 @@ func (c *poolStatsCollector) snapshot() poolstats.PoolStats {
 	}
 
 	return poolstats.PoolStats{
-		Engine:  poolstats.EngineMongo,
-		MaxOpen: int(c.maxPoolSize),
-		Open:    int(open),
-		InUse:   int(inUse),
-		Idle:    int(idle),
-		Present: poolstats.FieldMaxOpen | poolstats.FieldOpen | poolstats.FieldInUse | poolstats.FieldIdle,
+		Engine:           poolstats.EngineMongo,
+		MaxOpen:          int(c.maxPoolSize),
+		Open:             int(open),
+		InUse:            int(inUse),
+		Idle:             int(idle),
+		CheckOutFailures: c.checkOutFailed.Load(),
+		Present: poolstats.FieldMaxOpen | poolstats.FieldOpen | poolstats.FieldInUse |
+			poolstats.FieldIdle | poolstats.FieldCheckOutFailures,
 	}
 }
 
 // PoolStats implements poolstats.PoolStatsProvider. Stats come from the
-// event.PoolMonitor wired in Connect; reading them never touches MongoDB.
+// event.PoolMonitor wired in Connect; reading them never touches MongoDB. The
+// collector pointer is loaded atomically because reconnects swap it while
+// metrics pollers read it concurrently.
 func (d *mongoDriver) PoolStats(_ context.Context) (poolstats.PoolStats, error) {
-	if d.lifeCycle == nil || d.client == nil || d.poolStats == nil {
+	if d.lifeCycle == nil {
 		return poolstats.PoolStats{}, errors.New(types.ErrorSessionClosed)
 	}
 
-	return d.poolStats.snapshot(), nil
+	collector := d.poolStats.Load()
+	if collector == nil {
+		return poolstats.PoolStats{}, errors.New(types.ErrorSessionClosed)
+	}
+
+	return collector.snapshot(), nil
 }

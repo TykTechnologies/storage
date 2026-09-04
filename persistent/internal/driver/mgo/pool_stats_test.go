@@ -30,6 +30,17 @@ func TestStatsToPool(t *testing.T) {
 	assert.Equal(t, 0, got.MaxOpen)
 }
 
+func TestStatsToPool_ClampsNegativeCounters(t *testing.T) {
+	// A SetStats(false)/SetStats(true) cycle zeroes mgo's global counters while
+	// sockets are still alive; their close events then drive the raw values
+	// negative. Reported stats must never go below zero.
+	got := statsToPool(mgo.Stats{SocketsAlive: -3, SocketsInUse: -1})
+
+	assert.Equal(t, 0, got.Open)
+	assert.Equal(t, 0, got.InUse)
+	assert.Equal(t, 0, got.Idle)
+}
+
 func TestMgoDriver_PoolStats_NotConnected(t *testing.T) {
 	d := &mgoDriver{lifeCycle: &lifeCycle{}}
 

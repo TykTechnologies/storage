@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/TykTechnologies/storage/persistent/internal/helper"
@@ -20,8 +21,10 @@ import (
 )
 
 type lifeCycle struct {
-	client    *mongo.Client
-	poolStats *poolStatsCollector
+	client *mongo.Client
+	// poolStats is swapped on every (re)connect while PoolStats reads it from
+	// arbitrary goroutines, so the pointer itself must be atomic.
+	poolStats atomic.Pointer[poolStatsCollector]
 
 	connectionString string
 	database         string
@@ -80,7 +83,7 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	lc.connectionString = opts.ConnectionString
 	lc.database = cs.db
 	lc.client = client
-	lc.poolStats = collector
+	lc.poolStats.Store(collector)
 
 	// Make sure the old connection pool is closed if exists, but don't block the function on it
 	if oldClient != nil {
