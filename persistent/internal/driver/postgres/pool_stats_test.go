@@ -49,7 +49,7 @@ func TestDriver_PoolStats_SessionClosed(t *testing.T) {
 }
 
 func TestDriver_PoolStats_Integration(t *testing.T) {
-	d, err := NewPostgresDriver(&types.ClientOpts{ConnectionString: connStr, Type: "postgres"})
+	d, err := NewPostgresDriver(&types.ClientOpts{ConnectionString: getConnStr(), Type: "postgres"})
 	require.NoError(t, err)
 
 	defer func() { _ = d.Close() }()
@@ -70,7 +70,7 @@ func TestDriver_PoolStats_Integration(t *testing.T) {
 }
 
 func TestDriver_PoolStats_AfterClose_Integration(t *testing.T) {
-	d, err := NewPostgresDriver(&types.ClientOpts{ConnectionString: connStr, Type: "postgres"})
+	d, err := NewPostgresDriver(&types.ClientOpts{ConnectionString: getConnStr(), Type: "postgres"})
 	require.NoError(t, err)
 
 	require.NoError(t, d.Close())

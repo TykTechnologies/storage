@@ -67,6 +67,8 @@ func TestRedisV9_PoolStats_ConnectorInheritsMaxOpen(t *testing.T) {
 	kv, err := NewRedisV9WithConnection(conn)
 	require.NoError(t, err)
 
+	// MaxOpen is read from the shared client's own options, so it holds no
+	// matter how the handler was constructed.
 	got, err := kv.PoolStats(context.Background())
 	require.NoError(t, err)
 
@@ -74,16 +76,19 @@ func TestRedisV9_PoolStats_ConnectorInheritsMaxOpen(t *testing.T) {
 	assert.True(t, got.Present.Has(poolstats.FieldMaxOpen))
 }
 
-func TestRedisV9_PoolStats_UnknownConfigOmitsMaxOpen(t *testing.T) {
-	h := &RedisV9{client: redis.NewClient(&redis.Options{Addr: "localhost:6379"})}
+func TestRedisV9_PoolStats_ExternalClientReportsMaxOpen(t *testing.T) {
+	client := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+	h := &RedisV9{client: client}
 
 	got, err := h.PoolStats(context.Background())
 	require.NoError(t, err)
 
-	// The backend cannot report MaxOpen here: the bit must NOT be present and
-	// the zero value must not be mistaken for "unlimited".
-	assert.False(t, got.Present.Has(poolstats.FieldMaxOpen))
-	assert.Equal(t, 0, got.MaxOpen)
+	// MaxOpen comes from the live client's options, so even an externally
+	// supplied client reports the pool size it actually runs with (go-redis
+	// fills in its own default when unset).
+	assert.True(t, got.Present.Has(poolstats.FieldMaxOpen))
+	assert.Equal(t, client.Options().PoolSize, got.MaxOpen)
+	assert.Positive(t, got.MaxOpen)
 	assert.True(t, got.Present.Has(poolstats.FieldWaitCount))
 }
 
@@ -91,5 +96,38 @@ func TestRedisV9_PoolStats_NoClient(t *testing.T) {
 	h := &RedisV9{}
 
 	_, err := h.PoolStats(context.Background())
+	assert.ErrorIs(t, err, temperr.ClosedConnection)
+}
+
+func TestRedisV9_PoolStats_AfterDisconnect(t *testing.T) {
+	driver, err := NewRedisV9WithOpts(model.WithRedisConfig(&model.RedisOptions{
+		Host: "localhost",
+		Port: 6379,
+	}))
+	require.NoError(t, err)
+
+	require.NoError(t, driver.Disconnect(context.Background()))
+
+	// A disconnected handler must error like Ping does, not keep reporting
+	// counters go-redis still returns for a closed pool.
+	_, err = driver.PoolStats(context.Background())
+	assert.ErrorIs(t, err, temperr.ClosedConnection)
+}
+
+func TestRedisV9_PoolStats_AfterConnectorDisconnect(t *testing.T) {
+	conn, err := NewRedisV9WithOpts(model.WithRedisConfig(&model.RedisOptions{
+		Host: "localhost",
+		Port: 6379,
+	}))
+	require.NoError(t, err)
+
+	kv, err := NewRedisV9WithConnection(conn)
+	require.NoError(t, err)
+
+	require.NoError(t, conn.Disconnect(context.Background()))
+
+	// The handler shares the connector's client (and closed flag), so closing
+	// the connector must be observable through the handler too.
+	_, err = kv.PoolStats(context.Background())
 	assert.ErrorIs(t, err, temperr.ClosedConnection)
 }

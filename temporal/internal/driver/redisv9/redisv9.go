@@ -3,14 +3,16 @@ package redisv9
 import (
 	"context"
 	"crypto/tls"
+	"sync/atomic"
 	"time"
 
 	"github.com/TykTechnologies/storage/temporal/internal/helper"
 	"github.com/TykTechnologies/storage/temporal/internal/tlsconfig"
 	"github.com/TykTechnologies/storage/temporal/temperr"
 
-	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/TykTechnologies/storage/temporal/model"
 )
 
 type RedisV9 struct {
@@ -20,6 +22,13 @@ type RedisV9 struct {
 	cfg       *model.RedisOptions
 	onConnect func(context.Context) error
 	retryCfg  *model.RetryOptions
+
+	// closed flips on Disconnect so PoolStats can error instead of reporting
+	// counters for a closed pool (go-redis' PoolStats has no closed check).
+	// It is a shared pointer: handlers built with NewRedisV9WithConnection
+	// reuse their parent connector's flag, so disconnecting the connector is
+	// visible to every handler on the same client.
+	closed *atomic.Bool
 }
 
 // NewList returns a new RedisV9 instance.
@@ -35,7 +44,7 @@ func NewRedisV9WithOpts(options ...model.Option) (*RedisV9, error) {
 	}
 
 	opts := baseConfig.RedisConfig
-	driver := &RedisV9{cfg: opts}
+	driver := &RedisV9{cfg: opts, closed: &atomic.Bool{}}
 
 	if baseConfig.RetryConfig != nil {
 		driver.retryCfg = baseConfig.RetryConfig
@@ -59,6 +68,20 @@ func NewRedisV9WithOpts(options ...model.Option) (*RedisV9, error) {
 	driver.client = client
 
 	return driver, nil
+}
+
+// defaultPoolSize is the pool size applied (per cluster node) when MaxActive
+// is not configured.
+const defaultPoolSize = 500
+
+// effectivePoolSize returns the pool size buildUniversalOptions configures on
+// the client: MaxActive when positive, otherwise the default.
+func effectivePoolSize(opts *model.RedisOptions) int {
+	if opts.MaxActive > 0 {
+		return opts.MaxActive
+	}
+
+	return defaultPoolSize
 }
 
 // buildUniversalOptions maps a BaseConfig into go-redis UniversalOptions. It is
@@ -137,5 +160,12 @@ func NewRedisV9WithConnection(conn model.Connector) (*RedisV9, error) {
 		return nil, temperr.InvalidConnector
 	}
 
-	return &RedisV9{connector: conn, client: client}, nil
+	// Share the parent's closed flag when possible so disconnecting the
+	// connector is observable through this handler too.
+	closed := &atomic.Bool{}
+	if parent, ok := conn.(*RedisV9); ok && parent.closed != nil {
+		closed = parent.closed
+	}
+
+	return &RedisV9{connector: conn, client: client, closed: closed}, nil
 }

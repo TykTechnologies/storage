@@ -12,10 +12,11 @@ import (
 	"github.com/TykTechnologies/storage/poolstats"
 )
 
-// defaultMaxPoolSize mirrors the mongo-go driver's default connection pool
-// size (defaultMaxPoolSize in mongo/client.go, 100 as of v1.17.7), applied
-// when maxPoolSize is not set via URI or options. Re-check this value when
-// upgrading the driver.
+// defaultMaxPoolSize is the pool size this driver applies when maxPoolSize is
+// not set via URI or options. It matches the mongo-go driver's own default
+// (100), but Connect pins it explicitly on the client options, so the limit
+// the pool enforces and the MaxOpen reported by PoolStats are the same value
+// by construction — a driver upgrade cannot silently desync them.
 const defaultMaxPoolSize = 100
 
 var _ poolstats.PoolStatsProvider = (*mongoDriver)(nil)
@@ -92,8 +93,9 @@ func (c *poolStatsCollector) snapshot() poolstats.PoolStats {
 
 // PoolStats implements poolstats.PoolStatsProvider. Stats come from the
 // event.PoolMonitor wired in Connect; reading them never touches MongoDB. The
-// collector pointer is loaded atomically because reconnects swap it while
-// metrics pollers read it concurrently.
+// collector pointer is loaded atomically because Connect swaps it and Close
+// clears it while metrics pollers read it concurrently; nil means the session
+// is closed (or never connected) and must error, not report healthy zeros.
 func (d *mongoDriver) PoolStats(_ context.Context) (poolstats.PoolStats, error) {
 	if d.lifeCycle == nil {
 		return poolstats.PoolStats{}, errors.New(types.ErrorSessionClosed)

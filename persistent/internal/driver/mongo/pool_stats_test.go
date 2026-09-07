@@ -71,3 +71,14 @@ func TestMongoDriver_PoolStats_Integration(t *testing.T) {
 	assert.GreaterOrEqual(t, got.InUse, 0)
 	assert.GreaterOrEqual(t, got.Idle, 0)
 }
+
+func TestMongoDriver_PoolStats_AfterClose_Integration(t *testing.T) {
+	d, _ := prepareEnvironment(t)
+
+	require.NoError(t, d.Close())
+
+	// A closed store must error like the other drivers do, not keep reporting
+	// healthy zeros that a metrics loop would emit forever.
+	_, err := d.PoolStats(context.Background())
+	assert.Error(t, err)
+}

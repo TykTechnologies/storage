@@ -7,49 +7,20 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/TykTechnologies/storage/poolstats"
-	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/TykTechnologies/storage/temporal/temperr"
 )
 
-// defaultPoolSize is the pool size applied (per cluster node) when MaxActive
-// is not configured. It must stay in sync with buildUniversalOptions.
-const defaultPoolSize = 500
-
 var _ poolstats.PoolStatsProvider = (*RedisV9)(nil)
-
-// effectivePoolSize returns the pool size buildUniversalOptions configures on
-// the client: MaxActive when positive, otherwise the default.
-func effectivePoolSize(opts *model.RedisOptions) int {
-	if opts.MaxActive > 0 {
-		return opts.MaxActive
-	}
-
-	return defaultPoolSize
-}
-
-// poolCfg returns the RedisOptions this handler was built from. Handlers built
-// with NewRedisV9WithConnection (e.g. via temporal.NewKeyValue) carry no config
-// themselves, so fall back to the underlying connector's config.
-func (h *RedisV9) poolCfg() *model.RedisOptions {
-	if h.cfg != nil {
-		return h.cfg
-	}
-
-	if parent, ok := h.connector.(*RedisV9); ok {
-		return parent.cfg
-	}
-
-	return nil
-}
 
 // PoolStats implements poolstats.PoolStatsProvider. It reads go-redis' cheap
 // in-process pool counters (aggregated across nodes in cluster mode) and never
-// touches Redis. MaxOpen is only reported when the originating configuration is
-// known AND the client is not a cluster client: the configured pool size is
-// per node while Open/InUse/Idle are cluster-wide aggregates, so reporting it
-// would make utilization ratios exceed 100%.
+// touches Redis. MaxOpen is read from the live client's own options — the
+// source of truth for the pool actually serving requests, regardless of how
+// this handler was constructed. Cluster clients are excluded: their pool size
+// applies per node while Open/InUse/Idle are cluster-wide aggregates, so
+// reporting it would make utilization ratios exceed 100%.
 func (h *RedisV9) PoolStats(_ context.Context) (poolstats.PoolStats, error) {
-	if h.client == nil {
+	if h.client == nil || (h.closed != nil && h.closed.Load()) {
 		return poolstats.PoolStats{}, temperr.ClosedConnection
 	}
 
@@ -67,9 +38,10 @@ func (h *RedisV9) PoolStats(_ context.Context) (poolstats.PoolStats, error) {
 			poolstats.FieldWaitCount | poolstats.FieldWaitDuration | poolstats.FieldCheckOutFailures,
 	}
 
-	_, clustered := h.client.(*redis.ClusterClient)
-	if cfg := h.poolCfg(); cfg != nil && !clustered {
-		stats.MaxOpen = effectivePoolSize(cfg)
+	// Both the simple and failover (sentinel) clients are *redis.Client; the
+	// cluster client is not, so it is skipped without a separate check.
+	if c, ok := h.client.(*redis.Client); ok {
+		stats.MaxOpen = c.Options().PoolSize
 		stats.Present |= poolstats.FieldMaxOpen
 	}
 

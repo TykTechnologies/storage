@@ -58,6 +58,15 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 	// SetRegistry allow us to marshall/unmarshall old mgo ID's structures and mgo default values.
 	connOpts.SetRegistry(createCustomRegistry().Build())
 
+	// Pin the pool-size default explicitly when the URI doesn't set it: the
+	// driver's own default lives in an unexported constant applied to a merged
+	// copy of these options, so pinning here is the only way to guarantee the
+	// limit the pool enforces and the MaxOpen reported by PoolStats are the
+	// same value.
+	if connOpts.MaxPoolSize == nil {
+		connOpts.SetMaxPoolSize(defaultMaxPoolSize)
+	}
+
 	// Aggregate pool events for PoolStats; the official client has no snapshot
 	// pool API. A fresh collector per connect keeps reconnects clean.
 	collector := newPoolStatsCollector(connOpts)
@@ -253,6 +262,10 @@ func (lc *lifeCycle) Close() error {
 	if lc.client != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), MongoDisconnectTimeout)
 		defer cancel()
+
+		// Clear the collector first so PoolStats errors immediately: a closed
+		// pool must not keep reporting healthy zeros to metrics pollers.
+		lc.poolStats.Store(nil)
 
 		return lc.client.Disconnect(ctx)
 	}

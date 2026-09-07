@@ -3,11 +3,19 @@ package redisv9
 import (
 	"context"
 
-	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/TykTechnologies/storage/temporal/model"
 )
 
 func (h *RedisV9) Disconnect(ctx context.Context) error {
+	// Mark closed before Close so PoolStats errors immediately: go-redis keeps
+	// returning pool counters after Close, which would look like a healthy
+	// empty pool to a metrics poller.
+	if h.closed != nil {
+		h.closed.Store(true)
+	}
+
 	return h.client.Close()
 }
 
