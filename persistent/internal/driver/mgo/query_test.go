@@ -7,8 +7,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/TykTechnologies/storage/persistent/model"
 	"gopkg.in/mgo.v2/bson"
+
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 func TestBuildQuery(t *testing.T) {

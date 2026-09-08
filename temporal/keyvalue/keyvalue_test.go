@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/TykTechnologies/storage/poolstats"
 	"github.com/TykTechnologies/storage/temporal/flusher"
 	"github.com/TykTechnologies/storage/temporal/internal/testutil"
 	"github.com/TykTechnologies/storage/temporal/model"
@@ -1397,6 +1398,31 @@ func TestKeyValue_SetIfExist(t *testing.T) {
 				assert.False(t, ok)
 				assert.ErrorIs(t, err, temperr.KeyEmpty)
 			})
+		})
+	}
+}
+
+func TestKeyValue_PoolStats(t *testing.T) {
+	connectors := testutil.TestConnectors(t)
+	defer testutil.CloseConnectors(t, connectors)
+
+	for _, connector := range connectors {
+		t.Run(connector.Type(), func(t *testing.T) {
+			kv, err := NewKeyValue(connector)
+			require.NoError(t, err)
+
+			provider, ok := kv.(poolstats.PoolStatsProvider)
+			require.True(t, ok, "KeyValue must expose poolstats.PoolStatsProvider")
+
+			require.NoError(t, kv.Set(context.Background(), "poolstats-key", "v", 10*time.Second))
+
+			got, err := provider.PoolStats(context.Background())
+			require.NoError(t, err)
+
+			assert.Equal(t, poolstats.EngineRedis, got.Engine)
+			assert.True(t, got.Present.Has(poolstats.FieldOpen))
+			assert.GreaterOrEqual(t, got.Open, 1)
+			assert.Equal(t, got.Open, got.InUse+got.Idle)
 		})
 	}
 }

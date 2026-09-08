@@ -6,8 +6,9 @@ import (
 	"reflect"
 	"regexp"
 
-	"github.com/TykTechnologies/storage/persistent/model"
 	"gopkg.in/mgo.v2/bson"
+
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 func buildQuery(query model.DBM) bson.M {

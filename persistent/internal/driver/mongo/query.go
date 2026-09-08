@@ -6,9 +6,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/TykTechnologies/storage/persistent/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 func buildLimitQuery(fields ...string) bson.D {

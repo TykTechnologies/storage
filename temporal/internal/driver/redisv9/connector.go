@@ -3,12 +3,27 @@ package redisv9
 import (
 	"context"
 
-	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/TykTechnologies/storage/temporal/model"
 )
 
 func (h *RedisV9) Disconnect(ctx context.Context) error {
+	// Mark closed before Close so PoolStats errors immediately: go-redis keeps
+	// returning pool counters after Close, which would look like a healthy
+	// empty pool to a metrics poller.
+	if h.closed != nil {
+		h.closed.Store(true)
+	}
+
 	return h.client.Close()
+}
+
+// isClosed reports whether Disconnect was called on this handler (or on the
+// connector it shares its client with). The flag is nil only on hand-built
+// struct literals, which count as open.
+func (h *RedisV9) isClosed() bool {
+	return h.closed != nil && h.closed.Load()
 }
 
 func (h *RedisV9) Ping(ctx context.Context) error {

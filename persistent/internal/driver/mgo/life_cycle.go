@@ -47,6 +47,10 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 		}
 	}
 
+	// Enable mgo's process-global stats so sockets created during dial are
+	// counted; required before mgo.GetStats (which panics when disabled).
+	mgo.SetStats(true)
+
 	sess, err := mgo.DialWithInfo(dialInfo)
 	if err != nil {
 		return err

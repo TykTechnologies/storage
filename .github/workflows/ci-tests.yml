@@ -232,7 +232,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ./downloaded-coverage
-          merge-multiple: true
+          pattern: coverage-*
+          # No merge-multiple: matrix jobs upload same-named files that corrupt on concurrent extraction; per-artifact dirs are collision-free.
       - name: Download golangci-lint artifacts
         uses: actions/download-artifact@v4
         with:

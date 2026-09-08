@@ -39,7 +39,12 @@ tasks:
     desc: "Merge coverage files into a single file"
     cmds:
       - |
-        find . -name '*.cov' -type f -exec gocovmerge {} + > merged-coverage.cov
+        # Drop blank lines (gocovmerge rejects them), skip empty files, and
+        # exclude the output file itself: the > redirect creates it before
+        # find runs, so it would otherwise be fed back in as an input.
+        find . -name '*.cov' -type f ! -name merged-coverage.cov -exec sed -i.covtmp '/^[[:space:]]*$/d' {} +
+        find . -name '*.covtmp' -type f -delete
+        find . -name '*.cov' -type f ! -name merged-coverage.cov ! -empty -exec gocovmerge {} + > merged-coverage.cov
 
   test-persistent:
     desc: "Run tests for persistent storage with specified database"
