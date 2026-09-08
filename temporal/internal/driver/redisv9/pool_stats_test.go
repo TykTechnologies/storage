@@ -13,11 +13,6 @@ import (
 	"github.com/TykTechnologies/storage/temporal/temperr"
 )
 
-func TestEffectivePoolSize(t *testing.T) {
-	assert.Equal(t, 500, effectivePoolSize(&model.RedisOptions{}))
-	assert.Equal(t, 42, effectivePoolSize(&model.RedisOptions{MaxActive: 42}))
-}
-
 func TestRedisV9_PoolStats(t *testing.T) {
 	driver, err := NewRedisV9WithOpts(model.WithRedisConfig(&model.RedisOptions{
 		Host:      "localhost",

@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 
 	"go.mongodb.org/mongo-driver/event"
-	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/poolstats"
@@ -34,14 +33,11 @@ type poolStatsCollector struct {
 	checkOutFailed atomic.Int64
 }
 
-func newPoolStatsCollector(connOpts *options.ClientOptions) *poolStatsCollector {
-	c := &poolStatsCollector{maxPoolSize: defaultMaxPoolSize}
-
-	if connOpts != nil && connOpts.MaxPoolSize != nil {
-		c.maxPoolSize = *connOpts.MaxPoolSize
-	}
-
-	return c
+// newPoolStatsCollector takes the already-resolved pool size: Connect pins
+// MaxPoolSize on the client options before building the collector, so there is
+// exactly one owner of the default and the two values cannot diverge.
+func newPoolStatsCollector(maxPoolSize uint64) *poolStatsCollector {
+	return &poolStatsCollector{maxPoolSize: maxPoolSize}
 }
 
 func (c *poolStatsCollector) monitor() *event.PoolMonitor {
@@ -64,20 +60,9 @@ func (c *poolStatsCollector) monitor() *event.PoolMonitor {
 }
 
 func (c *poolStatsCollector) snapshot() poolstats.PoolStats {
-	open := c.created.Load() - c.closed.Load()
-	if open < 0 {
-		open = 0
-	}
-
-	inUse := c.checkedOut.Load() - c.checkedIn.Load()
-	if inUse < 0 {
-		inUse = 0
-	}
-
-	idle := open - inUse
-	if idle < 0 {
-		idle = 0
-	}
+	open := max(c.created.Load()-c.closed.Load(), 0)
+	inUse := max(c.checkedOut.Load()-c.checkedIn.Load(), 0)
+	idle := max(open-inUse, 0)
 
 	return poolstats.PoolStats{
 		Engine:           poolstats.EngineMongo,

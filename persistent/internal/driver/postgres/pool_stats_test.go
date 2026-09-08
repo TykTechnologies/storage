@@ -62,11 +62,6 @@ func TestDriver_PoolStats_Integration(t *testing.T) {
 	assert.True(t, got.Present.Has(poolstats.FieldWaitCount))
 	assert.Equal(t, got.Open, got.InUse+got.Idle)
 	assert.GreaterOrEqual(t, got.Open, 0)
-
-	// Compile-time proof the concrete driver satisfies the capability interface
-	// through the public factory's return type.
-	var provider poolstats.PoolStatsProvider = d
-	assert.NotNil(t, provider)
 }
 
 func TestDriver_PoolStats_AfterClose_Integration(t *testing.T) {

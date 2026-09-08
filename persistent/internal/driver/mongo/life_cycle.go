@@ -69,7 +69,7 @@ func (lc *lifeCycle) Connect(opts *types.ClientOpts) error {
 
 	// Aggregate pool events for PoolStats; the official client has no snapshot
 	// pool API. A fresh collector per connect keeps reconnects clean.
-	collector := newPoolStatsCollector(connOpts)
+	collector := newPoolStatsCollector(*connOpts.MaxPoolSize)
 	connOpts.SetPoolMonitor(collector.monitor())
 
 	if client, err = mongo.Connect(context.Background(), connOpts); err != nil {

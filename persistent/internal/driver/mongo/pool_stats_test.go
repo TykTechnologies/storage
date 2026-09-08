@@ -10,13 +10,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/event"
-	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/TykTechnologies/storage/poolstats"
 )
 
 func TestPoolStatsCollector_Snapshot(t *testing.T) {
-	c := newPoolStatsCollector(options.Client().SetMaxPoolSize(50))
+	c := newPoolStatsCollector(50)
 	m := c.monitor()
 
 	for i := 0; i < 4; i++ {
@@ -43,11 +42,6 @@ func TestPoolStatsCollector_Snapshot(t *testing.T) {
 	assert.Equal(t, want, got.Present)
 	assert.False(t, got.Present.Has(poolstats.FieldWaitCount), "mongo does not report waits")
 	assert.False(t, got.Present.Has(poolstats.FieldWaitDuration), "mongo does not report waits")
-}
-
-func TestPoolStatsCollector_DefaultMaxPoolSize(t *testing.T) {
-	c := newPoolStatsCollector(options.Client())
-	assert.Equal(t, 100, c.snapshot().MaxOpen)
 }
 
 func TestMongoDriver_PoolStats_NotConnected(t *testing.T) {

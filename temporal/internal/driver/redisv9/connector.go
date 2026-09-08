@@ -19,6 +19,13 @@ func (h *RedisV9) Disconnect(ctx context.Context) error {
 	return h.client.Close()
 }
 
+// isClosed reports whether Disconnect was called on this handler (or on the
+// connector it shares its client with). The flag is nil only on hand-built
+// struct literals, which count as open.
+func (h *RedisV9) isClosed() bool {
+	return h.closed != nil && h.closed.Load()
+}
+
 func (h *RedisV9) Ping(ctx context.Context) error {
 	return h.client.Ping(ctx).Err()
 }

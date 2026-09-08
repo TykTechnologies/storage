@@ -70,20 +70,6 @@ func NewRedisV9WithOpts(options ...model.Option) (*RedisV9, error) {
 	return driver, nil
 }
 
-// defaultPoolSize is the pool size applied (per cluster node) when MaxActive
-// is not configured.
-const defaultPoolSize = 500
-
-// effectivePoolSize returns the pool size buildUniversalOptions configures on
-// the client: MaxActive when positive, otherwise the default.
-func effectivePoolSize(opts *model.RedisOptions) int {
-	if opts.MaxActive > 0 {
-		return opts.MaxActive
-	}
-
-	return defaultPoolSize
-}
-
 // buildUniversalOptions maps a BaseConfig into go-redis UniversalOptions. It is
 // kept separate from client construction so the option mapping (in particular
 // the credentials-provider wiring) can be unit tested without a live Redis.
@@ -94,7 +80,10 @@ func buildUniversalOptions(baseConfig *model.BaseConfig) (*redis.UniversalOption
 	}
 
 	// poolSize applies per cluster node and not for the whole cluster.
-	poolSize := effectivePoolSize(opts)
+	poolSize := 500
+	if opts.MaxActive > 0 {
+		poolSize = opts.MaxActive
+	}
 
 	timeout := 5 * time.Second
 	if opts.Timeout != 0 {

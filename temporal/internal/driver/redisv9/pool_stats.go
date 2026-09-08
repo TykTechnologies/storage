@@ -20,7 +20,7 @@ var _ poolstats.PoolStatsProvider = (*RedisV9)(nil)
 // applies per node while Open/InUse/Idle are cluster-wide aggregates, so
 // reporting it would make utilization ratios exceed 100%.
 func (h *RedisV9) PoolStats(_ context.Context) (poolstats.PoolStats, error) {
-	if h.client == nil || (h.closed != nil && h.closed.Load()) {
+	if h.client == nil || h.isClosed() {
 		return poolstats.PoolStats{}, temperr.ClosedConnection
 	}
 

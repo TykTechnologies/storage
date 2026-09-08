@@ -45,9 +45,9 @@ const (
 	FieldCheckOutFailures
 )
 
-// Has reports whether every bit in field is set in f.
+// Has reports whether field is set in f.
 func (f FieldSet) Has(field FieldSet) bool {
-	return f&field == field && field != 0
+	return f&field != 0
 }
 
 // PoolStats is an engine-agnostic snapshot of a driver's connection pool.
@@ -76,6 +76,10 @@ type PoolStats struct {
 // PoolStatsProvider is an optional capability interface implemented by drivers
 // that can report pool statistics. Reading stats is cheap and never opens a
 // connection or probes the backing dependency.
+//
+// Implementations must return an error once the underlying store is closed (or
+// before it is connected) instead of zero-valued stats, so a metrics poller
+// cannot mistake a closed pool for a healthy empty one.
 type PoolStatsProvider interface {
 	PoolStats(ctx context.Context) (PoolStats, error)
 }
