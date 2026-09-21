@@ -3,6 +3,7 @@ package redisv9
 import (
 	"context"
 	"crypto/tls"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -25,10 +26,47 @@ type RedisV9 struct {
 
 	// closed flips on Disconnect so PoolStats can error instead of reporting
 	// counters for a closed pool (go-redis' PoolStats has no closed check).
-	// It is a shared pointer: handlers built with NewRedisV9WithConnection
-	// reuse their parent connector's flag, so disconnecting the connector is
-	// visible to every handler on the same client.
+	// The pointer comes from closedFlagFor, keyed by the client, so every
+	// handler on the same client shares one flag no matter how it was
+	// constructed — including through wrapper connectors that only surface
+	// the client via As().
 	closed *atomic.Bool
+}
+
+// closedFlags maps a live client to the closed flag shared by every handler
+// built on it. It is keyed by the client — the resource whose lifecycle the
+// flag tracks — rather than by connector identity, so a wrapper connector that
+// delegates As() to an inner *RedisV9 still shares the inner flag. Disconnect
+// removes the entry so closed clients stay collectable; existing handlers hold
+// the flag pointer directly and keep observing true after removal.
+var (
+	closedFlagsMu sync.Mutex
+	closedFlags   = map[redis.UniversalClient]*atomic.Bool{}
+)
+
+// closedFlagFor returns the shared closed flag for client, creating it on
+// first use. Handlers built from an already-disconnected client get a fresh
+// (open) flag; such handlers are misuse and fail on every command anyway.
+func closedFlagFor(client redis.UniversalClient) *atomic.Bool {
+	closedFlagsMu.Lock()
+	defer closedFlagsMu.Unlock()
+
+	flag, ok := closedFlags[client]
+	if !ok {
+		flag = &atomic.Bool{}
+		closedFlags[client] = flag
+	}
+
+	return flag
+}
+
+// forgetClosedFlag drops the registry entry for client so a closed client can
+// be garbage collected. Handlers keep their flag pointer and its value.
+func forgetClosedFlag(client redis.UniversalClient) {
+	closedFlagsMu.Lock()
+	defer closedFlagsMu.Unlock()
+
+	delete(closedFlags, client)
 }
 
 // NewList returns a new RedisV9 instance.
@@ -44,7 +82,7 @@ func NewRedisV9WithOpts(options ...model.Option) (*RedisV9, error) {
 	}
 
 	opts := baseConfig.RedisConfig
-	driver := &RedisV9{cfg: opts, closed: &atomic.Bool{}}
+	driver := &RedisV9{cfg: opts}
 
 	if baseConfig.RetryConfig != nil {
 		driver.retryCfg = baseConfig.RetryConfig
@@ -66,6 +104,7 @@ func NewRedisV9WithOpts(options ...model.Option) (*RedisV9, error) {
 	}
 
 	driver.client = client
+	driver.closed = closedFlagFor(client)
 
 	return driver, nil
 }
@@ -149,12 +188,8 @@ func NewRedisV9WithConnection(conn model.Connector) (*RedisV9, error) {
 		return nil, temperr.InvalidConnector
 	}
 
-	// Share the parent's closed flag when possible so disconnecting the
-	// connector is observable through this handler too.
-	closed := &atomic.Bool{}
-	if parent, ok := conn.(*RedisV9); ok && parent.closed != nil {
-		closed = parent.closed
-	}
-
-	return &RedisV9{connector: conn, client: client, closed: closed}, nil
+	// The flag is looked up by client, so it is shared with whichever
+	// connector owns this client — even when conn is a wrapper and not a
+	// *RedisV9 itself.
+	return &RedisV9{connector: conn, client: client, closed: closedFlagFor(client)}, nil
 }

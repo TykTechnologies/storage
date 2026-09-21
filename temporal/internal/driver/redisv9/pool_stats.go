@@ -31,18 +31,7 @@ func (h *RedisV9) PoolStats(_ context.Context) (poolstats.PoolStats, error) {
 	}
 
 	s := h.client.PoolStats()
-
-	stats := poolstats.PoolStats{
-		Engine: poolstats.EngineRedis,
-		Open:   int(s.TotalConns),
-		// Clamped: TotalConns and IdleConns are read under separate lock
-		// acquisitions, so idle can transiently exceed total.
-		InUse:            max(int(s.TotalConns)-int(s.IdleConns), 0),
-		Idle:             int(s.IdleConns),
-		CheckOutFailures: int64(s.Timeouts),
-		Present: poolstats.FieldOpen | poolstats.FieldInUse | poolstats.FieldIdle |
-			poolstats.FieldCheckOutFailures,
-	}
+	stats := statsFromRedis(s)
 
 	// Both the simple and failover (sentinel) clients are *redis.Client; the
 	// cluster client is not, so it is skipped without a separate check.
@@ -54,4 +43,24 @@ func (h *RedisV9) PoolStats(_ context.Context) (poolstats.PoolStats, error) {
 	}
 
 	return stats, nil
+}
+
+// statsFromRedis maps go-redis pool counters onto the engine-agnostic fields
+// every client kind reports. TotalConns and IdleConns are read under separate
+// lock acquisitions inside go-redis, so idle can transiently exceed total;
+// InUse is clamped and Idle derived from the clamped pair so the documented
+// Open = InUse + Idle invariant holds on every snapshot.
+func statsFromRedis(s *redis.PoolStats) poolstats.PoolStats {
+	open := int(s.TotalConns)
+	inUse := max(open-int(s.IdleConns), 0)
+
+	return poolstats.PoolStats{
+		Engine:           poolstats.EngineRedis,
+		Open:             open,
+		InUse:            inUse,
+		Idle:             open - inUse,
+		CheckOutFailures: int64(s.Timeouts),
+		Present: poolstats.FieldOpen | poolstats.FieldInUse | poolstats.FieldIdle |
+			poolstats.FieldCheckOutFailures,
+	}
 }

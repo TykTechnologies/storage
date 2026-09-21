@@ -103,6 +103,50 @@ func TestRedisV9_PoolStats_ExternalClientReportsMaxOpen(t *testing.T) {
 	assert.True(t, got.Present.Has(poolstats.FieldWaitCount))
 }
 
+func TestStatsFromRedis_IdleNeverExceedsOpen(t *testing.T) {
+	// go-redis reads TotalConns and IdleConns under separate lock acquisitions,
+	// so a concurrent conn removal can yield idle > total. The mapping must
+	// still uphold the documented Open = InUse + Idle invariant.
+	got := statsFromRedis(&redis.PoolStats{TotalConns: 5, IdleConns: 8})
+
+	assert.Equal(t, 5, got.Open)
+	assert.Equal(t, 0, got.InUse)
+	assert.Equal(t, 5, got.Idle)
+	assert.Equal(t, got.Open, got.InUse+got.Idle)
+}
+
+// wrappingConnector simulates a consumer-defined model.Connector that wraps a
+// *RedisV9 and only surfaces the client through As() — it is deliberately not
+// a *RedisV9 itself.
+type wrappingConnector struct {
+	inner model.Connector
+}
+
+func (w *wrappingConnector) Disconnect(ctx context.Context) error { return w.inner.Disconnect(ctx) }
+func (w *wrappingConnector) Ping(ctx context.Context) error       { return w.inner.Ping(ctx) }
+func (w *wrappingConnector) Type() string                         { return w.inner.Type() }
+func (w *wrappingConnector) As(i interface{}) bool                { return w.inner.As(i) }
+
+func TestRedisV9_PoolStats_AfterWrappedConnectorDisconnect(t *testing.T) {
+	inner, err := NewRedisV9WithOpts(model.WithRedisConfig(&model.RedisOptions{
+		Host: "localhost",
+		Port: 6379,
+	}))
+	require.NoError(t, err)
+
+	kv, err := NewRedisV9WithConnection(&wrappingConnector{inner: inner})
+	require.NoError(t, err)
+
+	require.NoError(t, inner.Disconnect(context.Background()))
+
+	// The closed flag is keyed by the shared client, so the disconnect must be
+	// observable even though the handler was built through a wrapper that is
+	// not a *RedisV9.
+	_, err = kv.PoolStats(context.Background())
+	assert.ErrorIs(t, err, temperr.ClosedConnection)
+	assert.ErrorIs(t, err, poolstats.ErrClosed)
+}
+
 func TestRedisV9_PoolStats_NoClient(t *testing.T) {
 	h := &RedisV9{}
 

@@ -16,6 +16,10 @@ func (h *RedisV9) Disconnect(ctx context.Context) error {
 		h.closed.Store(true)
 	}
 
+	// Drop the registry entry so the closed client can be garbage collected;
+	// live handlers hold the flag pointer directly and keep observing true.
+	forgetClosedFlag(h.client)
+
 	return h.client.Close()
 }
 
