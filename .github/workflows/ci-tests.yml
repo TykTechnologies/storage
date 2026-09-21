@@ -251,7 +251,9 @@ jobs:
         run: >
           git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
 
-          go install github.com/wadey/gocovmerge@latest
+          # GOTOOLCHAIN=auto: gocovmerge@latest pulls in the newest x/tools, which can require a newer Go than the pinned GO_VERSION; let go fetch the toolchain it needs instead of failing the install.
+
+          GOTOOLCHAIN=auto go install github.com/wadey/gocovmerge@latest
       - name: Setup CI Tooling
         uses: shrink/actions-docker-extract@v3
         with:
