@@ -224,10 +224,6 @@ jobs:
           fetch-depth: 1
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Setup Golang
-        uses: actions/setup-go@v3
-        with:
-          go-version: ${{ env.GO_VERSION }}
       - name: Download coverage artifacts
         uses: actions/download-artifact@v4
         with:
@@ -245,20 +241,15 @@ jobs:
         uses: andstor/file-existence-action@v1
         with:
           files: "coverage/*.cov, golanglint.xml"
-      - name: Install Dependencies
-        env:
-          TOKEN: "${{ steps.app-token.outputs.token }}"
-        run: >
-          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
-
-          # gocovmerge has no go.mod, so its x/tools dependency resolves to the newest release even when gocovmerge itself is pinned, and that release can require a newer Go than the pinned GO_VERSION (x/tools v0.50.0 needs go >= 1.26). GOTOOLCHAIN=auto cannot switch during that package resolution, so force a sufficient toolchain upfront.
-
-          GOTOOLCHAIN=go1.26.0 go install github.com/wadey/gocovmerge@v0.0.0-20160331181800-b5bfa59ec0ad
+      # ci-tools ships gocovmerge pre-built next to task, so extract both
+      # instead of `go install`ing gocovmerge here: installing it resolves its
+      # x/tools dependency to the newest release (gocovmerge has no go.mod),
+      # which can demand a newer Go than the runner has and fail the job.
       - name: Setup CI Tooling
         uses: shrink/actions-docker-extract@v3
         with:
           image: tykio/ci-tools:latest
-          path: /usr/local/bin/task
+          path: /usr/local/bin/.
           destination: /usr/local/bin/
 
       - name: merge reports
