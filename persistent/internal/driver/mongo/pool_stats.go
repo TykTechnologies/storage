@@ -2,7 +2,7 @@ package mongo
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"sync/atomic"
 
 	"go.mongodb.org/mongo-driver/event"
@@ -26,6 +26,12 @@ var _ poolstats.PoolStatsProvider = (*mongoDriver)(nil)
 type poolStatsCollector struct {
 	maxPoolSize uint64
 
+	// pools counts live per-server pools: maxPoolSize applies to each server
+	// individually while the connection counters below sum across all servers,
+	// so MaxOpen must scale with the topology (a 3-member replica set may
+	// legitimately hold 3×maxPoolSize connections).
+	pools atomic.Int64
+
 	created        atomic.Int64
 	closed         atomic.Int64
 	checkedOut     atomic.Int64
@@ -44,6 +50,10 @@ func (c *poolStatsCollector) monitor() *event.PoolMonitor {
 	return &event.PoolMonitor{
 		Event: func(e *event.PoolEvent) {
 			switch e.Type {
+			case event.PoolCreated:
+				c.pools.Add(1)
+			case event.PoolClosedEvent:
+				c.pools.Add(-1)
 			case event.ConnectionCreated:
 				c.created.Add(1)
 			case event.ConnectionClosed:
@@ -64,9 +74,13 @@ func (c *poolStatsCollector) snapshot() poolstats.PoolStats {
 	inUse := max(c.checkedOut.Load()-c.checkedIn.Load(), 0)
 	idle := max(open-inUse, 0)
 
+	// Clamped at one so MaxOpen never reads as 0 ("unlimited") before the
+	// topology has fired its first PoolCreated event.
+	pools := max(c.pools.Load(), 1)
+
 	return poolstats.PoolStats{
 		Engine:           poolstats.EngineMongo,
-		MaxOpen:          int(c.maxPoolSize),
+		MaxOpen:          int(c.maxPoolSize) * int(pools),
 		Open:             int(open),
 		InUse:            int(inUse),
 		Idle:             int(idle),
@@ -83,12 +97,12 @@ func (c *poolStatsCollector) snapshot() poolstats.PoolStats {
 // is closed (or never connected) and must error, not report healthy zeros.
 func (d *mongoDriver) PoolStats(_ context.Context) (poolstats.PoolStats, error) {
 	if d.lifeCycle == nil {
-		return poolstats.PoolStats{}, errors.New(types.ErrorSessionClosed)
+		return poolstats.PoolStats{}, fmt.Errorf("%s: %w", types.ErrorSessionClosed, poolstats.ErrClosed)
 	}
 
 	collector := d.poolStats.Load()
 	if collector == nil {
-		return poolstats.PoolStats{}, errors.New(types.ErrorSessionClosed)
+		return poolstats.PoolStats{}, fmt.Errorf("%s: %w", types.ErrorSessionClosed, poolstats.ErrClosed)
 	}
 
 	return collector.snapshot(), nil

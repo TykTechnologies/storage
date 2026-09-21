@@ -9,13 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/TykTechnologies/storage/poolstats"
 	"github.com/TykTechnologies/storage/temporal/flusher"
 	"github.com/TykTechnologies/storage/temporal/internal/testutil"
 	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/TykTechnologies/storage/temporal/temperr"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestKeyValue_Set(t *testing.T) {
@@ -1422,7 +1423,8 @@ func TestKeyValue_PoolStats(t *testing.T) {
 			assert.Equal(t, poolstats.EngineRedis, got.Engine)
 			assert.True(t, got.Present.Has(poolstats.FieldOpen))
 			assert.GreaterOrEqual(t, got.Open, 1)
-			assert.Equal(t, got.Open, got.InUse+got.Idle)
+			// The Set above has completed, so its connection is back in the pool.
+			assert.GreaterOrEqual(t, got.Idle, 1)
 		})
 	}
 }

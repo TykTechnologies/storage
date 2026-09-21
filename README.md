@@ -170,8 +170,10 @@ if p, ok := store.(poolstats.PoolStatsProvider); ok {
 ```
 
 Not every backend reports every field: check `stats.Present` before emitting a
-metric (e.g. mongo/mgo report no wait stats; mgo stats are process-global and
-best-effort). Reading stats is cheap and never probes the backing store.
+metric (e.g. mongo/mgo report no wait stats; redis cluster reports neither
+wait stats nor `MaxOpen`; mgo stats are process-global and best-effort).
+Reading stats is cheap and, bar a one-off cluster-state fetch on a redis
+cluster client that has never run a command, never probes the backing store.
 
 ## Architecture
 

@@ -2,7 +2,7 @@ package mgo
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"gopkg.in/mgo.v2"
 
@@ -34,10 +34,20 @@ func statsToPool(s mgo.Stats) poolstats.PoolStats {
 // PoolStats implements poolstats.PoolStatsProvider. mgo only offers
 // process-global counters (mgo.GetStats), so the numbers cover every mgo
 // session in the process — best effort by design.
-func (d *mgoDriver) PoolStats(_ context.Context) (poolstats.PoolStats, error) {
+func (d *mgoDriver) PoolStats(_ context.Context) (stats poolstats.PoolStats, err error) {
 	if d.lifeCycle == nil || d.session == nil {
-		return poolstats.PoolStats{}, errors.New(types.ErrorSessionClosed)
+		return poolstats.PoolStats{}, fmt.Errorf("%s: %w", types.ErrorSessionClosed, poolstats.ErrClosed)
 	}
+
+	// mgo's stats switch is process-global: any code in the host process can
+	// call mgo.SetStats(false) between our SetStats(true) and GetStats, and
+	// GetStats dereferences the nil stats struct. Recover so a metrics poller
+	// gets an error, not a panic.
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("mgo stats collection was disabled concurrently: %v", r)
+		}
+	}()
 
 	// Idempotent: enables collection if off (keeps counters when already on)
 	// and guards against mgo.GetStats' nil-stats panic.

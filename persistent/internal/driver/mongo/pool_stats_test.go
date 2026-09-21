@@ -18,6 +18,8 @@ func TestPoolStatsCollector_Snapshot(t *testing.T) {
 	c := newPoolStatsCollector(50)
 	m := c.monitor()
 
+	m.Event(&event.PoolEvent{Type: event.PoolCreated})
+
 	for i := 0; i < 4; i++ {
 		m.Event(&event.PoolEvent{Type: event.ConnectionCreated})
 	}
@@ -44,11 +46,32 @@ func TestPoolStatsCollector_Snapshot(t *testing.T) {
 	assert.False(t, got.Present.Has(poolstats.FieldWaitDuration), "mongo does not report waits")
 }
 
+func TestPoolStatsCollector_MaxOpenScalesWithServerPools(t *testing.T) {
+	// maxPoolSize applies per server while the connection counters aggregate
+	// across all servers, so MaxOpen must scale with the live pool count or a
+	// replica set would show utilization above 100%.
+	c := newPoolStatsCollector(50)
+	m := c.monitor()
+
+	// No PoolCreated yet: clamp to one pool rather than report 0 ("unlimited").
+	assert.Equal(t, 50, c.snapshot().MaxOpen)
+
+	for i := 0; i < 3; i++ {
+		m.Event(&event.PoolEvent{Type: event.PoolCreated})
+	}
+
+	assert.Equal(t, 150, c.snapshot().MaxOpen)
+
+	m.Event(&event.PoolEvent{Type: event.PoolClosedEvent})
+
+	assert.Equal(t, 100, c.snapshot().MaxOpen)
+}
+
 func TestMongoDriver_PoolStats_NotConnected(t *testing.T) {
 	d := &mongoDriver{lifeCycle: &lifeCycle{}}
 
 	_, err := d.PoolStats(context.Background())
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, poolstats.ErrClosed)
 }
 
 func TestMongoDriver_PoolStats_Integration(t *testing.T) {
@@ -59,7 +82,7 @@ func TestMongoDriver_PoolStats_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, poolstats.EngineMongo, got.Engine)
-	assert.Equal(t, 100, got.MaxOpen) // driver default, no maxPoolSize in test URI
+	assert.Equal(t, 100, got.MaxOpen) // default per-server size × 1 pool (single-node test mongo)
 	assert.True(t, got.Present.Has(poolstats.FieldOpen))
 	assert.GreaterOrEqual(t, got.Open, 0)
 	assert.GreaterOrEqual(t, got.InUse, 0)
@@ -74,5 +97,5 @@ func TestMongoDriver_PoolStats_AfterClose_Integration(t *testing.T) {
 	// A closed store must error like the other drivers do, not keep reporting
 	// healthy zeros that a metrics loop would emit forever.
 	_, err := d.PoolStats(context.Background())
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, poolstats.ErrClosed)
 }

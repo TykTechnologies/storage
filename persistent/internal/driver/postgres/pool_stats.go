@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/TykTechnologies/storage/poolstats"
 )
@@ -31,7 +32,7 @@ func poolStatsFromSQL(s sql.DBStats) poolstats.PoolStats {
 // set, and a closed pool must error rather than report healthy zeros.
 func (d *driver) PoolStats(_ context.Context) (poolstats.PoolStats, error) {
 	if d.lifeCycle == nil || d.db == nil || d.sqlDB == nil {
-		return poolstats.PoolStats{}, ErrorSessionClosed
+		return poolstats.PoolStats{}, fmt.Errorf("%w: %w", ErrorSessionClosed, poolstats.ErrClosed)
 	}
 
 	return poolStatsFromSQL(d.sqlDB.Stats()), nil

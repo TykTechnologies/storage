@@ -45,7 +45,7 @@ func TestMgoDriver_PoolStats_NotConnected(t *testing.T) {
 	d := &mgoDriver{lifeCycle: &lifeCycle{}}
 
 	_, err := d.PoolStats(context.Background())
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, poolstats.ErrClosed)
 }
 
 func TestMgoDriver_PoolStats_Integration(t *testing.T) {

@@ -46,6 +46,7 @@ func TestDriver_PoolStats_SessionClosed(t *testing.T) {
 
 	_, err := d.PoolStats(context.Background())
 	assert.ErrorIs(t, err, ErrorSessionClosed)
+	assert.ErrorIs(t, err, poolstats.ErrClosed)
 }
 
 func TestDriver_PoolStats_Integration(t *testing.T) {
@@ -74,4 +75,5 @@ func TestDriver_PoolStats_AfterClose_Integration(t *testing.T) {
 	// metrics loop would keep emitting.
 	_, err = d.PoolStats(context.Background())
 	assert.ErrorIs(t, err, ErrorSessionClosed)
+	assert.ErrorIs(t, err, poolstats.ErrClosed)
 }

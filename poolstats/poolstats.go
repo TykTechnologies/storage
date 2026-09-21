@@ -20,8 +20,15 @@ package poolstats
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+// ErrClosed is wrapped into the error PoolStats returns once the underlying
+// store is closed (or was never connected). Drivers also wrap their own
+// subsystem sentinel (e.g. temperr.ClosedConnection), so either matches with
+// errors.Is; generic consumers can test just ErrClosed to stop scraping.
+var ErrClosed = errors.New("pool stats: store is closed")
 
 // Engine values reported in PoolStats.Engine.
 const (
@@ -54,7 +61,10 @@ func (f FieldSet) Has(field FieldSet) bool {
 type PoolStats struct {
 	// Engine identifies the backend: "postgres", "mongo", "mgo" or "redis".
 	Engine string
-	// MaxOpen is the configured maximum pool size; 0 means unlimited/unset.
+	// MaxOpen is the configured maximum number of connections the client may
+	// hold open in total; 0 means unlimited/unset. For engines whose limit is
+	// configured per server (mongo), this is that limit times the number of
+	// live server pools, so it stays comparable to the aggregate Open.
 	MaxOpen int
 	// Open is the number of established connections (in use + idle).
 	Open int
@@ -67,19 +77,24 @@ type PoolStats struct {
 	// WaitDuration is the cumulative time blocked waiting for a connection.
 	WaitDuration time.Duration
 	// CheckOutFailures is the cumulative number of failed attempts to check a
-	// connection out of the pool (timeouts, dial errors).
+	// connection out of the pool. The causes counted are engine-specific:
+	// mongo includes dial errors and timeouts, redis counts pool-wait timeouts
+	// only (a dial error alone does not increment it).
 	CheckOutFailures int64
 	// Present marks which of the above fields this backend actually reports.
 	Present FieldSet
 }
 
 // PoolStatsProvider is an optional capability interface implemented by drivers
-// that can report pool statistics. Reading stats is cheap and never opens a
-// connection or probes the backing dependency.
+// that can report pool statistics. Reading stats is cheap and, as a rule,
+// never opens a connection or probes the backing dependency. Narrow exception:
+// a redis cluster client synchronously fetches its cluster state if it was
+// never loaded, so the first read on an idle cluster client can touch Redis
+// (see the redis driver's PoolStats doc).
 //
-// Implementations must return an error once the underlying store is closed (or
-// before it is connected) instead of zero-valued stats, so a metrics poller
-// cannot mistake a closed pool for a healthy empty one.
+// Implementations must return an error wrapping ErrClosed once the underlying
+// store is closed (or before it is connected) instead of zero-valued stats, so
+// a metrics poller cannot mistake a closed pool for a healthy empty one.
 type PoolStatsProvider interface {
 	PoolStats(ctx context.Context) (PoolStats, error)
 }

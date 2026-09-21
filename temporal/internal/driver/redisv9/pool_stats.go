@@ -2,6 +2,7 @@ package redisv9
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -13,36 +14,43 @@ import (
 var _ poolstats.PoolStatsProvider = (*RedisV9)(nil)
 
 // PoolStats implements poolstats.PoolStatsProvider. It reads go-redis' cheap
-// in-process pool counters (aggregated across nodes in cluster mode) and never
-// touches Redis. MaxOpen is read from the live client's own options — the
-// source of truth for the pool actually serving requests, regardless of how
-// this handler was constructed. Cluster clients are excluded: their pool size
-// applies per node while Open/InUse/Idle are cluster-wide aggregates, so
-// reporting it would make utilization ratios exceed 100%.
+// in-process pool counters (aggregated across nodes in cluster mode). It does
+// not issue commands, with one narrow exception: a cluster client whose
+// cluster state was never loaded (no command has succeeded yet) fetches it
+// synchronously, so the first read on an idle cluster client can touch Redis.
+//
+// MaxOpen is read from the live client's own options — the source of truth for
+// the pool actually serving requests, regardless of how this handler was
+// constructed. Cluster clients report neither MaxOpen (the pool size applies
+// per node while Open/InUse/Idle are cluster-wide aggregates, so utilization
+// ratios would exceed 100%) nor the wait fields (go-redis does not aggregate
+// WaitCount/WaitDuration across nodes, so they would read as a false zero).
 func (h *RedisV9) PoolStats(_ context.Context) (poolstats.PoolStats, error) {
 	if h.client == nil || h.isClosed() {
-		return poolstats.PoolStats{}, temperr.ClosedConnection
+		return poolstats.PoolStats{}, fmt.Errorf("%w: %w", temperr.ClosedConnection, poolstats.ErrClosed)
 	}
 
 	s := h.client.PoolStats()
 
 	stats := poolstats.PoolStats{
-		Engine:           poolstats.EngineRedis,
-		Open:             int(s.TotalConns),
-		InUse:            int(s.TotalConns) - int(s.IdleConns),
+		Engine: poolstats.EngineRedis,
+		Open:   int(s.TotalConns),
+		// Clamped: TotalConns and IdleConns are read under separate lock
+		// acquisitions, so idle can transiently exceed total.
+		InUse:            max(int(s.TotalConns)-int(s.IdleConns), 0),
 		Idle:             int(s.IdleConns),
-		WaitCount:        int64(s.WaitCount),
-		WaitDuration:     time.Duration(s.WaitDurationNs),
 		CheckOutFailures: int64(s.Timeouts),
 		Present: poolstats.FieldOpen | poolstats.FieldInUse | poolstats.FieldIdle |
-			poolstats.FieldWaitCount | poolstats.FieldWaitDuration | poolstats.FieldCheckOutFailures,
+			poolstats.FieldCheckOutFailures,
 	}
 
 	// Both the simple and failover (sentinel) clients are *redis.Client; the
 	// cluster client is not, so it is skipped without a separate check.
 	if c, ok := h.client.(*redis.Client); ok {
 		stats.MaxOpen = c.Options().PoolSize
-		stats.Present |= poolstats.FieldMaxOpen
+		stats.WaitCount = int64(s.WaitCount)
+		stats.WaitDuration = time.Duration(s.WaitDurationNs)
+		stats.Present |= poolstats.FieldMaxOpen | poolstats.FieldWaitCount | poolstats.FieldWaitDuration
 	}
 
 	return stats, nil

@@ -21,6 +21,8 @@ func TestRedisV9_PoolStats(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
+	t.Cleanup(func() { assert.NoError(t, driver.Disconnect(context.Background())) })
+
 	got, err := driver.PoolStats(context.Background())
 	require.NoError(t, err)
 
@@ -34,12 +36,18 @@ func TestRedisV9_PoolStats(t *testing.T) {
 	assert.Equal(t, all, got.Present)
 }
 
-func TestRedisV9_PoolStats_ClusterOmitsMaxOpen(t *testing.T) {
+func TestRedisV9_PoolStats_ClusterOmitsMaxOpenAndWaits(t *testing.T) {
 	// PoolSize is configured per cluster node while go-redis aggregates
 	// Open/InUse/Idle across all nodes, so reporting a per-node MaxOpen next to
-	// cluster-wide gauges would push utilization ratios past 100%.
+	// cluster-wide gauges would push utilization ratios past 100%. The wait
+	// counters are omitted too: go-redis never aggregates WaitCount or
+	// WaitDuration across cluster nodes, so they would read as a false zero.
+	client := redis.NewClusterClient(&redis.ClusterOptions{Addrs: []string{"localhost:7100"}})
+
+	t.Cleanup(func() { assert.NoError(t, client.Close()) })
+
 	h := &RedisV9{
-		client: redis.NewClusterClient(&redis.ClusterOptions{Addrs: []string{"localhost:7100"}}),
+		client: client,
 		cfg:    &model.RedisOptions{MaxActive: 9},
 	}
 
@@ -47,8 +55,11 @@ func TestRedisV9_PoolStats_ClusterOmitsMaxOpen(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.False(t, got.Present.Has(poolstats.FieldMaxOpen))
+	assert.False(t, got.Present.Has(poolstats.FieldWaitCount))
+	assert.False(t, got.Present.Has(poolstats.FieldWaitDuration))
 	assert.Equal(t, 0, got.MaxOpen)
 	assert.True(t, got.Present.Has(poolstats.FieldOpen))
+	assert.True(t, got.Present.Has(poolstats.FieldCheckOutFailures), "timeouts are aggregated, so they stay present")
 }
 
 func TestRedisV9_PoolStats_ConnectorInheritsMaxOpen(t *testing.T) {
@@ -58,6 +69,8 @@ func TestRedisV9_PoolStats_ConnectorInheritsMaxOpen(t *testing.T) {
 		MaxActive: 7,
 	}))
 	require.NoError(t, err)
+
+	t.Cleanup(func() { assert.NoError(t, conn.Disconnect(context.Background())) })
 
 	kv, err := NewRedisV9WithConnection(conn)
 	require.NoError(t, err)
@@ -73,6 +86,9 @@ func TestRedisV9_PoolStats_ConnectorInheritsMaxOpen(t *testing.T) {
 
 func TestRedisV9_PoolStats_ExternalClientReportsMaxOpen(t *testing.T) {
 	client := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+
+	t.Cleanup(func() { assert.NoError(t, client.Close()) })
+
 	h := &RedisV9{client: client}
 
 	got, err := h.PoolStats(context.Background())
@@ -92,6 +108,7 @@ func TestRedisV9_PoolStats_NoClient(t *testing.T) {
 
 	_, err := h.PoolStats(context.Background())
 	assert.ErrorIs(t, err, temperr.ClosedConnection)
+	assert.ErrorIs(t, err, poolstats.ErrClosed)
 }
 
 func TestRedisV9_PoolStats_AfterDisconnect(t *testing.T) {
@@ -107,6 +124,7 @@ func TestRedisV9_PoolStats_AfterDisconnect(t *testing.T) {
 	// counters go-redis still returns for a closed pool.
 	_, err = driver.PoolStats(context.Background())
 	assert.ErrorIs(t, err, temperr.ClosedConnection)
+	assert.ErrorIs(t, err, poolstats.ErrClosed)
 }
 
 func TestRedisV9_PoolStats_AfterConnectorDisconnect(t *testing.T) {
@@ -125,4 +143,5 @@ func TestRedisV9_PoolStats_AfterConnectorDisconnect(t *testing.T) {
 	// the connector must be observable through the handler too.
 	_, err = kv.PoolStats(context.Background())
 	assert.ErrorIs(t, err, temperr.ClosedConnection)
+	assert.ErrorIs(t, err, poolstats.ErrClosed)
 }
