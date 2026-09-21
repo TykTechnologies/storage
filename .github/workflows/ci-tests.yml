@@ -251,9 +251,9 @@ jobs:
         run: >
           git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
 
-          # gocovmerge has no go.mod, so its x/tools dependency resolves to the newest release, which can require a newer Go than the pinned GO_VERSION (x/tools v0.50.0 needs go >= 1.26). GOTOOLCHAIN=auto cannot switch during that package resolution, so force a sufficient toolchain upfront.
+          # gocovmerge has no go.mod, so its x/tools dependency resolves to the newest release even when gocovmerge itself is pinned, and that release can require a newer Go than the pinned GO_VERSION (x/tools v0.50.0 needs go >= 1.26). GOTOOLCHAIN=auto cannot switch during that package resolution, so force a sufficient toolchain upfront.
 
-          GOTOOLCHAIN=go1.26.0 go install github.com/wadey/gocovmerge@latest
+          GOTOOLCHAIN=go1.26.0 go install github.com/wadey/gocovmerge@v0.0.0-20160331181800-b5bfa59ec0ad
       - name: Setup CI Tooling
         uses: shrink/actions-docker-extract@v3
         with:
