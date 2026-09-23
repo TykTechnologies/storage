@@ -6,9 +6,10 @@ package mongo
 import (
 	"testing"
 
-	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 func Test_buildOpt(t *testing.T) {

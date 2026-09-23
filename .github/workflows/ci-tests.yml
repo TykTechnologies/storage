@@ -224,15 +224,12 @@ jobs:
           fetch-depth: 1
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Setup Golang
-        uses: actions/setup-go@v3
-        with:
-          go-version: ${{ env.GO_VERSION }}
       - name: Download coverage artifacts
         uses: actions/download-artifact@v4
         with:
           path: ./downloaded-coverage
-          merge-multiple: true
+          pattern: coverage-*
+          # No merge-multiple: matrix jobs upload same-named files that corrupt on concurrent extraction; per-artifact dirs are collision-free.
       - name: Download golangci-lint artifacts
         uses: actions/download-artifact@v4
         with:
@@ -244,18 +241,15 @@ jobs:
         uses: andstor/file-existence-action@v1
         with:
           files: "coverage/*.cov, golanglint.xml"
-      - name: Install Dependencies
-        env:
-          TOKEN: "${{ steps.app-token.outputs.token }}"
-        run: >
-          git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"
-
-          go install github.com/wadey/gocovmerge@latest
+      # ci-tools ships gocovmerge pre-built next to task, so extract both
+      # instead of `go install`ing gocovmerge here: installing it resolves its
+      # x/tools dependency to the newest release (gocovmerge has no go.mod),
+      # which can demand a newer Go than the runner has and fail the job.
       - name: Setup CI Tooling
         uses: shrink/actions-docker-extract@v3
         with:
           image: tykio/ci-tools:latest
-          path: /usr/local/bin/task
+          path: /usr/local/bin/.
           destination: /usr/local/bin/
 
       - name: merge reports

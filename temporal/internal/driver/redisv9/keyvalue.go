@@ -7,8 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/TykTechnologies/storage/temporal/temperr"
 )
 
 // Get retrieves the value for a given key from Redis

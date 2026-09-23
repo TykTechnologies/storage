@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TykTechnologies/storage/temporal/model"
-	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/TykTechnologies/storage/temporal/model"
+	"github.com/TykTechnologies/storage/temporal/temperr"
 )
 
 func TestBuildUniversalOptions_StaticCredentials(t *testing.T) {

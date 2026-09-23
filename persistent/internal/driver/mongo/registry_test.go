@@ -10,8 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 func TestCreateCustomRegistry(t *testing.T) {
