@@ -11,6 +11,23 @@ import (
 	"github.com/TykTechnologies/storage/persistent/model"
 )
 
+// buildProjection builds an inclusion selector from field names, skipping empty ones; nil when there are none.
+func buildProjection(fields []string) bson.M {
+	projection := bson.M{}
+
+	for _, field := range fields {
+		if field != "" {
+			projection[field] = 1
+		}
+	}
+
+	if len(projection) == 0 {
+		return nil
+	}
+
+	return projection
+}
+
 func buildQuery(query model.DBM) bson.M {
 	search := bson.M{}
 

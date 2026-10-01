@@ -177,6 +177,23 @@ func (d *mgoDriver) Count(ctx context.Context, row model.DBObject, filters ...mo
 }
 
 func (d *mgoDriver) Query(ctx context.Context, row model.DBObject, result interface{}, query model.DBM) error {
+	return d.find(row, result, query, nil)
+}
+
+// QueryFields reads only fields; the _id of map results becomes a model.ObjectID, as in Aggregate.
+func (d *mgoDriver) QueryFields(
+	_ context.Context, row model.DBObject, result interface{}, query model.DBM, fields []string,
+) error {
+	if err := d.find(row, result, query, buildProjection(fields)); err != nil {
+		return err
+	}
+
+	normalizeObjectIDs(result)
+
+	return nil
+}
+
+func (d *mgoDriver) find(row model.DBObject, result interface{}, query model.DBM, projection bson.M) error {
 	session := d.session.Copy()
 	defer session.Close()
 
@@ -204,6 +221,10 @@ func (d *mgoDriver) Query(ctx context.Context, row model.DBObject, result interf
 		q = q.Skip(offset)
 	}
 
+	if projection != nil {
+		q = q.Select(projection)
+	}
+
 	if helper.IsSlice(result) {
 		err = q.All(result)
 	} else {
@@ -211,6 +232,24 @@ func (d *mgoDriver) Query(ctx context.Context, row model.DBObject, result interf
 	}
 
 	return d.handleStoreError(err)
+}
+
+// normalizeObjectIDs rewrites the _id of map results from bson.ObjectId to model.ObjectID.
+func normalizeObjectIDs(result interface{}) {
+	switch rows := result.(type) {
+	case *[]model.DBM:
+		for _, row := range *rows {
+			normalizeObjectID(row)
+		}
+	case *model.DBM:
+		normalizeObjectID(*rows)
+	}
+}
+
+func normalizeObjectID(row model.DBM) {
+	if id, ok := row["_id"].(bson.ObjectId); ok {
+		row["_id"] = model.ObjectIDHex(id.Hex())
+	}
 }
 
 func (d *mgoDriver) Drop(ctx context.Context, row model.DBObject) error {

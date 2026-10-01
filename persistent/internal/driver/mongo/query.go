@@ -50,6 +50,23 @@ func buildLimitQuery(fields ...string) bson.D {
 	return order
 }
 
+// buildProjection builds an inclusion projection from field names, skipping empty ones; nil when there are none.
+func buildProjection(fields []string) bson.D {
+	projection := make(bson.D, 0, len(fields))
+
+	for _, field := range fields {
+		if field != "" {
+			projection = append(projection, bson.E{Key: field, Value: 1})
+		}
+	}
+
+	if len(projection) == 0 {
+		return nil
+	}
+
+	return projection
+}
+
 func handleQueryValue(key string, value interface{}, search bson.M) {
 	switch {
 	case isNestedQuery(value):

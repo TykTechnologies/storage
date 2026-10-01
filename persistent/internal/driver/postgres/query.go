@@ -16,6 +16,19 @@ import (
 // Query retrieves records from the database matching the given filter into result.
 // Returns an error if the query fails or the result cannot be populated.
 func (d *driver) Query(ctx context.Context, object model.DBObject, result interface{}, filter model.DBM) error {
+	return d.find(ctx, object, result, filter, nil)
+}
+
+// QueryFields is Query selecting only the listed columns.
+func (d *driver) QueryFields(
+	ctx context.Context, object model.DBObject, result interface{}, filter model.DBM, fields []string,
+) error {
+	return d.find(ctx, object, result, filter, fields)
+}
+
+func (d *driver) find(
+	ctx context.Context, object model.DBObject, result interface{}, filter model.DBM, fields []string,
+) error {
 	tableName, err := d.validateDBAndTable(object)
 	if err != nil {
 		return err
@@ -32,6 +45,10 @@ func (d *driver) Query(ctx context.Context, object model.DBObject, result interf
 	db, err = d.translateQuery(db, filter, object)
 	if err != nil {
 		return err
+	}
+
+	if len(fields) > 0 {
+		db = db.Select(fields)
 	}
 
 	resultElem := resultVal.Elem()
