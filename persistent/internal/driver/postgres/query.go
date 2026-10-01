@@ -8,12 +8,14 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lib/pq"
 
 	"github.com/TykTechnologies/storage/persistent/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 // Query retrieves records from the database matching the given filter into result.
@@ -23,7 +25,8 @@ func (d *driver) Query(ctx context.Context, object model.DBObject, result interf
 }
 
 // QueryFields is Query selecting only the listed columns. Names use the filter key notation
-// (dots become underscores, _id names the id column), and a []model.DBM result carries _id as a model.ObjectID.
+// (dots become underscores, _id names the model's id column), and model.DBM results carry _id as a
+// model.ObjectID with the id column itself only present when it was listed by its own name.
 func (d *driver) QueryFields(
 	ctx context.Context, object model.DBObject, result interface{}, filter model.DBM, fields []string,
 ) error {
@@ -44,13 +47,15 @@ func (d *driver) find(
 		return errors.New("result must be a pointer")
 	}
 
-	sel, err := selectColumns(fields)
+	idColumn := idColumnOf(object, d.db)
+
+	sel, err := selectColumns(fields, idColumn)
 	if err != nil {
 		return err
 	}
 
 	rows, single, isMap := dbmDestination(result)
-	if isMap && len(sel.columns) > 0 && !sel.hasID {
+	if isMap && len(sel.columns) > 0 && !sel.wantsObjectID && !sel.wantsRawColumn {
 		// map rows always carry _id, as the Mongo drivers include it in every projection
 		sel.columns = append(sel.columns, pq.QuoteIdentifier(idColumn))
 	}
@@ -67,7 +72,7 @@ func (d *driver) find(
 	}
 
 	if isMap {
-		return findDBM(db, rows, single, sel)
+		return findDBM(db, rows, single, sel, idColumn)
 	}
 
 	resultElem := resultVal.Elem()
@@ -102,22 +107,33 @@ func (d *driver) find(
 // identifierPattern is the only shape a field name may take before it is quoted into SQL.
 var identifierPattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_.]*$`)
 
-// idColumn is the column every table of this driver stores the object id in.
-const idColumn = "id"
+// defaultIDColumn is where the object id lives when the model does not name its primary key column.
+const defaultIDColumn = "id"
 
-// selection is the outcome of selectColumns: the quoted columns and which spellings of the id were asked for.
+var schemaCache = &sync.Map{}
+
+// idColumnOf returns the primary key column of row as gorm maps it with db's settings, so a model that
+// keeps its object id in a column named differently, such as _id, is addressed by that column.
+func idColumnOf(row model.DBObject, db *gorm.DB) string {
+	parsed, err := schema.Parse(row, schemaCache, db.NamingStrategy, db.AutoEmbedd, db.UseJSONTags)
+	if err != nil || parsed.PrioritizedPrimaryField == nil {
+		return defaultIDColumn
+	}
+
+	return parsed.PrioritizedPrimaryField.DBName
+}
+
+// selection is the outcome of selectColumns: the quoted columns and which spellings of the id were listed.
 type selection struct {
 	columns []string
-	// hasID is true when the id column is among the selected columns.
-	hasID bool
-	// wantsObjectID is true when _id was asked for; wantsRawID when id itself was.
-	wantsObjectID, wantsRawID bool
+	// wantsObjectID is true when _id was listed; wantsRawColumn when the id column was listed by its own name.
+	wantsObjectID, wantsRawColumn bool
 }
 
 // selectColumns turns field names into quoted column references: blanks and duplicates are dropped,
-// dots become underscores like filter keys, _id names the id column, and anything that is not a plain
-// identifier is rejected rather than passed to SQL.
-func selectColumns(fields []string) (selection, error) {
+// dots become underscores and case folds like unquoted filter keys, _id names the model's id column,
+// and anything that is not a plain identifier is rejected rather than passed to SQL.
+func selectColumns(fields []string, idColumn string) (selection, error) {
 	var sel selection
 
 	seen := make(map[string]struct{}, len(fields))
@@ -132,14 +148,14 @@ func selectColumns(fields []string) (selection, error) {
 			return selection{}, fmt.Errorf("invalid field name %q", field)
 		}
 
-		column := strings.ReplaceAll(field, ".", "_")
+		column := strings.ToLower(strings.ReplaceAll(field, ".", "_"))
 
 		switch column {
 		case "_id":
 			column = idColumn
 			sel.wantsObjectID = true
 		case idColumn:
-			sel.wantsRawID = true
+			sel.wantsRawColumn = true
 		}
 
 		if _, ok := seen[column]; ok {
@@ -147,10 +163,6 @@ func selectColumns(fields []string) (selection, error) {
 		}
 
 		seen[column] = struct{}{}
-
-		if column == idColumn {
-			sel.hasID = true
-		}
 
 		sel.columns = append(sel.columns, pq.QuoteIdentifier(column))
 	}
@@ -171,9 +183,10 @@ func dbmDestination(result interface{}) (rows *[]model.DBM, single *model.DBM, o
 }
 
 // findDBM scans through plain maps, then converts each row so it carries _id like the Mongo drivers do.
-func findDBM(db *gorm.DB, rows *[]model.DBM, single *model.DBM, sel selection) error {
+func findDBM(db *gorm.DB, rows *[]model.DBM, single *model.DBM, sel selection, idColumn string) error {
 	if single != nil {
-		db = db.Limit(1)
+		// First semantics: the lowest id when the filter matches several rows
+		db = db.Order(pq.QuoteIdentifier(idColumn)).Limit(1)
 	}
 
 	var scanned []map[string]interface{}
@@ -188,7 +201,7 @@ func findDBM(db *gorm.DB, rows *[]model.DBM, single *model.DBM, sel selection) e
 	converted := make([]model.DBM, 0, len(scanned))
 
 	for _, row := range scanned {
-		converted = append(converted, dbmRow(row, sel.wantsObjectID, sel.wantsRawID))
+		converted = append(converted, dbmRow(row, idColumn, sel.wantsRawColumn))
 	}
 
 	if single != nil {
@@ -202,18 +215,16 @@ func findDBM(db *gorm.DB, rows *[]model.DBM, single *model.DBM, sel selection) e
 	return nil
 }
 
-// dbmRow converts a scanned row: byte columns become strings and the id column is exposed as _id, a
-// model.ObjectID when it is one and the raw value otherwise, so the key is always there. The id column
-// itself stays unless only _id was asked for, so a caller listing both gets both.
-func dbmRow(row map[string]interface{}, wantsObjectID, wantsRawID bool) model.DBM {
-	out := make(model.DBM, len(row)+1)
+// dbmRow converts a scanned row in place: byte columns become strings and the id column is exposed as
+// _id, a model.ObjectID when it is one and the stored string otherwise, as the Mongo drivers leave other
+// id types alone. The id column itself only stays when it was listed by its own name.
+func dbmRow(row map[string]interface{}, idColumn string, keepRawColumn bool) model.DBM {
+	out := model.DBM(row)
 
-	for k, v := range row {
+	for k, v := range out {
 		if b, ok := v.([]byte); ok {
-			v = string(b)
+			out[k] = string(b)
 		}
-
-		out[k] = v
 	}
 
 	id, ok := out[idColumn].(string)
@@ -224,10 +235,10 @@ func dbmRow(row map[string]interface{}, wantsObjectID, wantsRawID bool) model.DB
 	if model.IsObjectIDHex(id) {
 		out["_id"] = model.ObjectIDHex(id)
 	} else {
-		out["_id"] = model.ObjectID(id)
+		out["_id"] = id
 	}
 
-	if wantsObjectID && !wantsRawID {
+	if idColumn != "_id" && !keepRawColumn {
 		delete(out, idColumn)
 	}
 
@@ -306,6 +317,7 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 		return nil, fmt.Errorf("failed to get columns: %w", err)
 	}
 
+	idColumn := idColumnOf(row, d.db)
 	results := []model.DBM{}
 
 	for rows.Next() {
@@ -329,7 +341,7 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 		}
 
 		// rows carry _id like the mongo driver's Aggregate results
-		results = append(results, dbmRow(rowMap, false, false))
+		results = append(results, dbmRow(rowMap, idColumn, false))
 	}
 
 	// Check for errors during iteration

@@ -69,6 +69,10 @@ func TestNormalizeObjectIDs(t *testing.T) {
 	NormalizeObjectIDs(&named, normalize)
 	assert.Equal(t, "normalized:c", named[0]["_id"], "named map types such as bson.M qualify")
 
+	pointers := []*map[string]interface{}{{"_id": rawID("p")}, nil}
+	NormalizeObjectIDs(&pointers, normalize)
+	assert.Equal(t, "normalized:p", (*pointers[0])["_id"], "pointers to maps are followed")
+
 	var nilMap map[string]interface{}
 	NormalizeObjectIDs(&nilMap, normalize)
 	assert.Nil(t, nilMap)

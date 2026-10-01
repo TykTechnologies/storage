@@ -51,8 +51,8 @@ func hasListedParent(field string, listed map[string]struct{}) bool {
 
 // NormalizeObjectIDs rewrites the _id of map results through normalize, which returns the
 // replacement and true when the value is the driver's own id type. Any pointer to a map with string
-// keys, or to a slice of such maps, is handled, so model.DBM, plain maps and bson.M all qualify;
-// typed destinations are left alone.
+// keys, or to a slice of such maps or of pointers to them, is handled, so model.DBM, plain maps and
+// bson.M all qualify; typed destinations are left alone.
 func NormalizeObjectIDs(result interface{}, normalize func(id interface{}) (interface{}, bool)) {
 	value := reflect.ValueOf(result)
 	if value.Kind() != reflect.Pointer || value.IsNil() {
@@ -66,7 +66,12 @@ func NormalizeObjectIDs(result interface{}, normalize func(id interface{}) (inte
 		normalizeObjectID(value, normalize)
 	case reflect.Slice:
 		for i := 0; i < value.Len(); i++ {
-			normalizeObjectID(value.Index(i), normalize)
+			elem := value.Index(i)
+			if elem.Kind() == reflect.Pointer && !elem.IsNil() {
+				elem = elem.Elem()
+			}
+
+			normalizeObjectID(elem, normalize)
 		}
 	}
 }

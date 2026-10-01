@@ -63,6 +63,37 @@ func TestQueryFields(t *testing.T) {
 		assert.Equal(t, rows[0].ID, got[0]["_id"], "_id is a non-empty model.ObjectID like on Mongo")
 		assert.Equal(t, "Bob", got[0]["name"])
 		assert.NotContains(t, got[0], "value")
+		assert.NotContains(t, got[0], "id", "the id column was not listed, so like on Mongo only _id is there")
+	})
+
+	t.Run("mixed case names fold like filter keys", func(t *testing.T) {
+		var got []model.DBM
+		require.NoError(t, driver.QueryFields(ctx, rows[0], &got, model.DBM{"name": "Bob"}, []string{"Name"}))
+		require.Len(t, got, 1)
+		assert.Equal(t, "Bob", got[0]["name"])
+	})
+
+	t.Run("a model that stores its object id in _id", func(t *testing.T) {
+		obj := &underscoreIDObject{Name: "Underscore"}
+		require.NoError(t, driver.Migrate(ctx, []model.DBObject{obj}))
+		require.NoError(t, driver.Insert(ctx, obj))
+
+		defer func() { _, _ = driver.DropTable(ctx, obj.TableName()) }()
+
+		var got []model.DBM
+		require.NoError(t, driver.QueryFields(ctx, obj, &got, model.DBM{"_id": obj.ID}, []string{"_id", "name"}))
+		require.Len(t, got, 1)
+		assert.Equal(t, obj.ID, got[0]["_id"])
+		assert.Equal(t, "Underscore", got[0]["name"])
+
+		var whole model.DBM
+		require.NoError(t, driver.Query(ctx, obj, &whole, model.DBM{"name": "Underscore"}))
+		assert.Equal(t, obj.ID, whole["_id"])
+
+		var typed underscoreIDObject
+		require.NoError(t, driver.QueryFields(ctx, obj, &typed, model.DBM{"_id": obj.ID}, []string{"_id"}))
+		assert.Equal(t, obj.ID, typed.ID)
+		assert.Empty(t, typed.Name)
 	})
 
 	t.Run("listing both _id and id returns both", func(t *testing.T) {

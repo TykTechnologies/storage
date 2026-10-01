@@ -372,7 +372,7 @@ func TestAggregate(t *testing.T) {
 			id, ok := result["_id"].(model.ObjectID)
 			assert.True(t, ok, "_id is a model.ObjectID")
 			assert.True(t, model.IsObjectIDHex(id.Hex()))
-			assert.Equal(t, id.Hex(), result["id"], "the id column is kept as stored")
+			assert.NotContains(t, result, "id", "the id column is only exposed as _id, like a Mongo document")
 		}
 	})
 
