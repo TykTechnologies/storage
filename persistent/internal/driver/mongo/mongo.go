@@ -171,36 +171,14 @@ func (d *mongoDriver) find(
 // normalizeObjectIDs rewrites the _id of map results from primitive.ObjectID to model.ObjectID,
 // as Aggregate returns it.
 func normalizeObjectIDs(result interface{}) {
-	switch rows := result.(type) {
-	case *[]model.DBM:
-		for _, row := range *rows {
-			normalizeObjectID(row)
+	helper.NormalizeObjectIDs(result, func(id interface{}) (interface{}, bool) {
+		raw, ok := id.(primitive.ObjectID)
+		if !ok {
+			return nil, false
 		}
-	case *model.DBM:
-		normalizeObjectID(*rows)
-	case *[]map[string]interface{}:
-		for _, row := range *rows {
-			normalizeObjectID(row)
-		}
-	case *map[string]interface{}:
-		normalizeObjectID(*rows)
-	case *[]bson.M:
-		for _, row := range *rows {
-			normalizeObjectID(row)
-		}
-	case *bson.M:
-		normalizeObjectID(*rows)
-	}
-}
 
-func normalizeObjectID(row map[string]interface{}) {
-	if row == nil {
-		return
-	}
-
-	if id, ok := row["_id"].(primitive.ObjectID); ok {
-		row["_id"] = model.ObjectIDHex(id.Hex())
-	}
+		return model.ObjectIDHex(raw.Hex()), true
+	})
 }
 
 func (d *mongoDriver) Drop(ctx context.Context, row model.DBObject) error {
@@ -455,7 +433,7 @@ func (d *mongoDriver) Aggregate(ctx context.Context, row model.DBObject, query [
 			return nil, d.handleStoreError(err)
 		}
 
-		normalizeObjectID(result)
+		normalizeObjectIDs(&result)
 
 		resultSlice = append(resultSlice, result)
 	}

@@ -250,36 +250,14 @@ func (d *mgoDriver) find(
 
 // normalizeObjectIDs rewrites the _id of map results from bson.ObjectId to model.ObjectID, as Aggregate returns it.
 func normalizeObjectIDs(result interface{}) {
-	switch rows := result.(type) {
-	case *[]model.DBM:
-		for _, row := range *rows {
-			normalizeObjectID(row)
+	helper.NormalizeObjectIDs(result, func(id interface{}) (interface{}, bool) {
+		raw, ok := id.(bson.ObjectId)
+		if !ok {
+			return nil, false
 		}
-	case *model.DBM:
-		normalizeObjectID(*rows)
-	case *[]map[string]interface{}:
-		for _, row := range *rows {
-			normalizeObjectID(row)
-		}
-	case *map[string]interface{}:
-		normalizeObjectID(*rows)
-	case *[]bson.M:
-		for _, row := range *rows {
-			normalizeObjectID(row)
-		}
-	case *bson.M:
-		normalizeObjectID(*rows)
-	}
-}
 
-func normalizeObjectID(row map[string]interface{}) {
-	if row == nil {
-		return
-	}
-
-	if id, ok := row["_id"].(bson.ObjectId); ok {
-		row["_id"] = model.ObjectIDHex(id.Hex())
-	}
+		return model.ObjectIDHex(raw.Hex()), true
+	})
 }
 
 func (d *mgoDriver) Drop(ctx context.Context, row model.DBObject) error {
