@@ -320,7 +320,7 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
-		rowMap := model.DBM{}
+		rowMap := make(map[string]interface{}, len(columns))
 
 		// Set values in the map
 		for i, col := range columns {
@@ -328,7 +328,8 @@ func (d *driver) Aggregate(ctx context.Context, row model.DBObject, pipeline []m
 			rowMap[col] = val
 		}
 
-		results = append(results, rowMap)
+		// rows carry _id like the mongo driver's Aggregate results
+		results = append(results, dbmRow(rowMap, false, false))
 	}
 
 	// Check for errors during iteration

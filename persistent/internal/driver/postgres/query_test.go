@@ -357,6 +357,25 @@ func TestAggregate(t *testing.T) {
 		}
 	}
 
+	t.Run("rows carry _id like the mongo driver", func(t *testing.T) {
+		tableName := "test_agg_object_id"
+		setupTestData(tableName)
+		defer cleanupTestData(tableName)
+
+		pipeline := []model.DBM{{"$match": model.DBM{"value": model.DBM{"$gt": 90}}}}
+
+		results, err := driver.Aggregate(ctx, &TestObject{TableNameValue: tableName}, pipeline)
+		require.NoError(t, err)
+		require.NotEmpty(t, results)
+
+		for _, result := range results {
+			id, ok := result["_id"].(model.ObjectID)
+			assert.True(t, ok, "_id is a model.ObjectID")
+			assert.True(t, model.IsObjectIDHex(id.Hex()))
+			assert.Equal(t, id.Hex(), result["id"], "the id column is kept as stored")
+		}
+	})
+
 	// Test case 1: Simple $match aggregation
 	t.Run("SimpleMatchAggregation", func(t *testing.T) {
 		tableName := "test_agg_match"
