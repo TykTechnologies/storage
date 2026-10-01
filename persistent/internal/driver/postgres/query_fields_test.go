@@ -28,15 +28,32 @@ func TestQueryFields(t *testing.T) {
 		require.NoError(t, driver.Insert(ctx, row))
 	}
 
-	t.Run("map result carries only the listed columns", func(t *testing.T) {
-		var got []map[string]interface{}
-		err := driver.QueryFields(ctx, rows[0], &got, model.DBM{"_sort": "name", "_limit": 2}, []string{"id", "name", "value"})
+	t.Run("map result carries only the listed columns and _id as a model.ObjectID", func(t *testing.T) {
+		var got []model.DBM
+		err := driver.QueryFields(ctx, rows[0], &got, model.DBM{"_sort": "name", "_limit": 2}, []string{"_id", "name", "value", "name", " "})
 		require.NoError(t, err)
 		require.Len(t, got, 2, "_limit and _sort are honoured like in Query")
 		assert.Equal(t, "Alice", got[0]["name"])
 		assert.EqualValues(t, 45, got[0]["value"])
+		assert.Equal(t, rows[1].ID, got[0]["_id"], "_id names the id column and comes back as a model.ObjectID, like on Mongo")
+		assert.NotContains(t, got[0], "id", "only _id was asked for")
 		assert.NotContains(t, got[0], "category", "columns outside the list are not read")
 		assert.NotContains(t, got[0], "active")
+	})
+
+	t.Run("single map result", func(t *testing.T) {
+		var got model.DBM
+		require.NoError(t, driver.QueryFields(ctx, rows[0], &got, model.DBM{"name": "Carl"}, []string{"value"}))
+		assert.EqualValues(t, 12, got["value"])
+		assert.NotContains(t, got, "name")
+		var missing model.DBM
+		assert.ErrorIs(t, driver.QueryFields(ctx, rows[0], &missing, model.DBM{"name": "nobody"}, []string{"value"}), sql.ErrNoRows)
+	})
+
+	t.Run("a field name that is not an identifier is refused", func(t *testing.T) {
+		var got []model.DBM
+		err := driver.QueryFields(ctx, rows[0], &got, model.DBM{}, []string{"name, (SELECT 1) AS x"})
+		assert.ErrorContains(t, err, "invalid field name")
 	})
 
 	t.Run("typed result leaves unselected columns zero", func(t *testing.T) {

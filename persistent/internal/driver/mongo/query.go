@@ -50,14 +50,13 @@ func buildLimitQuery(fields ...string) bson.D {
 	return order
 }
 
-// buildProjection builds an inclusion projection from field names, skipping empty ones; nil when there are none.
+// buildProjection builds an inclusion projection from field names, dropping blanks, duplicates and
+// children of a listed parent, which MongoDB rejects as path collisions; nil when nothing is left.
 func buildProjection(fields []string) bson.D {
 	projection := make(bson.D, 0, len(fields))
 
-	for _, field := range fields {
-		if field != "" {
-			projection = append(projection, bson.E{Key: field, Value: 1})
-		}
+	for _, field := range projectionFields(fields) {
+		projection = append(projection, bson.E{Key: field, Value: 1})
 	}
 
 	if len(projection) == 0 {
@@ -65,6 +64,50 @@ func buildProjection(fields []string) bson.D {
 	}
 
 	return projection
+}
+
+// projectionFields trims the names, keeps the first occurrence of each and skips a child path
+// whose parent is also listed.
+func projectionFields(fields []string) []string {
+	seen := make(map[string]struct{}, len(fields))
+	names := make([]string, 0, len(fields))
+
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+
+		if _, ok := seen[field]; ok {
+			continue
+		}
+
+		seen[field] = struct{}{}
+
+		names = append(names, field)
+	}
+
+	kept := names[:0]
+
+	for _, field := range names {
+		if hasListedParent(field, seen) {
+			continue
+		}
+
+		kept = append(kept, field)
+	}
+
+	return kept
+}
+
+func hasListedParent(field string, listed map[string]struct{}) bool {
+	for i := strings.LastIndex(field, "."); i > 0; i = strings.LastIndex(field[:i], ".") {
+		if _, ok := listed[field[:i]]; ok {
+			return true
+		}
+	}
+
+	return false
 }
 
 func handleQueryValue(key string, value interface{}, search bson.M) {

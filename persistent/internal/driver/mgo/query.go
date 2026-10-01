@@ -5,20 +5,20 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strings"
 
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/TykTechnologies/storage/persistent/model"
 )
 
-// buildProjection builds an inclusion selector from field names, skipping empty ones; nil when there are none.
+// buildProjection builds an inclusion selector from field names, dropping blanks, duplicates and
+// children of a listed parent so both Mongo drivers project the same paths; nil when nothing is left.
 func buildProjection(fields []string) bson.M {
 	projection := bson.M{}
 
-	for _, field := range fields {
-		if field != "" {
-			projection[field] = 1
-		}
+	for _, field := range projectionFields(fields) {
+		projection[field] = 1
 	}
 
 	if len(projection) == 0 {
@@ -26,6 +26,50 @@ func buildProjection(fields []string) bson.M {
 	}
 
 	return projection
+}
+
+// projectionFields trims the names, keeps the first occurrence of each and skips a child path
+// whose parent is also listed.
+func projectionFields(fields []string) []string {
+	seen := make(map[string]struct{}, len(fields))
+	names := make([]string, 0, len(fields))
+
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+
+		if _, ok := seen[field]; ok {
+			continue
+		}
+
+		seen[field] = struct{}{}
+
+		names = append(names, field)
+	}
+
+	kept := names[:0]
+
+	for _, field := range names {
+		if hasListedParent(field, seen) {
+			continue
+		}
+
+		kept = append(kept, field)
+	}
+
+	return kept
+}
+
+func hasListedParent(field string, listed map[string]struct{}) bool {
+	for i := strings.LastIndex(field, "."); i > 0; i = strings.LastIndex(field[:i], ".") {
+		if _, ok := listed[field[:i]]; ok {
+			return true
+		}
+	}
+
+	return false
 }
 
 func buildQuery(query model.DBM) bson.M {

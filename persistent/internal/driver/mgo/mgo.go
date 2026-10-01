@@ -177,25 +177,32 @@ func (d *mgoDriver) Count(ctx context.Context, row model.DBObject, filters ...mo
 }
 
 func (d *mgoDriver) Query(ctx context.Context, row model.DBObject, result interface{}, query model.DBM) error {
-	return d.find(row, result, query, nil)
+	return d.find(ctx, row, result, query, nil)
 }
 
-// QueryFields reads only fields; the _id of map results becomes a model.ObjectID, as in Aggregate.
+// QueryFields reads only fields through the same find as Query.
 func (d *mgoDriver) QueryFields(
-	_ context.Context, row model.DBObject, result interface{}, query model.DBM, fields []string,
+	ctx context.Context, row model.DBObject, result interface{}, query model.DBM, fields []string,
 ) error {
-	if err := d.find(row, result, query, buildProjection(fields)); err != nil {
+	return d.find(ctx, row, result, query, buildProjection(fields))
+}
+
+// find honours ctx as far as mgo allows: a cancelled context is refused up front and a deadline bounds the socket.
+func (d *mgoDriver) find(
+	ctx context.Context, row model.DBObject, result interface{}, query model.DBM, projection bson.M,
+) error {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	normalizeObjectIDs(result)
-
-	return nil
-}
-
-func (d *mgoDriver) find(row model.DBObject, result interface{}, query model.DBM, projection bson.M) error {
 	session := d.session.Copy()
 	defer session.Close()
+
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout := time.Until(deadline)
+		session.SetSocketTimeout(timeout)
+		session.SetSyncTimeout(timeout)
+	}
 
 	colName, err := getColName(query, row)
 	if err != nil {
@@ -231,10 +238,16 @@ func (d *mgoDriver) find(row model.DBObject, result interface{}, query model.DBM
 		err = q.One(result)
 	}
 
-	return d.handleStoreError(err)
+	if err != nil {
+		return d.handleStoreError(err)
+	}
+
+	normalizeObjectIDs(result)
+
+	return nil
 }
 
-// normalizeObjectIDs rewrites the _id of map results from bson.ObjectId to model.ObjectID.
+// normalizeObjectIDs rewrites the _id of map results from bson.ObjectId to model.ObjectID, as Aggregate returns it.
 func normalizeObjectIDs(result interface{}) {
 	switch rows := result.(type) {
 	case *[]model.DBM:
@@ -243,10 +256,26 @@ func normalizeObjectIDs(result interface{}) {
 		}
 	case *model.DBM:
 		normalizeObjectID(*rows)
+	case *[]map[string]interface{}:
+		for _, row := range *rows {
+			normalizeObjectID(row)
+		}
+	case *map[string]interface{}:
+		normalizeObjectID(*rows)
+	case *[]bson.M:
+		for _, row := range *rows {
+			normalizeObjectID(row)
+		}
+	case *bson.M:
+		normalizeObjectID(*rows)
 	}
 }
 
-func normalizeObjectID(row model.DBM) {
+func normalizeObjectID(row map[string]interface{}) {
+	if row == nil {
+		return
+	}
+
 	if id, ok := row["_id"].(bson.ObjectId); ok {
 		row["_id"] = model.ObjectIDHex(id.Hex())
 	}

@@ -106,17 +106,11 @@ func (d *mongoDriver) Query(ctx context.Context, row model.DBObject, result inte
 	return d.find(ctx, row, result, query, nil)
 }
 
-// QueryFields reads only fields; the _id of map results becomes a model.ObjectID, as in Aggregate.
+// QueryFields reads only fields through the same find as Query.
 func (d *mongoDriver) QueryFields(
 	ctx context.Context, row model.DBObject, result interface{}, query model.DBM, fields []string,
 ) error {
-	if err := d.find(ctx, row, result, query, buildProjection(fields)); err != nil {
-		return err
-	}
-
-	normalizeObjectIDs(result)
-
-	return nil
+	return d.find(ctx, row, result, query, buildProjection(fields))
 }
 
 func (d *mongoDriver) find(
@@ -164,10 +158,17 @@ func (d *mongoDriver) find(
 		err = collection.FindOne(ctx, search, findOneOpts).Decode(result)
 	}
 
-	return d.handleStoreError(err)
+	if err != nil {
+		return d.handleStoreError(err)
+	}
+
+	normalizeObjectIDs(result)
+
+	return nil
 }
 
-// normalizeObjectIDs rewrites the _id of map results from primitive.ObjectID to model.ObjectID.
+// normalizeObjectIDs rewrites the _id of map results from primitive.ObjectID to model.ObjectID,
+// as Aggregate returns it.
 func normalizeObjectIDs(result interface{}) {
 	switch rows := result.(type) {
 	case *[]model.DBM:
@@ -176,10 +177,26 @@ func normalizeObjectIDs(result interface{}) {
 		}
 	case *model.DBM:
 		normalizeObjectID(*rows)
+	case *[]map[string]interface{}:
+		for _, row := range *rows {
+			normalizeObjectID(row)
+		}
+	case *map[string]interface{}:
+		normalizeObjectID(*rows)
+	case *[]bson.M:
+		for _, row := range *rows {
+			normalizeObjectID(row)
+		}
+	case *bson.M:
+		normalizeObjectID(*rows)
 	}
 }
 
-func normalizeObjectID(row model.DBM) {
+func normalizeObjectID(row map[string]interface{}) {
+	if row == nil {
+		return
+	}
+
 	if id, ok := row["_id"].(primitive.ObjectID); ok {
 		row["_id"] = model.ObjectIDHex(id.Hex())
 	}

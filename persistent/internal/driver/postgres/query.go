@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
+
+	"github.com/lib/pq"
 
 	"github.com/TykTechnologies/storage/persistent/model"
 	"gorm.io/gorm"
@@ -19,7 +22,8 @@ func (d *driver) Query(ctx context.Context, object model.DBObject, result interf
 	return d.find(ctx, object, result, filter, nil)
 }
 
-// QueryFields is Query selecting only the listed columns.
+// QueryFields is Query selecting only the listed columns. Names use the filter key notation
+// (dots become underscores, _id names the id column), and a []model.DBM result carries _id as a model.ObjectID.
 func (d *driver) QueryFields(
 	ctx context.Context, object model.DBObject, result interface{}, filter model.DBM, fields []string,
 ) error {
@@ -40,6 +44,11 @@ func (d *driver) find(
 		return errors.New("result must be a pointer")
 	}
 
+	columns, wantsID, err := selectColumns(fields)
+	if err != nil {
+		return err
+	}
+
 	db := d.db.WithContext(ctx).Table(tableName)
 
 	db, err = d.translateQuery(db, filter, object)
@@ -47,8 +56,12 @@ func (d *driver) find(
 		return err
 	}
 
-	if len(fields) > 0 {
-		db = db.Select(fields)
+	if len(columns) > 0 {
+		db = db.Select(strings.Join(columns, ", "))
+	}
+
+	if rows, single, ok := dbmDestination(result); ok {
+		return findDBM(db, rows, single, wantsID)
 	}
 
 	resultElem := resultVal.Elem()
@@ -78,6 +91,110 @@ func (d *driver) find(
 	}
 
 	return nil
+}
+
+// identifierPattern is the only shape a field name may take before it is quoted into SQL.
+var identifierPattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_.]*$`)
+
+// selectColumns turns field names into quoted column references: blanks and duplicates are dropped,
+// dots become underscores like filter keys, _id names the id column, and anything that is not a plain
+// identifier is rejected rather than passed to SQL. wantsID reports that _id was asked for.
+func selectColumns(fields []string) (columns []string, wantsID bool, err error) {
+	seen := make(map[string]struct{}, len(fields))
+
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+
+		if !identifierPattern.MatchString(field) {
+			return nil, false, fmt.Errorf("invalid field name %q", field)
+		}
+
+		column := strings.ReplaceAll(field, ".", "_")
+		if column == "_id" {
+			column = "id"
+			wantsID = true
+		}
+
+		if _, ok := seen[column]; ok {
+			continue
+		}
+
+		seen[column] = struct{}{}
+
+		columns = append(columns, pq.QuoteIdentifier(column))
+	}
+
+	return columns, wantsID, nil
+}
+
+// dbmDestination recognises the map results gorm cannot scan into directly.
+func dbmDestination(result interface{}) (rows *[]model.DBM, single *model.DBM, ok bool) {
+	switch dest := result.(type) {
+	case *[]model.DBM:
+		return dest, nil, true
+	case *model.DBM:
+		return nil, dest, true
+	}
+
+	return nil, nil, false
+}
+
+// findDBM scans through plain maps, then converts each row, exposing the id as _id (a model.ObjectID)
+// like the Mongo drivers do; the id column itself stays unless only _id was asked for.
+func findDBM(db *gorm.DB, rows *[]model.DBM, single *model.DBM, wantsID bool) error {
+	if single != nil {
+		db = db.Limit(1)
+	}
+
+	var scanned []map[string]interface{}
+	if err := db.Find(&scanned).Error; err != nil {
+		return err
+	}
+
+	if len(scanned) == 0 {
+		return sql.ErrNoRows
+	}
+
+	converted := make([]model.DBM, 0, len(scanned))
+
+	for _, row := range scanned {
+		converted = append(converted, dbmRow(row, wantsID))
+	}
+
+	if single != nil {
+		*single = converted[0]
+
+		return nil
+	}
+
+	*rows = converted
+
+	return nil
+}
+
+func dbmRow(row map[string]interface{}, wantsID bool) model.DBM {
+	out := make(model.DBM, len(row)+1)
+
+	for k, v := range row {
+		if b, ok := v.([]byte); ok {
+			v = string(b)
+		}
+
+		out[k] = v
+	}
+
+	if id, ok := out["id"].(string); ok && model.IsObjectIDHex(id) {
+		out["_id"] = model.ObjectIDHex(id)
+
+		if wantsID {
+			delete(out, "id")
+		}
+	}
+
+	return out
 }
 
 // Count returns the number of records in the table matching the provided filters.

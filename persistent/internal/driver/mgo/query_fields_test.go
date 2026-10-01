@@ -40,4 +40,9 @@ func TestQueryFields(t *testing.T) {
 	assert.Equal(t, "bob@example.com", one["email"])
 	assert.NotContains(t, one, "age")
 	assert.Equal(t, rows[0].ID, one["_id"])
+
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	assert.ErrorIs(t, driver.QueryFields(cancelled, object, &got, model.DBM{}, []string{"name"}), context.Canceled,
+		"a cancelled context is refused before the query runs")
 }
