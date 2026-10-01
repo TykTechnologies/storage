@@ -39,6 +39,32 @@ func TestQueryFields(t *testing.T) {
 		assert.Equal(t, rows[1].Id, got[0]["_id"], "_id is a model.ObjectID, as in Aggregate")
 	})
 
+	t.Run("map rows always carry _id even when it was not listed", func(t *testing.T) {
+		var got []model.DBM
+		require.NoError(t, driver.QueryFields(ctx, object, &got, model.DBM{"name": "Bob"}, []string{"name"}))
+		require.Len(t, got, 1)
+		assert.Equal(t, rows[0].Id, got[0]["_id"], "_id is a non-empty model.ObjectID like on Postgres")
+		assert.NotContains(t, got[0], "email")
+	})
+
+	t.Run("id is an ordinary field, independent from _id", func(t *testing.T) {
+		doc := &dummyWithPublicID{PublicID: "pol-42", Name: "Policy"}
+		require.NoError(t, driver.Insert(ctx, doc))
+
+		var got []model.DBM
+		require.NoError(t, driver.QueryFields(ctx, doc, &got, model.DBM{"id": "pol-42"}, []string{"id"}))
+		require.Len(t, got, 1)
+		assert.Equal(t, doc.ID, got[0]["_id"], "_id is the normalised object id")
+		assert.Equal(t, "pol-42", got[0]["id"], "id is the document's own field, untouched")
+		assert.NotContains(t, got[0], "name")
+
+		var both []model.DBM
+		require.NoError(t, driver.QueryFields(ctx, doc, &both, model.DBM{"id": "pol-42"}, []string{"_id", "id"}))
+		require.Len(t, both, 1)
+		assert.Equal(t, doc.ID, both[0]["_id"])
+		assert.Equal(t, "pol-42", both[0]["id"])
+	})
+
 	t.Run("typed result decodes the listed fields and leaves the rest zero", func(t *testing.T) {
 		var got []dummyDBObject
 		err := driver.QueryFields(ctx, object, &got, model.DBM{"email": model.DBM{"$text": "tyk.com"}, "_sort": "name"}, []string{"name"})
@@ -72,3 +98,14 @@ func TestQueryFields(t *testing.T) {
 		assert.ErrorIs(t, driver.QueryFields(cancelled, object, &got, model.DBM{}, []string{"name"}), context.Canceled)
 	})
 }
+
+// dummyWithPublicID has an id field of its own next to the object id, like several Dashboard models.
+type dummyWithPublicID struct {
+	ID       model.ObjectID `bson:"_id,omitempty"`
+	PublicID string         `bson:"id"`
+	Name     string         `bson:"name"`
+}
+
+func (d *dummyWithPublicID) GetObjectID() model.ObjectID   { return d.ID }
+func (d *dummyWithPublicID) SetObjectID(id model.ObjectID) { d.ID = id }
+func (d *dummyWithPublicID) TableName() string             { return "dummy" }

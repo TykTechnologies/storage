@@ -56,6 +56,23 @@ func TestQueryFields(t *testing.T) {
 		assert.ErrorContains(t, err, "invalid field name")
 	})
 
+	t.Run("map rows always carry _id even when it was not listed", func(t *testing.T) {
+		var got []model.DBM
+		require.NoError(t, driver.QueryFields(ctx, rows[0], &got, model.DBM{"name": "Bob"}, []string{"name"}))
+		require.Len(t, got, 1)
+		assert.Equal(t, rows[0].ID, got[0]["_id"], "_id is a non-empty model.ObjectID like on Mongo")
+		assert.Equal(t, "Bob", got[0]["name"])
+		assert.NotContains(t, got[0], "value")
+	})
+
+	t.Run("listing both _id and id returns both", func(t *testing.T) {
+		var got []model.DBM
+		require.NoError(t, driver.QueryFields(ctx, rows[0], &got, model.DBM{"name": "Bob"}, []string{"_id", "id"}))
+		require.Len(t, got, 1)
+		assert.Equal(t, rows[0].ID, got[0]["_id"])
+		assert.Equal(t, rows[0].ID.Hex(), got[0]["id"], "the explicitly requested id column is kept as stored")
+	})
+
 	t.Run("typed result leaves unselected columns zero", func(t *testing.T) {
 		var got []TestObject
 		err := driver.QueryFields(ctx, rows[0], &got, model.DBM{"category": "a", "_sort": "name"}, []string{"name"})

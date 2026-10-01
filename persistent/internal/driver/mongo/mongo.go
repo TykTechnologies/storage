@@ -454,10 +454,7 @@ func (d *mongoDriver) Aggregate(ctx context.Context, row model.DBObject, query [
 			return nil, d.handleStoreError(err)
 		}
 
-		// Parsing _id from primitive.ObjectID to model.ObjectID
-		if ObjectID, ok := result["_id"].(primitive.ObjectID); ok {
-			result["_id"] = model.ObjectIDHex(ObjectID.Hex())
-		}
+		normalizeObjectID(result)
 
 		resultSlice = append(resultSlice, result)
 	}
