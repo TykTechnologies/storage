@@ -106,11 +106,18 @@ func (d *mongoDriver) Query(ctx context.Context, row model.DBObject, result inte
 	return d.find(ctx, row, result, query, nil)
 }
 
-// QueryFields reads only fields through the same find as Query.
+// QueryFields reads only fields through the same find as Query. Map results get their _id
+// normalised like Aggregate does; Query keeps returning the driver's own id type.
 func (d *mongoDriver) QueryFields(
 	ctx context.Context, row model.DBObject, result interface{}, query model.DBM, fields []string,
 ) error {
-	return d.find(ctx, row, result, query, buildProjection(fields))
+	if err := d.find(ctx, row, result, query, buildProjection(fields)); err != nil {
+		return err
+	}
+
+	normalizeObjectIDs(result)
+
+	return nil
 }
 
 func (d *mongoDriver) find(
@@ -158,13 +165,7 @@ func (d *mongoDriver) find(
 		err = collection.FindOne(ctx, search, findOneOpts).Decode(result)
 	}
 
-	if err != nil {
-		return d.handleStoreError(err)
-	}
-
-	normalizeObjectIDs(result)
-
-	return nil
+	return d.handleStoreError(err)
 }
 
 // normalizeObjectIDs rewrites the _id of map results from primitive.ObjectID to model.ObjectID,

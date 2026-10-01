@@ -22,9 +22,9 @@ type PersistentStorage interface {
 	// Query one or multiple DBObjects from the database
 	Query(context.Context, model.DBObject, interface{}, model.DBM) error
 	// QueryFields is Query reading only the listed fields, so a result of []model.DBM carries just
-	// the columns the caller needs. Field names use the same dot notation as filter keys. Map results
-	// always carry _id, the object id, as a model.ObjectID on every driver, like in Aggregate; id is
-	// an ordinary field whose meaning depends on the schema (postgres stores the object id in the id column).
+	// the columns the caller needs. Field names use the same dot notation as filter keys. Unlike Query,
+	// map results always carry _id, the object id, as a model.ObjectID on every driver, like in Aggregate;
+	// id is an ordinary field whose meaning depends on the schema (postgres stores the object id in the id column).
 	QueryFields(ctx context.Context, row model.DBObject, result interface{}, filter model.DBM, fields []string) error
 	// BulkUpdate updates multiple rows
 	BulkUpdate(context.Context, []model.DBObject, ...model.DBM) error

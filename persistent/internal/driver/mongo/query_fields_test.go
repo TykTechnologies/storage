@@ -7,6 +7,8 @@ import (
 	"context"
 	"testing"
 
+	"go.mongodb.org/mongo-driver/bson/primitive"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -37,6 +39,13 @@ func TestQueryFields(t *testing.T) {
 		assert.NotContains(t, got[0], "email", "fields outside the list are not read")
 		assert.NotContains(t, got[0], "country")
 		assert.Equal(t, rows[1].Id, got[0]["_id"], "_id is a model.ObjectID, as in Aggregate")
+	})
+
+	t.Run("Query keeps returning the driver's own _id type", func(t *testing.T) {
+		var got []model.DBM
+		require.NoError(t, driver.Query(ctx, object, &got, model.DBM{"name": "Bob"}))
+		require.Len(t, got, 1)
+		assert.IsType(t, primitive.ObjectID{}, got[0]["_id"], "existing callers of Query are not affected")
 	})
 
 	t.Run("map rows always carry _id even when it was not listed", func(t *testing.T) {
