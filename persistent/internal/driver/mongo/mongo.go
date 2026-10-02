@@ -103,6 +103,26 @@ func (d *mongoDriver) Count(ctx context.Context, row model.DBObject, filters ...
 }
 
 func (d *mongoDriver) Query(ctx context.Context, row model.DBObject, result interface{}, query model.DBM) error {
+	return d.find(ctx, row, result, query, nil)
+}
+
+// QueryFields reads only fields through the same find as Query. Map results get their _id
+// normalised like Aggregate does; Query keeps returning the driver's own id type.
+func (d *mongoDriver) QueryFields(
+	ctx context.Context, row model.DBObject, result interface{}, query model.DBM, fields []string,
+) error {
+	if err := d.find(ctx, row, result, query, buildProjection(fields)); err != nil {
+		return err
+	}
+
+	normalizeObjectIDs(result)
+
+	return nil
+}
+
+func (d *mongoDriver) find(
+	ctx context.Context, row model.DBObject, result interface{}, query model.DBM, projection bson.D,
+) error {
 	collection := d.client.Database(d.database).Collection(row.TableName())
 
 	search := buildQuery(query)
@@ -126,6 +146,11 @@ func (d *mongoDriver) Query(ctx context.Context, row model.DBObject, result inte
 		findOneOpts.SetSkip(int64(offset))
 	}
 
+	if projection != nil {
+		findOpts.SetProjection(projection)
+		findOneOpts.SetProjection(projection)
+	}
+
 	var err error
 
 	if helper.IsSlice(result) {
@@ -141,6 +166,19 @@ func (d *mongoDriver) Query(ctx context.Context, row model.DBObject, result inte
 	}
 
 	return d.handleStoreError(err)
+}
+
+// normalizeObjectIDs rewrites the _id of map results from primitive.ObjectID to model.ObjectID,
+// as Aggregate returns it.
+func normalizeObjectIDs(result interface{}) {
+	helper.NormalizeObjectIDs(result, func(id interface{}) (interface{}, bool) {
+		raw, ok := id.(primitive.ObjectID)
+		if !ok {
+			return nil, false
+		}
+
+		return model.ObjectIDHex(raw.Hex()), true
+	})
 }
 
 func (d *mongoDriver) Drop(ctx context.Context, row model.DBObject) error {
@@ -395,10 +433,7 @@ func (d *mongoDriver) Aggregate(ctx context.Context, row model.DBObject, query [
 			return nil, d.handleStoreError(err)
 		}
 
-		// Parsing _id from primitive.ObjectID to model.ObjectID
-		if ObjectID, ok := result["_id"].(primitive.ObjectID); ok {
-			result["_id"] = model.ObjectIDHex(ObjectID.Hex())
-		}
+		normalizeObjectIDs(&result)
 
 		resultSlice = append(resultSlice, result)
 	}

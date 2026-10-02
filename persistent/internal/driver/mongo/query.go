@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
+	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/model"
 )
 
@@ -48,6 +49,22 @@ func buildLimitQuery(fields ...string) bson.D {
 	}
 
 	return order
+}
+
+// buildProjection builds an inclusion projection from field names, dropping blanks, duplicates and
+// children of a listed parent, which MongoDB rejects as path collisions; nil when nothing is left.
+func buildProjection(fields []string) bson.D {
+	projection := make(bson.D, 0, len(fields))
+
+	for _, field := range helper.ProjectionFields(fields) {
+		projection = append(projection, bson.E{Key: field, Value: 1})
+	}
+
+	if len(projection) == 0 {
+		return nil
+	}
+
+	return projection
 }
 
 func handleQueryValue(key string, value interface{}, search bson.M) {

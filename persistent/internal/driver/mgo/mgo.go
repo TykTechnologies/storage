@@ -177,8 +177,39 @@ func (d *mgoDriver) Count(ctx context.Context, row model.DBObject, filters ...mo
 }
 
 func (d *mgoDriver) Query(ctx context.Context, row model.DBObject, result interface{}, query model.DBM) error {
+	return d.find(ctx, row, result, query, nil)
+}
+
+// QueryFields reads only fields through the same find as Query. Map results get their _id
+// normalised like Aggregate does; Query keeps returning the driver's own id type.
+func (d *mgoDriver) QueryFields(
+	ctx context.Context, row model.DBObject, result interface{}, query model.DBM, fields []string,
+) error {
+	if err := d.find(ctx, row, result, query, buildProjection(fields)); err != nil {
+		return err
+	}
+
+	normalizeObjectIDs(result)
+
+	return nil
+}
+
+// find honours ctx as far as mgo allows: a cancelled context is refused up front and a deadline bounds the socket.
+func (d *mgoDriver) find(
+	ctx context.Context, row model.DBObject, result interface{}, query model.DBM, projection bson.M,
+) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	session := d.session.Copy()
 	defer session.Close()
+
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout := time.Until(deadline)
+		session.SetSocketTimeout(timeout)
+		session.SetSyncTimeout(timeout)
+	}
 
 	colName, err := getColName(query, row)
 	if err != nil {
@@ -204,6 +235,10 @@ func (d *mgoDriver) Query(ctx context.Context, row model.DBObject, result interf
 		q = q.Skip(offset)
 	}
 
+	if projection != nil {
+		q = q.Select(projection)
+	}
+
 	if helper.IsSlice(result) {
 		err = q.All(result)
 	} else {
@@ -211,6 +246,18 @@ func (d *mgoDriver) Query(ctx context.Context, row model.DBObject, result interf
 	}
 
 	return d.handleStoreError(err)
+}
+
+// normalizeObjectIDs rewrites the _id of map results from bson.ObjectId to model.ObjectID, as Aggregate returns it.
+func normalizeObjectIDs(result interface{}) {
+	helper.NormalizeObjectIDs(result, func(id interface{}) (interface{}, bool) {
+		raw, ok := id.(bson.ObjectId)
+		if !ok {
+			return nil, false
+		}
+
+		return model.ObjectIDHex(raw.Hex()), true
+	})
 }
 
 func (d *mgoDriver) Drop(ctx context.Context, row model.DBObject) error {

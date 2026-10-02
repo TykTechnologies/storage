@@ -8,8 +8,25 @@ import (
 
 	"gopkg.in/mgo.v2/bson"
 
+	"github.com/TykTechnologies/storage/persistent/internal/helper"
 	"github.com/TykTechnologies/storage/persistent/model"
 )
+
+// buildProjection builds an inclusion selector from field names, dropping blanks, duplicates and
+// children of a listed parent so both Mongo drivers project the same paths; nil when nothing is left.
+func buildProjection(fields []string) bson.M {
+	projection := bson.M{}
+
+	for _, field := range helper.ProjectionFields(fields) {
+		projection[field] = 1
+	}
+
+	if len(projection) == 0 {
+		return nil
+	}
+
+	return projection
+}
 
 func buildQuery(query model.DBM) bson.M {
 	search := bson.M{}
