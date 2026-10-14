@@ -598,6 +598,65 @@ func TestNewFromConfigUnknownProviderType(t *testing.T) {
 	})
 }
 
+func TestNewFromConfigCacheConfig(t *testing.T) {
+	t.Parallel()
+
+	t.Run("kv.cache settings reach the store wrapper", func(t *testing.T) {
+		t.Parallel()
+
+		doc := []byte(`{
+			"kv": {
+				"cache": {"enabled": true, "ttl": "1m"},
+				"stores": {
+					"remote": {"type": "hashicorp_vault", "config": {}}
+				}
+			}
+		}`)
+
+		provider := &fakeProvider{}
+		reg := newRegistry(t, doc, registry.WithFactories(map[kv.ProviderType]kv.ProviderFactory{
+			kv.Vault: recordingFactory(nil, provider, nil),
+		}))
+
+		store, err := reg.GetStore("remote")
+		require.NoError(t, err)
+
+		for range 3 {
+			_, err = store.Get(t.Context(), "some/key")
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, int32(1), provider.calls.Load(), "enabled cache must serve repeat Gets")
+	})
+
+	t.Run("without cache config every Get reaches the provider", func(t *testing.T) {
+		t.Parallel()
+
+		doc := []byte(`{
+			"kv": {
+				"stores": {
+					"remote": {"type": "hashicorp_vault", "config": {}}
+				}
+			}
+		}`)
+
+		provider := &fakeProvider{}
+		reg := newRegistry(t, doc, registry.WithFactories(map[kv.ProviderType]kv.ProviderFactory{
+			kv.Vault: recordingFactory(nil, provider, nil),
+		}))
+
+		store, err := reg.GetStore("remote")
+		require.NoError(t, err)
+
+		for range 3 {
+			_, err = store.Get(t.Context(), "some/key")
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, int32(3), provider.calls.Load())
+	})
+}
+
 func TestNewFromConfigLifecycle(t *testing.T) {
 	t.Run("context cancellation propagates and partial stores are cleaned up", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {

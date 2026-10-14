@@ -356,6 +356,46 @@ func TestInitStores_EdgeCases(t *testing.T) {
 		}
 	})
 
+	t.Run("should handle error returned by secret store wrapper", func(t *testing.T) {
+		r := NewRegistry()
+
+		err := r.Add("valid", newFactory(nil, nil))
+		require.NoError(t, err)
+
+		err = r.InitStores(t.Context(), &kv.Config{
+			Stores: map[string]kv.StoreConfig{
+				"valid-1": {Type: "valid", Required: true},
+			},
+			Cache: kv.CacheConfig{
+				Enabled: true,
+				TTL:     "-10s",
+			},
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), `secret store "valid-1"`)
+		require.False(t, r.isInitialized.Load())
+	})
+
+	t.Run("should log warning when optional store failed one of the steps", func(t *testing.T) {
+		l := &mockLogger{}
+		r := NewRegistry(WithLogger(l))
+
+		err := r.Add("valid", newFactory(nil, nil))
+		require.NoError(t, err)
+
+		err = r.InitStores(t.Context(), &kv.Config{
+			Stores: map[string]kv.StoreConfig{
+				"valid-1": {Type: "valid", Required: false},
+			},
+			Cache: kv.CacheConfig{
+				Enabled: true,
+				TTL:     "-10s",
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, int32(1), l.warnCalls.Load())
+	})
+
 	t.Run("should skip secret store wrapping if provider is standalone", func(t *testing.T) {
 		r := NewRegistry()
 
@@ -515,4 +555,54 @@ func TestConcurrentInitStoresAndCloseAreHandledCorrectly(t *testing.T) {
 	})
 
 	wg.Wait()
+}
+
+func TestInitStores_CacheCleanupSurvivesInitialization(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		r := NewRegistry()
+
+		t.Cleanup(func() {
+			r.Close(t.Context())
+		})
+
+		p := &mockProvider{}
+		err := r.Add("test", func(config json.RawMessage) (kv.Provider, error) {
+			return p, nil
+		})
+		require.NoError(t, err)
+
+		cfg := &kv.Config{
+			Cache: kv.CacheConfig{
+				Enabled: true,
+				TTL:     "1s",
+			},
+			Stores: map[string]kv.StoreConfig{
+				"test-store": {Type: "test", Required: true},
+			},
+		}
+
+		err = r.InitStores(t.Context(), cfg)
+		require.NoError(t, err)
+
+		store, err := r.GetStore("test-store")
+		require.NoError(t, err)
+
+		// Populate cache
+		val, err := store.Get(t.Context(), "key1")
+		require.NoError(t, err)
+		require.Equal(t, "value", val)
+		require.Equal(t, int32(1), p.calls.Load())
+
+		// Second call should hit cache (no provider call)
+		_, err = store.Get(t.Context(), "key1")
+		require.NoError(t, err)
+		require.Equal(t, int32(1), p.calls.Load(), "should hit cache")
+
+		time.Sleep(time.Second)
+		synctest.Wait()
+
+		_, err = store.Get(t.Context(), "key1")
+		require.NoError(t, err)
+		require.Equal(t, int32(2), p.calls.Load(), "cache should have cleaned up expired entry")
+	})
 }

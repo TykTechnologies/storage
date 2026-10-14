@@ -117,7 +117,7 @@ func NewFromConfig(
 	}
 
 	if len(merged) > 0 {
-		err := full.InitStores(ctx, &kv.Config{Stores: merged})
+		err := full.InitStores(ctx, &kv.Config{Stores: merged, Cache: config.KV.Cache})
 		if err != nil {
 			return nil, fmt.Errorf("kv: initialize stores: %w", err)
 		}
