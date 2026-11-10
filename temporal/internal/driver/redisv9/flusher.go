@@ -3,8 +3,9 @@ package redisv9
 import (
 	"context"
 
-	"github.com/TykTechnologies/storage/temporal/temperr"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/TykTechnologies/storage/temporal/temperr"
 )
 
 func (r *RedisV9) FlushAll(ctx context.Context) error {

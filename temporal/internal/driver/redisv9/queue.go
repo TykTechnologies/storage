@@ -5,9 +5,10 @@ import (
 	"errors"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/TykTechnologies/storage/temporal/model"
 	"github.com/TykTechnologies/storage/temporal/temperr"
-	"github.com/redis/go-redis/v9"
 )
 
 // subscribeAdapter is an adapter for redis.PubSub to satisfy model.Subscription interface.
