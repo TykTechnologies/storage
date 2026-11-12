@@ -352,20 +352,30 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 
 	originalID := row.GetObjectID()
 
+	lockKey, err := upsertLockKey(tableName, query)
+	if err != nil {
+		return err
+	}
+
+	// Callers in this process queue here, before taking a connection. Without
+	// it every caller waiting on the advisory lock below would hold one pool
+	// connection for the whole wait.
+	release, err := acquireUpsertGate(ctx, lockKey)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	// Transaction auto-commits when the callback returns nil and rolls back on
 	// any returned error or panic, so each early return cleans up the tx and the
 	// advisory lock (which is transaction-scoped) without an explicit Rollback.
 	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// pg_advisory_xact_lock serializes concurrent Upserts that use the same
-		// (table, query) pair; it is released automatically when the tx ends.
+		// (table, query) pair across processes; it is released automatically
+		// when the tx ends.
 		// It does NOT protect against Upserts reaching the same row through a
 		// different filter, or writers bypassing Upsert (Insert, raw SQL) —
 		// uniqueness beyond the primary key is not enforced at the schema level.
-		lockKey, err := upsertLockKey(tableName, query)
-		if err != nil {
-			return err
-		}
-
 		if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", lockKey).Error; err != nil {
 			return err
 		}
@@ -454,13 +464,32 @@ func (d *driver) fetchUpdatedRow(tx *gorm.DB, table string, query model.DBM, row
 func ensureID(originalID model.ObjectID, row model.DBObject, query model.DBM) {
 	if originalID != "" {
 		row.SetObjectID(originalID)
-	} else if idVal, ok := query["id"].(string); ok && idVal != "" {
-		row.SetObjectID(model.ObjectIDHex(idVal))
+	} else if id := queryID(query); id != "" {
+		row.SetObjectID(id)
 	}
 
 	if row.GetObjectID() == "" {
 		row.SetObjectID(model.NewObjectID())
 	}
+}
+
+// queryID returns the record ID a query selects by, under either the id or
+// the Mongo _id key, or "" when the query does not select by ID.
+func queryID(query model.DBM) model.ObjectID {
+	for _, key := range []string{"id", "_id"} {
+		switch id := query[key].(type) {
+		case model.ObjectID:
+			if id != "" {
+				return id
+			}
+		case string:
+			if id != "" {
+				return model.ObjectIDHex(id)
+			}
+		}
+	}
+
+	return ""
 }
 
 func cloneDBObject(row model.DBObject) model.DBObject {
@@ -582,6 +611,35 @@ func upsertLockKey(tableName string, query model.DBM) (int64, error) {
 	}
 
 	return int64(h.Sum64()), nil
+}
+
+// upsertGateCount is the number of in-process upsert gates. Keys that share a
+// gate only wait for each other; correctness comes from the advisory lock.
+const upsertGateCount = 64
+
+// upsertGates holds one single-slot gate per stripe of advisory-lock keys.
+var upsertGates = newUpsertGates()
+
+func newUpsertGates() []chan struct{} {
+	gates := make([]chan struct{}, upsertGateCount)
+	for i := range gates {
+		gates[i] = make(chan struct{}, 1)
+	}
+
+	return gates
+}
+
+// acquireUpsertGate blocks until the gate for lockKey is free or ctx ends, and
+// returns the function that frees it.
+func acquireUpsertGate(ctx context.Context, lockKey int64) (func(), error) {
+	gate := upsertGates[uint64(lockKey)%upsertGateCount]
+
+	select {
+	case gate <- struct{}{}:
+		return func() { <-gate }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 func applySetOperatorToObject(obj model.DBObject, update model.DBM) {

@@ -892,3 +892,77 @@ func TestApplySetOperatorToObject(t *testing.T) {
 		assert.Equal(t, "Updated Name", obj.Name)
 	})
 }
+
+// Callers upserting the same record must wait in the process, not each on a
+// database connection.
+func TestUpsertWaitersDoNotHoldConnections(t *testing.T) {
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	sqlDB, err := driver.db.DB()
+	require.NoError(t, err)
+
+	const concurrency = 40
+
+	targetID := model.NewObjectID()
+	stop := make(chan struct{})
+	peak := make(chan int, 1)
+
+	go func() {
+		highest := 0
+
+		for {
+			select {
+			case <-stop:
+				peak <- highest
+				return
+			default:
+				if n := sqlDB.Stats().InUse; n > highest {
+					highest = n
+				}
+			}
+		}
+	}()
+
+	var wg sync.WaitGroup
+
+	errs := make([]error, concurrency)
+
+	for i := range concurrency {
+		wg.Add(1)
+
+		go func(idx int) {
+			defer wg.Done()
+
+			errs[idx] = driver.Upsert(ctx, &TestObject{},
+				model.DBM{"id": targetID},
+				model.DBM{"$set": model.DBM{"value": idx}})
+		}(i)
+	}
+
+	wg.Wait()
+	close(stop)
+
+	for i, err := range errs {
+		assert.NoError(t, err, "goroutine %d must not error", i)
+	}
+
+	assert.LessOrEqual(t, <-peak, 2, "waiting upserts must not each hold a connection")
+}
+
+func TestAcquireUpsertGateHonoursContext(t *testing.T) {
+	release, err := acquireUpsertGate(context.Background(), 42)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	_, err = acquireUpsertGate(ctx, 42)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+
+	release()
+
+	release, err = acquireUpsertGate(context.Background(), 42)
+	require.NoError(t, err)
+	release()
+}

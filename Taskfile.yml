@@ -27,7 +27,9 @@ tasks:
         for pkg in $(go list ./{{.STORAGE_TYPE}}/...); do
           pkg_base=$(basename $pkg)
           coveragefile="${pkg_base}.cov"
-          tags=$([[ ${pkg} == *"driver"* ]] && echo "-tags {{.DB}}{{.DB_VERSION}} " || echo "")
+          # The persistent conformance tests sit in the top-level package behind the
+          # same build tags as the driver tests, so every persistent package gets them.
+          tags=$([[ "{{.STORAGE_TYPE}}" == "persistent" || ${pkg} == *"driver"* ]] && echo "-tags {{.DB}}{{.DB_VERSION}} " || echo "")
           go test -failfast -timeout $TEST_TIMEOUT -race -cover $tags -coverprofile=${coveragefile} -v ${pkg}
           if [ -f "${coveragefile}" ]; then
             mkdir -p "coverage/$(dirname ${pkg})"

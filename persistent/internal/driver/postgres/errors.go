@@ -19,4 +19,7 @@ var (
 	ErrorIndexComposedTTL   = errors.New(types.ErrorIndexComposedTTL)
 	ErrorRowOptDiffLength   = errors.New(types.ErrorRowOptDiffLenght)
 	ErrorEmptyConnStr       = errors.New("empty connection string")
+	// ErrorUnsupportedOrClause is returned for a $or value the translator cannot
+	// express in SQL, instead of silently dropping the condition.
+	ErrorUnsupportedOrClause = errors.New("unsupported $or clause")
 )

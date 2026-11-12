@@ -11,17 +11,7 @@ import (
 
 	"github.com/TykTechnologies/storage/persistent"
 	"github.com/TykTechnologies/storage/persistent/internal/testutil"
-	"github.com/TykTechnologies/storage/persistent/model"
 )
-
-type mongoConformanceEntity struct {
-	ID   model.ObjectID `bson:"_id,omitempty"`
-	Name string         `bson:"name"`
-}
-
-func (e *mongoConformanceEntity) TableName() string             { return "conformance_entities" }
-func (e *mongoConformanceEntity) GetObjectID() model.ObjectID   { return e.ID }
-func (e *mongoConformanceEntity) SetObjectID(id model.ObjectID) { e.ID = id }
 
 func TestConformanceOfficialMongo(t *testing.T) {
 	storage, err := persistent.NewPersistentStorage(&persistent.ClientOpts{
@@ -31,9 +21,5 @@ func TestConformanceOfficialMongo(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, storage.Ping(context.Background()))
 
-	testutil.RunSuite(t, testutil.Suite{
-		Storage:   storage,
-		NewObject: func() model.DBObject { return &mongoConformanceEntity{} },
-		IDFilter:  func(id model.ObjectID) model.DBM { return model.DBM{"_id": id} },
-	})
+	testutil.RunSuite(t, testutil.Suite{Storage: storage})
 }

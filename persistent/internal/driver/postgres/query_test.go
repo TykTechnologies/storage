@@ -5,6 +5,7 @@ package postgres
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -1648,4 +1649,68 @@ func TestTranslateQueryWithShardingEnabled(t *testing.T) {
 		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", shardTableName)).Error
 		require.NoError(t, err, "Failed to drop sharded table")
 	}
+}
+
+func TestTranslateQueryOrShapes(t *testing.T) {
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	for _, it := range []*TestObject{
+		{Name: "one", Value: 10, Category: "A", CreatedAt: time.Now()},
+		{Name: "two", Value: 20, Category: "B", CreatedAt: time.Now()},
+		{Name: "three", Value: 30, Category: "A", CreatedAt: time.Now()},
+	} {
+		require.NoError(t, driver.Insert(ctx, it))
+	}
+
+	count := func(t *testing.T, q model.DBM) int {
+		t.Helper()
+
+		var out []TestObject
+
+		// A slice query with no match reports sql.ErrNoRows in this driver.
+		if err := driver.Query(ctx, &TestObject{}, &out, q); !errors.Is(err, sql.ErrNoRows) {
+			require.NoError(t, err)
+		}
+
+		return len(out)
+	}
+
+	t.Run("generic list is applied, not dropped", func(t *testing.T) {
+		q := model.DBM{"category": "B", "$or": []interface{}{model.DBM{"name": "one"}}}
+		assert.Equal(t, 0, count(t, q))
+	})
+
+	t.Run("plain map branches", func(t *testing.T) {
+		q := model.DBM{"$or": []map[string]interface{}{{"name": "one"}, {"name": "two"}}}
+		assert.Equal(t, 2, count(t, q))
+	})
+
+	t.Run("empty branch matches every row", func(t *testing.T) {
+		q := model.DBM{"$or": []model.DBM{{}, {"name": "one"}}}
+		assert.Equal(t, 3, count(t, q))
+	})
+
+	t.Run("empty list adds no condition", func(t *testing.T) {
+		assert.Equal(t, 3, count(t, model.DBM{"$or": []model.DBM{}}))
+	})
+
+	for name, q := range map[string]model.DBM{
+		"operator in a branch": {"$or": []model.DBM{{"value": model.DBM{"$gt": 15}}}},
+		"value is not a list":  {"$or": "name"},
+		"branch is not a map":  {"$or": []interface{}{"name"}},
+	} {
+		t.Run(name+" is rejected", func(t *testing.T) {
+			var out []TestObject
+
+			err := driver.Query(ctx, &TestObject{}, &out, q)
+			assert.ErrorIs(t, err, ErrorUnsupportedOrClause)
+		})
+	}
+
+	t.Run("rejected $or never widens a delete", func(t *testing.T) {
+		err := driver.Delete(ctx, &TestObject{}, model.DBM{"category": "A", "$or": "name"})
+		assert.ErrorIs(t, err, ErrorUnsupportedOrClause)
+		assert.Equal(t, 3, count(t, model.DBM{}))
+	})
 }

@@ -12,17 +12,7 @@ import (
 
 	"github.com/TykTechnologies/storage/persistent"
 	"github.com/TykTechnologies/storage/persistent/internal/testutil"
-	"github.com/TykTechnologies/storage/persistent/model"
 )
-
-type pgConformanceEntity struct {
-	ID   model.ObjectID `json:"id" gorm:"primaryKey"`
-	Name string         `json:"name"`
-}
-
-func (e *pgConformanceEntity) TableName() string             { return "conformance_entities" }
-func (e *pgConformanceEntity) GetObjectID() model.ObjectID   { return e.ID }
-func (e *pgConformanceEntity) SetObjectID(id model.ObjectID) { e.ID = id }
 
 func postgresConnStr() string {
 	if dsn := os.Getenv("postgres_test_dsn"); dsn != "" {
@@ -42,9 +32,5 @@ func TestConformancePostgres(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, storage.Ping(context.Background()))
 
-	testutil.RunSuite(t, testutil.Suite{
-		Storage:   storage,
-		NewObject: func() model.DBObject { return &pgConformanceEntity{} },
-		IDFilter:  func(id model.ObjectID) model.DBM { return model.DBM{"id": id} },
-	})
+	testutil.RunSuite(t, testutil.Suite{Storage: storage})
 }

@@ -434,6 +434,93 @@ func (d *driver) applyMongoUpdateOperators(db *gorm.DB, update model.DBM) (*gorm
 	return result, updateMap, nil
 }
 
+// orBranches normalises the accepted $or shapes to a list of branches. Mongo
+// takes any array of documents, so callers pass []model.DBM as well as
+// []interface{} and []map[string]interface{}.
+func orBranches(v interface{}) ([]model.DBM, error) {
+	switch branches := v.(type) {
+	case []model.DBM:
+		return branches, nil
+	case []map[string]interface{}:
+		out := make([]model.DBM, 0, len(branches))
+		for _, b := range branches {
+			out = append(out, model.DBM(b))
+		}
+
+		return out, nil
+	case []interface{}:
+		out := make([]model.DBM, 0, len(branches))
+
+		for _, b := range branches {
+			switch branch := b.(type) {
+			case model.DBM:
+				out = append(out, branch)
+			case map[string]interface{}:
+				out = append(out, model.DBM(branch))
+			default:
+				return nil, fmt.Errorf("%w: branch is %T, want a document", ErrorUnsupportedOrClause, b)
+			}
+		}
+
+		return out, nil
+	default:
+		return nil, fmt.Errorf("%w: value is %T, want a list of documents", ErrorUnsupportedOrClause, v)
+	}
+}
+
+// applyOr adds a $or condition to db as one parenthesised group, so sibling
+// filters still apply to every branch. Fields inside a branch are ANDed and an
+// empty branch matches every row, as in Mongo. _id names the model's id column.
+// Branch values are compared by equality only; an operator document is rejected rather than compared as text.
+func applyOr(db *gorm.DB, v interface{}, idColumn string) (*gorm.DB, error) {
+	branches, err := orBranches(v)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(branches) == 0 {
+		return db, nil
+	}
+
+	orGroup := db.Session(&gorm.Session{NewDB: true})
+
+	for i, branch := range branches {
+		sub := db.Session(&gorm.Session{NewDB: true})
+
+		if len(branch) == 0 {
+			sub = sub.Where("1 = 1")
+		}
+
+		for field, value := range branch {
+			if field == "_id" {
+				field = idColumn
+			}
+
+			col, colErr := sanitizeIdentifier(strings.ReplaceAll(field, ".", "_"))
+			if colErr != nil {
+				return nil, fmt.Errorf("invalid field in $or: %w", colErr)
+			}
+
+			switch typed := value.(type) {
+			case model.ObjectID:
+				sub = sub.Where(col+" = ?", typed.Hex())
+			case model.DBM, map[string]interface{}:
+				return nil, fmt.Errorf("%w: operators on field %q are not supported", ErrorUnsupportedOrClause, field)
+			default:
+				sub = sub.Where(col+" = ?", fmt.Sprint(value))
+			}
+		}
+
+		if i == 0 {
+			orGroup = orGroup.Where(sub)
+		} else {
+			orGroup = orGroup.Or(sub)
+		}
+	}
+
+	return db.Where(orGroup), nil
+}
+
 // translateQuery converts MongoDB-style queries to GORM queries with sharding support
 func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*gorm.DB, error) {
 	if db == nil {
@@ -442,6 +529,12 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 
 	where := map[string]interface{}{}
 	order := ""
+
+	// Mongo callers filter on _id; here that is the model's id column.
+	idColumn := defaultIDColumn
+	if obj, ok := result.(model.DBObject); ok {
+		idColumn = idColumnOf(obj, db)
+	}
 
 	shardField, useSharding := q["_date_sharding"].(string)
 	var minShardDate, maxShardDate time.Time
@@ -461,53 +554,23 @@ func (d *driver) translateQuery(db *gorm.DB, q model.DBM, result interface{}) (*
 			continue
 		}
 
-		if o, ok := v.(model.ObjectID); ok {
-			where[k] = o.Hex()
+		if k == "$or" {
+			var err error
+
+			db, err = applyOr(db, v, idColumn)
+			if err != nil {
+				return nil, err
+			}
+
 			continue
 		}
 
-		if k == "$or" {
-			if nested, ok := v.([]model.DBM); ok {
-				// Accumulate the branches on a separate session and attach them with a
-				// single Where so the whole $or renders as one parenthesized group.
-				// Chaining db.Or at the top level would flatten it and let SQL's
-				// AND-over-OR precedence bypass sibling filters.
-				orGroup := db.Session(&gorm.Session{NewDB: true})
+		if k == "_id" {
+			k = idColumn
+		}
 
-				for i, n := range nested {
-					sub := db.Session(&gorm.Session{NewDB: true})
-
-					for nk, nv := range n {
-						// Apply the same dot-to-underscore conversion as the non-$or path
-						// (line below the $or block) so nested field names like "user.name"
-						// remain valid before sanitization.
-						col, colErr := sanitizeIdentifier(strings.ReplaceAll(nk, ".", "_"))
-						if colErr != nil {
-							return nil, fmt.Errorf("invalid field in $or: %w", colErr)
-						}
-
-						val := ""
-						if o, ok := nv.(model.ObjectID); ok {
-							val = o.Hex()
-						} else {
-							val = fmt.Sprint(nv)
-						}
-
-						sub = sub.Where(col+" = ?", val)
-					}
-
-					if i == 0 {
-						orGroup = orGroup.Where(sub)
-					} else {
-						orGroup = orGroup.Or(sub)
-					}
-				}
-
-				if len(nested) > 0 {
-					db = db.Where(orGroup)
-				}
-			}
-
+		if o, ok := v.(model.ObjectID); ok {
+			where[k] = o.Hex()
 			continue
 		}
 
