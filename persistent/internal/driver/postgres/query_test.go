@@ -1,18 +1,20 @@
-//go:build postgres || postgres16.1 || postgres15 || postgres14.11 || postgres13.3 || postgres12.22
-// +build postgres postgres16.1 postgres15 postgres14.11 postgres13.3 postgres12.22
+//go:build postgres || postgres16.10 || postgres16.1 || postgres15.0 || postgres15 || postgres14.11 || postgres13.3 || postgres12.22
+// +build postgres postgres16.10 postgres16.1 postgres15.0 postgres15 postgres14.11 postgres13.3 postgres12.22
 
 package postgres
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/internal/types"
-	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/TykTechnologies/storage/persistent/internal/types"
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 func TestQuery(t *testing.T) {
@@ -1373,6 +1375,34 @@ func TestTranslateQuery(t *testing.T) {
 			expectedCount: 3,
 		},
 		{
+			// Regression: multi-field elements inside $or must be ANDed within the element,
+			// not ORed. {category:A, value:10} should match only Test 1, not all A-category.
+			name: "OR Operator multi-field elements",
+			query: model.DBM{
+				"$or": []model.DBM{
+					{"category": "A", "value": 10}, // only Test 1 matches both
+					{"value": 20},                  // Test 2
+				},
+			},
+			expectedCount: 2,
+		},
+		{
+			// Regression: the whole $or must render as one parenthesized group so a
+			// sibling top-level field still applies: category='B' AND (value=10 OR
+			// value=20) matches only Test 2. A flattened OR chain would let SQL's
+			// AND-over-OR precedence bypass the category filter and also match
+			// Test 1 (value=10, category=A).
+			name: "OR Operator with sibling field",
+			query: model.DBM{
+				"category": "B",
+				"$or": []model.DBM{
+					{"value": 10},
+					{"value": 20},
+				},
+			},
+			expectedCount: 1,
+		},
+		{
 			name: "Not Equal Operator",
 			query: model.DBM{
 				"category": model.DBM{
@@ -1619,4 +1649,68 @@ func TestTranslateQueryWithShardingEnabled(t *testing.T) {
 		err := driver.db.WithContext(ctx).Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", shardTableName)).Error
 		require.NoError(t, err, "Failed to drop sharded table")
 	}
+}
+
+func TestTranslateQueryOrShapes(t *testing.T) {
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	for _, it := range []*TestObject{
+		{Name: "one", Value: 10, Category: "A", CreatedAt: time.Now()},
+		{Name: "two", Value: 20, Category: "B", CreatedAt: time.Now()},
+		{Name: "three", Value: 30, Category: "A", CreatedAt: time.Now()},
+	} {
+		require.NoError(t, driver.Insert(ctx, it))
+	}
+
+	count := func(t *testing.T, q model.DBM) int {
+		t.Helper()
+
+		var out []TestObject
+
+		// A slice query with no match reports sql.ErrNoRows in this driver.
+		if err := driver.Query(ctx, &TestObject{}, &out, q); !errors.Is(err, sql.ErrNoRows) {
+			require.NoError(t, err)
+		}
+
+		return len(out)
+	}
+
+	t.Run("generic list is applied, not dropped", func(t *testing.T) {
+		q := model.DBM{"category": "B", "$or": []interface{}{model.DBM{"name": "one"}}}
+		assert.Equal(t, 0, count(t, q))
+	})
+
+	t.Run("plain map branches", func(t *testing.T) {
+		q := model.DBM{"$or": []map[string]interface{}{{"name": "one"}, {"name": "two"}}}
+		assert.Equal(t, 2, count(t, q))
+	})
+
+	t.Run("empty branch matches every row", func(t *testing.T) {
+		q := model.DBM{"$or": []model.DBM{{}, {"name": "one"}}}
+		assert.Equal(t, 3, count(t, q))
+	})
+
+	t.Run("empty list adds no condition", func(t *testing.T) {
+		assert.Equal(t, 3, count(t, model.DBM{"$or": []model.DBM{}}))
+	})
+
+	for name, q := range map[string]model.DBM{
+		"operator in a branch": {"$or": []model.DBM{{"value": model.DBM{"$gt": 15}}}},
+		"value is not a list":  {"$or": "name"},
+		"branch is not a map":  {"$or": []interface{}{"name"}},
+	} {
+		t.Run(name+" is rejected", func(t *testing.T) {
+			var out []TestObject
+
+			err := driver.Query(ctx, &TestObject{}, &out, q)
+			assert.ErrorIs(t, err, ErrorUnsupportedOrClause)
+		})
+	}
+
+	t.Run("rejected $or never widens a delete", func(t *testing.T) {
+		err := driver.Delete(ctx, &TestObject{}, model.DBM{"category": "A", "$or": "name"})
+		assert.ErrorIs(t, err, ErrorUnsupportedOrClause)
+		assert.Equal(t, 3, count(t, model.DBM{}))
+	})
 }

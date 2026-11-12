@@ -8,10 +8,11 @@ import (
 	"strconv"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/TykTechnologies/storage/persistent/internal/types"
 	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/TykTechnologies/storage/persistent/utils"
-	"gorm.io/gorm"
 )
 
 type BasicStats struct {
@@ -331,6 +332,14 @@ func (d *driver) DropTable(ctx context.Context, name string) (int, error) {
 		return 0, fmt.Errorf("failed to drop table %s: %w", name, err)
 	}
 
+	// Drop the table's TTL index metadata so a recreated table does not
+	// inherit stale TTL flags. Unsanitizable names can have no metadata.
+	if quotedTable, qErr := sanitizeIdentifier(name); qErr == nil {
+		if mErr := d.deleteIndexMetadata(ctx, quotedTable, ""); mErr != nil {
+			return int(rowCount), mErr
+		}
+	}
+
 	return int(rowCount), nil
 }
 
@@ -346,6 +355,14 @@ func (d *driver) Drop(ctx context.Context, object model.DBObject) error {
 	err = d.db.WithContext(ctx).Migrator().DropTable(tableName)
 	if err != nil {
 		return fmt.Errorf("failed to drop table %s: %w", tableName, err)
+	}
+
+	// Drop the table's TTL index metadata so a recreated table does not
+	// inherit stale TTL flags. Unsanitizable names can have no metadata.
+	if quotedTable, qErr := sanitizeIdentifier(tableName); qErr == nil {
+		if mErr := d.deleteIndexMetadata(ctx, quotedTable, ""); mErr != nil {
+			return mErr
+		}
 	}
 
 	return nil

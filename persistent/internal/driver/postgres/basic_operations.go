@@ -3,16 +3,20 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"reflect"
+	"sort"
 	"strings"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
-	"github.com/TykTechnologies/storage/persistent/model"
 	"gorm.io/gorm"
+
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 // Insert adds one or more objects into the database in a single batch operation.
@@ -128,15 +132,20 @@ func (d *driver) Update(ctx context.Context, object model.DBObject, filters ...m
 		}
 	} else {
 		id := object.GetObjectID()
-		if id != "" {
-			tx = tx.Where("id = ?", id.Hex())
-		} else {
+		if id == "" {
 			return errors.New("no filter provided and object has no ID")
 		}
+
+		tx = tx.Where("id = ?", id.Hex())
 	}
 
-	// Save replaces all fields with the object’s values
-	result := tx.Save(object)
+	// Select("*") makes Updates write every field, including zero values,
+	// preserving Save's replace-all semantics, while Omit keeps the primary key
+	// out of the SET clause. Unlike Save, Updates never falls back to INSERT
+	// when the WHERE clause matches nothing, so this single atomic UPDATE can't
+	// create ghost rows under concurrent deletes and makes RowsAffected a
+	// reliable existence signal.
+	result := tx.Select("*").Omit("id").Updates(object)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -287,7 +296,7 @@ func (d *driver) UpdateAll(ctx context.Context, row model.DBObject, query, updat
 		}
 	}()
 
-	db := d.db.WithContext(ctx).Table(tableName)
+	db := tx.Table(tableName)
 
 	hasFilter := false
 
@@ -341,73 +350,104 @@ func (d *driver) Upsert(ctx context.Context, row model.DBObject, query, update m
 		return err
 	}
 
-	tx := d.db.WithContext(ctx).Begin()
-	if tx.Error != nil {
-		return tx.Error
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			panic(r)
-		}
-	}()
-
 	originalID := row.GetObjectID()
-	updateDB := tx.Table(tableName)
 
-	updateDB, err = d.translateQuery(updateDB, query, row)
+	lockKey, err := upsertLockKey(tableName, query)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
 
-	_, updateMap, err := d.applyMongoUpdateOperators(updateDB, update)
+	// Callers in this process queue here, before taking a connection. Without
+	// it every caller waiting on the advisory lock below would hold one pool
+	// connection for the whole wait.
+	release, err := acquireUpsertGate(ctx, lockKey)
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
+	defer release()
 
-	result := updateDB.Updates(updateMap)
-	if result.Error != nil {
-		tx.Rollback()
-		return result.Error
-	}
-
-	if result.RowsAffected > 0 {
-		if err := d.fetchUpdatedRow(tx, tableName, query, row); err != nil {
-			tx.Rollback()
+	// Transaction auto-commits when the callback returns nil and rolls back on
+	// any returned error or panic, so each early return cleans up the tx and the
+	// advisory lock (which is transaction-scoped) without an explicit Rollback.
+	return d.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// pg_advisory_xact_lock serializes concurrent Upserts that use the same
+		// (table, query) pair across processes; it is released automatically
+		// when the tx ends.
+		// It does NOT protect against Upserts reaching the same row through a
+		// different filter, or writers bypassing Upsert (Insert, raw SQL) —
+		// uniqueness beyond the primary key is not enforced at the schema level.
+		if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", lockKey).Error; err != nil {
 			return err
 		}
 
-		// Preserve original ID
+		updateDB := tx.Table(tableName)
+
+		updateDB, err = d.translateQuery(updateDB, query, row)
+		if err != nil {
+			return err
+		}
+
+		_, updateMap, err := d.applyMongoUpdateOperators(updateDB, update)
+		if err != nil {
+			return err
+		}
+
+		// When updateMap is non-empty the UPDATE itself answers the existence
+		// question: Postgres reports matched rows in RowsAffected even when the
+		// new values equal the current ones. Only an empty updateMap needs a
+		// COUNT, because Updates({}) short-circuits with 0 RowsAffected and
+		// would incorrectly fall through to the INSERT branch for an existing
+		// record.
+		exists := false
+
+		if len(updateMap) > 0 {
+			res := updateDB.Updates(updateMap)
+			if res.Error != nil {
+				return res.Error
+			}
+
+			exists = res.RowsAffected > 0
+		} else {
+			var count int64
+			if err := updateDB.Count(&count).Error; err != nil {
+				return err
+			}
+
+			exists = count > 0
+		}
+
+		if exists {
+			if err := d.fetchUpdatedRow(tx, tableName, query, row); err != nil {
+				return err
+			}
+
+			if originalID != "" {
+				row.SetObjectID(originalID)
+			}
+
+			return nil
+		}
+
+		ensureID(originalID, row, query)
+
+		newRow := cloneDBObject(row)
+
+		mergeQueryFields(newRow, query)
+
+		applySetOperatorToObject(newRow, update)
+
+		if err := tx.Table(tableName).Create(newRow).Error; err != nil {
+			return err
+		}
+
+		copyStructValues(newRow, row)
+
 		if originalID != "" {
 			row.SetObjectID(originalID)
 		}
 
-		return tx.Commit().Error
-	}
-
-	ensureID(originalID, row, query)
-
-	newRow := cloneDBObject(row)
-
-	mergeQueryFields(newRow, query)
-
-	applySetOperatorToObject(newRow, update)
-
-	if err := tx.Table(tableName).Create(newRow).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	copyStructValues(newRow, row)
-
-	if originalID != "" {
-		row.SetObjectID(originalID)
-	}
-
-	return tx.Commit().Error
+		return nil
+	})
 }
 
 func (d *driver) fetchUpdatedRow(tx *gorm.DB, table string, query model.DBM, row model.DBObject) error {
@@ -424,13 +464,32 @@ func (d *driver) fetchUpdatedRow(tx *gorm.DB, table string, query model.DBM, row
 func ensureID(originalID model.ObjectID, row model.DBObject, query model.DBM) {
 	if originalID != "" {
 		row.SetObjectID(originalID)
-	} else if idVal, ok := query["id"].(string); ok && idVal != "" {
-		row.SetObjectID(model.ObjectIDHex(idVal))
+	} else if id := queryID(query); id != "" {
+		row.SetObjectID(id)
 	}
 
 	if row.GetObjectID() == "" {
 		row.SetObjectID(model.NewObjectID())
 	}
+}
+
+// queryID returns the record ID a query selects by, under either the id or
+// the Mongo _id key, or "" when the query does not select by ID.
+func queryID(query model.DBM) model.ObjectID {
+	for _, key := range []string{"id", "_id"} {
+		switch id := query[key].(type) {
+		case model.ObjectID:
+			if id != "" {
+				return id
+			}
+		case string:
+			if id != "" {
+				return model.ObjectIDHex(id)
+			}
+		}
+	}
+
+	return ""
 }
 
 func cloneDBObject(row model.DBObject) model.DBObject {
@@ -515,6 +574,71 @@ func copyStructValues(src, dst interface{}) {
 				dstField.Set(srcField.Convert(dstField.Type()))
 			}
 		}
+	}
+}
+
+// upsertLockKey returns a stable int64 advisory-lock key for a table+query pair.
+// Keys are sorted so the result is independent of map iteration order, and values
+// are JSON-marshaled for a canonical, type-safe representation.
+//
+// A value that cannot be JSON-marshaled is rejected rather than hashed via a
+// non-canonical fallback: an ambiguous representation (e.g. fmt's "%v" for
+// pointers or structs with unexported fields) could make distinct queries hash
+// to the same key (false lock contention, a DoS vector on attacker-controlled
+// input) or the same query hash differently (a missed lock, reintroducing the
+// race the lock exists to prevent). Callers must therefore use JSON-serializable
+// query values.
+func upsertLockKey(tableName string, query model.DBM) (int64, error) {
+	h := fnv.New64a()
+	h.Write([]byte(tableName))
+
+	keys := make([]string, 0, len(query))
+	for k := range query {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		h.Write([]byte(k))
+
+		b, err := json.Marshal(query[k])
+		if err != nil {
+			return 0, fmt.Errorf("cannot build upsert lock key: query value for %q is not JSON-serializable: %w", k, err)
+		}
+
+		h.Write(b)
+	}
+
+	return int64(h.Sum64()), nil
+}
+
+// upsertGateCount is the number of in-process upsert gates. Keys that share a
+// gate only wait for each other; correctness comes from the advisory lock.
+const upsertGateCount = 64
+
+// upsertGates holds one single-slot gate per stripe of advisory-lock keys.
+var upsertGates = newUpsertGates()
+
+func newUpsertGates() []chan struct{} {
+	gates := make([]chan struct{}, upsertGateCount)
+	for i := range gates {
+		gates[i] = make(chan struct{}, 1)
+	}
+
+	return gates
+}
+
+// acquireUpsertGate blocks until the gate for lockKey is free or ctx ends, and
+// returns the function that frees it.
+func acquireUpsertGate(ctx context.Context, lockKey int64) (func(), error) {
+	gate := upsertGates[uint64(lockKey)%upsertGateCount]
+
+	select {
+	case gate <- struct{}{}:
+		return func() { <-gate }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 

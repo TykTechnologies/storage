@@ -1,16 +1,19 @@
-//go:build postgres || postgres16.1 || postgres15 || postgres14.11 || postgres13.3 || postgres12.22
-// +build postgres postgres16.1 postgres15 postgres14.11 postgres13.3 postgres12.22
+//go:build postgres || postgres16.10 || postgres16.1 || postgres15.0 || postgres15 || postgres14.11 || postgres13.3 || postgres12.22
+// +build postgres postgres16.10 postgres16.1 postgres15.0 postgres15 postgres14.11 postgres13.3 postgres12.22
 
 package postgres
 
 import (
 	"context"
+	"database/sql"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 // TestInsert tests the Insert method
@@ -703,6 +706,86 @@ func TestDBIsNil(t *testing.T) {
 	})
 }
 
+func TestUpdateAllTransactionality(t *testing.T) {
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	items := []*TestObject{
+		{Name: "item", Value: 10, CreatedAt: time.Now()},
+		{Name: "item", Value: 10, CreatedAt: time.Now()},
+		{Name: "other", Value: 20, CreatedAt: time.Now()},
+	}
+	for _, it := range items {
+		require.NoError(t, driver.Insert(ctx, it))
+	}
+
+	err := driver.UpdateAll(ctx, &TestObject{},
+		model.DBM{"value": 10},
+		model.DBM{"$set": model.DBM{"name": "changed"}})
+	require.NoError(t, err)
+
+	var changed []*TestObject
+	require.NoError(t, driver.Query(ctx, &TestObject{}, &changed, model.DBM{"name": "changed"}))
+	assert.Len(t, changed, 2, "exactly the matching rows should be updated")
+
+	var unchanged []*TestObject
+	require.NoError(t, driver.Query(ctx, &TestObject{}, &unchanged, model.DBM{"name": "other"}))
+	assert.Len(t, unchanged, 1, "non-matching row must not be affected")
+}
+
+func TestUpdateAllRollbackOnNoMatch(t *testing.T) {
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	item := &TestObject{Name: "pristine", Value: 99, CreatedAt: time.Now()}
+	require.NoError(t, driver.Insert(ctx, item))
+
+	err := driver.UpdateAll(ctx, &TestObject{},
+		model.DBM{"name": "does-not-exist"},
+		model.DBM{"$set": model.DBM{"name": "should-not-appear"}})
+	assert.ErrorIs(t, err, sql.ErrNoRows)
+
+	var result TestObject
+	require.NoError(t, driver.Query(ctx, &TestObject{}, &result, model.DBM{"id": item.GetObjectID()}))
+	assert.Equal(t, "pristine", result.Name, "existing record must be unmodified after failed UpdateAll")
+}
+
+func TestUpsertConcurrentAdvisoryLock(t *testing.T) {
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	const concurrency = 10
+
+	targetID := model.NewObjectID()
+	errs := make([]error, concurrency)
+
+	var wg sync.WaitGroup
+
+	for i := range concurrency {
+		wg.Add(1)
+
+		go func(idx int) {
+			defer wg.Done()
+
+			obj := &TestObject{Name: "concurrent", Value: idx}
+			obj.SetObjectID(targetID)
+			errs[idx] = driver.Upsert(ctx, obj,
+				model.DBM{"id": targetID},
+				model.DBM{"$set": model.DBM{"name": "concurrent"}})
+		}(i)
+	}
+
+	wg.Wait()
+
+	for i, err := range errs {
+		assert.NoError(t, err, "goroutine %d must not error", i)
+	}
+
+	count, err := driver.Count(ctx, &TestObject{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, count, "concurrent Upserts on the same ID must not create duplicates")
+}
+
 func TestApplySetOperatorToObject(t *testing.T) {
 	t.Run("ApplySetOperator", func(t *testing.T) {
 		testID := model.ObjectIDHex("691338a5f2a2f824099f9ad8")
@@ -808,4 +891,78 @@ func TestApplySetOperatorToObject(t *testing.T) {
 		// Only valid field should be updated
 		assert.Equal(t, "Updated Name", obj.Name)
 	})
+}
+
+// Callers upserting the same record must wait in the process, not each on a
+// database connection.
+func TestUpsertWaitersDoNotHoldConnections(t *testing.T) {
+	driver, ctx := setupTest(t)
+	defer teardownTest(t, driver)
+
+	sqlDB, err := driver.db.DB()
+	require.NoError(t, err)
+
+	const concurrency = 40
+
+	targetID := model.NewObjectID()
+	stop := make(chan struct{})
+	peak := make(chan int, 1)
+
+	go func() {
+		highest := 0
+
+		for {
+			select {
+			case <-stop:
+				peak <- highest
+				return
+			default:
+				if n := sqlDB.Stats().InUse; n > highest {
+					highest = n
+				}
+			}
+		}
+	}()
+
+	var wg sync.WaitGroup
+
+	errs := make([]error, concurrency)
+
+	for i := range concurrency {
+		wg.Add(1)
+
+		go func(idx int) {
+			defer wg.Done()
+
+			errs[idx] = driver.Upsert(ctx, &TestObject{},
+				model.DBM{"id": targetID},
+				model.DBM{"$set": model.DBM{"value": idx}})
+		}(i)
+	}
+
+	wg.Wait()
+	close(stop)
+
+	for i, err := range errs {
+		assert.NoError(t, err, "goroutine %d must not error", i)
+	}
+
+	assert.LessOrEqual(t, <-peak, 2, "waiting upserts must not each hold a connection")
+}
+
+func TestAcquireUpsertGateHonoursContext(t *testing.T) {
+	release, err := acquireUpsertGate(context.Background(), 42)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	_, err = acquireUpsertGate(ctx, 42)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+
+	release()
+
+	release, err = acquireUpsertGate(context.Background(), 42)
+	require.NoError(t, err)
+	release()
 }

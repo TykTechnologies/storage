@@ -6,8 +6,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/TykTechnologies/storage/persistent/model"
 	"github.com/lib/pq"
+
+	"github.com/TykTechnologies/storage/persistent/model"
 )
 
 type IndexRow struct {
@@ -170,6 +171,10 @@ func (d *driver) CreateIndex(ctx context.Context, row model.DBObject, index mode
 		if err := d.db.WithContext(ctx).Exec(ttlSQL, tableName, indexName, index.TTL).Error; err != nil {
 			return fmt.Errorf("failed to store TTL metadata: %w", err)
 		}
+	} else if err := d.deleteIndexMetadata(ctx, tableName, indexName); err != nil {
+		// A dropped TTL index may have left a metadata row behind under this
+		// name; clear it so GetIndexes does not report this plain index as TTL.
+		return err
 	}
 
 	return nil
@@ -247,27 +252,61 @@ func (d *driver) GetIndexes(ctx context.Context, row model.DBObject) ([]model.In
 	// Map to store indexes by name to group columns
 	indexMap := make(map[string]*model.Index)
 
-	// Process each row
-	for _, row := range rows {
-		// Get or create the index in the map
-		idx, exists := indexMap[row.IndexName]
+	for _, idxRow := range rows {
+		idx, exists := indexMap[idxRow.IndexName]
 		if !exists {
 			idx = &model.Index{
-				Name:       row.IndexName,
-				Background: false, // PostgreSQL doesn't store this information
+				Name:       idxRow.IndexName,
+				Background: false,
 				Keys:       []model.DBM{},
 				IsTTLIndex: false,
 				TTL:        0,
 			}
-			indexMap[row.IndexName] = idx
+			indexMap[idxRow.IndexName] = idx
 		}
 
-		// Add the column to the index keys
-		columnDBM := model.DBM{
-			row.ColumnName: row.Direction,
+		idx.Keys = append(idx.Keys, model.DBM{idxRow.ColumnName: idxRow.Direction})
+	}
+
+	// TTL metadata only annotates indexes already collected above, so when there
+	// are no secondary indexes there is nothing to enrich — skip both round-trips.
+	//
+	// index_metadata is only created alongside the first TTL index, so its
+	// absence just means there is no TTL metadata to report. Any other failure
+	// must surface: silently skipping it would report TTL indexes as plain ones.
+	if len(indexMap) > 0 {
+		metaExists, err := d.tableExists(ctx, "index_metadata")
+		if err != nil {
+			return nil, err
 		}
-		idx.Keys = append(idx.Keys, columnDBM)
-		idx.IsTTLIndex = false
+
+		if metaExists {
+			quotedTable, err := sanitizeIdentifier(tableName)
+			if err != nil {
+				return nil, err
+			}
+
+			type ttlMeta struct {
+				IndexName  string `gorm:"column:index_name"`
+				TTLSeconds int    `gorm:"column:ttl_seconds"`
+			}
+
+			var metas []ttlMeta
+
+			ttlQ := `SELECT index_name, ttl_seconds FROM index_metadata WHERE table_name = ?`
+			if err := d.db.WithContext(ctx).Raw(ttlQ, quotedTable).Scan(&metas).Error; err != nil {
+				return nil, fmt.Errorf("failed to query TTL index metadata: %w", err)
+			}
+
+			for _, m := range metas {
+				// pq.QuoteIdentifier wraps names in double-quotes; strip before map lookup.
+				key := strings.Trim(m.IndexName, `"`)
+				if idx, found := indexMap[key]; found {
+					idx.IsTTLIndex = true
+					idx.TTL = m.TTLSeconds
+				}
+			}
+		}
 	}
 
 	// Convert the map to a slice
@@ -290,6 +329,37 @@ func (d *driver) tableExists(ctx context.Context, tableName string) (bool, error
 	}
 
 	return exists, nil
+}
+
+// deleteIndexMetadata removes TTL metadata rows for the given quoted table
+// (and optionally a single quoted index; empty means all of the table's rows)
+// so a dropped or recreated index does not inherit TTL attributes from a
+// previous incarnation. index_metadata is only created alongside the first
+// TTL index, so its absence means there is nothing to clean.
+func (d *driver) deleteIndexMetadata(ctx context.Context, quotedTable, quotedIndex string) error {
+	exists, err := d.tableExists(ctx, "index_metadata")
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return nil
+	}
+
+	query := `DELETE FROM index_metadata WHERE table_name = ?`
+	args := []interface{}{quotedTable}
+
+	if quotedIndex != "" {
+		query += ` AND index_name = ?`
+
+		args = append(args, quotedIndex)
+	}
+
+	if err := d.db.WithContext(ctx).Exec(query, args...).Error; err != nil {
+		return fmt.Errorf("failed to delete TTL index metadata: %w", err)
+	}
+
+	return nil
 }
 
 // CleanIndexes removes all non-primary indexes from the table of the given DBObject.
@@ -362,6 +432,16 @@ func (d *driver) CleanIndexes(ctx context.Context, row model.DBObject) error {
 
 	if err := tx.Commit().Error; err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// The dropped indexes' TTL metadata must go too, otherwise a later index
+	// reusing one of these names would be misreported as TTL. A table name
+	// that fails sanitization can never have been given TTL metadata by
+	// CreateIndex, so there is nothing to clean in that case.
+	if quotedTable, qErr := sanitizeIdentifier(tableName); qErr == nil {
+		if mErr := d.deleteIndexMetadata(ctx, quotedTable, ""); mErr != nil {
+			return mErr
+		}
 	}
 
 	return nil
